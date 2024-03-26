@@ -54,36 +54,40 @@ def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: s
     obs_helper = flight_stream_helper.ObservationReadOperations()
     all_flights_rid_data = obs_helper.get_observations(read_cg)
     # Get the latest telemetry
-    if all_flights_rid_data:
-        all_flights_rid_data.sort(key=lambda item: item["timestamp"], reverse=True)
-        distinct_messages = {i["address"]: i for i in reversed(all_flights_rid_data)}.values()
 
-        for message in list(distinct_messages):
-            metadata = message["metadata"]
-            if metadata["flight_details"]["id"] == flight_declaration_id:
-                lat_dd = message["msg_data"]["lat_dd"]
-                lon_dd = message["msg_data"]["lon_dd"]
-                altitude_m_wgs84 = message["msg_data"]["altitude_mm"]
-                aircraft_id = message["address"]
+    if not all_flights_rid_data:
+        logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
+        return
 
-                conformant_via_telemetry = my_conformance_ops.is_operation_conformant_via_telemetry(
-                    flight_declaration_id=flight_declaration_id,
-                    aircraft_id=aircraft_id,
-                    telemetry_location=LatLngPoint(lat=lat_dd, lng=lon_dd),
-                    altitude_m_wgs_84=float(altitude_m_wgs84),
+    all_flights_rid_data.sort(key=lambda item: item["timestamp"], reverse=True)
+    distinct_messages = {i["address"]: i for i in reversed(all_flights_rid_data)}.values()
+
+    for message in list(distinct_messages):
+        metadata = message["metadata"]
+        if metadata["flight_details"]["id"] == flight_declaration_id:
+            lat_dd = message["msg_data"]["lat_dd"]
+            lon_dd = message["msg_data"]["lon_dd"]
+            altitude_m_wgs84 = message["msg_data"]["altitude_mm"]
+            aircraft_id = message["address"]
+
+            conformant_via_telemetry = my_conformance_ops.is_operation_conformant_via_telemetry(
+                flight_declaration_id=flight_declaration_id,
+                aircraft_id=aircraft_id,
+                telemetry_location=LatLngPoint(lat=lat_dd, lng=lon_dd),
+                altitude_m_wgs_84=float(altitude_m_wgs84),
+            )
+            if conformant_via_telemetry is True:
+                pass
+            else:
+                logger.info(
+                    "Operation with {flight_operation_id} is not conformant via telemetry failed test {conformant_via_telemetry}...".format(
+                        flight_operation_id=flight_declaration_id,
+                        conformant_via_telemetry=conformant_via_telemetry,
+                    )
                 )
-                if conformant_via_telemetry:
-                    pass
-                else:
-                    logger.info(
-                        "Operation with {flight_operation_id} is not conformant via telemetry failed test {conformant_via_telemetry}...".format(
-                            flight_operation_id=flight_declaration_id,
-                            conformant_via_telemetry=conformant_via_telemetry,
-                        )
-                    )
-                    custom_signals.telemetry_non_conformance_signal.send(
-                        sender="conformant_via_telemetry",
-                        non_conformance_state=conformant_via_telemetry,
-                        flight_declaration_id=flight_declaration_id,
-                    )
-                break
+                custom_signals.telemetry_non_conformance_signal.send(
+                    sender="conformant_via_telemetry",
+                    non_conformance_state=conformant_via_telemetry,
+                    flight_declaration_id=flight_declaration_id,
+                )
+            break
