@@ -1,5 +1,5 @@
 Django==4.2.11
-djangorestframework==3.14.0
+djangorestframework==3.15.2
 gunicorn==22.0.0
 redis==4.4.4
 walrus==0.9.2

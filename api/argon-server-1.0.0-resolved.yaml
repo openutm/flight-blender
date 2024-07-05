@@ -2753,6 +2753,9 @@ components:
           description: Email address of person submitting this declaration
           type: string
           format: email
+        aircraft_id:
+          description: Specify the ID of the aircraft
+          type: string
         originating_party:
           description: Set the name of the flight declaration
           type: string

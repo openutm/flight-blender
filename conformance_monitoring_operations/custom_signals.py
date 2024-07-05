@@ -30,7 +30,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
     non_conformance_state_code = ConformanceChecksList.state_code(non_conformance_state)
 
     if non_conformance_state_code == "C3":
-        invalid_aircraft_id_msg = "The aircraft ID provided in telemetry for operation {flight_declaration_id}, does not match the declared / authorized aircraft, you must stop operation. C4 Check failed.".format(
+        invalid_aircraft_id_msg = "The aircraft ID provided in telemetry for operation {flight_declaration_id}, does not match the declared / authorized aircraft, you must stop operation. C3 Check failed.".format(
             flight_declaration_id=flight_declaration_id
         )
         logger.error(invalid_aircraft_id_msg)
@@ -39,7 +39,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
         event = "argon_server_confirms_contingent"
 
     elif non_conformance_state_code in ["C4", "C5"]:
-        flight_state_not_correct_msg = "The Operation state for operation {flight_declaration_id}, is not one of 'Accepted' or 'Activated', your authorization is invalid. C4+C5 Check failed.".format(
+        flight_state_not_correct_msg = "The state for operation {flight_declaration_id}, is not one of 'Accepted' or 'Activated', your authorization is invalid. C4+C5 Check failed.".format(
             flight_declaration_id=flight_declaration_id
         )
         logger.error(flight_state_not_correct_msg)
@@ -85,7 +85,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
         fd.add_state_history_entry(
             original_state=original_state,
             new_state=new_state,
-            notes="State changed by telemetry conformance checks: %s" % non_conformance_state_code,
+            notes="State changed by telemetry conformance checks because of telemetry non-conformance: %s" % non_conformance_state_code,
         )
         my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id)
         my_conformance_helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)
@@ -93,7 +93,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
 
 @receiver(flight_authorization_non_conformance_signal)
 def process_flight_authorization_non_conformance_message(sender, **kwargs):
-    """This method checks if the telemetry provided is conformant to the declared operation states, if it is not then the state of the operation is assigned as non-conforming (3) or contingent (4)"""
+    """This method checks if the flight authorization is conformant to the declared operation states, if it is not then the state of the operation is assigned as non-conforming (3) or contingent (4)"""
     non_conformance_state = kwargs["non_conformance_state"]
     flight_declaration_id = kwargs["flight_declaration_id"]
     my_operation_notification = OperationConformanceNotification(flight_declaration_id=flight_declaration_id)
@@ -106,11 +106,11 @@ def process_flight_authorization_non_conformance_message(sender, **kwargs):
                 flight_declaration_id=flight_declaration_id
             )
         )
+        logger.error(telemetry_not_being_received_error_msg)
         my_operation_notification.send_conformance_status_notification(message=telemetry_not_being_received_error_msg, level="error")
 
         event = "timeout"
         new_state = 4
-
     elif non_conformance_state_code == "C9b":
         telemetry_never_received_error_msg = "The telemetry for operation {flight_declaration_id}, has never been received. Check C9b Failed".format(
             flight_declaration_id=flight_declaration_id
@@ -121,23 +121,23 @@ def process_flight_authorization_non_conformance_message(sender, **kwargs):
         event = "argon_server_confirms_contingent"
         new_state = 4
     elif non_conformance_state_code == "C10":
-        # notify the operator that the state of operation is not properly set.
-        flight_state_not_conformant = "The state for operation {flight_declaration_id}, has not been is not one of 'Activated', 'Nonconforming' or 'Contingent'. Check C10 failed' ".format(
+        flight_authorization_expired = "The authorization for operation {flight_declaration_id}, has been expired. You must stop operation ".format(
             flight_declaration_id=flight_declaration_id
         )
-        logger.error(flight_state_not_conformant)
-        my_operation_notification.send_conformance_status_notification(message=flight_state_not_conformant, level="error")
+        logger.error(flight_authorization_expired)
+        my_operation_notification.send_conformance_status_notification(message=flight_authorization_expired, level="error")
         event = "argon_server_confirms_contingent"
         new_state = 4
     elif non_conformance_state_code == "C11":
         authorization_not_granted_message = "There is no flight authorization for operation with ID {flight_declaration_id}. Check C11 Failed".format(
             flight_declaration_id=flight_declaration_id
         )
-        logger.error(flight_state_not_conformant)
+        logger.error(authorization_not_granted_message)
 
         new_state = 4
         my_operation_notification.send_conformance_status_notification(message=authorization_not_granted_message, level="error")
         event = "argon_server_confirms_contingent"
+
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
         my_argon_server_database_reader = ArgonServerDatabaseReader()
@@ -146,7 +146,7 @@ def process_flight_authorization_non_conformance_message(sender, **kwargs):
         fd.add_state_history_entry(
             original_state=original_state,
             new_state=new_state,
-            notes="State changed by flight authorization checks because of telemetry non-conformance: %s" % non_conformance_state_code,
+            notes="State changed by flight authorization checks: %s" % non_conformance_state_code,
         )
         my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id)
         my_conformance_helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)

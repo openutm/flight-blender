@@ -71,6 +71,12 @@ planned_planning_response = UpsertFlightPlanResponse(
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Completed,
 )
+planned_off_nominal_planning_response = UpsertFlightPlanResponse(
+    flight_plan_status=FlightPlanProcessingResult.OffNominal,
+    notes="Flight Plan successfully processed and flight planned",
+    includes_advisories=AdvisoryInclusion.Unknown,
+    planning_result=PlanningActivityResult.Completed,
+)
 
 ready_to_fly_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanProcessingResult.OkToFly,
@@ -81,14 +87,34 @@ ready_to_fly_planning_response = UpsertFlightPlanResponse(
 
 not_planned_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanProcessingResult.NotPlanned,
-    notes="Flight Planning could not plan this flight",
+    notes="Argon Server could not plan this flight",
+    includes_advisories=AdvisoryInclusion.Unknown,
+    planning_result=PlanningActivityResult.Rejected,
+)
+
+not_planned_activated_planning_response = UpsertFlightPlanResponse(
+    flight_plan_status=FlightPlanProcessingResult.OkToFly,
+    notes="Argon Server could not update this activated flight",
+    includes_advisories=AdvisoryInclusion.Unknown,
+    planning_result=PlanningActivityResult.Rejected,
+)
+not_planned_closed_planning_response = UpsertFlightPlanResponse(
+    flight_plan_status=FlightPlanProcessingResult.Closed,
+    notes="Argon Server could not plan this flight",
+    includes_advisories=AdvisoryInclusion.Unknown,
+    planning_result=PlanningActivityResult.Rejected,
+)
+
+not_planned_already_planned_planning_response = UpsertFlightPlanResponse(
+    flight_plan_status=FlightPlanProcessingResult.Planned,
+    notes="Argon Server could not update this already planned flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 
 failed_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanProcessingResult.NotPlanned,
-    notes="Flight Planning failed to process this flight",
+    notes="Argon Server failed to process this flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Failed,
 )
