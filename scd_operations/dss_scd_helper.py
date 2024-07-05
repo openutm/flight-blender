@@ -9,6 +9,7 @@ from typing import List, Optional, Union
 import arrow
 import requests
 import shapely.geometry
+import tldextract
 import urllib3
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Proj
@@ -889,8 +890,7 @@ class SCDOperations:
     ):
         """This method posts operational intent details to peer USS via a POST request to /uss/v1/operational_intents"""
         auth_token = self.get_auth_token(audience=audience)
-        logger.info(")))")
-        logger.info(uss_base_url)
+
         notification_url = uss_base_url + "/uss/v1/operational_intents"
         headers = {
             "Content-Type": "application/json",
@@ -929,7 +929,8 @@ class SCDOperations:
     ):
         """This method sends a notification to all the subscribers of the operational intent reference in the DSS"""
         for subscriber in all_subscribers:
-            if subscriber.uss_base_url != "https://dummy.uss":
+            domain_to_check = tldextract.extract(subscriber.uss_base_url)
+            if domain_to_check.subdomain != "dummy" and domain_to_check.domain != "uss":
                 operational_intent = OperationalIntentDetailsUSSResponse(reference=operational_intent_reference, details=operational_intent_details)
 
                 notification_payload = NotifyPeerUSSPostPayload(
@@ -1085,7 +1086,7 @@ class SCDOperations:
         if not submit_update_payload_to_dss:
             d_r = None
             dss_r_status_code = 999
-            message = "Flight not deconflicted, will not be submitting to DSS"
+            message = "Update to flight will not be processed, will not be submitting to DSS"
             opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_r_status_code, message=message)
             return opint_update_result
 
@@ -1129,7 +1130,7 @@ class SCDOperations:
                 subscribers=all_subscribers,
                 operational_intent_reference=operational_intent_reference,
             )
-            logger.info("Updated Operational Intent in the DSS Successfully")
+            logger.info("Updated Operational Intent in the DSS successfully...")
 
             message = CommonDSS4xxResponse(message="Successfully updated operational intent")
             opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_r_status_code, message=message)

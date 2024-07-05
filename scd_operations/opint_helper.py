@@ -160,8 +160,10 @@ class DSSOperationalIntentsCreator:
             else:
                 uss_audience = ".".join(ext[:3])  # get the subdomain, domain and suffix and create a audience and get credentials
 
-        my_scd_dss_helper.notify_peer_uss_of_created_updated_operational_intent(
-            uss_base_url=uss_base_url,
-            notification_payload=notification_payload,
-            audience=uss_audience,
-        )
+        if ext.subdomain != "dummy" and ext.domain != "uss":
+            # Do not notify dummy.uss
+            my_scd_dss_helper.notify_peer_uss_of_created_updated_operational_intent(
+                uss_base_url=uss_base_url,
+                notification_payload=notification_payload,
+                audience=uss_audience,
+            )

@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from dataclasses import asdict
-from typing import List, Tuple, Union
+from typing import List, Union
 from uuid import uuid4
 
 import arrow
@@ -61,15 +61,15 @@ class ArgonServerDatabaseReader:
         except FlightAuthorization.DoesNotExist:
             return None
 
-    def get_current_flight_declaration_ids(self, now: str) -> Union[None, uuid4]:
+    def get_current_flight_declaration_ids(self, timestamp: str) -> Union[None, uuid4]:
         """This method gets flight operation ids that are active in the system within near the time interval"""
-        n = arrow.get(now)
+        ts = arrow.get(timestamp)
 
-        two_minutes_before_now = n.shift(seconds=-120).isoformat()
-        five_hours_from_now = n.shift(minutes=300).isoformat()
+        two_minutes_before_ts = ts.shift(seconds=-120).isoformat()
+        five_hours_from_ts = ts.shift(minutes=300).isoformat()
         relevant_ids = FlightDeclaration.objects.filter(
-            start_datetime__gte=two_minutes_before_now,
-            end_datetime__lte=five_hours_from_now,
+            start_datetime__gte=two_minutes_before_ts,
+            end_datetime__lte=five_hours_from_ts,
         ).values_list("id", flat=True)
         return relevant_ids
 
