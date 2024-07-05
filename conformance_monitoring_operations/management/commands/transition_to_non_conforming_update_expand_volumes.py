@@ -139,7 +139,7 @@ class Command(BaseCommand):
             )
 
             if not dry_run:
-                argon_server_base_url = env.get("ARGON_SERVER_FQDN", 0)
+                argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
                 for subscriber in dss_response_subscribers:
                     subscriptions = subscriber["subscriptions"]
                     uss_base_url = subscriber["uss_base_url"]
@@ -299,7 +299,7 @@ class Command(BaseCommand):
                         )
 
                     if not dry_run:
-                        argon_server_base_url = env.get("ARGON_SERVER_FQDN", 0)
+                        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
                         for subscriber in dss_response_subscribers:
                             subscriptions = subscriber["subscriptions"]
                             uss_base_url = subscriber["uss_base_url"]

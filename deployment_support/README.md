@@ -6,7 +6,7 @@ This guide is mainly for technical engineers within organizations who are intere
 
 ## Introduction and objectives
 
-This quick start is for local development / testing only, for a more detailed "Production" instance see the currently under development [Production Deployment](oauth_infrastructure.md) document. The main difference between local development and production is that for production you will need a full fledged OAUTH server like [Flight Passport](https://github.com/utmalliance/flight_passport) or others. For this quickstart we will use the simple authentication / token generation mechanism that requires not additional server setup. In this quickstart, we will:
+This quick start is for local development / testing only, for a more detailed "Production" instance see the currently under development [Production Deployment](oauth_infrastructure.md) document. The main difference between local development and production is that for production you will need a full fledged OAUTH server like [Flight Passport](https://github.com/xtmalliance/flight_passport) or others. For this quickstart we will use the simple authentication / token generation mechanism that requires not additional server setup. In this quickstart, we will:
 
 1. Create a .env file
 2. Use Docker compose to run Argon Server server
@@ -15,7 +15,7 @@ This quick start is for local development / testing only, for a more detailed "P
 
 ### 1. Create .env File
 
-For this quick start we will use the [sample .env](https://github.com/utmalliance/argon-server/blob/master/deployment_support/.env.local) file. You can copy the file to create a new .env file, we will go over the details of the file below.
+For this quick start we will use the [sample .env](https://github.com/xtmalliance/argon-server/blob/master/deployment_support/.env.local) file. You can copy the file to create a new .env file, we will go over the details of the file below.
 
 | Variable Key | Data Type | Description |
 |--------------|--------------|:-----:|
@@ -44,7 +44,7 @@ If you are working in stand-alone mode, recommended initially, the above environ
 | POSTGRES_DB | string| You can name a appropriate name, see the sample file |
 | POSTGRES_HOST | string| You can name a appropriate name, see the sample file |
 | PGDATA | string | This is where the data is stored, you can use `/var/lib/postgresql/data/pgdata` here |
-| ARGON_SERVER_FQDN | string | This is the domain name of a Argon Server deployment e.g. `https://beta.argonserver.com` |
+| ARGONSERVER_FQDN | string | This is the domain name of a Argon Server deployment e.g. `https://beta.argonserver.com` |
 
 ### 2. Use Docker Compose to stand up Argon Server
 Once you have created and saved the .env file you can then use the [docker-compose.yaml](../docker-compose.yml) file to start the instance. Just run `docker compose up` and a running instance of Argon Server will be available.
@@ -53,12 +53,12 @@ Once you have created and saved the .env file you can then use the [docker-compo
 You can run Argon Server by running `docker compose up` and then go to `http://localhost:8000`, you should see the Argon Server Logo and a link to the API and Ping documentation. Congratulations 🎉 we now have a running version of the system!
 
 ### 3. Upload some flight information
-Next we can now upload flight data. Argon Server has a extensive API and you can review it, any data uploaded or downloaded is done via the API. The [importers](../importers/) directory has a set of scripts that help you with uploading data / flight tracks. For this quickstart, we will use the [import_flight_json_argon_server_local.py](https://github.com/utmalliance/verification/blob/main/argon_server_e2e_integration/import_flight_json_argon_server_local.py) script here, you can see the rest of the scripts there to understand how it works.
+Next we can now upload flight data. Argon Server has a extensive API and you can review it, any data uploaded or downloaded is done via the API. The [importers](../importers/) directory has a set of scripts that help you with uploading data / flight tracks. For this quickstart, we will use the [import_flight_json_argon_server_local.py](https://github.com/xtmalliance/verification/blob/main/argon_server_e2e_integration/import_flight_json_argon_server_local.py) script here, you can see the rest of the scripts there to understand how it works.
 
 You will have to setup a environment like Anaconda or similar software package and install dependencies via something like `pip install -r requirements.txt` then you can run the import script via `python import_flight_json_argon_server_local.py` this will send some observations to the `/set_air_traffic` POST endpoint. This script will send a observation and then wait for 10 seconds and send another one. All of this requires Python.
 
 ### 4. Use Postman to query the API
-While the script is running you can install Postman and which should help us query the API. You can import the [Postman Collection](../api/argon_server_api.postman_collection.json) prior. You will also need a "NoAuth" Bearer JWT token that you can generate by using the [get_access_token.py](https://github.com/utmalliance/verification/blob/main/argon_server_e2e_integration/get_access_token.py) script. You should have a scope of `argon.read` and a audience of `testflight.argonserver.com`. We will use this token to go to the Postman collection > Flight Feed Operations > Get airtraffic observations. You should be able to see output of the flight feed as a response!
+While the script is running you can install Postman and which should help us query the API. You can import the [Postman Collection](../api/argon_server_api.postman_collection.json) prior. You will also need a "NoAuth" Bearer JWT token that you can generate by using the [get_access_token.py](https://github.com/xtmalliance/verification/blob/main/argon_server_e2e_integration/get_access_token.py) script. You should have a scope of `argon.read` and a audience of `testflight.argonserver.com`. We will use this token to go to the Postman collection > Flight Feed Operations > Get airtraffic observations. You should be able to see output of the flight feed as a response!
 
 
 ## Frequently asked Questions (FAQs)
@@ -67,7 +67,7 @@ While the script is running you can install Postman and which should help us que
 A: Check existing Postgres port and / or shut down Postgres if you have it, Argon Server Docker uses the default SQL ports.
 
 **Q: Where do I point my tools for Remote ID / Strategic Deconfliction APIs ?**
-A: Check the [API Specification](http://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/utmalliance/argon-server/master/api/argon-server-1.0.0-resolved.yaml) to see the appropriate endpoints and / or download the [Postman Collection](../api/argon_server_api.postman_collection.json) to see the endpoints.
+A: Check the [API Specification](http://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/xtmalliance/argon-server/master/api/argon-server-1.0.0-resolved.yaml) to see the appropriate endpoints and / or download the [Postman Collection](../api/argon_server_api.postman_collection.json) to see the endpoints.
 
 **Q: Is there guide on how to configure Flight Passport can be configured to be used with Argon Server + Spotlight?**
 A: Yes there is a small [OAUTH Infrastructure](oauth_infrastructure.md) document.

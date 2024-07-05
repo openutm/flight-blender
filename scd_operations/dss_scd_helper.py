@@ -72,18 +72,14 @@ logger = logging.getLogger("django")
 
 
 def is_time_within_time_period(start_time: datetime, end_time: datetime, time_to_check: datetime):
-    if start_time < end_time:
-        return time_to_check >= start_time and time_to_check <= end_time
-    else:
-        # Over midnight:
-        return time_to_check >= start_time or time_to_check <= end_time
+    return time_to_check >= start_time or time_to_check <= end_time
 
 
 class FlightPlanningDataValidator:
     def __init__(self, incoming_flight_planning_data: FlightPlanningInjectionData):
         self.flight_planning_data = incoming_flight_planning_data
 
-    def validate_flight_planning_state(self):
+    def validate_flight_planning_state(self) -> bool:
         try:
             assert self.flight_planning_data.uas_state in [
                 "Nominal",
@@ -97,7 +93,7 @@ class FlightPlanningDataValidator:
         else:
             return True
 
-    def validate_flight_planning_off_nominals(self):
+    def validate_flight_planning_off_nominals(self) -> bool:
         if self.flight_planning_data.usage_state in ["Planned", "InUse"] and bool(self.flight_planning_data.off_nominal_volumes):
             return False
         else:
@@ -117,7 +113,7 @@ class OperationalIntentValidator:
     def __init__(self, operational_intent_data: OperationalIntentTestInjection):
         self.operational_intent_data = operational_intent_data
 
-    def validate_operational_intent_state(self):
+    def validate_operational_intent_state(self) -> bool:
         try:
             assert self.operational_intent_data.state in [
                 "Accepted",
@@ -130,7 +126,7 @@ class OperationalIntentValidator:
         else:
             return True
 
-    def validate_operational_intent_state_off_nominals(self):
+    def validate_operational_intent_state_off_nominals(self) -> bool:
         if self.operational_intent_data.state in ["Accepted", "Activated"] and bool(self.operational_intent_data.off_nominal_volumes):
             return False
         else:
@@ -189,6 +185,18 @@ class VolumesValidator:
         else:
             return True
 
+    def validate_volume_times_within_limits_for_creation(self, volume: Volume4D) -> bool:
+        """This method validates that the operational intent is not in the past"""
+        now = arrow.now()
+        volume_start_datetime = arrow.get(volume.time_start.value)
+        start_time_valid = True
+        delta = now - volume_start_datetime
+        time_delta_seconds = delta.total_seconds()
+        if time_delta_seconds > 5:
+            start_time_valid = False
+
+        return start_time_valid
+
     def validate_polygon_vertices(self, volume: Volume4D) -> bool:
         v = asdict(volume)
         cur_volume = v["volume"]
@@ -200,6 +208,14 @@ class VolumesValidator:
                 if total_vertices < 3:
                     return False
         return True
+
+    def pre_operational_intent_creation_checks(self, volumes: List[Volume4D]) -> bool:
+        all_volume_start_time_ok = []
+        for volume in volumes:
+            start_time_validated = self.validate_volume_times_within_limits_for_creation(volume)
+            all_volume_start_time_ok.append(start_time_validated)
+
+        return all(all_volume_start_time_ok)
 
     def validate_volumes(self, volumes: List[Volume4D]) -> bool:
         all_volumes_ok = []
@@ -396,7 +412,7 @@ class OperationalIntentReferenceHelper:
             op_int_details = json.loads(op_int_details_raw)
             reference_full = op_int_details["success_response"]["operational_intent_reference"]
             # dss_response_subscribers = op_int_details["success_response"]["subscribers"]
-            # argon_server_base_url = env.get("ARGON_SERVER_FQDN", 0)
+            # argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
 
             # for subscriber in dss_response_subscribers:
             #     subscriptions = subscriber["subscriptions"]
@@ -565,7 +581,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        argon_server_base_url = env.get("ARGON_SERVER_FQDN", 0)
+        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
         my_op_int_ref_helper = OperationalIntentReferenceHelper()
         all_uss_operational_intent_details = []
 
@@ -873,7 +889,8 @@ class SCDOperations:
     ):
         """This method posts operational intent details to peer USS via a POST request to /uss/v1/operational_intents"""
         auth_token = self.get_auth_token(audience=audience)
-
+        logger.info(")))")
+        logger.info(uss_base_url)
         notification_url = uss_base_url + "/uss/v1/operational_intents"
         headers = {
             "Content-Type": "application/json",
@@ -912,16 +929,18 @@ class SCDOperations:
     ):
         """This method sends a notification to all the subscribers of the operational intent reference in the DSS"""
         for subscriber in all_subscribers:
-            operational_intent = OperationalIntentDetailsUSSResponse(reference=operational_intent_reference, details=operational_intent_details)
+            if subscriber.uss_base_url != "https://dummy.uss":
+                operational_intent = OperationalIntentDetailsUSSResponse(reference=operational_intent_reference, details=operational_intent_details)
 
-            notification_payload = NotifyPeerUSSPostPayload(
-                operational_intent_id=operational_intent_id, operational_intent=operational_intent, subscriptions=subscriber.subscriptions
-            )
-            audience = generate_audience_from_base_url(base_url=subscriber.uss_base_url)
-            if audience != "host.docker.internal":
-                self.notify_peer_uss_of_created_updated_operational_intent(
-                    uss_base_url=subscriber.uss_base_url, notification_payload=notification_payload, audience=audience
+                notification_payload = NotifyPeerUSSPostPayload(
+                    operational_intent_id=operational_intent_id, operational_intent=operational_intent, subscriptions=subscriber.subscriptions
                 )
+                audience = generate_audience_from_base_url(base_url=subscriber.uss_base_url)
+
+                if audience != "host.docker.internal":
+                    self.notify_peer_uss_of_created_updated_operational_intent(
+                        uss_base_url=subscriber.uss_base_url, notification_payload=notification_payload, audience=audience
+                    )
 
     def process_retrieved_airspace_volumes(
         self,
@@ -1008,7 +1027,7 @@ class SCDOperations:
         """This method updates a operational intent from one state to other"""
         auth_token = self.get_auth_token()
         logger.info("Updating operational intent...")
-        argon_server_base_url = env.get("ARGON_SERVER_FQDN", 0)
+        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
 
         # Initialize the update request with empty airspace key
         operational_intent_update_payload = OperationalIntentUpdateRequest(
@@ -1076,7 +1095,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        argon_server_base_url = env.get("ARGON_SERVER_FQDN", 0)
+        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
         dss_r = requests.put(
             dss_opint_update_url,
             json=json.loads(json.dumps(asdict(operational_intent_update_payload))),
@@ -1142,7 +1161,7 @@ class SCDOperations:
         }
         management_key = str(uuid.uuid4())
         airspace_keys = []
-        argon_server_base_url = env.get("ARGON_SERVER_FQDN", 0)
+        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
         implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=argon_server_base_url)
         operational_intent_reference = OperationalIntentReference(
             extents=volumes,
@@ -1189,14 +1208,14 @@ class SCDOperations:
             return d_r
 
         logger.info(
-            "Found {all_existing_operational_intent_details} operational intent references in the DSS".format(
+            "Found {all_existing_operational_intent_details:02} operational intent references in the DSS".format(
                 all_existing_operational_intent_details=len(all_existing_operational_intent_details)
             )
         )
 
         if all_existing_operational_intent_details:
             logger.info(
-                "Checking deconfliction status with {num_existing_op_ints} operational intent details".format(
+                "Checking deconfliction status with {num_existing_op_ints:02} operational intent details".format(
                     num_existing_op_ints=len(all_existing_operational_intent_details)
                 )
             )
@@ -1224,7 +1243,6 @@ class SCDOperations:
         # logger.info("Deconfliction status: %s" % deconflicted)
         # logger.info("Flight deconfliction status checked")
         opint_creation_payload = json.loads(json.dumps(asdict(operational_intent_reference)))
-
         dss_response = {}
 
         if deconflicted:

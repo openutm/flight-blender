@@ -339,7 +339,7 @@ def stream_rid_test_data(requested_flights):
         time_end=RIDTime(value=astm_rid_standard_end_time.isoformat(), format="RFC3339"),
     )
 
-    uss_base_url = env.get("ARGON_SERVER_FQDN", "http://host.docker.internal:8000")
+    uss_base_url = env.get("ARGONSERVER_FQDN", "http://host.docker.internal:8000")
     my_dss_helper = dss_rid_helper.RemoteIDOperations()
 
     logger.info("Creating a DSS ISA..")

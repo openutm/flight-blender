@@ -73,8 +73,8 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
         current_state = self.instance.state
         event = OPERATOR_EVENT_LOOKUP[value]
 
-        if current_state == 5:
-            raise serializers.ValidationError("Cannot change state of an operation that has already set as ended")
+        if current_state in [5, 6, 7, 8]:
+            raise serializers.ValidationError("Cannot change state of an operation that has already set as ended, withdrawn, cancelled or rejected")
 
         my_conformance_helper = FlightOperationConformanceHelper(str(self.instance.id))
         transition_valid = my_conformance_helper.verify_operation_state_transition(original_state=current_state, new_state=value, event=event)

@@ -77,6 +77,21 @@ class ContingentState(State):
         return self
 
 
+class WithdrawnState(State):
+    def on_event(self, event):
+        return self
+
+
+class CancelledState(State):
+    def on_event(self, event):
+        return self
+
+
+class RejectedState(State):
+    def on_event(self, event):
+        return self
+
+
 # End states.
 
 
@@ -102,6 +117,12 @@ def match_state(status: int):
         return ContingentState()
     elif status == 5:
         return EndedState()
+    elif status == 6:
+        return WithdrawnState()
+    elif status == 7:
+        return CancelledState()
+    elif status == 8:
+        return RejectedState()
     else:
         return False
 
@@ -119,5 +140,11 @@ def get_status(state: State):
         return 4
     elif isinstance(state, EndedState):
         return 5
+    elif isinstance(state, WithdrawnState):
+        return 6
+    elif isinstance(state, CancelledState):
+        return 7
+    elif isinstance(state, RejectedState):
+        return 8
     else:
         return False

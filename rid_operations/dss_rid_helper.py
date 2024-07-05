@@ -222,7 +222,7 @@ class RemoteIDOperations:
 
             # check if a subscription already exists for this view_port
 
-            callback_url = env.get("ARGON_SERVER_FQDN", "https://www.https://www.argonserver.com") + "/dss/identification_service_areas"
+            callback_url = env.get("ARGONSERVER_FQDN", "https://www.https://www.argonserver.com") + "/dss/identification_service_areas"
             now = datetime.now()
 
             callback_url += "/" + new_subscription_id

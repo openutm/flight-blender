@@ -35,7 +35,7 @@ class ArgonServerDatabaseReader:
     def check_flight_declaration_exists(self, flight_declaration_id: str) -> bool:
         return FlightDeclaration.objects.filter(id=flight_declaration_id).exists()
 
-    def get_flight_declaration_by_id(self, flight_declaration_id: str) -> Tuple[None, FlightDeclaration]:
+    def get_flight_declaration_by_id(self, flight_declaration_id: str) -> Union[None, FlightDeclaration]:
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
             return flight_declaration

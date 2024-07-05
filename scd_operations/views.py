@@ -230,7 +230,6 @@ def scd_auth_test(request, operation_id):
                 {"result": "Could not parse test injection payload, expected key %s not found " % ke},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         # Initial data for subscriptions
         opint_subscription_end_time = timedelta(seconds=180)
         # Parse the operational intent
@@ -243,7 +242,6 @@ def scd_auth_test(request, operation_id):
                 {"result": "Could not parse test injection payload, expected key %s not found " % ke},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         # Create a list of Volume4D objects
         all_volumes: List[Volume4D] = []
         for volume in operational_intent_volumes:
@@ -272,7 +270,6 @@ def scd_auth_test(request, operation_id):
         # Begin validation of operational intent
         my_operational_intent_validator = dss_scd_helper.OperationalIntentValidator(operational_intent_data=operational_intent_data)
         operational_intent_valid = my_operational_intent_validator.validate_operational_intent_test_data()
-
         if not operational_intent_valid:
             return Response(
                 json.loads(json.dumps(rejected_test_injection_response, cls=EnhancedJSONEncoder)),
@@ -384,7 +381,6 @@ def scd_auth_test(request, operation_id):
                 # Update the redis storage for operational intent details so that when the USS endpoint is queried it will reflect the most updated state.
 
                 # Notify the subscribers that the operational intent has been updated
-
                 my_scd_dss_helper.process_peer_uss_notifications(
                     all_subscribers=operational_intent_update_job.dss_response.subscribers,
                     operational_intent_details=operational_intent_details_notification,
@@ -584,7 +580,8 @@ def scd_auth_test(request, operation_id):
                 notes="The flight was closed successfully by the USS and is now out of the UTM system.",
             )
         else:
-            delete_flight_response = DeleteFlightResponse(
+            delete_flight_response = DeleteFlightR
+            esponse(
                 result=DeleteFlightStatusResponseEnum.Failed,
                 notes="The flight was not found in the USS, please check your flight ID %s" % operation_id_str,
             )
@@ -819,9 +816,18 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     status=status.HTTP_200_OK,
                 )
         else:
+            pre_creation_checks_passed = my_volumes_validator.pre_operational_intent_creation_checks(
+                volumes=scd_test_data.intended_flight.basic_information.area
+            )
+            if not pre_creation_checks_passed:
+                return Response(
+                    json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)),
+                    status=status.HTTP_200_OK,
+                )
             off_nominal_volumes = (
                 scd_test_data.intended_flight.basic_information.area if flight_planning_uas_state in ["OffNominal", "Contingent"] else []
             )
+
             flight_planning_submission: OperationalIntentSubmissionStatus = my_scd_dss_helper.create_and_submit_operational_intent_reference(
                 state=generated_operational_intent_state,
                 volumes=scd_test_data.intended_flight.basic_information.area,
@@ -895,7 +901,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
             elif flight_planning_submission.status in ["failure", "peer_uss_data_sharing_issue"]:
                 logger.info(flight_planning_submission.status_code)
                 if flight_planning_submission.status_code == 408:
-                    print("&&&&")
                     return Response(
                         json.loads(json.dumps(asdict(not_planned_planning_response), cls=EnhancedJSONEncoder)),
                         status=status.HTTP_200_OK,
