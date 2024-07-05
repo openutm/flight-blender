@@ -1,6 +1,6 @@
 # Flight Blender
 
-![blender-logo]("images/blender-logo.jpg")
+![blender-logo](images/blender-logo.jpg)
 
 Flight Blender is the UTM data processing engine for the OpenUTM stack. It builds upon Argon Server. 
 
