@@ -1,6 +1,6 @@
 import json
 import logging
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from datetime import timedelta
 from uuid import UUID
 
@@ -23,6 +23,7 @@ from common.database_operations import (
     ArgonServerDatabaseReader,
     ArgonServerDatabaseWriter,
 )
+from common.utils import EnhancedJSONEncoder
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
 
 from . import dss_scd_helper
@@ -74,13 +75,6 @@ def is_valid_uuid(uuid_to_test, version=4):
     except ValueError:
         return False
     return str(uuid_obj) == uuid_to_test
-
-
-class EnhancedJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if is_dataclass(o):
-            return asdict(o)
-        return super().default(o)
 
 
 @api_view(["GET"])

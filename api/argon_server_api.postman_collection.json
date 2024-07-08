@@ -393,17 +393,17 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\"state\":2, \"submitted_by\":\"hh@auth.com\"}"
+							"raw": "{\"state\":4, \"submitted_by\":\"hh@auth.com\"}"
 						},
 						"url": {
-							"raw": "{{base_url}}/flight_declaration_ops/flight_declaration_state/d120d8bb-2169-463f-bbfd-6850bc7ec2da",
+							"raw": "{{base_url}}/flight_declaration_ops/flight_declaration_state/620a5ad9-5657-4002-9450-c5c683188a50",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"flight_declaration_ops",
 								"flight_declaration_state",
-								"d120d8bb-2169-463f-bbfd-6850bc7ec2da"
+								"620a5ad9-5657-4002-9450-c5c683188a50"
 							],
 							"query": [
 								{
@@ -506,23 +506,13 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/flight_declaration_ops/flight_declaration?start_date=2024-02-12&end_date=2024-02-15",
+							"raw": "{{base_url}}/flight_declaration_ops/flight_declaration",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"flight_declaration_ops",
 								"flight_declaration"
-							],
-							"query": [
-								{
-									"key": "start_date",
-									"value": "2024-02-12"
-								},
-								{
-									"key": "end_date",
-									"value": "2024-02-15"
-								}
 							]
 						},
 						"description": "This request submits a Geofence to Flight Blender"
@@ -542,7 +532,7 @@
 							"oauth2": [
 								{
 									"key": "accessTokenUrl",
-									"value": "http://local.test:9000/oauth/token/",
+									"value": "{{auth_server_base_url}}/oauth/token/",
 									"type": "string"
 								},
 								{
@@ -618,13 +608,14 @@
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/flight_declaration_ops/flight_declaration",
+							"raw": "{{base_url}}/flight_declaration_ops/flight_declaration_state/b160e7ac-1658-4187-bb63-19e03dab0cab",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"flight_declaration_ops",
-								"flight_declaration"
+								"flight_declaration_state",
+								"b160e7ac-1658-4187-bb63-19e03dab0cab"
 							]
 						},
 						"description": "This request submits a Geofence to Flight Blender"
@@ -815,7 +806,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n    \"exchange_type\": \"flight_declaration\",\r\n    \"flight_id\": \"5a7f3377-b991-4cc8-af2d-379d57f786d1\",\r\n    \"plan_id\": \"a5b5484c-a23c-4e83-8bb8-a6a5c294e45b\",\r\n    \"flight_state\": 2,\r\n    \"flight_approved\": 0,\r\n    \"sequence_number\": 0,\r\n    \"start_datetime\": \"2024-05-03T14:25:08.842Z\",\r\n    \"end_datetime\": \"2024-05-03T14:27:08.842Z\",\r\n    \"version\": \"1.0.0\",\r\n    \"purpose\": \"Delivery\",\r\n    \"expect_telemetry\": true,\r\n    \"originating_party\": \"Medicine Delivery Company\",\r\n    \"contact_url\": \"https://utm.originatingparty.com/contact?5a7f3377-b991-4cc8-af2d-379d57f786d1\",\r\n    \"type_of_operation\": 0,\r\n    \"aircraft_id\": \"157de9bb-6b49-496b-bf3f-0b768ce6a3b6\",\r\n    \"operator_id\": \"4a725cb5-02d2-4f78-888f-b93088d324be\",\r\n    \"flight_declaration_geo_json\": {\r\n        \"type\": \"FeatureCollection\",\r\n        \"features\": [\r\n            {\r\n                \"type\": \"Feature\",\r\n                \"properties\": {\r\n                    \"id\": \"0\",\r\n                    \"start_datetime\": \"2023-09-15T16:29:08.842Z\",\r\n                    \"end_datetime\": \"2023-09-15T16:29:08.842Z\",\r\n                    \"max_altitude\": {\r\n                        \"meters\": 152.4,\r\n                        \"datum\": \"agl\"\r\n                    },\r\n                    \"min_altitude\": {\r\n                        \"meters\": 102.4,\r\n                        \"datum\": \"agl\"\r\n                    }\r\n                },\r\n                \"geometry\": {\r\n                    \"coordinates\": [\r\n                        [\r\n                            15.776083042366338,\r\n                            1.18379149158649\r\n                        ],\r\n                        [\r\n                            15.799823306116707,\r\n                            1.2159036290562142\r\n                        ],\r\n                        [\r\n                            15.812391681043636,\r\n                            1.2675614791659342\r\n                        ],\r\n                        [\r\n                            15.822167083764754,\r\n                            1.3024648511225934\r\n                        ],\r\n                        [\r\n                            15.82635654207283,\r\n                            1.3220105290909174\r\n                        ]\r\n                    ],\r\n                    \"type\": \"LineString\"\r\n                }\r\n            }\r\n        ]\r\n    }\r\n}",
+							"raw": "{\r\n    \"exchange_type\": \"flight_declaration\",\r\n    \"flight_id\": \"5a7f3377-b991-4cc8-af2d-379d57f786d1\",\r\n    \"plan_id\": \"a5b5484c-a23c-4e83-8bb8-a6a5c294e45b\",\r\n    \"flight_state\": 2,\r\n    \"flight_approved\": 0,\r\n    \"sequence_number\": 0,\r\n    \"start_datetime\": \"2024-06-20T14:25:08.842Z\",\r\n    \"end_datetime\": \"2024-06-20T14:27:08.842Z\",\r\n    \"version\": \"1.0.0\",\r\n    \"purpose\": \"Delivery\",\r\n    \"expect_telemetry\": true,\r\n    \"originating_party\": \"Medicine Delivery Company\",\r\n    \"contact_url\": \"https://utm.originatingparty.com/contact?5a7f3377-b991-4cc8-af2d-379d57f786d1\",\r\n    \"type_of_operation\": 0,\r\n    \"aircraft_id\": \"157de9bb-6b49-496b-bf3f-0b768ce6a3b6\",\r\n    \"operator_id\": \"4a725cb5-02d2-4f78-888f-b93088d324be\",\r\n    \"flight_declaration_geo_json\": {\r\n        \"type\": \"FeatureCollection\",\r\n        \"features\": [\r\n            {\r\n                \"type\": \"Feature\",\r\n                \"properties\": {\r\n                    \"id\": \"0\",\r\n                    \"start_datetime\": \"2023-09-15T16:29:08.842Z\",\r\n                    \"end_datetime\": \"2023-09-15T16:29:08.842Z\",\r\n                    \"max_altitude\": {\r\n                        \"meters\": 152.4,\r\n                        \"datum\": \"agl\"\r\n                    },\r\n                    \"min_altitude\": {\r\n                        \"meters\": 102.4,\r\n                        \"datum\": \"agl\"\r\n                    }\r\n                },\r\n                \"geometry\": {\r\n                    \"coordinates\": [\r\n                        [\r\n                            15.776083042366338,\r\n                            1.18379149158649\r\n                        ],\r\n                        [\r\n                            15.799823306116707,\r\n                            1.2159036290562142\r\n                        ],\r\n                        [\r\n                            15.812391681043636,\r\n                            1.2675614791659342\r\n                        ],\r\n                        [\r\n                            15.822167083764754,\r\n                            1.3024648511225934\r\n                        ],\r\n                        [\r\n                            15.82635654207283,\r\n                            1.3220105290909174\r\n                        ]\r\n                    ],\r\n                    \"type\": \"LineString\"\r\n                }\r\n            }\r\n        ]\r\n    }\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2468,7 +2459,7 @@
 			]
 		},
 		{
-			"name": "Geofence & Geozones",
+			"name": "Geofence & Geospatial map",
 			"item": [
 				{
 					"name": "Geozones Test Suite",
@@ -2562,13 +2553,13 @@
 									}
 								],
 								"url": {
-									"raw": "{{base_url}}/geo_fence_ops/geo_awareness/status",
+									"raw": "{{base_url}}/geo_fence_ops/geospatial_map/status",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"geo_fence_ops",
-										"geo_awareness",
+										"geospatial_map",
 										"status"
 									],
 									"query": [
@@ -2681,6 +2672,116 @@
 										"geo_awareness",
 										"geozone_sources",
 										"2081a7af-7631-46ab-b34e-1ebe129e69b4"
+									],
+									"query": [
+										{
+											"key": "start_date",
+											"value": "2021-01-21",
+											"disabled": true
+										},
+										{
+											"key": "end_date",
+											"value": "2021-01-31",
+											"disabled": true
+										}
+									]
+								},
+								"description": "This request submits a Geofence to Flight Blender"
+							},
+							"response": []
+						},
+						{
+							"name": "All Geospatial Map Sources",
+							"protocolProfileBehavior": {
+								"disabledSystemHeaders": {
+									"content-type": true
+								}
+							},
+							"request": {
+								"auth": {
+									"type": "oauth2",
+									"oauth2": [
+										{
+											"key": "accessTokenUrl",
+											"value": "{{passport_oauth_token_url}}",
+											"type": "string"
+										},
+										{
+											"key": "scope",
+											"value": "{{flight_blender_scopes}}",
+											"type": "string"
+										},
+										{
+											"key": "audience",
+											"value": {
+												"56d75814-297b-4a52-b60d-94e1b4f0aee6": "{{flight_blender_audience}}"
+											},
+											"type": "any"
+										},
+										{
+											"key": "clientSecret",
+											"value": "{{client_secret}}",
+											"type": "string"
+										},
+										{
+											"key": "clientId",
+											"value": "{{client_id}}",
+											"type": "string"
+										},
+										{
+											"key": "tokenType",
+											"value": "",
+											"type": "string"
+										},
+										{
+											"key": "accessToken",
+											"value": "\"eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6IjkzNDMyNTZiLTVlYTUtNGY0OC04NzJlLTE0YTI5N2NmZTkzYyJ9.eyJpc3MiOiJodHRwczovL2lkLm9wZW5za2llcy5zaC8iLCJleHAiOjE2MjQyNjcwMjAsImlhdCI6MTYyNDI2MzQyMCwic3ViIjoiRjB2a1ZnWkJDTWZCem1yQTZNUjRJSW5MU0trRGdYamNRb2pXTFZrU0BjbGllbnRzIiwic2NvcGUiOiJibGVuZGVyLnJlYWQgYmxlbmRlci53cml0ZSBkc3MucmVhZC5pZGVudGlmaWNhdGlvbl9zZXJ2aWNlX2FyZWFzIiwidHlwIjoiQmVhcmVyIiwiYXVkIjoidGVzdGZsaWdodC5mbGlnaHRibGVuZGVyLmNvbSJ9.RletK2EmPyJGbHLJzJbqUuaYUzO0RhzFUPOM7hDIykHDmrP8EbcXK3DXtmuirCuvPSHr6XvtXNMGWWySgvYzUucitNPhP0KXV96Ci6s7MIBBmARPS7wuSTSIZJYL7A6xW_BZp2IDV2A_tCM7BFpq8rIIBO1v_KbGm-C6lrSjjUp8JlpxkdCBmmkyEqNeppyw7kxIxBJFNnHGAE0WIQ1mANXNLIADn8v3vPh6AWNs8Pzjeh-sLkAjkg5IejMxCJCpZUbqBtDUzGbycy3a-yHK10efu1gOR5enez4ExY0jd5ZSklbO4mWlJ3Qba1WNEoqThHHzH64rPIvt89Q68RHH9umhl2_nPFPHznq4xQXBfWGHyKv_0hglFOGCxRfQB3RKkzZpvHy9BHZjnjfPx5IKjg4qVug6_yCFNTuRJlHNA_ymcpcEGHgQqm2gxRRv2JU3dCSTL4i6pse9xcMZIsJxupp-eLe8qe_PVAh0uL_F_ogBuTVYTIBXDE-MTGVkrbd-DJJ_kZI2-qKGH6PR8VsZjBp26SG88IWhF-AICnw4bVcsC3BiDf_dsUf5_EUbXI0A3XmmDJzU6G42-VaWoFF26EOYsT7g_Y3g3m9Q7dpa3GdzcAIdFU6o7hXPPIakHQwifUP8UqXpqEA5UYu_DluWhNg1cQcPG3gayzUob0tBO8U",
+											"type": "string"
+										},
+										{
+											"key": "redirect_uri",
+											"value": "http://local.test:8000/",
+											"type": "string"
+										},
+										{
+											"key": "grant_type",
+											"value": "client_credentials",
+											"type": "string"
+										},
+										{
+											"key": "authUrl",
+											"value": "http://local.test:8000/oauth/authorize/",
+											"type": "string"
+										},
+										{
+											"key": "client_authentication",
+											"value": "body",
+											"type": "string"
+										},
+										{
+											"key": "addTokenTo",
+											"value": "header",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/geo_fence_ops/geospatial_map/geospatial_data_sources",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"geo_fence_ops",
+										"geospatial_map",
+										"geospatial_data_sources"
 									],
 									"query": [
 										{
@@ -3629,7 +3730,8 @@
 						}
 					]
 				}
-			]
+			],
+			"description": "This folder contains API calls for Geofences and the geospatial map test suite"
 		},
 		{
 			"name": "UTM Adapter",
@@ -3884,6 +3986,39 @@
 							"path": [
 								"scd",
 								"flight_planning",
+								"status"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Geospatial Map",
+			"item": [
+				{
+					"name": "Get Geospatial map capability",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJsb2NhbC50ZXN0IiwiZXhwIjoxNjQ2MjI1MDA2LCJpc3MiOiJkdW1teSIsInNjb3BlIjoidXRtLmluamVjdF90ZXN0X2RhdGEiLCJzdWIiOiJ1c3MxIn0.QBdU8W-9f0Jl5_OMZW2TIjRu_DuByP5iQX68NRVqdsDZIPazBY43ppELgybtRUoz_E8ML3c7TRkPRTc6rCNbYaZ31gxFbodIG0DNlJ8z2wZtOSGvh319s8oYlhexE5ofZjRDxT_B0yjD5gL8n0ASpVsbdk_Q4V3ClF7VU7tYGzQ",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/geospatial_map/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"geospatial_map",
 								"status"
 							]
 						}

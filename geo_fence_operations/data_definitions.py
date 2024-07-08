@@ -13,9 +13,13 @@ class GeoAwarenessStatusResponseEnum(str, enum.Enum):
 
 
 @dataclass
-class GeoAwarenessTestHarnessStatus:
-    status: Literal[GeoAwarenessStatusResponseEnum.Starting, GeoAwarenessStatusResponseEnum.Ready]
-    version: str
+class GeoSpatialMapTestHarnessStatus:
+    status: Literal[
+        GeoAwarenessStatusResponseEnum.Starting,
+        GeoAwarenessStatusResponseEnum.Ready,
+    ]
+    api_version: Optional[str]
+    api_name: Optional[str] = "Geospatial Map Provider Automated Testing Interface"
 
 
 class HTTPSSource(ImplicitDict):
@@ -142,15 +146,26 @@ class ED269Filter(ImplicitDict):
     ]
 
 
+class ResultingOperationalImpactEnum(str, enum.Enum):
+    """A enum to specify the result of processing of a GeoZone"""
+
+    Block = "Block"
+    Advise = "Advise"
+    BlockOrAdvise = "BlockOrAdvise"
+
+
 class GeoZoneFilterSet(ImplicitDict):
+    resulting_operational_impact: str
     position: Optional[GeoZoneFilterPosition]
     after: Optional[str]
     before: Optional[str]
-    ed269: List[ED269Filter]
+    operation_rule_set: Optional[str]
+    restriction_source: Optional[str]
+    ed269: Optional[ED269Filter]
 
 
 class GeozonesCheck(ImplicitDict):
-    filterSets: List[GeoZoneFilterSet]
+    filter_sets: List[GeoZoneFilterSet]
 
 
 class GeoZoneCheckRequestBody(ImplicitDict):
@@ -170,4 +185,4 @@ class GeoZoneCheckResult:
 @dataclass
 class GeoZoneChecksResponse:
     applicableGeozone: List[GeoZoneCheckResult]
-    message: str
+    message: Optional[str]

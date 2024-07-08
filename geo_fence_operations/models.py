@@ -14,6 +14,15 @@ class GeoFence(models.Model):
         (2, _("MSL")),
     )
 
+    STATUS_CODES = (
+        (0, _("Activating")),
+        (1, _("Ready")),
+        (3, _("Deactivating")),
+        (4, _("Unsupported")),
+        (5, _("Rejected")),
+        (6, _("Error")),
+    )
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     raw_geo_fence = models.TextField(blank=True, null=True, help_text="Set a GeoJSON as a GeoFence")
@@ -27,6 +36,9 @@ class GeoFence(models.Model):
 
     name = models.CharField(max_length=50)
     bounds = models.CharField(max_length=140)
+
+    status = models.IntegerField(choices=STATUS_CODES, default=0)
+    message = models.CharField(max_length=140, help_text="Set the status regarding the availability of the dataset", blank=True, null=True)
 
     is_test_dataset = models.BooleanField(
         default=False,

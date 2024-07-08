@@ -6,7 +6,7 @@ walrus==0.9.2
 celery==5.3.4
 requests==2.32.0
 python-dotenv==1.0.1
-pyproj==3.3.1
+pyproj==3.6.1
 pandas==2.0.3
 Shapely==1.8.5
 python-jose==3.3.0
@@ -26,3 +26,4 @@ http-message-signatures==0.4.4
 dj-database-url==2.1.0
 django-celery-beat==2.5.0
 wait-for-it==2.2.2
+numpy<2.0.0

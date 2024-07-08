@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from uuid import UUID
 
 import arrow
@@ -13,6 +13,7 @@ from shapely.geometry import Point
 import rid_operations.view_port_ops as view_port_ops
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
+from common.utils import EnhancedJSONEncoder
 from flight_feed_operations import flight_stream_helper
 from rid_operations.data_definitions import (
     UASID,
@@ -58,13 +59,6 @@ def is_valid_uuid(uuid_to_test, version=4):
     except ValueError:
         return False
     return str(uuid_obj) == uuid_to_test
-
-
-class EnhancedJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if is_dataclass(o):
-            return asdict(o)
-        return super().default(o)
 
 
 @api_view(["POST"])

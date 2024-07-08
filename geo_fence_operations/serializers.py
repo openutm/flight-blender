@@ -55,3 +55,20 @@ class GeoFenceSerializer(serializers.ModelSerializer):
 
     def get_altitude_ref(self, obj):
         return obj.get_altitude_ref_display()
+
+
+class GeoSpatialMapListSerializer(serializers.ModelSerializer):
+    id = serializers.SerializerMethodField()
+    message = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GeoFence
+        fields = (
+            "id",
+            "status",
+            "message",
+        )
+
+    def get_status(self, obj):
+        return obj.get_status_display()

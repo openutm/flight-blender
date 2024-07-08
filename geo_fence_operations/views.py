@@ -5,7 +5,7 @@ import io
 import json
 import logging
 import uuid
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from decimal import Decimal
 from typing import List
 
@@ -26,14 +26,15 @@ from shapely.ops import unary_union
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
 from common.data_definitions import ARGONSERVER_READ_SCOPE, ARGONSERVER_WRITE_SCOPE
+from common.utils import EnhancedJSONEncoder
 from flight_declaration_operations.pagination import StandardResultsSetPagination
 
 from . import rtree_geo_fence_helper
 from .buffer_helper import toFromUTM
 from .common import validate_geo_zone
 from .data_definitions import (
-    GeoAwarenessTestHarnessStatus,
     GeoAwarenessTestStatus,
+    GeoSpatialMapTestHarnessStatus,
     GeoZoneCheckRequestBody,
     GeoZoneCheckResult,
     GeoZoneChecksResponse,
@@ -41,18 +42,14 @@ from .data_definitions import (
     GeoZoneHttpsSource,
 )
 from .models import GeoFence
-from .serializers import GeoFenceRequestSerializer, GeoFenceSerializer
+from .serializers import (
+    GeoFenceRequestSerializer,
+    GeoFenceSerializer,
+    GeoSpatialMapListSerializer,
+)
 from .tasks import download_geozone_source, write_geo_zone
 
 logger = logging.getLogger("django")
-
-
-class EnhancedJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if is_dataclass(o):
-            return asdict(o)
-        return super().default(o)
-
 
 INDEX_NAME = "geofence_proc"
 
@@ -211,10 +208,61 @@ class GeoFenceList(mixins.ListModelMixin, generics.GenericAPIView):
         return self.list(request, *args, **kwargs)
 
 
+@method_decorator(requires_scopes([ARGONSERVER_READ_SCOPE]), name="dispatch")
+class GeospatialMapList(mixins.ListModelMixin, generics.GenericAPIView):
+    queryset = GeoFence.objects.filter(is_test_dataset=False).order_by("created_at")
+    serializer_class = GeoSpatialMapListSerializer
+
+    def get_relevant_geo_fence(self, start_date, end_date, view_port: List[float]):
+        present = arrow.now()
+        if start_date and end_date:
+            s_date = arrow.get(start_date, "YYYY-MM-DD")
+            e_date = arrow.get(end_date, "YYYY-MM-DD")
+
+        else:
+            s_date = present.shift(days=-1)
+            e_date = present.shift(days=1)
+
+        all_fences_within_timelimits = GeoFence.objects.filter(start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat())
+        logger.info("Found %s geofences" % len(all_fences_within_timelimits))
+
+        if view_port:
+            INDEX_NAME = "geofence_idx"
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+            my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
+            all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_port)
+            relevant_id_set = []
+            for i in all_relevant_fences:
+                relevant_id_set.append(i["geo_fence_id"])
+
+            my_rtree_helper.clear_rtree_index()
+            filtered_relevant_fences = GeoFence.objects.filter(id__in=relevant_id_set)
+
+        else:
+            filtered_relevant_fences = all_fences_within_timelimits
+
+        return filtered_relevant_fences
+
+    def get_queryset(self):
+        start_date = self.request.query_params.get("start_date", None)
+        end_date = self.request.query_params.get("end_date", None)
+
+        view = self.request.query_params.get("view", None)
+        view_port = []
+        if view:
+            view_port = [float(i) for i in view.split(",")]
+
+        responses = self.get_relevant_geo_fence(view_port=view_port, start_date=start_date, end_date=end_date)
+        return responses
+
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
+
+
 @method_decorator(requires_scopes(["geo-awareness.test"]), name="dispatch")
 class GeoZoneTestHarnessStatus(generics.GenericAPIView):
     def get(self, request, *args, **kwargs):
-        status = GeoAwarenessTestHarnessStatus(status="Ready", version="latest")
+        status = GeoSpatialMapTestHarnessStatus(status="Ready", api_version="latest")
         return JsonResponse(json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200)
 
 
@@ -300,74 +348,77 @@ class GeoZoneSourcesOperations(generics.GenericAPIView):
 @method_decorator(requires_scopes(["geo-awareness.test"]), name="dispatch")
 class GeoZoneCheck(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
-        proj = pyproj.Proj(proj="utm", zone="54N", ellps="WGS84", datum="WGS84")
+        proj = pyproj.Proj("+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs ")
 
-        geo_zone_checks = ImplicitDict.parse(request.data, GeoZoneCheckRequestBody)
+        geo_zone_body = ImplicitDict.parse(request.data, GeoZoneCheckRequestBody)
         geo_zones_of_interest = False
-        for filter_set in geo_zone_checks.checks.filterSets:
-            if "position" in filter_set:
-                filter_position = ImplicitDict.parse(filter_set["position"], GeoZoneFilterPosition)
-                relevant_geo_fences = GeoFence.objects.filter(is_test_dataset=1)
-                INDEX_NAME = "geofence_idx"
-                my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
-                # Buffer the point to get a small view port / bounds
-                init_point = Point(filter_position)
-                init_shape_utm = toFromUTM(init_point, proj)
-                buffer_shape_utm = init_shape_utm.buffer(1)
-                buffer_shape_lonlat = toFromUTM(buffer_shape_utm, proj, inv=True)
-                view_port = buffer_shape_lonlat.bounds
+        geo_zone_checks = geo_zone_body.checks
 
-                my_rtree_helper.generate_geo_fence_index(all_fences=relevant_geo_fences)
-                all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_port)
-                my_rtree_helper.clear_rtree_index()
-                if all_relevant_fences:
-                    geo_zones_of_interest = True
+        for geo_zone_check in geo_zone_checks:
+            for filter_set in geo_zone_check["filter_sets"]:
+                if "position" in filter_set:
+                    filter_position = ImplicitDict.parse(filter_set["position"], GeoZoneFilterPosition)
+                    relevant_geo_fences = GeoFence.objects.filter(is_test_dataset=1)
+                    INDEX_NAME = "geofence_idx"
+                    my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+                    # Buffer the point to get a small view port / bounds
+                    init_point = Point(filter_position)
+                    init_shape_utm = toFromUTM(init_point, proj)
+                    buffer_shape_utm = init_shape_utm.buffer(1)
+                    buffer_shape_lonlat = toFromUTM(buffer_shape_utm, proj, inv=True)
+                    view_port = buffer_shape_lonlat.bounds
 
-            if "after" in filter_set:
-                after_query = arrow.get(filter_set["after"])
-                geo_zones_exist = GeoFence.objects.filter(start_datetime__gte=after_query, is_test_dataset=1).exists()
-                if geo_zones_exist:
-                    geo_zones_of_interest = True
-            if "before" in filter_set:
-                before_query = arrow.get(filter_set["before"])
-                geo_zones_exist = GeoFence.objects.filter(before_datetime__lte=before_query, is_test_dataset=1).exists()
-                if geo_zones_exist:
-                    geo_zones_of_interest = True
-            if "ed269" in filter_set:
-                ed269_filter_set = filter_set["ed269"]
-                if "uSpaceClass" in ed269_filter_set:
-                    uSpace_class_to_query = ed269_filter_set["uSpaceClass"]
-                    # Iterate over Geofences to see if there is a uSpace class
-                    geo_zones_exist = False
-                    all_geo_zones = GeoFence.objects.filter(is_test_dataset=1)
-                    for current_geo_zone in all_geo_zones:
-                        current_geo_zone_uSpace_class = current_geo_zone["uSpaceClass"]
-                        if uSpace_class_to_query == current_geo_zone_uSpace_class:
-                            geo_zones_exist = True
-                            break
-
-                    if geo_zones_exist:
+                    my_rtree_helper.generate_geo_fence_index(all_fences=relevant_geo_fences)
+                    all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_port)
+                    my_rtree_helper.clear_rtree_index()
+                    if all_relevant_fences:
                         geo_zones_of_interest = True
 
-                if "acceptableRestrictions" in ed269_filter_set:
-                    acceptable_restrictions = ed269_filter_set["acceptableRestrictions"]
-                    geo_zones_exist = False
-                    all_geo_zones = GeoFence.objects.filter(is_test_dataset=1)
-                    for current_geo_zone in all_geo_zones:
-                        current_geo_zone_restriction = current_geo_zone["restriction"]
-                        if current_geo_zone_restriction in acceptable_restrictions:
-                            geo_zones_exist = True
-                            break
-
+                if "after" in filter_set:
+                    after_query = arrow.get(filter_set["after"])
+                    geo_zones_exist = GeoFence.objects.filter(start_datetime__gte=after_query, is_test_dataset=1).exists()
                     if geo_zones_exist:
                         geo_zones_of_interest = True
+                if "before" in filter_set:
+                    before_query = arrow.get(filter_set["before"])
+                    geo_zones_exist = GeoFence.objects.filter(before_datetime__lte=before_query, is_test_dataset=1).exists()
+                    if geo_zones_exist:
+                        geo_zones_of_interest = True
+                if "ed269" in filter_set:
+                    ed269_filter_set = filter_set["ed269"]
+                    if "uSpaceClass" in ed269_filter_set:
+                        uSpace_class_to_query = ed269_filter_set["uSpaceClass"]
+                        # Iterate over Geofences to see if there is a uSpace class
+                        geo_zones_exist = False
+                        all_geo_zones = GeoFence.objects.filter(is_test_dataset=1)
+                        for current_geo_zone in all_geo_zones:
+                            current_geo_zone_uSpace_class = current_geo_zone["uSpaceClass"]
+                            if uSpace_class_to_query == current_geo_zone_uSpace_class:
+                                geo_zones_exist = True
+                                break
+
+                        if geo_zones_exist:
+                            geo_zones_of_interest = True
+
+                    if "acceptableRestrictions" in ed269_filter_set:
+                        acceptable_restrictions = ed269_filter_set["acceptableRestrictions"]
+                        geo_zones_exist = False
+                        all_geo_zones = GeoFence.objects.filter(is_test_dataset=1)
+                        for current_geo_zone in all_geo_zones:
+                            current_geo_zone_restriction = current_geo_zone["restriction"]
+                            if current_geo_zone_restriction in acceptable_restrictions:
+                                geo_zones_exist = True
+                                break
+
+                        if geo_zones_exist:
+                            geo_zones_of_interest = True
 
         if geo_zones_of_interest:
             geo_zone_check_result = GeoZoneCheckResult(geozone="Present")
         else:
             geo_zone_check_result = GeoZoneCheckResult(geozone="Absent")
 
-        geo_zone_response = GeoZoneChecksResponse(applicableGeozone=geo_zone_check_result)
+        geo_zone_response = GeoZoneChecksResponse(applicableGeozone=geo_zone_check_result, message="Test")
         return JsonResponse(
             json.loads(json.dumps(geo_zone_response, cls=EnhancedJSONEncoder)),
             status=200,
