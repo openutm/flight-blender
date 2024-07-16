@@ -19,12 +19,13 @@ class AdvisoryInclusion(str, enum.Enum):
     NoAdvisoriesOrConditions = "NoAdvisoriesOrConditions"
 
 
-class FlightPlanProcessingResult(str, enum.Enum):
+class FlightPlanCurrentStatus(str, enum.Enum):
     NotPlanned = "NotPlanned"
     Planned = "Planned"
     OkToFly = "OkToFly"
     OffNominal = "OffNominal"
     Closed = "Closed"
+    Processing = "Processing"  # Internal Argon Server status
 
 
 class PlanningActivityResult(str, enum.Enum):
@@ -38,13 +39,13 @@ class PlanningActivityResult(str, enum.Enum):
 class CloseFlightPlanResponse:
     planning_result: PlanningActivityResult
     notes: Optional[str]
-    flight_plan_status: FlightPlanProcessingResult
+    flight_plan_status: FlightPlanCurrentStatus
     includes_advisories: Optional[AdvisoryInclusion]
 
 
 @dataclass
 class UpsertFlightPlanResponse:
-    flight_plan_status: FlightPlanProcessingResult
+    flight_plan_status: FlightPlanCurrentStatus
     notes: str
     includes_advisories: Optional[AdvisoryInclusion]
     planning_result: PlanningActivityResult

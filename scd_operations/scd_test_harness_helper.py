@@ -17,8 +17,8 @@ from .flight_planning_data_definitions import (
     CloseFlightPlanResponse,
     FlightAuthorisationData,
     FlightPlan,
+    FlightPlanCurrentStatus,
     FlightPlanningRequest,
-    FlightPlanProcessingResult,
     PlanningActivityResult,
     RPAS26FlightDetails,
     UpsertFlightPlanResponse,
@@ -60,60 +60,66 @@ ready_to_fly_injection_response = TestInjectionResult(
 
 # Flight Planning responses
 not_supported_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.NotPlanned,
+    flight_plan_status=FlightPlanCurrentStatus.NotPlanned,
     notes="Flight Plan action is not supported",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.NotSupported,
 )
 planned_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.Planned,
+    flight_plan_status=FlightPlanCurrentStatus.Planned,
     notes="Flight Plan successfully processed and flight planned",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Completed,
 )
 planned_off_nominal_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.OffNominal,
+    flight_plan_status=FlightPlanCurrentStatus.OffNominal,
     notes="Flight Plan successfully processed and flight planned",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Completed,
 )
 
 ready_to_fly_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.OkToFly,
+    flight_plan_status=FlightPlanCurrentStatus.OkToFly,
     notes="Flight is ready to fly",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Completed,
 )
 
 not_planned_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.NotPlanned,
+    flight_plan_status=FlightPlanCurrentStatus.NotPlanned,
     notes="Argon Server could not plan this flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 
 not_planned_activated_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.OkToFly,
+    flight_plan_status=FlightPlanCurrentStatus.Planned,
+    notes="Argon Server could not update this activated flight",
+    includes_advisories=AdvisoryInclusion.Unknown,
+    planning_result=PlanningActivityResult.Rejected,
+)
+not_planned_activated_higher_priority_planning_response = UpsertFlightPlanResponse(
+    flight_plan_status=FlightPlanCurrentStatus.OkToFly,
     notes="Argon Server could not update this activated flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 not_planned_closed_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.Closed,
+    flight_plan_status=FlightPlanCurrentStatus.Closed,
     notes="Argon Server could not plan this flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 
 not_planned_already_planned_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.Planned,
+    flight_plan_status=FlightPlanCurrentStatus.Planned,
     notes="Argon Server could not update this already planned flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 
 failed_planning_response = UpsertFlightPlanResponse(
-    flight_plan_status=FlightPlanProcessingResult.NotPlanned,
+    flight_plan_status=FlightPlanCurrentStatus.NotPlanned,
     notes="Argon Server failed to process this flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Failed,
@@ -122,14 +128,14 @@ failed_planning_response = UpsertFlightPlanResponse(
 flight_planning_deletion_success_response = CloseFlightPlanResponse(
     planning_result=PlanningActivityResult.Completed,
     notes="The flight was closed successfully by the USS and is now out of the UTM system.",
-    flight_plan_status=FlightPlanProcessingResult.Closed,
+    flight_plan_status=FlightPlanCurrentStatus.Closed,
     includes_advisories=AdvisoryInclusion.Unknown,
 )
 
 flight_planning_deletion_failure_response = CloseFlightPlanResponse(
     planning_result=PlanningActivityResult.Failed,
     notes="The flight plan was not deleted by the system",
-    flight_plan_status=FlightPlanProcessingResult.Closed,
+    flight_plan_status=FlightPlanCurrentStatus.Closed,
     includes_advisories=AdvisoryInclusion.Unknown,
 )
 

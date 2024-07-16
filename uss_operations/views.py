@@ -44,6 +44,8 @@ from .uss_data_definitions import (
     OperatorDetailsSuccessResponse,
     Time,
     UpdateOperationalIntent,
+    VehicleTelemetry,
+    VehicleTelemetryResponse,
 )
 
 # Create your views here.
@@ -116,9 +118,16 @@ def USSOffNominalPositionDetails(request, entity_id):
 
 @api_view(["GET"])
 @requires_scopes(["utm.conformance_monitoring_sa"])
-def USSOpIntDetailTelemetry(request, entity_id):
+def USSOpIntDetailTelemetry(request, opint_id):
     # Get the telemetry of a off-nominal USSP, for more information see https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/astm-utm/Protocol/cb7cf962d3a0c01b5ab12502f5f54789624977bf/utm.yaml
-    raise NotImplementedError
+    now = arrow.now()
+    five_seconds_from_now = now.shift(seconds=5)
+    telemetry_response = VehicleTelemetryResponse(
+        operational_intent_id=str(opint_id),
+        telemetry=VehicleTelemetry(time_measured=Time(format="RFC3339", value=arrow.now().isoformat()), position=None, velocity=None),
+        next_telemetry_opportunity=Time(format="RFC3339", value=five_seconds_from_now.isoformat()),
+    )
+    return JsonResponse(json.loads(json.dumps(asdict(telemetry_response), cls=EnhancedJSONEncoder)), status=200)
 
 
 @api_view(["GET"])

@@ -49,6 +49,7 @@ from .scd_test_harness_helper import (
     failed_planning_response,
     flight_planning_deletion_failure_response,
     flight_planning_deletion_success_response,
+    not_planned_activated_higher_priority_planning_response,
     not_planned_activated_planning_response,
     not_planned_already_planned_planning_response,
     not_planned_planning_response,
@@ -108,7 +109,8 @@ def scd_capabilities(request):
 @requires_scopes(["interuss.flight_planning.plan"])
 def upsert_close_flight_plan(request, flight_plan_id):
     # Parse the incoming flight planning data
-
+    # view_name = request.resolver_match.view_name
+    # uspace_test = True if "u-space" in view_name else False
     r = get_redis()
     # flight_details_storage = "flight_details:" + str(flight_plan_id)
     my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
@@ -315,20 +317,42 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 return update_operational_intent_response
 
             elif operational_intent_update_job.status == 999:
-                # The update cannot be sent to the DSS
+                # The update cannot be sent to the DSS, there is additional information that needs to be sent
+                logger.info(operational_intent_update_job.additional_information)
                 logger.info("Flight not sent to DSS..")
-                if flight_plan_exists_in_argon_server and generated_operational_intent_state == "Activated":
+                if flight_plan_exists_in_argon_server and operational_intent_update_job.additional_information.check_id.value == "B":
+                    logger.info(operational_intent_update_job.additional_information.tentative_flight_plan_processing_response.value)
+                    if operational_intent_update_job.additional_information.tentative_flight_plan_processing_response.value == "OkToFly":
+                        return Response(
+                            json.loads(
+                                json.dumps(
+                                    not_planned_activated_higher_priority_planning_response,
+                                    cls=EnhancedJSONEncoder,
+                                )
+                            ),
+                            status=status.HTTP_200_OK,
+                        )
+                    else:
+                        return Response(
+                            json.loads(
+                                json.dumps(
+                                    not_planned_activated_planning_response,
+                                    cls=EnhancedJSONEncoder,
+                                )
+                            ),
+                            status=status.HTTP_200_OK,
+                        )
+                elif scd_test_data.intended_flight.astm_f3548_21.priority == 100:
                     # Updated cannot be processed / sent to the DSS
                     return Response(
                         json.loads(
                             json.dumps(
-                                not_planned_activated_planning_response,
+                                not_planned_activated_higher_priority_planning_response,
                                 cls=EnhancedJSONEncoder,
                             )
                         ),
                         status=status.HTTP_200_OK,
                     )
-
                 return Response(
                     json.loads(
                         json.dumps(
@@ -435,7 +459,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 )
 
             elif flight_planning_submission.status in ["failure", "peer_uss_data_sharing_issue"]:
-                logger.info(flight_planning_submission.status_code)
                 if flight_planning_submission.status_code == 408:
                     return Response(
                         json.loads(json.dumps(asdict(not_planned_planning_response), cls=EnhancedJSONEncoder)),
@@ -492,6 +515,8 @@ def upsert_close_flight_plan(request, flight_plan_id):
 @api_view(["GET"])
 @requires_scopes(["interuss.flight_planning.direct_automated_test"])
 def flight_planning_status(request):
+    # view_name = request.resolver_match.view_name
+    # uspace_test = True if "u-space" in view_name else False
     status = FlightPlanningTestStatus(
         status=FlightPlanningStatusResponse.Ready,
         system_version="v0.1",
@@ -504,6 +529,8 @@ def flight_planning_status(request):
 @api_view(["POST"])
 @requires_scopes(["interuss.flight_planning.direct_automated_test"])
 def flight_planning_clear_area_request(request):
+    # view_name = request.resolver_match.view_name
+    # uspace_test = True if "u-space" in view_name else False
     clear_area_request = request.data
     try:
         request_id = clear_area_request["request_id"]

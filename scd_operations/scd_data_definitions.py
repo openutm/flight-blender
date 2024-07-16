@@ -431,11 +431,51 @@ class OperationalIntentUpdateErrorResponse:
     message: str
 
 
+class FlightPlanCurrentStatus(str, enum.Enum):
+    NotPlanned = "NotPlanned"
+    Planned = "Planned"
+    OkToFly = "OkToFly"
+    OffNominal = "OffNominal"
+    Closed = "Closed"
+    Processing = "Processing"  # Internal Argon Server status
+
+
+class OpIntUpdateCheckResultCodes(str, enum.Enum):
+    """A set of codes to specify why an operational update should not be sent to the DSS by the USS.
+    A - If the current state is Activate and new state is Non-conforming or Contingent an update request should be sent to DSS
+    B - If the current state is activated and new state is also activated but the new extents conflict with existing DSS volumes, the update request should not be sent to the DSS
+    C - If the current state is activate and new state is also activate and the volumes dont intersect with the volumes in the DSS the update request should be sent to the DSS
+    D - If the priority of the updated request is 100 then it should be submitted to the DSS
+    E - If the extents conflict then dont submit
+    F-  If the extents dont conflict then submit it
+    Z - Default state
+    """
+
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+    E = "E"
+    F = "F"
+    Z = "Z"
+
+    def __str__(self):
+        return str(self.value)
+
+
+@dataclass
+class ShouldSendtoDSSProcessingResponse:
+    check_id: OpIntUpdateCheckResultCodes
+    should_submit_update_payload_to_dss: int
+    tentative_flight_plan_processing_response: FlightPlanCurrentStatus
+
+
 @dataclass
 class OperationalIntentUpdateResponse:
     dss_response: Union[OperationalIntentUpdateSuccessResponse, CommonDSS4xxResponse, CommonPeer9xxResponse]
     status: int
     message: Union[CommonDSS4xxResponse, CommonDSS2xxResponse, str]
+    additional_information: Optional[ShouldSendtoDSSProcessingResponse] = None
 
 
 @dataclass

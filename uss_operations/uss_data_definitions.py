@@ -161,3 +161,84 @@ class UpdateChangedOpIntDetailsPost:
     operational_intent_id: str
     subscriptions: List[SubscriptionState]
     operational_intent: Optional[OperationalIntentDetailsUSSResponse] = None
+
+
+Latitude = float
+"""Degrees of latitude north of the equator, with reference to the WGS84 ellipsoid."""
+
+
+Longitude = float
+"""Degrees of longitude east of the Prime Meridian, with reference to the WGS84 ellipsoid."""
+
+
+class PositionAccuracyVertical(str, enum.Enum):
+    """Vertical error that is likely to be present in this reported position. This is the GVA enumeration from ADS-B, plus some finer values for UAS."""
+
+    VAUnknown = "VAUnknown"
+    VA150mPlus = "VA150mPlus"
+    VA150m = "VA150m"
+    VA45m = "VA45m"
+    VA25m = "VA25m"
+    VA10m = "VA10m"
+    VA3m = "VA3m"
+    VA1m = "VA1m"
+
+
+class PositionAccuracyHorizontal(str, enum.Enum):
+    """Horizontal error that is likely to be present in this reported position. This is the NACp enumeration from ADS-B, plus 1m for a more complete range for UAS."""
+
+    HAUnknown = "HAUnknown"
+    HA10NMPlus = "HA10NMPlus"
+    HA10NM = "HA10NM"
+    HA4NM = "HA4NM"
+    HA2NM = "HA2NM"
+    HA1NM = "HA1NM"
+    HA05NM = "HA05NM"
+    HA03NM = "HA03NM"
+    HA01NM = "HA01NM"
+    HA005NM = "HA005NM"
+    HA30m = "HA30m"
+    HA10m = "HA10m"
+    HA3m = "HA3m"
+    HA1m = "HA1m"
+
+
+@dataclass
+class Position:
+    """Location of the vehicle (UAS) as reported for UTM. Note: 'accuracy' values are required when extrapolated field is true."""
+
+    longitude: Optional[Longitude]
+    latitude: Optional[Latitude]
+    accuracy_h: Optional[PositionAccuracyHorizontal]
+    accuracy_v: Optional[PositionAccuracyVertical]
+    altitude: Optional[Altitude]
+    extrapolated: Optional[bool] = False
+
+
+class VelocityUnitsSpeed(str, enum.Enum):
+    MetersPerSecond = "MetersPerSecond"
+
+
+@dataclass
+class Velocity:
+    speed: float
+    """Ground speed in meters/second."""
+    units_speed: VelocityUnitsSpeed = VelocityUnitsSpeed.MetersPerSecond
+    track: Optional[float] = 0
+    """Direction of flight expressed as a "True North-based" ground track angle. This value is provided in degrees East of North with a minimum resolution of 1 degree. A value of 360 indicates invalid, no value, or unknown."""
+
+
+@dataclass
+class VehicleTelemetry:
+    """Vehicle position, altitude, and velocity."""
+
+    time_measured: Time
+    position: Optional[Position]
+    velocity: Optional[Velocity]
+
+
+@dataclass
+class VehicleTelemetryResponse:
+    operational_intent_id: str
+    telemetry: Optional[VehicleTelemetry]
+    next_telemetry_opportunity: Optional[Time]

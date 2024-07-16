@@ -32,6 +32,7 @@ from .scd_data_definitions import (
     DeleteOperationalIntentConstuctor,
     DeleteOperationalIntentResponse,
     DeleteOperationalIntentResponseSuccess,
+    FlightPlanCurrentStatus,
     ImplicitSubscriptionParameters,
     LatLng,
     LatLngPoint,
@@ -50,11 +51,13 @@ from .scd_data_definitions import (
     OperationalIntentUpdateSuccessResponse,
     OperationalIntentUSSDetails,
     OpInttoCheckDetails,
+    OpIntUpdateCheckResultCodes,
 )
 from .scd_data_definitions import Polygon as Plgn
 from .scd_data_definitions import (
     QueryOperationalIntentPayload,
     Radius,
+    ShouldSendtoDSSProcessingResponse,
     SubscriberToNotify,
     SubscriptionState,
     Time,
@@ -683,7 +686,8 @@ class SCDOperations:
                         requests.exceptions.Timeout,
                         requests.exceptions.ConnectionError,
                     ) as e:
-                        logger.error("Error details %s " % e)
+                        logger.error("Connection error details..")
+                        logger.error(e)
                         logger.error(
                             "Error in getting operational intent id {uss_op_int_id} details from uss with base url {uss_base_url}".format(
                                 uss_op_int_id=current_uss_operational_intent_detail.id,
@@ -692,7 +696,7 @@ class SCDOperations:
                         )
                         op_int_details_retrieved = False
                         logger.info("Raising connection Error 1")
-                        raise ConnectionError("Could not reach peer USS.. ")
+                        raise ConnectionError("Could not reach peer USS..")
 
                     else:
                         # Verify status of the response from the USS
@@ -995,24 +999,45 @@ class SCDOperations:
 
     def check_if_update_payload_should_be_submitted_to_dss(
         self, current_state: str, new_state: str, extents_conflict_with_dss_volumes: bool, priority: int
-    ) -> bool:
+    ) -> ShouldSendtoDSSProcessingResponse:
+        should_opint_be_sent_to_dss = ShouldSendtoDSSProcessingResponse(
+            should_submit_update_payload_to_dss=0,
+            check_id=OpIntUpdateCheckResultCodes.Z,
+            tentative_flight_plan_processing_response=FlightPlanCurrentStatus.Processing,
+        )
         if current_state == "Activated" and new_state == "Activated" and extents_conflict_with_dss_volumes:
             logger.debug("Case B")
-            submit_update_payload_to_dss = False
+            should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 0
+            should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.B
+            should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OkToFly
 
         elif current_state == "Activated" or new_state in ["Nonconforming", "Contingent"]:
             logger.debug("Case A")
-            submit_update_payload_to_dss = True
+            should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
+            should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.A
+            should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OffNominal
         elif current_state == "Activated" and new_state == "Activated":
             logger.debug("Case C")
-            submit_update_payload_to_dss = True
+            should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
+            should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.C
+            should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OkToFly
         elif priority == 100:
             logger.debug("Case D")
-            submit_update_payload_to_dss = True
+            should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
+            should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.D
         else:
-            logger.debug("Case E")
-            submit_update_payload_to_dss = False if extents_conflict_with_dss_volumes else True
-        return submit_update_payload_to_dss
+            submit_update_payload_to_dss = 0 if extents_conflict_with_dss_volumes else 1
+            should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = submit_update_payload_to_dss
+            if should_opint_be_sent_to_dss:
+                should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.E
+                should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.Planned
+            else:
+                should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.F
+                should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.NotPlanned
+
+        logger.info("Update payload check complete..")
+
+        return should_opint_be_sent_to_dss
 
     def update_specified_operational_intent_reference(
         self,
@@ -1049,6 +1074,7 @@ class SCDOperations:
             return opint_update_result
         except ConnectionError:
             logger.info("Raising Connection Error 3")
+            logger.info("Connection error with peer USS, cannot update volume...")
             # Update unsuccessful, problems with processing peer USS volumes
             d_r = CommonPeer9xxResponse(message="Error in validating received operational intents from peer USS")
             message = "Error in updating operational intent in the DSS, peer USS shared invalid data"
@@ -1076,18 +1102,20 @@ class SCDOperations:
         else:
             extents_conflict_with_dss_volumes = False
 
-        submit_update_payload_to_dss = self.check_if_update_payload_should_be_submitted_to_dss(
+        pre_submission_checks = self.check_if_update_payload_should_be_submitted_to_dss(
             current_state=current_state,
             new_state=new_state,
             extents_conflict_with_dss_volumes=extents_conflict_with_dss_volumes,
             priority=priority,
         )
 
-        if not submit_update_payload_to_dss:
+        if not pre_submission_checks.should_submit_update_payload_to_dss:
             d_r = None
             dss_r_status_code = 999
             message = "Update to flight will not be processed, will not be submitting to DSS"
-            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_r_status_code, message=message)
+            opint_update_result = OperationalIntentUpdateResponse(
+                dss_response=d_r, status=dss_r_status_code, message=message, additional_information=pre_submission_checks
+            )
             return opint_update_result
 
         dss_opint_update_url = self.dss_base_url + "dss/v1/operational_intent_references/" + operational_intent_ref_id + "/" + ovn
