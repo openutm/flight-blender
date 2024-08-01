@@ -1020,6 +1020,52 @@ paths:
       tags:
         - flight-declarations
 
+  /flight_declaration_ops/{flight_declaration_id}/delete:
+    delete:
+      parameters:
+        - in: path
+          name: flight_declaration_id
+          description: 'This is the ID of the flight declaration'
+          schema:
+            type: string
+            format: uuid
+          required: true
+
+      summary: 'Delete the specified flight declaration from Argon Server'
+      security:
+        - AuthFromPassport: [argon_server.write]
+      description: "Delete a flight declaration, used by verification framework to tear down tests."
+
+      responses:
+        '204':
+          description: The Flight Declaration has been deleted
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - flight-declarations
+
   /flight_stream/public_keys/:
     get:
       operationId: Get all Public Keys
