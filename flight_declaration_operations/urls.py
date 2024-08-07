@@ -38,4 +38,9 @@ urlpatterns = [
         "flight_declaration_state/<uuid:pk>",
         flight_declaration_views.FlightDeclarationStateUpdate.as_view(),
     ),
+    path(
+        "flight_declaration/<uuid:declaration_id>/delete",
+        flight_declaration_views.FlightDeclarationDelete.as_view(),
+        name="flight-declaration-delete",
+    ),
 ]

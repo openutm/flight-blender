@@ -6,10 +6,10 @@ from os import environ as env
 from typing import List
 
 import arrow
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, Http404
 from django.utils.decorators import method_decorator
 from dotenv import find_dotenv, load_dotenv
-from rest_framework import generics, mixins
+from rest_framework import generics, mixins, status
 from rest_framework.decorators import api_view
 from shapely.geometry import shape
 
@@ -57,6 +57,26 @@ logger = logging.getLogger("django")
 
 
 print("Flight Declaration Operations Views Loaded")
+
+
+@method_decorator(requires_scopes(["ARGONSERVER_WRITE_SCOPE"]), name="dispatch")
+class FlightDeclarationDelete(generics.DestroyAPIView):
+    serializer_class = FlightDeclarationApprovalSerializer
+
+    def get_object(self):
+        declaration_id = self.kwargs.get("declaration_id")
+        try:
+            return FlightDeclaration.objects.get(pk=declaration_id)
+        except FlightDeclaration.DoesNotExist:
+            raise Http404
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            flight_declaration = self.get_object()
+            flight_declaration.delete()
+            return HttpResponse(status=status.HTTP_204_NO_CONTENT)
+        except Http404:
+            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(["POST"])

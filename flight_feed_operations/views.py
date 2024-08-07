@@ -454,7 +454,7 @@ def set_telemetry(request):
         unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
         operation_id = f_details.id
         now = arrow.now().isoformat()
-        relevant_operation_ids_qs = my_argon_server_database_reader.get_current_flight_declaration_ids(now=now)
+        relevant_operation_ids_qs = my_argon_server_database_reader.get_current_flight_declaration_ids(timestamp=now)
         relevant_operation_ids = [str(o) for o in relevant_operation_ids_qs.all()]
         if operation_id in list(relevant_operation_ids):
             # Get flight state:
