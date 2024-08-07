@@ -13,6 +13,7 @@ from scd_operations.scd_data_definitions import Volume4D
 
 from .models import FlightDeclaration
 from .utils import OperationalIntentsConverter
+from django.db import transaction
 
 
 class FlightDeclarationSerializer(serializers.ModelSerializer):
