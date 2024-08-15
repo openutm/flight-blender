@@ -93,10 +93,10 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
         my_database_reader = ArgonServerDatabaseReader()
         fd = my_database_reader.get_flight_declaration_by_id(instance.id)
         original_state = fd.state
-        FlightDeclaration.objects.filter(pk=instance.id).update(**validated_data)
-
         # Save the database and trigger management command
         new_state = validated_data["state"]
+        fd.state = new_state
+        fd.save()
         event = OPERATOR_EVENT_LOOKUP[new_state]
         fd.add_state_history_entry(
             original_state=original_state,
