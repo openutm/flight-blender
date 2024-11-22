@@ -18,7 +18,7 @@ class FlightDeclaration(models.Model):
     type_of_operation = models.IntegerField(
         choices=OPERATION_TYPES,
         default=1,
-        help_text="At the moment, only VLOS and BVLOS operations are supported, for other types of operations, please issue a pull-request",
+        help_text="At the moment, only Visual Line of Sight (VLOS) and Beyond Visual Line of Sight (BVLOS) operations are supported, for other types of operations, please issue a pull-request",
     )
     bounds = models.CharField(max_length=140)
     aircraft_id = models.CharField(
@@ -96,7 +96,7 @@ class FlightDeclaration(models.Model):
 
 
 class FlightAuthorization(models.Model):
-    """This object hold the associated"""
+    """This object hold the associated Flight Authorization"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     declaration = models.OneToOneField(FlightDeclaration, on_delete=models.CASCADE)
