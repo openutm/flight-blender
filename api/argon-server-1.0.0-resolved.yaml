@@ -1,15 +1,15 @@
 ---
 openapi: '3.0.0'
 info:
-  title: 'Argon Server API specification'
+  title: 'Flight Blender API specification'
   description: |-
-    All the Interfaces for Argon Server are defined here, using these APIs, you can submit raw air traffic observations, geo fencing data, flight declarations, enable ASTM specified network Remote-ID and U-Space Flight Authorisation (also know as Strategic Deconfliction).
+    All the Interfaces for Flight Blender are defined here, using these APIs, you can submit raw air traffic observations, geo fencing data, flight declarations, enable ASTM specified network Remote-ID and U-Space Flight Authorisation (also know as Strategic Deconfliction).
 
     Unless otherwise specified, fields specified in a message but not declared in the API shall be ignored.
   version: '1.0.0'
 servers:
-  - url: 'https://virtserver.swaggerhub.com/cygnus2936/flight-Argon Server/1.0.0'
-    description: 'Argon Server API'
+  - url: 'https://virtserver.swaggerhub.com/cygnus2936/flight-Flight Blender/1.0.0'
+    description: 'Flight Blender API'
 security:
   - AuthFromPassport:
       - 'argon_server.write'
@@ -58,9 +58,9 @@ paths:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
   /signing_public_key:
     get:
-      summary: 'Argon Server Signing Public Key'
+      summary: 'Flight Blender Signing Public Key'
 
-      description: 'Get the public key used to verify signed responses from Argon Server. When Argon Server will sign responses and this endpoint will provide a public key that can be used to verify signatures of messages signed by Argon Server'
+      description: 'Get the public key used to verify signed responses from Flight Blender. When Flight Blender will sign responses and this endpoint will provide a public key that can be used to verify signatures of messages signed by Flight Blender'
 
       security: []
       responses:
@@ -124,8 +124,8 @@ paths:
       security:
         - AuthFromPassport: [argon_server.write]
       description:
-        "Create a subscription for an airspace to receive updates of operations in a volume of interest. After extents are submitted, Argon Server will \
-        \ get a appropriate token and create a subscription with a DSS instance, the DSS url needs to be confirmed / set as a part of Argon Server setup. It will then poll flights through the Flights URLs provided by the DSS "
+        "Create a subscription for an airspace to receive updates of operations in a volume of interest. After extents are submitted, Flight Blender will \
+        \ get a appropriate token and create a subscription with a DSS instance, the DSS url needs to be confirmed / set as a part of Flight Blender setup. It will then poll flights through the Flights URLs provided by the DSS "
       parameters:
         - name: view
           description:
@@ -240,7 +240,7 @@ paths:
       security:
         - AuthFromPassport: [argon_server.write]
       description:
-        "Submit data that is compliant with ASTM RemoteID from the vehicle / GCS into Argon Server, after submission, Argon Server will \
+        "Submit data that is compliant with ASTM RemoteID from the vehicle / GCS into Flight Blender, after submission, Flight Blender will \
         \ normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces e.g. Network RID. A single or multiple flight states can be submitted at a given time."
       requestBody:
         required: true
@@ -275,7 +275,7 @@ paths:
       summary: 'Add Signed Remote-ID observation(s)'
       security: []
       description:
-        "Submit data that is compliant with ASTM RemoteID from the vehicle into Argon Server, after submission, Argon Server will \
+        "Submit data that is compliant with ASTM RemoteID from the vehicle into Flight Blender, after submission, Flight Blender will \
         \ normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces. A single or multiple flight states can be submitted at a given time. This endpoint does not require a token but the requests need to be signed else they will be rejected. "
       requestBody:
         required: true
@@ -309,7 +309,7 @@ paths:
       security:
         - AuthFromPassport: [argon_server.read]
       description:
-        "By default Argon Server sends flight data to Flight Spotlight as a scheduled job (push) every x seconds (which can be configured) \
+        "By default Flight Blender sends flight data to Flight Spotlight as a scheduled job (push) every x seconds (which can be configured) \
         \ use this endpoint if you plan to implement polling mechanism (pull). This endpoint for e.g. is used in the RID Qualifier or can be to get flights if you are using a polling mechanism for your display client"
       parameters:
         - in: path
@@ -542,7 +542,7 @@ paths:
 
 
   /uss/v1/operational_intents/{entityid}:
-    summary: Query detailed information of an operational intent from submitted Argon Server, this is used in the context of strategic deconfliction.
+    summary: Query detailed information of an operational intent from submitted Flight Blender, this is used in the context of strategic deconfliction.
     parameters:
       - name: entityid
         description: EntityID for this operational intent.
@@ -558,7 +558,7 @@ paths:
             - utm.strategic_coordination
       summary: Retrieve the specified operational intent details
       description: >-
-        Get details of an existing operational intent in Argon Server.
+        Get details of an existing operational intent in Flight Blender.
       operationId: getOperationalIntentDetails
       responses:
         '200':
@@ -745,7 +745,7 @@ paths:
       security:
         - AuthFromPassport: [argon_server.write]
       description:
-        "Submit air traffic data into Argon Server, after submission, Argon Server will \
+        "Submit air traffic data into Flight Blender, after submission, Flight Blender will \
         \ normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces. A single or multiple observations can be submitted at a given time. No Network Remote ID data should be uploaded from this endpoint."
       requestBody:
         required: true
@@ -859,7 +859,7 @@ paths:
       security:
         - AuthFromPassport: [argon_server.read]
       description:
-        "Get all air traffic observations within Argon Server for a view port. No Network Remote ID data will be provided from this endpoint."
+        "Get all air traffic observations within Flight Blender for a view port. No Network Remote ID data will be provided from this endpoint."
       responses:
         '200':
           description: 'Airtraffic data retrieved'
@@ -899,7 +899,7 @@ paths:
       summary: 'Get a list of all submitted flight declarations'
       security:
         - AuthFromPassport: [argon_server.read]
-      description: "Get a list of all Flight declarations in the database, if no start or end date is provided, Argon Server will provide declarations for today"
+      description: "Get a list of all Flight declarations in the database, if no start or end date is provided, Flight Blender will provide declarations for today"
 
       parameters:
         - name: view
@@ -1031,7 +1031,7 @@ paths:
             format: uuid
           required: true
 
-      summary: 'Delete the specified flight declaration from Argon Server'
+      summary: 'Delete the specified flight declaration from Flight Blender'
       security:
         - AuthFromPassport: [argon_server.write]
       description: "Delete a flight declaration, used by verification framework to tear down tests."
@@ -1089,7 +1089,7 @@ paths:
       operationId: Create a new Public Key
       security:
         - AuthFromPassport: [ argon_server.write]
-      description: 'Create a new Authorized Public key. Once this key is submitted to Argon Server, messages signed by the corresponding private key will be validated and processed.'
+      description: 'Create a new Authorized Public key. Once this key is submitted to Flight Blender, messages signed by the corresponding private key will be validated and processed.'
       parameters: []
       requestBody:
         content:
@@ -1116,7 +1116,7 @@ paths:
       operationId: Get a single key
       security:
         - AuthFromPassport: [argon_server.read]
-      description: 'Get a single Authorized Public key by ID. A JWK json will be returned by Argon Server.'
+      description: 'Get a single Authorized Public key by ID. A JWK json will be returned by Flight Blender.'
       parameters:
       - name: id
         in: path
@@ -1167,7 +1167,7 @@ paths:
       - message-signing-verification
     delete:
       operationId: Remove Public Key
-      description: 'Remove details of a public key in Argon Server'
+      description: 'Remove details of a public key in Flight Blender'
       security:
         - AuthFromPassport: [argon_server.write]
       parameters:
@@ -1187,7 +1187,7 @@ paths:
       summary: 'Get the details of a single flight declaration'
       security:
         - AuthFromPassport: [argon_server.read]
-      description: "By default all flight declarations submitted in Argon Server are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point can be queried to display authorization"
+      description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point can be queried to display authorization"
       parameters:
         - in: path
           name: flight_declaration_id
@@ -1237,7 +1237,7 @@ paths:
       summary: 'Submit a approval /rejection review for an operation'
       security:
         - AuthFromPassport: [argon_server.write]
-      description: "By default all flight declarations submitted in Argon Server are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point to change the status of operation and additionally update the state of the operations as it has commenced"
+      description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point to change the status of operation and additionally update the state of the operations as it has commenced"
       parameters:
         - in: path
           name: flight_declaration_id
@@ -1296,7 +1296,7 @@ paths:
       summary: 'Update the state of a existing Flight Declaration'
       security:
         - AuthFromPassport: [argon_server.write]
-      description: "By default all flight declarations submitted in Argon Server are not set a 'Accepted' state, for most operations this would suffice, however the state may be changed / updated manually. "
+      description: "By default all flight declarations submitted in Flight Blender are not set a 'Accepted' state, for most operations this would suffice, however the state may be changed / updated manually. "
       parameters:
         - in: path
           name: flight_declaration_id
@@ -1353,7 +1353,7 @@ paths:
   /flight_declaration_ops/set_flight_declaration:
     post:
       summary: 'Add a new Flight Declaration'
-      description: "Submit a Flight Declaration into Argon Server. \
+      description: "Submit a Flight Declaration into Flight Blender. \
         \ A flight declaration can be added upto 24 hours in advance and follows the ASTM Operational Intent data format. In most cases, you can use Flight Spotlight Launchpad functionality to submit a declaration."
       security:
         - AuthFromPassport: [argon_server.write]
@@ -1459,7 +1459,7 @@ paths:
         - AuthFromPassport: [argon_server.write]
       description:
         "Submit a Geofence in the form of a GeoZone which is in turn submitted to  \
-        \ Flight Spotlight. Geofence can be used to specify areas of interest, restricted areas, constraints etc., Argon Server will convert the fence into a format that is compatible with the EuroCAE ED-269 standard."
+        \ Flight Spotlight. Geofence can be used to specify areas of interest, restricted areas, constraints etc., Flight Blender will convert the fence into a format that is compatible with the EuroCAE ED-269 standard."
 
       requestBody:
         required: true
@@ -1508,7 +1508,7 @@ paths:
       summary: 'Get a list of all submitted Geofence'
       security:
         - AuthFromPassport: [argon_server.read]
-      description: 'By default all geo fence submitted in Argon Server has  a start and end date, if none is provided, the server will default to today as start and end date'
+      description: 'By default all geo fence submitted in Flight Blender has  a start and end date, if none is provided, the server will default to today as start and end date'
 
       parameters:
         - name: view
@@ -1955,14 +1955,14 @@ components:
     AuthFromPassport:
       type: oauth2
       description: |-
-        Argon Server utilizes JWT tokens issued by a OAUTH server. This can be configured as an environment variable. In this case we recommend using / deploying a Authorization Server: Flight Passport. For more information see https://id.openskies.sh
+        Flight Blender utilizes JWT tokens issued by a OAUTH server. This can be configured as an environment variable. In this case we recommend using / deploying a Authorization Server: Flight Passport. For more information see https://id.openskies.sh
 
       flows:
         clientCredentials:
           tokenUrl: 'http://id.openskies.sh/oauth/token'
           scopes:
-            argon_server.write: 'Write data into Argon Server'
-            argon_server.read: 'Read data into Argon Server'
+            argon_server.write: 'Write data into Flight Blender'
+            argon_server.read: 'Read data into Flight Blender'
 
     AuthFromAuthorizationAuthority:
       flows:
@@ -2715,7 +2715,7 @@ components:
           type: string
           format: email
         originating_party:
-          description: Provide the name of the flight declaration e.g. Argon Server 102
+          description: Provide the name of the flight declaration e.g. Flight Blender 102
           type: string
         submitted_by:
           description: Email address of person submitting this declaration
@@ -3334,7 +3334,7 @@ components:
 
           metadata:
             type: object
-            description: An arbitrary JSON that can be submitted into Argon Server
+            description: An arbitrary JSON that can be submitted into Flight Blender
 
     GetDisplayDataResponse:
       description: Response to a request for current data that would be visualized by a Display Application.
@@ -3546,7 +3546,7 @@ components:
       type: object
       properties:
         id:
-          description: ID for this flight, matching a existing flight declaration ID in Argon Server in request. If the ID of does not match, Argon Server will reject data from this endpoint.
+          description: ID for this flight, matching a existing flight declaration ID in Flight Blender in request. If the ID of does not match, Flight Blender will reject data from this endpoint.
           type: string
           example: 238c0189-cdb1-43f0-8510-5718b37eeca4
 
@@ -5170,22 +5170,22 @@ components:
 
 tags:
   - name: uss
-    description: Argon Server allows connections and interactions with the DSS by enabling creation of subscriptions, operational intents to the DSS for ASTM Compliant Remote-ID data, these endpoints detail how the functionality work for creating a DSS subscription and querying the area for Remote-ID data and querying operational intents
+    description: Flight Blender allows connections and interactions with the DSS by enabling creation of subscriptions, operational intents to the DSS for ASTM Compliant Remote-ID data, these endpoints detail how the functionality work for creating a DSS subscription and querying the area for Remote-ID data and querying operational intents
   - name: rid-qualifier
     description: RID Qualifier is a set of tests created to check compliance with ASTM remote-id standards, these endpoints implement the Observation API as described by the test suite.
   - name: flight-planning-qualifier
-    description: Argon Server allows connections and interactions with the USSP software testing framework (via InterUSS) for Remote ID and Strategic deconfliction. These endpoints implement the stratetgic deconflication test framework APIs.
+    description: Flight Blender allows connections and interactions with the USSP software testing framework (via InterUSS) for Remote ID and Strategic deconfliction. These endpoints implement the stratetgic deconflication test framework APIs.
   - name: rid
-    description: Argon Server allows connections and interactions with the DSS by enabling creation of subscriptions to the DSS for Remote-ID data, these endpoints detail how the functionality work for creating a DSS subscription and querying the area for Remote-ID data.
+    description: Flight Blender allows connections and interactions with the DSS by enabling creation of subscriptions to the DSS for Remote-ID data, these endpoints detail how the functionality work for creating a DSS subscription and querying the area for Remote-ID data.
   - name: air-traffic
-    description: Airtraffic data from sensors such as ADS-B, FLARM etc. can be integrated into Argon Server, Argon Server will normalize the traffic and send it to the Display and or other API endpoints. Use these endpoints to submit / query air-traffic data.
+    description: Airtraffic data from sensors such as ADS-B, FLARM etc. can be integrated into Flight Blender, Flight Blender will normalize the traffic and send it to the Display and or other API endpoints. Use these endpoints to submit / query air-traffic data.
   - name: flight-declarations
-    description: Using tools like Flight Spotlight (see Openskies Github) you can submit declarations of flight for approval / review to the Argon Server system. These endpoints define how flight declarations / operational intents can be created.
+    description: Using tools like Flight Spotlight (see Openskies Github) you can submit declarations of flight for approval / review to the Flight Blender system. These endpoints define how flight declarations / operational intents can be created.
   - name: geo-fence
-    description: You can submit geo-fences as GeoJSON into Argon Server, Argon Server will convert the GeoJSON to a ED-269 Geofence in the background, use these operations into Argon Server.
+    description: You can submit geo-fences as GeoJSON into Flight Blender, Flight Blender will convert the GeoJSON to a ED-269 Geofence in the background, use these operations into Flight Blender.
   - name: geozone-qualifier
     description: The InterUSS monitoring test suite has developed a series of tests to check compliance for ED-269 geofences as part of the EU U-Space regulations, these endpoints interact with the qualifier test suite.
   - name: telemetry
-    description: Argon Server enables GCS and trackers to submit telemetry data for processes, use this end point to submit the telemetry data.
+    description: Flight Blender enables GCS and trackers to submit telemetry data for processes, use this end point to submit the telemetry data.
   - name: message-signing-verification
-    description: Argon Server provides security related features for signing of requests and responses. These endpoints provide data about public keys that can used to verify messages on Argon Server and also in environments outside Argon Server
+    description: Flight Blender provides security related features for signing of requests and responses. These endpoints provide data about public keys that can used to verify messages on Flight Blender and also in environments outside Flight Blender
