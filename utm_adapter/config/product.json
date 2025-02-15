@@ -1,12 +1,12 @@
 {
     "utmsp_name": "OpenUTM: Argon Server",
-    "utmsp_logo_url": "https://www.argonserver.com/images/argonserver-logo.jpg",
+    "utmsp_logo_url": "https://www.flightblender.com/images/flightblender-logo.jpg",
     "utmsp_support_url": "https://discord.gg/dnRxpZdd9a",
-    "utmsp_documentation_url": "https://www.argonserver.com/",
-    "base_url":"https://testflight.argonserver.com/utm_adapter/",
+    "utmsp_documentation_url": "https://www.flightblender.com/",
+    "base_url":"https://testflight.flightblender.com/utm_adapter/",
     "available_scopes": {
-        "read": "argonserver.read",
-        "write": "argonserver.write"
+        "read": "flightblender.read",
+        "write": "flightblender.write"
     },
     "utmsp_oauth2_data": {
         "token_url": "https://id.openskies.sh/oauth/token"

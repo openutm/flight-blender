@@ -1,6 +1,6 @@
 version: "3"
 services:
-  redis-argon-server:
+  redis-flight-blender:
     platform: linux/amd64
     command: ["redis-server", "/redis.conf", "--requirepass", "$REDIS_PASSWORD"]
     image: "redis:latest"
@@ -8,13 +8,13 @@ services:
       - "6379"
     volumes:
       - ./config/redis.conf:/redis.conf
-    container_name: "redis-argon-server"
+    container_name: "redis-flight-blender"
     env_file:
       - ".env"
 
-  db-argon-server:
+  db-flight-blender:
     platform: linux/amd64
-    container_name: "db-argon-server"
+    container_name: "db-flight-blender"
     image: postgres
     expose:
       - "5432"
@@ -35,12 +35,12 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - redis-argon-server
-      - db-argon-server
+      - redis-flight-blender
+      - db-flight-blender
     volumes:
       - .:/app
 
-  argon-server-celery:
+  flight-blender-celery:
     platform: linux/amd64
     container_name: worker
     image: openskiessh/flight-blender
@@ -52,11 +52,11 @@ services:
     volumes:
       - .:/app
     depends_on:
-      - redis-argon-server
+      - redis-flight-blender
 
-  argon-server-celery-beat:
+  flight-blender-celery-beat:
     platform: linux/amd64
-    container_name: argon-server-beat
+    container_name: flight-blender-beat
     image: openskies-sh/flight-blender
     restart: on-failure
     build:
@@ -70,11 +70,11 @@ services:
     volumes:
       - .:/app
     depends_on:
-      redis-argon-server:
+      redis-flight-blender:
         condition: service_started
-      db-argon-server:
+      db-flight-blender:
         condition: service_started
-      argon-server-celery:
+      flight-blender-celery:
         condition: service_started
 
 volumes:

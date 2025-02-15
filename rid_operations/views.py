@@ -17,8 +17,8 @@ from rest_framework.decorators import api_view
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
 from common.data_definitions import (
-    ARGONSERVER_READ_SCOPE,
-    ARGONSERVER_WRITE_SCOPE,
+    FLIGHTBLENDER_READ_SCOPE,
+    FLIGHTBLENDER_WRITE_SCOPE,
     RESPONSE_CONTENT_TYPE,
 )
 from common.utils import EnhancedJSONEncoder
@@ -98,14 +98,14 @@ class SubscriptionHelper:
 
 
 @api_view(["GET"])
-@requires_scopes([ARGONSERVER_READ_SCOPE])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_rid_capabilities(request):
     status = RIDCapabilitiesResponse(capabilities=["ASTMRID2022"])
     return JsonResponse(json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200)
 
 
 @api_view(["PUT"])
-@requires_scopes([ARGONSERVER_WRITE_SCOPE])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def create_dss_subscription(request, *args, **kwargs):
     """This module takes a lat, lng box from Flight Spotlight and puts in a subscription to the DSS for the ISA"""
 
@@ -166,7 +166,7 @@ def create_dss_subscription(request, *args, **kwargs):
 
 
 @api_view(["GET"])
-@requires_scopes([ARGONSERVER_READ_SCOPE])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_rid_data(request, subscription_id):
     """This is the GET endpoint for remote id data given a DSS subscription id. Argon Server will store flight URLs and every time the data is queried"""
 

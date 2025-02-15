@@ -6,13 +6,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from auth_helper.utils import requires_scopes
-from common.data_definitions import ARGONSERVER_WRITE_SCOPE
+from common.data_definitions import FLIGHTBLENDER_WRITE_SCOPE
 from services.weather_service import WeatherService
 
 from .serializers import WeatherSerializer
 
 
-@method_decorator(requires_scopes([ARGONSERVER_WRITE_SCOPE]), name="dispatch")
+@method_decorator(requires_scopes([FLIGHTBLENDER_WRITE_SCOPE]), name="dispatch")
 class WeatherAPIView(APIView):
     def get(self, request, *args, **kwargs):
         longitude = request.query_params.get("longitude")

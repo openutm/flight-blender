@@ -16,7 +16,7 @@ from rest_framework import generics
 from rest_framework.decorators import api_view
 
 from auth_helper.utils import requires_scopes
-from common.data_definitions import ARGONSERVER_READ_SCOPE, ARGONSERVER_WRITE_SCOPE
+from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from common.database_operations import ArgonServerDatabaseReader
 from rid_operations import view_port_ops
 from rid_operations.data_definitions import (
@@ -80,7 +80,7 @@ def ping(request):
 
 
 @api_view(["POST"])
-@requires_scopes([ARGONSERVER_WRITE_SCOPE])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_air_traffic(request):
     """This is the main POST method that takes in a request for Air traffic observation and processes the input data"""
 
@@ -138,7 +138,7 @@ def set_air_traffic(request):
 
 
 @api_view(["GET"])
-@requires_scopes([ARGONSERVER_READ_SCOPE])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_air_traffic(request):
     """This is the end point for the rid_qualifier test DSS network call once a subscription is updated"""
 
@@ -225,7 +225,7 @@ def get_air_traffic(request):
 
 
 @api_view(["GET"])
-@requires_scopes([ARGONSERVER_READ_SCOPE])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def start_opensky_feed(request):
     # This method takes in a view port as a lat1,lon1,lat2,lon2 coordinate system and for 60 seconds starts the stream of data from the OpenSky Network.
 
@@ -266,7 +266,7 @@ def set_signed_telemetry(request):
     # This endpoint sets signed telemetry details into Argon Server, use this endpoint to securely send signed telemetry information into Argon Server, since the messages are signed, we turn off any auth requirements for tokens and validate against allowed public keys in Argon Server.
 
     my_message_verifier = MessageVerifier()
-    my_argon_server_database_reader = ArgonServerDatabaseReader()
+    my_flight_blender_database_reader = ArgonServerDatabaseReader()
     my_response_signer = ResponseSigningOperations()
     verified = my_message_verifier.verify_message(request)
 
@@ -316,11 +316,11 @@ def set_signed_telemetry(request):
 
             operation_id = f_details.id
             now = arrow.now().isoformat()
-            relevant_operation_ids_qs = my_argon_server_database_reader.get_current_flight_declaration_ids(timestamp=now)
+            relevant_operation_ids_qs = my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now)
             relevant_operation_ids = [str(o) for o in relevant_operation_ids_qs.all()]
             if operation_id in relevant_operation_ids:
                 # Get flight state:
-                flight_operation = my_argon_server_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
+                flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
 
                 if flight_operation.state in [
                     2,
@@ -364,7 +364,7 @@ def set_signed_telemetry(request):
 
 
 @api_view(["GET"])
-@requires_scopes([ARGONSERVER_READ_SCOPE])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def traffic_information_discovery_view(request):
     try:
         view = request.query_params["view"]
@@ -411,14 +411,14 @@ def traffic_information_discovery_view(request):
 
 
 @api_view(["PUT"])
-@requires_scopes([ARGONSERVER_WRITE_SCOPE])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_telemetry(request):
     """A RIDOperatorDetails object is posted here"""
     # This endpoints receives data from GCS and / or flights and processes telemetry data.
     # TODO: Use dacite to parse incoming json into a dataclass
     raw_data = request.data
 
-    my_argon_server_database_reader = ArgonServerDatabaseReader()
+    my_flight_blender_database_reader = ArgonServerDatabaseReader()
     my_telemetry_validator = ArgonServerTelemetryValidator()
 
     observations_exist = my_telemetry_validator.validate_observation_key_exists(raw_request_data=raw_data)
@@ -454,11 +454,11 @@ def set_telemetry(request):
         unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
         operation_id = f_details.id
         now = arrow.now().isoformat()
-        relevant_operation_ids_qs = my_argon_server_database_reader.get_current_flight_declaration_ids(timestamp=now)
+        relevant_operation_ids_qs = my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now)
         relevant_operation_ids = [str(o) for o in relevant_operation_ids_qs.all()]
         if operation_id in list(relevant_operation_ids):
             # Get flight state:
-            flight_operation = my_argon_server_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
+            flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
 
             if flight_operation.state in [
                 2,

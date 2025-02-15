@@ -1,6 +1,6 @@
 # Argon Server
 
-![argon-server-logo](images/argonserver-logo.png)
+![flight-blender-logo](images/flightblender-logo.png)
 
 Argon Server is a backend / data-processing engine to stand up standards-compliant UTM services that adhere to the latest regulations on UTM / U-Space in the EU and other jurisdictions. Specifically, it gives you:
 
@@ -27,13 +27,13 @@ Read the ⏲️ [20-minute quickstart](deployment_support/README.md) now!
 
 ## Technical details
 
-- To begin, review the [API Specification](http://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/xtmalliance/argon-server/master/api/argon-server-1.0.0-resolved.yaml) to understand the endpoints and the kind of data that you can set in Argon Server.
-- Then take a look at some data formats: [Flight tracking data](https://github.com/xtmalliance/verification/blob/main/argon_server_e2e_integration/air_traffic_samples/micro_flight_data_single.json). This file follows the format as specified in the [Air-traffic data protocol](https://github.com/openskies-sh/airtraffic-data-protocol-development/blob/master/Airtraffic-Data-Protocol.md)
+- To begin, review the [API Specification](http://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/openutm/flight-blender/master/api/flight-blender-1.0.0-resolved.yaml) to understand the endpoints and the kind of data that you can set in Argon Server.
+- Then take a look at some data formats: [Flight tracking data](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/air_traffic_samples/micro_flight_data_single.json). This file follows the format as specified in the [Air-traffic data protocol](https://github.com/openskies-sh/airtraffic-data-protocol-development/blob/master/Airtraffic-Data-Protocol.md)
 
 ## Submitting AOI, Flight Declarations and Geofence data
 
 Take a look at sample data below to see the kind of data that can be submitted in Argon Server
 
-- [Area of Interest](https://github.com/xtmalliance/verification/blob/main/argon_server_e2e_integration/aoi_geo_fence_samples/aoi.geojson) as a GeoJSON
-- [Geofence](https://github.com/xtmalliance/verification/blob/main/argon_server_e2e_integration/aoi_geo_fence_samples/geo_fence.geojson) as a GeoJSON, we have converters to convert EuroCAE from ED-269 standard
-- [Flight Declaration](https://github.com/xtmalliance/verification/blob/main/argon_server_e2e_integration/flight_declarations_samples/flight-1-bern.json). This file follows the format specified in [Flight Declaration Protocol](https://github.com/openskies-sh/flight-declaration-protocol-development), optionally when using DSS components it supports "operational intent" APIs.
+- [Area of Interest](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/aoi_geo_fence_samples/aoi.geojson) as a GeoJSON
+- [Geofence](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/aoi_geo_fence_samples/geo_fence.geojson) as a GeoJSON, we have converters to convert EuroCAE from ED-269 standard
+- [Flight Declaration](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/flight_declarations_samples/flight-1-bern.json). This file follows the format specified in [Flight Declaration Protocol](https://github.com/openskies-sh/flight-declaration-protocol-development), optionally when using DSS components it supports "operational intent" APIs.

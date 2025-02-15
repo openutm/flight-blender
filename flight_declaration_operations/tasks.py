@@ -8,7 +8,6 @@ import arrow
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 
-from argon_server.celery import app
 from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import (
@@ -18,6 +17,7 @@ from common.database_operations import (
 from conformance_monitoring_operations.conformance_checks_handler import (
     FlightOperationConformanceHelper,
 )
+from flight_blender.celery import app
 from notification_operations.data_definitions import FlightDeclarationUpdateMessage
 from notification_operations.notification_helper import NotificationFactory
 from scd_operations.opint_helper import DSSOperationalIntentsCreator
@@ -179,9 +179,9 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
                 for subscriber in subscribers:
                     subscriptions_raw = subscriber["subscriptions"]
                     uss_base_url = subscriber["uss_base_url"]
-                    argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+                    flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
 
-                    if uss_base_url != argon_server_base_url:  # There are others who are subscribesd, not just ourselves
+                    if uss_base_url != flight_blender_base_url:  # There are others who are subscribesd, not just ourselves
                         subscriptions = from_dict(data_class=SubscriptionState, data=subscriptions_raw)
                         op_int_details = from_dict(
                             data_class=OperationalIntentUSSDetails,

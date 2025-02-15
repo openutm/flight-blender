@@ -2,9 +2,9 @@ from os import environ as env
 
 from django.utils.translation import gettext_lazy as _
 
-ARGONSERVER_READ_SCOPE = env.get("ARGONSERVER_READ_SCOPE", "argonserver.read")
+FLIGHTBLENDER_READ_SCOPE = env.get("FLIGHTBLENDER_READ_SCOPE", "flightblender.read")
 
-ARGONSERVER_WRITE_SCOPE = env.get("ARGONSERVER_WRITE_SCOPE", "argonserver.write")
+FLIGHTBLENDER_WRITE_SCOPE = env.get("FLIGHTBLENDER_WRITE_SCOPE", "flightblender.write")
 
 OPERATION_STATES = (
     (0, _("Not Submitted")),

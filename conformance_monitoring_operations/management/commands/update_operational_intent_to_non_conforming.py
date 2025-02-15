@@ -121,11 +121,11 @@ class Command(BaseCommand):
             )
 
             if not dry_run:
-                argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+                flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
                 for subscriber in dss_response_subscribers:
                     subscriptions = subscriber["subscriptions"]
                     uss_base_url = subscriber["uss_base_url"]
-                    if argon_server_base_url == uss_base_url:
+                    if flight_blender_base_url == uss_base_url:
                         for s in subscriptions:
                             subscription_id = s["subscription_id"]
                             break

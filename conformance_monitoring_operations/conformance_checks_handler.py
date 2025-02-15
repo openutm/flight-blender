@@ -72,7 +72,7 @@ class FlightOperationConformanceHelper:
         elif new_state == 4:  # handle entry into contingent state
             if original_state == 2 and event in [
                 "operator_initiates_contingent",
-                "argon_server_confirms_contingent",
+                "flight_blender_confirms_contingent",
             ]:
                 # Operator activates contingent state from Activated state
                 if self.USSP_NETWORK_ENABLED:

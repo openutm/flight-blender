@@ -157,7 +157,7 @@ class SCDTestHarnessHelper:
         else:
             return False
 
-    def check_if_same_operational_intent_exists_in_argon_server(self, volumes: List[Volume4D]) -> bool:
+    def check_if_same_operational_intent_exists_in_flight_blender(self, volumes: List[Volume4D]) -> bool:
         all_checks: List[bool] = []
         self.my_volumes_converter.convert_volumes_to_geojson(volumes=volumes)
         polygon_to_check = self.my_volumes_converter.get_minimum_rotated_rectangle()

@@ -8,8 +8,8 @@ from requests.exceptions import ConnectionError
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
-from argon_server.celery import app
 from auth_helper.common import get_redis
+from flight_blender.celery import app
 
 from .common import GeoZoneParser
 from .data_definitions import GeoAwarenessTestStatus, GeoZone

@@ -10,7 +10,7 @@ import requests
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Transformer
 
-from argon_server.celery import app
+from flight_blender.celery import app
 
 from . import flight_stream_helper
 from .data_definitions import SingleAirtrafficObservation

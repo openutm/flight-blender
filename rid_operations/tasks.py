@@ -12,9 +12,9 @@ from arrow.parser import ParserError
 from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import MultiPoint, Point, box
 
-from argon_server.celery import app
 from auth_helper.common import get_redis
 from common.database_operations import ArgonServerDatabaseWriter
+from flight_blender.celery import app
 from flight_feed_operations import flight_stream_helper
 from flight_feed_operations.data_definitions import SingleRIDObservation
 from flight_feed_operations.tasks import write_incoming_air_traffic_data
@@ -339,7 +339,7 @@ def stream_rid_test_data(requested_flights):
         time_end=RIDTime(value=astm_rid_standard_end_time.isoformat(), format="RFC3339"),
     )
 
-    uss_base_url = env.get("ARGONSERVER_FQDN", "http://host.docker.internal:8000")
+    uss_base_url = env.get("FLIGHTBLENDER_FQDN", "http://host.docker.internal:8000")
     my_dss_helper = dss_rid_helper.RemoteIDOperations()
 
     logger.info("Creating a DSS ISA..")
