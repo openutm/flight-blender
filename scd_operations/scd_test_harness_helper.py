@@ -87,40 +87,40 @@ ready_to_fly_planning_response = UpsertFlightPlanResponse(
 
 not_planned_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanCurrentStatus.NotPlanned,
-    notes="Argon Server could not plan this flight",
+    notes="Flight Blender could not plan this flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 
 not_planned_activated_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanCurrentStatus.Planned,
-    notes="Argon Server could not update this activated flight",
+    notes="Flight Blender could not update this activated flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 not_planned_activated_higher_priority_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanCurrentStatus.OkToFly,
-    notes="Argon Server could not update this activated flight",
+    notes="Flight Blender could not update this activated flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 not_planned_closed_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanCurrentStatus.Closed,
-    notes="Argon Server could not plan this flight",
+    notes="Flight Blender could not plan this flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 
 not_planned_already_planned_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanCurrentStatus.Planned,
-    notes="Argon Server could not update this already planned flight",
+    notes="Flight Blender could not update this already planned flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Rejected,
 )
 
 failed_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanCurrentStatus.NotPlanned,
-    notes="Argon Server failed to process this flight",
+    notes="Flight Blender failed to process this flight",
     includes_advisories=AdvisoryInclusion.Unknown,
     planning_result=PlanningActivityResult.Failed,
 )

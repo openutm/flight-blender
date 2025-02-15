@@ -20,8 +20,8 @@ from common.data_definitions import (
     OPERATION_STATES_LOOKUP,
 )
 from common.database_operations import (
-    ArgonServerDatabaseReader,
-    ArgonServerDatabaseWriter,
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
 )
 from common.utils import EnhancedJSONEncoder
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
@@ -117,8 +117,8 @@ def upsert_close_flight_plan(request, flight_plan_id):
     my_scd_dss_helper = dss_scd_helper.SCDOperations()
     my_geo_json_converter = dss_scd_helper.VolumesConverter()
     my_volumes_validator = dss_scd_helper.VolumesValidator()
-    my_database_writer = ArgonServerDatabaseWriter()
-    my_database_reader = ArgonServerDatabaseReader()
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_reader = FlightBlenderDatabaseReader()
 
     operation_id_str = str(flight_plan_id)
     logger.info("*********************")
@@ -210,19 +210,19 @@ def upsert_close_flight_plan(request, flight_plan_id):
         view_rect_bounds_storage = ",".join([str(i) for i in view_rect_bounds])
         view_r_bounds = ",".join(map(str, view_rect_bounds))
 
-        # Check if operational intent exists in Argon Server
+        # Check if operational intent exists in Flight Blender
         my_test_harness_helper = SCDTestHarnessHelper()
         flight_plan_exists_in_flight_blender = my_test_harness_helper.check_if_same_flight_id_exists(operation_id=operation_id_str)
         # Create a payload for notification
         flight_planning_notification_payload = flight_planning_data
         generated_operational_intent_state = my_flight_plan_op_intent_bridge.generate_operational_intent_state_from_planning_information()
-        # Flight plan exists in Argon Server and the new state is off nominal or contingent
+        # Flight plan exists in Flight Blender and the new state is off nominal or contingent
         if flight_plan_exists_in_flight_blender and generated_operational_intent_state in ["Activated", "Nonconforming"]:
             # Operational intent exists, update the operational intent based on SCD rules. Get the detail of the existing / stored operational intent
             existing_op_int_details = my_operational_intent_parser.parse_stored_operational_intent_details(operation_id=operation_id_str)
             flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
             if not flight_declaration:
-                failed_planning_response.notes = "Flight Declaration with ID %s not found in Argon Server" % operation_id_str
+                failed_planning_response.notes = "Flight Declaration with ID %s not found in Flight Blender" % operation_id_str
 
                 return Response(
                     json.loads(json.dumps(asdict(failed_planning_response), cls=EnhancedJSONEncoder)),

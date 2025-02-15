@@ -10,7 +10,7 @@ from shapely.geometry import Point, Polygon
 
 from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from flight_declaration_operations.utils import OperationalIntentsConverter
 from flight_feed_operations import flight_stream_helper
@@ -52,7 +52,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # This command declares an operation as non-conforming and updates the state to the DSS (and notifies subscribers)
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         dry_run = options["dry_run"]
 
         dry_run = 1 if dry_run == "1" else 0
@@ -72,7 +72,7 @@ class Command(BaseCommand):
             )
 
         my_scd_dss_helper = SCDOperations()
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
 
         try:
             flight_declaration_id = options["flight_declaration_id"]

@@ -21,8 +21,8 @@ from common.data_definitions import (
     RESPONSE_CONTENT_TYPE,
 )
 from common.database_operations import (
-    ArgonServerDatabaseReader,
-    ArgonServerDatabaseWriter,
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
 )
 from geo_fence_operations import rtree_geo_fence_helper
 from geo_fence_operations.models import GeoFence
@@ -115,7 +115,7 @@ def set_flight_declaration(request):
         msg = json.dumps({"message": "A valid flight declaration as specified by the A flight declaration protocol must be submitted."})
         return HttpResponse(msg, status=400)
 
-    my_database_writer = ArgonServerDatabaseWriter()
+    my_database_writer = FlightBlenderDatabaseWriter()
     USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 
     submitted_by = None if "submitted_by" not in req else req["submitted_by"]
@@ -261,7 +261,7 @@ def set_flight_declaration(request):
         flight_declaration.add_state_history_entry(
             new_state=declaration_state,
             original_state=0,
-            notes="Rejected by Argon Server because of  time / space conflicts with existing operations",
+            notes="Rejected by Flight Blender because of  time / space conflicts with existing operations",
         )
 
     flight_declaration_id = str(flight_declaration.id)
@@ -332,11 +332,11 @@ class FlightDeclarationDetail(mixins.RetrieveModelMixin, generics.GenericAPIView
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def network_flight_declaration_details(request, flight_declaration_id):
-    my_database_reader = ArgonServerDatabaseReader()
+    my_database_reader = FlightBlenderDatabaseReader()
     USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
     # Check if the flight declaration exists
     if not USSP_NETWORK_ENABLED:
-        network_not_enabled = HTTP400Response(message="USSP network can not be queried since it is not enabled in Argon Server")
+        network_not_enabled = HTTP400Response(message="USSP network can not be queried since it is not enabled in Flight Blender")
         op = json.dumps(asdict(network_not_enabled))
         return HttpResponse(op, status=400, content_type="application/json")
 
@@ -473,7 +473,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
             msg = json.dumps({"message": "A valid flight declaration as specified by the A flight declaration protocol must be submitted."})
             return HttpResponse(msg, status=400)
 
-        my_database_writer = ArgonServerDatabaseWriter()
+        my_database_writer = FlightBlenderDatabaseWriter()
         USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 
         submitted_by = None if "submitted_by" not in req else req["submitted_by"]
@@ -615,7 +615,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
             flight_declaration.add_state_history_entry(
                 new_state=declaration_state,
                 original_state=0,
-                notes="Rejected by Argon Server because of  time / space conflicts with existing operations",
+                notes="Rejected by Flight Blender because of  time / space conflicts with existing operations",
             )
 
         flight_declaration_id = str(flight_declaration.id)

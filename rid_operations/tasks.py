@@ -13,7 +13,7 @@ from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import MultiPoint, Point, box
 
 from auth_helper.common import get_redis
-from common.database_operations import ArgonServerDatabaseWriter
+from common.database_operations import FlightBlenderDatabaseWriter
 from flight_blender.celery import app
 from flight_feed_operations import flight_stream_helper
 from flight_feed_operations.data_definitions import SingleRIDObservation
@@ -114,7 +114,7 @@ def poll_uss_for_flights_async():
 
 @app.task(name="stream_rid_telemetry_data")
 def stream_rid_telemetry_data(rid_telemetry_observations):
-    my_database_writer = ArgonServerDatabaseWriter()
+    my_database_writer = FlightBlenderDatabaseWriter()
     telemetry_observations = json.loads(rid_telemetry_observations)
 
     for observation in telemetry_observations:

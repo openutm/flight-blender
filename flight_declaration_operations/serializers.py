@@ -4,7 +4,7 @@ from typing import List
 from rest_framework import serializers
 
 from common.data_definitions import OPERATION_STATES, OPERATOR_EVENT_LOOKUP
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.conformance_checks_handler import (
     FlightOperationConformanceHelper,
 )
@@ -92,7 +92,7 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         fd = my_database_reader.get_flight_declaration_by_id(instance.id)
         original_state = fd.state
         # Save the database and trigger management command

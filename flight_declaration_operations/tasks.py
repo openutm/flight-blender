@@ -11,8 +11,8 @@ from dotenv import find_dotenv, load_dotenv
 from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import (
-    ArgonServerDatabaseReader,
-    ArgonServerDatabaseWriter,
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
 )
 from conformance_monitoring_operations.conformance_checks_handler import (
     FlightOperationConformanceHelper,
@@ -38,9 +38,9 @@ load_dotenv(find_dotenv())
 @app.task(name="submit_flight_declaration_to_dss_async")
 def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
     my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id)
-    my_database_reader = ArgonServerDatabaseReader()
+    my_database_reader = FlightBlenderDatabaseReader()
     r = get_redis()
-    my_database_writer = ArgonServerDatabaseWriter()
+    my_database_writer = FlightBlenderDatabaseWriter()
 
     start_end_time_validated = my_dss_opint_creator.validate_flight_declaration_start_end_time()
 
@@ -91,7 +91,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             logger.error("Error in submitting Flight Declaration to the DSS %s" % opint_submission_result.status)
 
             dss_submission_error_msg = (
-                "Flight Operation with ID {operation_id} was rejected by the DSS, there was a error in data submitted by Argon Server".format(
+                "Flight Operation with ID {operation_id} was rejected by the DSS, there was a error in data submitted by Flight Blender".format(
                     operation_id=flight_declaration_id
                 )
             )

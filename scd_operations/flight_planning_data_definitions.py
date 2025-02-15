@@ -25,7 +25,7 @@ class FlightPlanCurrentStatus(str, enum.Enum):
     OkToFly = "OkToFly"
     OffNominal = "OffNominal"
     Closed = "Closed"
-    Processing = "Processing"  # Internal Argon Server status
+    Processing = "Processing"  # Internal Flight Blender status
 
 
 class PlanningActivityResult(str, enum.Enum):

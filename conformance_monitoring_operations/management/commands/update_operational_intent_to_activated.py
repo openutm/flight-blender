@@ -7,7 +7,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from scd_operations.dss_scd_helper import SCDOperations
 from scd_operations.scd_data_definitions import (
     OperationalIntentReferenceDSSResponse,
@@ -55,7 +55,7 @@ class Command(BaseCommand):
 
         # Get the flight declaration
 
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         if not flight_declaration:

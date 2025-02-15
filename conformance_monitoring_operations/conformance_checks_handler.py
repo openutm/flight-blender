@@ -6,8 +6,8 @@ from django.core import management
 from dotenv import find_dotenv, load_dotenv
 
 from common.database_operations import (
-    ArgonServerDatabaseReader,
-    ArgonServerDatabaseWriter,
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
 )
 
 from .operation_state_helper import FlightOperationStateMachine, get_status
@@ -28,9 +28,9 @@ class FlightOperationConformanceHelper:
 
     def __init__(self, flight_declaration_id: str):
         self.flight_declaration_id = flight_declaration_id
-        self.database_reader = ArgonServerDatabaseReader()
+        self.database_reader = FlightBlenderDatabaseReader()
         self.flight_declaration = self.database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
-        self.database_writer = ArgonServerDatabaseWriter()
+        self.database_writer = FlightBlenderDatabaseWriter()
         self.ENABLE_CONFORMANCE_MONITORING = int(os.getenv("ENABLE_CONFORMANCE_MONITORING", 0))
         self.USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 

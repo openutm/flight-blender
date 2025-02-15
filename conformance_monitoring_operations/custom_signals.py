@@ -3,7 +3,7 @@ import logging
 import django.dispatch
 from django.dispatch import receiver
 
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 
 from .conformance_checks_handler import FlightOperationConformanceHelper
 from .conformance_state_helper import ConformanceChecksList
@@ -78,7 +78,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
 
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
-        my_flight_blender_database_reader = ArgonServerDatabaseReader()
+        my_flight_blender_database_reader = FlightBlenderDatabaseReader()
 
         fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         original_state = fd.state
@@ -140,7 +140,7 @@ def process_flight_authorization_non_conformance_message(sender, **kwargs):
 
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
-        my_flight_blender_database_reader = ArgonServerDatabaseReader()
+        my_flight_blender_database_reader = FlightBlenderDatabaseReader()
         fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         original_state = fd.state
         fd.add_state_history_entry(

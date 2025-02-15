@@ -168,7 +168,7 @@ def create_dss_subscription(request, *args, **kwargs):
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_rid_data(request, subscription_id):
-    """This is the GET endpoint for remote id data given a DSS subscription id. Argon Server will store flight URLs and every time the data is queried"""
+    """This is the GET endpoint for remote id data given a DSS subscription id. Flight Blender will store flight URLs and every time the data is queried"""
 
     try:
         UUID(subscription_id, version=4)

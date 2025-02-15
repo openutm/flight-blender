@@ -17,7 +17,7 @@ from rest_framework.decorators import api_view
 
 from auth_helper.utils import requires_scopes
 from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from rid_operations import view_port_ops
 from rid_operations.data_definitions import (
     RIDAircraftState,
@@ -263,15 +263,15 @@ def start_opensky_feed(request):
 
 @api_view(["PUT"])
 def set_signed_telemetry(request):
-    # This endpoint sets signed telemetry details into Argon Server, use this endpoint to securely send signed telemetry information into Argon Server, since the messages are signed, we turn off any auth requirements for tokens and validate against allowed public keys in Argon Server.
+    # This endpoint sets signed telemetry details into Flight Blender, use this endpoint to securely send signed telemetry information into Flight Blender, since the messages are signed, we turn off any auth requirements for tokens and validate against allowed public keys in Flight Blender.
 
     my_message_verifier = MessageVerifier()
-    my_flight_blender_database_reader = ArgonServerDatabaseReader()
+    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
     my_response_signer = ResponseSigningOperations()
     verified = my_message_verifier.verify_message(request)
 
     if not verified:
-        message_verification_failed_response = MessageVerificationFailedResponse(message="Could not verify against public keys setup in Argon Server")
+        message_verification_failed_response = MessageVerificationFailedResponse(message="Could not verify against public keys setup in Flight Blender")
         return JsonResponse(
             asdict(message_verification_failed_response),
             status=400,
@@ -330,7 +330,7 @@ def set_signed_telemetry(request):
                     stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
                 else:
                     operation_state_incorrect_msg = {
-                        "message": "The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Argon Server, telemetry submission will be ignored, please change the state first.".format(
+                        "message": "The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first.".format(
                             operation_id=operation_id
                         )
                     }
@@ -342,7 +342,7 @@ def set_signed_telemetry(request):
 
             else:
                 incorrect_operation_id_msg = {
-                    "message": "The operation ID: {operation_id} in the flight details object provided does not match any current operation in Argon Server".format(
+                    "message": "The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender".format(
                         operation_id=operation_id
                     )
                 }
@@ -418,7 +418,7 @@ def set_telemetry(request):
     # TODO: Use dacite to parse incoming json into a dataclass
     raw_data = request.data
 
-    my_flight_blender_database_reader = ArgonServerDatabaseReader()
+    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
     my_telemetry_validator = ArgonServerTelemetryValidator()
 
     observations_exist = my_telemetry_validator.validate_observation_key_exists(raw_request_data=raw_data)
@@ -468,7 +468,7 @@ def set_telemetry(request):
                 stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
             else:
                 operation_state_incorrect_msg = {
-                    "message": "The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Argon Server, telemetry submission will be ignored, please change the state first.".format(
+                    "message": "The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first.".format(
                         operation_id=operation_id
                     )
                 }
@@ -480,7 +480,7 @@ def set_telemetry(request):
 
         else:
             incorrect_operation_id_msg = {
-                "message": "The operation ID: {operation_id} in the flight details object provided does not match any current operation in Argon Server".format(
+                "message": "The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender".format(
                     operation_id=operation_id
                 )
             }

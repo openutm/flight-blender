@@ -9,7 +9,7 @@ from shapely.geometry import Point
 
 from auth_helper.common import get_redis
 from common.data_definitions import FLIGHT_OPINT_KEY, OPERATION_STATES
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from flight_declaration_operations.utils import OperationalIntentsConverter
 from flight_feed_operations import flight_stream_helper
@@ -58,7 +58,7 @@ class Command(BaseCommand):
         contingent_state_str = OPERATION_STATES[contingent_state][1]
 
         my_scd_dss_helper = SCDOperations()
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         my_operational_intent_parser = OperationalIntentReferenceHelper()
         stream_ops = flight_stream_helper.StreamHelperOps()
         obs_helper = flight_stream_helper.ObservationReadOperations()

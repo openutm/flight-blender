@@ -4,14 +4,14 @@ from django.core.management.base import BaseCommand
 
 from auth_helper.common import RedisHelper, get_redis
 from common.database_operations import (
-    ArgonServerDatabaseReader,
-    ArgonServerDatabaseWriter,
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
 )
 from scd_operations import dss_scd_helper
 
 
 class Command(BaseCommand):
-    help = "This command deletes all flight operations in the Argon Server database and also clears the DSS if available"
+    help = "This command deletes all flight operations in the Flight Blender database and also clears the DSS if available"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -39,8 +39,8 @@ class Command(BaseCommand):
 
         r = get_redis()
         dry_run = 1 if dry_run == "1" else 0
-        my_database_reader = ArgonServerDatabaseReader()
-        my_database_writer = ArgonServerDatabaseWriter()
+        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_writer = FlightBlenderDatabaseWriter()
         all_operations = my_database_reader.get_all_flight_declarations()
         for o in all_operations:
             f_a = my_database_reader.get_flight_authorization_by_flight_declaration_obj(flight_declaration=o)

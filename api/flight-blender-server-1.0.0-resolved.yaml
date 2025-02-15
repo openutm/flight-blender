@@ -899,7 +899,7 @@ paths:
       summary: 'Get a list of all submitted flight declarations'
       security:
         - AuthFromPassport: [flight_blender.read]
-      description: "Get a list of all Flight declarations in the database, if no start or end date is provided, Argon Server will provide declarations for today"
+      description: "Get a list of all Flight declarations in the database, if no start or end date is provided, Flight Blender will provide declarations for today"
 
       parameters:
         - name: view
@@ -1031,7 +1031,7 @@ paths:
             format: uuid
           required: true
 
-      summary: 'Delete the specified flight declaration from Argon Server'
+      summary: 'Delete the specified flight declaration from Flight Blender'
       security:
         - AuthFromPassport: [flight_blender.write]
       description: "Delete a flight declaration, used by verification framework to tear down tests."
@@ -1089,7 +1089,7 @@ paths:
       operationId: Create a new Public Key
       security:
         - AuthFromPassport: [ flight_blender.write]
-      description: 'Create a new Authorized Public key. Once this key is submitted to Argon Server, messages signed by the corresponding private key will be validated and processed.'
+      description: 'Create a new Authorized Public key. Once this key is submitted to Flight Blender, messages signed by the corresponding private key will be validated and processed.'
       parameters: []
       requestBody:
         content:
@@ -1116,7 +1116,7 @@ paths:
       operationId: Get a single key
       security:
         - AuthFromPassport: [flight_blender.read]
-      description: 'Get a single Authorized Public key by ID. A JWK json will be returned by Argon Server.'
+      description: 'Get a single Authorized Public key by ID. A JWK json will be returned by Flight Blender.'
       parameters:
       - name: id
         in: path
@@ -1187,7 +1187,7 @@ paths:
       summary: 'Get the details of a single flight declaration'
       security:
         - AuthFromPassport: [flight_blender.read]
-      description: "By default all flight declarations submitted in Argon Server are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point can be queried to display authorization"
+      description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point can be queried to display authorization"
       parameters:
         - in: path
           name: flight_declaration_id
@@ -1237,7 +1237,7 @@ paths:
       summary: 'Submit a approval /rejection review for an operation'
       security:
         - AuthFromPassport: [flight_blender.write]
-      description: "By default all flight declarations submitted in Argon Server are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point to change the status of operation and additionally update the state of the operations as it has commenced"
+      description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point to change the status of operation and additionally update the state of the operations as it has commenced"
       parameters:
         - in: path
           name: flight_declaration_id
@@ -1296,7 +1296,7 @@ paths:
       summary: 'Update the state of a existing Flight Declaration'
       security:
         - AuthFromPassport: [flight_blender.write]
-      description: "By default all flight declarations submitted in Argon Server are not set a 'Accepted' state, for most operations this would suffice, however the state may be changed / updated manually. "
+      description: "By default all flight declarations submitted in Flight Blender are not set a 'Accepted' state, for most operations this would suffice, however the state may be changed / updated manually. "
       parameters:
         - in: path
           name: flight_declaration_id
@@ -1508,7 +1508,7 @@ paths:
       summary: 'Get a list of all submitted Geofence'
       security:
         - AuthFromPassport: [flight_blender.read]
-      description: 'By default all geo fence submitted in Argon Server has  a start and end date, if none is provided, the server will default to today as start and end date'
+      description: 'By default all geo fence submitted in Flight Blender has  a start and end date, if none is provided, the server will default to today as start and end date'
 
       parameters:
         - name: view
@@ -1961,8 +1961,8 @@ components:
         clientCredentials:
           tokenUrl: 'http://id.openskies.sh/oauth/token'
           scopes:
-            flight_blender.write: 'Write data into Argon Server'
-            flight_blender.read: 'Read data into Argon Server'
+            flight_blender.write: 'Write data into Flight Blender'
+            flight_blender.read: 'Read data into Flight Blender'
 
     AuthFromAuthorizationAuthority:
       flows:

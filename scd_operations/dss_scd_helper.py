@@ -639,10 +639,10 @@ class SCDOperations:
                     all_uss_operational_intent_details.append(o_i_r_formatted)
 
             for current_uss_operational_intent_detail in all_uss_operational_intent_details:
-                # check the USS for flight volume by using the URL to see if this is stored in Argon Server, DSS will return all intent details including our own
+                # check the USS for flight volume by using the URL to see if this is stored in Flight Blender, DSS will return all intent details including our own
                 current_uss_base_url = current_uss_operational_intent_detail.uss_base_url
                 if current_uss_base_url == flight_blender_base_url:
-                    # The opint is from Argon Server itself
+                    # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
                     r = get_redis()
                     opint_flightref = "opint_flightref." + str(current_uss_operational_intent_detail.id)
@@ -1345,7 +1345,7 @@ class SCDOperations:
                 d_r.dss_response = dss_response
                 logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
         else:
-            # When flight is not deconflicted, Argon Server assigns a error code of 500
+            # When flight is not deconflicted, Flight Blender assigns a error code of 500
             logger.info("Flight not deconflicted, there are other flights in the area..")
             d_r = OperationalIntentSubmissionStatus(
                 status="conflict_with_flight",
