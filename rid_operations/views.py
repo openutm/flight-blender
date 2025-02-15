@@ -129,7 +129,7 @@ def create_dss_subscription(request, *args, **kwargs):
     # Convert bounds vertex list
     vertex_list = []
     for cur_co_ordinate in co_ordinates:
-        lat_lng = {"lng": 0, "lat": 0}
+        lat_lng = {"lng": 0.0, "lat": 0.0}
         lat_lng["lng"] = cur_co_ordinate[0]
         lat_lng["lat"] = cur_co_ordinate[1]
         vertex_list.append(lat_lng)

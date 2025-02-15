@@ -1,8 +1,10 @@
-# Argon Server
+# Flight Blender
 
-![flight-blender-logo](images/flightblender-logo.png)
+![blender-logo](images/blender-logo.jpg)
 
-Argon Server is a backend / data-processing engine to stand up standards-compliant UTM services that adhere to the latest regulations on UTM / U-Space in the EU and other jurisdictions. Specifically, it gives you:
+Flight Blender is the UTM data processing engine for the OpenUTM stack. It builds upon Argon Server. 
+
+Argon server is a backend / data-processing engine to stand up standards-compliant UTM services that adhere to the latest regulations on UTM / U-Space in the EU and other jurisdictions. Specifically, it gives you:
 
 - an open source Remote ID "service provider" compatible with ASTM Remote ID standard, it comes with Flight Spotlight a opensource remote ID Display Application as well.
 - an open source implementation of the ASTM USS <-> USS standard and compatible with the EU U-Space regulation for flight authorisation
