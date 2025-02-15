@@ -2,4 +2,4 @@
 
 APP=flight-blender
 
-docker build --platform linux/amd64 -t "openskiessh/$APP" .
+docker build --platform linux/amd64 -t "openutm/$APP" .

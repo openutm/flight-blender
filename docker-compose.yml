@@ -30,7 +30,7 @@ services:
     env_file:
       - ".env"
     build: .
-    image: openskiessh/flight-blender
+    image: openutm/flight-blender
     command: ./entrypoints/with-database/entrypoint.sh
     ports:
       - "8000:8000"
@@ -43,7 +43,7 @@ services:
   flight-blender-celery:
     platform: linux/amd64
     container_name: worker
-    image: openskiessh/flight-blender
+    image: openutm/flight-blender
     build:
       context: "."
     env_file:
