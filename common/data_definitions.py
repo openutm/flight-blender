@@ -2,9 +2,9 @@ from os import environ as env
 
 from django.utils.translation import gettext_lazy as _
 
-ARGONSERVER_READ_SCOPE = env.get("ARGONSERVER_READ_SCOPE", "argonserver.read")
+FLIGHTBLENDER_READ_SCOPE = env.get("FLIGHTBLENDER_READ_SCOPE", "flightblender.read")
 
-ARGONSERVER_WRITE_SCOPE = env.get("ARGONSERVER_WRITE_SCOPE", "argonserver.write")
+FLIGHTBLENDER_WRITE_SCOPE = env.get("FLIGHTBLENDER_WRITE_SCOPE", "flightblender.write")
 
 OPERATION_STATES = (
     (0, _("Not Submitted")),
@@ -17,6 +17,7 @@ OPERATION_STATES = (
     (7, _("Cancelled")),
     (8, _("Rejected")),
 )
+ACTIVE_OPERATIONAL_STATES = [1, 2, 3, 4]
 
 # This is only used int he SCD Test harness therefore it is partial
 OPERATION_STATES_LOOKUP = {

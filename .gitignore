@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 blender-env/
-argon-server-env/
+flight-blender-env/
 
 # C extensions
 *.so

@@ -23,7 +23,7 @@ if ENV_FILE:
     load_dotenv(ENV_FILE)
 
 
-class ArgonServerDatabaseReader:
+class FlightBlenderDatabaseReader:
     """
     A file to unify read and write operations to the database. Eventually caching etc. can be added via this file
     """
@@ -96,7 +96,7 @@ class ArgonServerDatabaseReader:
             return None
 
 
-class ArgonServerDatabaseWriter:
+class FlightBlenderDatabaseWriter:
     def delete_flight_declaration(self, flight_declaration_id: str) -> bool:
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)

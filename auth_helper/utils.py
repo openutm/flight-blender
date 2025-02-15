@@ -29,7 +29,7 @@ def requires_scopes(required_scopes):
         @wraps(f)
         def decorated(*args, **kwargs):
             # Set the audience of the instance
-            API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.argonserver.com")
+            API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
             # Check if the setting is Debug
             BYPASS_AUTH_TOKEN_VERIFICATION = int(env.get("BYPASS_AUTH_TOKEN_VERIFICATION", 0))
             # Use the OAUTH 2.0 standard endpoint

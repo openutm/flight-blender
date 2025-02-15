@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
                 (
                     "originating_party",
                     models.CharField(
-                        default="Argon Server Default",
+                        default="Flight Blender Default",
                         help_text="Set the party originating this flight, you can add details e.g. Aerobridge Flight 105",
                         max_length=100,
                     ),

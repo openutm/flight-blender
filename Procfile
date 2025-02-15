@@ -1,2 +1,2 @@
-web: gunicorn argon_server:app
-worker: celery worker --app=argon_server
+web: gunicorn flight_blender:app
+worker: celery worker --app=flight_blender

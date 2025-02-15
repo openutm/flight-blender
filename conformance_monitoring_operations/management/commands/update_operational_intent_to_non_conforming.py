@@ -8,7 +8,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from scd_operations.dss_scd_helper import SCDOperations
 from scd_operations.scd_data_definitions import (
     OperationalIntentReferenceDSSResponse,
@@ -46,7 +46,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # This command declares an operation as non-conforming and updates the state to the DSS (and notifies subscribers)
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         dry_run = options["dryrun"]
         dry_run = 1 if dry_run == "1" else 0
         # Set new state as non-conforming
@@ -121,11 +121,11 @@ class Command(BaseCommand):
             )
 
             if not dry_run:
-                argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+                flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
                 for subscriber in dss_response_subscribers:
                     subscriptions = subscriber["subscriptions"]
                     uss_base_url = subscriber["uss_base_url"]
-                    if argon_server_base_url == uss_base_url:
+                    if flight_blender_base_url == uss_base_url:
                         for s in subscriptions:
                             subscription_id = s["subscription_id"]
                             break

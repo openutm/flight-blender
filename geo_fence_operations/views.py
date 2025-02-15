@@ -25,7 +25,7 @@ from shapely.ops import unary_union
 
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
-from common.data_definitions import ARGONSERVER_READ_SCOPE, ARGONSERVER_WRITE_SCOPE
+from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from common.utils import EnhancedJSONEncoder
 from flight_declaration_operations.pagination import StandardResultsSetPagination
 
@@ -55,7 +55,7 @@ INDEX_NAME = "geofence_proc"
 
 
 @api_view(["PUT"])
-@requires_scopes([ARGONSERVER_WRITE_SCOPE])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_geo_fence(request: HttpRequest):
     try:
         assert request.headers["Content-Type"] == "application/json"
@@ -115,7 +115,7 @@ def set_geo_fence(request: HttpRequest):
 
 
 @api_view(["POST"])
-@requires_scopes([ARGONSERVER_WRITE_SCOPE])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_geozone(request):
     try:
         assert request.headers["Content-Type"] == "application/json"
@@ -147,7 +147,7 @@ def set_geozone(request):
         return HttpResponse(msg, status=status.HTTP_400_BAD_REQUEST, content_type="application/json")
 
 
-@method_decorator(requires_scopes([ARGONSERVER_READ_SCOPE]), name="dispatch")
+@method_decorator(requires_scopes([FLIGHTBLENDER_READ_SCOPE]), name="dispatch")
 class GeoFenceDetail(mixins.RetrieveModelMixin, generics.GenericAPIView):
     queryset = GeoFence.objects.filter(is_test_dataset=False)
     serializer_class = GeoFenceSerializer
@@ -156,7 +156,7 @@ class GeoFenceDetail(mixins.RetrieveModelMixin, generics.GenericAPIView):
         return self.retrieve(request, *args, **kwargs)
 
 
-@method_decorator(requires_scopes([ARGONSERVER_READ_SCOPE]), name="dispatch")
+@method_decorator(requires_scopes([FLIGHTBLENDER_READ_SCOPE]), name="dispatch")
 class GeoFenceList(mixins.ListModelMixin, generics.GenericAPIView):
     queryset = GeoFence.objects.filter(is_test_dataset=False)
     serializer_class = GeoFenceSerializer
@@ -208,7 +208,7 @@ class GeoFenceList(mixins.ListModelMixin, generics.GenericAPIView):
         return self.list(request, *args, **kwargs)
 
 
-@method_decorator(requires_scopes([ARGONSERVER_READ_SCOPE]), name="dispatch")
+@method_decorator(requires_scopes([FLIGHTBLENDER_READ_SCOPE]), name="dispatch")
 class GeospatialMapList(mixins.ListModelMixin, generics.GenericAPIView):
     queryset = GeoFence.objects.filter(is_test_dataset=False).order_by("created_at")
     serializer_class = GeoSpatialMapListSerializer

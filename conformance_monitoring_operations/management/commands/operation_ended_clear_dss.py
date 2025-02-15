@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
 
 from auth_helper.common import get_redis
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from scd_operations.dss_scd_helper import SCDOperations
 
 load_dotenv(find_dotenv())
@@ -42,7 +42,7 @@ class Command(BaseCommand):
         dry_run = 1 if dry_run == "1" else 0
 
         my_scd_dss_helper = SCDOperations()
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         try:
             flight_declaration_id = options["flight_declaration_id"]
         except Exception as e:
@@ -72,7 +72,7 @@ class Command(BaseCommand):
 
             # Get the flight declaration
 
-            my_database_reader = ArgonServerDatabaseReader()
+            my_database_reader = FlightBlenderDatabaseReader()
             flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
             if not flight_declaration:
                 raise CommandError(

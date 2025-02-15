@@ -8,7 +8,7 @@ from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import Point
 from shapely.geometry import Polygon as Plgn
 
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from scd_operations.scd_data_definitions import LatLngPoint
 
@@ -38,7 +38,7 @@ class ArgonServerConformanceEngine:
         altitude_m_wgs_84: float,
     ) -> bool:
         """This method performs the conformance sequence per AMC1 Article 13(1) as specified in the EU AMC / GM on U-Space regulation.
-        This method is called every time a telemetry has been sent into Argon Server. Specifically, it checks this once a telemetry has been sent:
+        This method is called every time a telemetry has been sent into Flight Blender. Specifically, it checks this once a telemetry has been sent:
          - C2 Check if flight authorization is granted
          - C3 Match telmetry from aircraft with the flight authorization
          - C4 Determine whether the aircraft is subject to an accepted and activated flight authorization
@@ -48,7 +48,7 @@ class ArgonServerConformanceEngine:
          - C8 Check if it is near a GeoFence and / breaches one
 
         """
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         now = arrow.now()
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
@@ -163,7 +163,7 @@ class ArgonServerConformanceEngine:
         """
         # Flight Operation and Flight Authorization exists, create a notifications helper
 
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         now = arrow.now()
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         flight_authorization_exists = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=flight_declaration_id)
