@@ -28,6 +28,16 @@ logger = logging.getLogger("django")
 
 @app.task(name="write_incoming_air_traffic_data")
 def write_incoming_air_traffic_data(observation):
+    """
+    Processes and writes incoming air traffic data.
+    This function takes an observation in JSON format, parses it, and writes it to a stream.
+    It also trims the stream to keep only the most recent 1000 observations.
+    Args:
+        observation (str): A JSON string representing the air traffic observation.
+    Returns:
+        str: The message ID of the added observation.
+    """
+
     obs = json.loads(observation)
     logger.debug("Writing observation..")
 
@@ -48,84 +58,85 @@ def mercator_transform(lon, lat):
 
 @app.task(name="start_opensky_network_stream")
 def start_opensky_network_stream(view_port: str):
+    """
+    Starts streaming data from the OpenSky Network within the specified viewport.
+    Args:
+        view_port (str): A JSON string representing the viewport coordinates in the format 
+                         [lng_min, lat_min, lng_max, lat_max].
+    The function performs the following steps:
+    1. Parses the viewport JSON string to extract the coordinates.
+    2. Calculates the minimum and maximum longitude and latitude values.
+    3. Sets a heartbeat interval for querying the OpenSky Network.
+    4. Queries the OpenSky Network API for flight data within the specified viewport for one minute.
+    5. Logs the API request URL and response data.
+    6. If the response is successful and contains flight data, loads the data into a pandas DataFrame.
+    7. Iterates over the DataFrame rows and creates SingleAirtrafficObservation objects.
+    8. Submits tasks to write the incoming air traffic data.
+    Note:
+        - The function uses environment variables for the OpenSky Network username and password.
+        - The function logs information and debug messages.
+        - The function sleeps for the specified heartbeat interval between API requests.
+    """
     view_port = json.loads(view_port)
 
-    # submit task to write to the flight stream
-    lng_min = min(view_port[0], view_port[2])
-    lng_max = max(view_port[0], view_port[2])
-    lat_min = min(view_port[1], view_port[3])
-    lat_max = max(view_port[1], view_port[3])
+    lng_min, lat_min, lng_max, lat_max = (
+        min(view_port[0], view_port[2]),
+        min(view_port[1], view_port[3]),
+        max(view_port[0], view_port[2]),
+        max(view_port[1], view_port[3]),
+    )
 
-    heartbeat = env.get("HEARTBEAT_RATE_SECS", 2)
-    heartbeat = int(heartbeat)
-    now = arrow.now()
-    two_minutes_from_now = now.shift(seconds=60)
+    heartbeat = int(env.get("HEARTBEAT_RATE_SECS", 2))
+    end_time = arrow.now().shift(seconds=60)
 
     logger.info("Querying OpenSkies Network for one minute.. ")
 
-    while arrow.now() < two_minutes_from_now:
+    while arrow.now() < end_time:
         url_data = (
-            "https://opensky-network.org/api/states/all?"
-            + "lamin="
-            + str(lat_min)
-            + "&lomin="
-            + str(lng_min)
-            + "&lamax="
-            + str(lat_max)
-            + "&lomax="
-            + str(lng_max)
+            f"https://opensky-network.org/api/states/all?lamin={lat_min}&lomin={lng_min}&lamax={lat_max}&lomax={lng_max}"
         )
-        openskies_username = env.get("OPENSKY_NETWORK_USERNAME")
-        openskies_password = env.get("OPENSKY_NETWORK_PASSWORD")
-        response = requests.get(url_data, auth=(openskies_username, openskies_password))
+        response = requests.get(
+            url_data,
+            auth=(env.get("OPENSKY_NETWORK_USERNAME"), env.get("OPENSKY_NETWORK_PASSWORD")),
+        )
         logger.info(url_data)
-        # LOAD TO PANDAS DATAFRAME
-        col_name = [
-            "icao24",
-            "callsign",
-            "origin_country",
-            "time_position",
-            "last_contact",
-            "long",
-            "lat",
-            "baro_altitude",
-            "on_ground",
-            "velocity",
-            "true_track",
-            "vertical_rate",
-            "sensors",
-            "geo_altitude",
-            "squawk",
-            "spi",
-            "position_source",
-        ]
-
-        response_data = response.json()
-        logger.debug(response_data)
 
         if response.status_code == 200:
-            if response_data["states"] is not None:
-                flight_df = pd.DataFrame(response_data["states"], columns=col_name)
-                flight_df = flight_df.fillna("No Data")
-                for index, row in flight_df.iterrows():
-                    metadata = {"velocity": row["velocity"]}
-                    lat_dd = row["lat"]
-                    lon_dd = row["long"]
-                    altitude_mm = row["baro_altitude"]
-                    traffic_source = 2
-                    source_type = 1
-                    icao_address = row["icao24"]
+            response_data = response.json()
+            logger.debug(response_data)
 
+            if response_data.get("states"):
+                col_names = [
+                    "icao24",
+                    "callsign",
+                    "origin_country",
+                    "time_position",
+                    "last_contact",
+                    "long",
+                    "lat",
+                    "baro_altitude",
+                    "on_ground",
+                    "velocity",
+                    "true_track",
+                    "vertical_rate",
+                    "sensors",
+                    "geo_altitude",
+                    "squawk",
+                    "spi",
+                    "position_source",
+                ]
+                flight_df = pd.DataFrame(response_data["states"], columns=col_names).fillna("No Data")
+
+                for _, row in flight_df.iterrows():
                     so = SingleAirtrafficObservation(
-                        lat_dd=lat_dd,
-                        lon_dd=lon_dd,
-                        altitude_mm=altitude_mm,
-                        traffic_source=traffic_source,
-                        source_type=source_type,
-                        icao_address=icao_address,
-                        metadata=json.dumps(metadata),
+                        lat_dd=row["lat"],
+                        lon_dd=row["long"],
+                        altitude_mm=row["baro_altitude"],
+                        traffic_source=2,
+                        source_type=1,
+                        icao_address=row["icao24"],
+                        metadata=json.dumps({"velocity": row["velocity"]}),
                     )
-
                     write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
 
         time.sleep(heartbeat)

@@ -1,6 +1,16 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from marshmallow import Schema, fields, 
+
+class ObservationSchema(Schema):
+    lat_dd = fields.Float(required=True)
+    lon_dd = fields.Float(required=True)
+    altitude_mm = fields.Integer(required=True)
+    traffic_source = fields.String(required=True)
+    source_type = fields.String(required=True)
+    icao_address = fields.String(required=True)
+    metadata = fields.Dict(required=False)
 
 @dataclass
 class SingleObservationMetadata:
@@ -8,6 +18,23 @@ class SingleObservationMetadata:
 
     aircraft_type: str
 
+@dataclass
+class Observation:
+    timestamp: str
+    seq: int
+    msg_data: dict
+    address: str
+    metadata: dict
+
+# Extract unique flight messages with necessary details
+@dataclass
+class FlightMessage:
+    timestamp: str
+    seq: int
+    msg_data: dict
+    address: str
+    icao_address: str
+    metadata: Optional[dict]
 
 @dataclass
 class SingleRIDObservation:
