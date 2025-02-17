@@ -23,32 +23,85 @@ if ENV_FILE:
 
 
 class OperationalIntentsConverter:
-    """A class to convert a operational intent in to GeoJSON"""
+    """
+    A class to convert operational intents into GeoJSON format and perform various operations related to operational intents.
+    Attributes:
+        geo_json (dict): A dictionary representing the GeoJSON structure.
+        utm_zone (str): The UTM zone used for coordinate conversion.
+        all_features (list): A list to store all features for union operations.
+    Methods:
+        __init__():
+            Initializes the OperationalIntentsConverter with default values.
+        utm_converter(shapely_shape: shapely.geometry, inverse: bool = False) -> shapely.geometry.shape:
+            Converts coordinates between latitude/longitude and UTM.
+        convert_operational_intent_to_geo_json(volumes: List[Volume4D]):
+            Converts a list of Volume4D objects to GeoJSON format.
+        create_partial_operational_intent_ref(start_datetime: str, end_datetime: str, geo_json_fc: FeatureCollection, priority: int, state: str = "Accepted") -> PartialCreateOperationalIntentReference:
+            Creates a partial operational intent reference from given parameters.
+        convert_geo_json_to_volume_4_d(geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> List[Volume4D]:
+            Converts a GeoJSON FeatureCollection to a list of Volume4D objects.
+        buffer_point_to_volume4d(lat: float, lng: float, max_altitude: float, min_altitude: float, start_datetime: str, end_datetime: str) -> Volume4D:
+            Generates a new Volume4D object based on a buffered point.
+        get_geo_json_bounds() -> str:
+            Returns the bounding box of all features in GeoJSON format.
+        _convert_operational_intent_to_geojson_feature(volume: Volume4D):
+            Converts a Volume4D object to GeoJSON features.
+    """
 
     def __init__(self):
+        """
+        Initializes the instance with default values.
+        Attributes:
+            geo_json (dict): A dictionary representing an empty GeoJSON FeatureCollection.
+            utm_zone (str): The UTM zone, defaulting to "54N" if not provided in the environment variables.
+            all_features (list): An empty list to store all features.
+        """
+
         self.geo_json = {"type": "FeatureCollection", "features": []}
         self.utm_zone = env.get("UTM_ZONE", "54N")  # Default Zone for Switzerland
 
         self.all_features = []
 
-    def utm_converter(self, shapely_shape: shapely.geometry, inverse: bool = False) -> shapely.geometry.shape:
-        """A helper function to convert from lat / lon to UTM coordinates for buffering. tracks. This is the UTM projection (https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system), we use Zone 54N which encompasses Japan, this zone has to be set for each locale / city. Adapted from https://gis.stackexchange.com/questions/325926/buffering-geometry-with-points-in-wgs84-using-shapely"""
+        def utm_converter(self, shapely_shape: shapely.geometry.base.BaseGeometry, inverse: bool = False) -> shapely.geometry.base.BaseGeometry:
+            """
+            Converts coordinates between latitude/longitude and UTM.
 
-        proj = Proj(proj="utm", zone=self.utm_zone, ellps="WGS84", datum="WGS84")
+            Args:
+                shapely_shape (shapely.geometry.base.BaseGeometry): The shapely geometry object to convert.
+                inverse (bool): If True, converts from UTM to lat/lon. If False, converts from lat/lon to UTM.
 
-        geo_interface = shapely_shape.__geo_interface__
-        point_or_polygon = geo_interface["type"]
-        coordinates = geo_interface["coordinates"]
-        if point_or_polygon == "Polygon":
-            new_coordinates = [[proj(*point, inverse=inverse) for point in linring] for linring in coordinates]
-        elif point_or_polygon == "Point":
-            new_coordinates = proj(*coordinates, inverse=inverse)
-        else:
-            raise RuntimeError("Unexpected geo_interface type: {}".format(point_or_polygon))
+            Returns:
+                shapely.geometry.base.BaseGeometry: The converted shapely geometry object.
 
-        return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
+
+            A helper function to convert from lat / lon to UTM coordinates for buffering. tracks. This is the UTM projection (https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system), we use Zone 54N which encompasses Japan, this zone has to be set for each locale / city. Adapted from https://gis.stackexchange.com/questions/325926/buffering-geometry-with-points-in-wgs84-using-shapely"
+            """
+            proj = Proj(proj="utm", zone=self.utm_zone, ellps="WGS84", datum="WGS84")
+
+            geo_interface = shapely_shape.__geo_interface__
+            point_or_polygon = geo_interface["type"]
+            coordinates = geo_interface["coordinates"]
+
+            if point_or_polygon == "Polygon":
+                new_coordinates = [[proj(*point, inverse=inverse) for point in linring] for linring in coordinates]
+            elif point_or_polygon == "Point":
+                new_coordinates = proj(*coordinates, inverse=inverse)
+            else:
+                raise RuntimeError(f"Unexpected geo_interface type: {point_or_polygon}")
+
+            return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
 
     def convert_operational_intent_to_geo_json(self, volumes: List[Volume4D]):
+        """
+        Converts a list of Volume4D objects to GeoJSON format and appends the resulting features
+        to the geo_json attribute.
+
+        Args:
+            volumes (List[Volume4D]): A list of Volume4D objects representing the operational intent.
+
+        Returns:
+            None
+        """
         for volume in volumes:
             geo_json_features = self._convert_operational_intent_to_geojson_feature(volume)
             self.geo_json["features"] += geo_json_features
@@ -61,60 +114,69 @@ class OperationalIntentsConverter:
         priority: int,
         state: str = "Accepted",
     ) -> PartialCreateOperationalIntentReference:
+        """
+        Creates a partial operational intent reference from given parameters.
+
+        Args:
+            start_datetime (str): The start time in RFC3339 format.
+            end_datetime (str): The end time in RFC3339 format.
+            geo_json_fc (FeatureCollection): The GeoJSON FeatureCollection representing the operational intent.
+            priority (int): The priority of the operational intent.
+            state (str): The state of the operational intent. Defaults to "Accepted".
+
+        Returns:
+            PartialCreateOperationalIntentReference: The created partial operational intent reference.
+        """
         all_v4d = self.convert_geo_json_to_volume_4_d(
             geo_json_fc=geo_json_fc,
             start_datetime=start_datetime,
             end_datetime=end_datetime,
         )
 
-        op_int_r = PartialCreateOperationalIntentReference(volumes=all_v4d, state=state, priority=priority, off_nominal_volumes=[])
+        op_int_ref = PartialCreateOperationalIntentReference(volumes=all_v4d, state=state, priority=priority, off_nominal_volumes=[])
 
-        return op_int_r
+        return op_int_ref
 
     def convert_geo_json_to_volume_4_d(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> List[Volume4D]:
+        """
+        Converts a GeoJSON FeatureCollection to a list of Volume4D objects.
+
+        Args:
+            geo_json_fc (FeatureCollection): The GeoJSON FeatureCollection to convert.
+            start_datetime (str): The start time in RFC3339 format.
+            end_datetime (str): The end time in RFC3339 format.
+
+        Returns:
+            List[Volume4D]: A list of Volume4D objects.
+        """
         all_v4d = []
-        all_features = geo_json_fc["features"]
-        for feature in all_features:
+        for feature in geo_json_fc["features"]:
             geom = feature["geometry"]
             max_altitude = feature["properties"]["max_altitude"]["meters"]
             min_altitude = feature["properties"]["min_altitude"]["meters"]
-            s = shape(geom)
-            buffed_s = s.buffer(0.0005)
-            self.all_features.append(buffed_s)
-            # feature_union = unary_union(all_shapes)
-            # # TODO: build a better flightplan
-            # b = feature_union.minimum_rotated_rectangle
+            shapely_geom = shape(geom)
+            buffered_geom = shapely_geom.buffer(0.0005)
+            self.all_features.append(buffered_geom)
 
-            co_ordinates = list(zip(*buffed_s.exterior.coords.xy))
-            # Convert bounds vertex list
-            polygon_verticies = []
-            for cur_co_ordinate in co_ordinates:
-                v = LatLngPoint(lat=cur_co_ordinate[1], lng=cur_co_ordinate[0])
-                polygon_verticies.append(v)
+            coordinates = list(zip(*buffered_geom.exterior.coords.xy))
+            polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
 
-            # remove the final point
-            polygon_verticies.pop()
-
-            volume_3_d = Volume3D(
-                outline_polygon=Plgn(vertices=polygon_verticies),
+            volume_3d = Volume3D(
+                outline_polygon=Plgn(vertices=polygon_vertices),
                 altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
                 altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
             )
 
-            if "start_time" in feature["properties"] and "end_time" in feature["properties"]:
-                volume_4_d = Volume4D(
-                    volume=volume_3_d,
-                    time_start=Time(format="RFC3339", value=feature["properties"]["start_time"]),
-                    time_end=Time(format="RFC3339", value=feature["properties"]["end_time"]),
-                )
-            else:
-                volume_4_d = Volume4D(
-                    volume=volume_3_d,
-                    time_start=Time(format="RFC3339", value=start_datetime),
-                    time_end=Time(format="RFC3339", value=end_datetime),
-                )
+            time_start = feature["properties"].get("start_time", start_datetime)
+            time_end = feature["properties"].get("end_time", end_datetime)
 
-            all_v4d.append(volume_4_d)
+            volume_4d = Volume4D(
+                volume=volume_3d,
+                time_start=Time(format="RFC3339", value=time_start),
+                time_end=Time(format="RFC3339", value=time_end),
+            )
+
+            all_v4d.append(volume_4d)
 
         return all_v4d
 
@@ -128,35 +190,38 @@ class OperationalIntentsConverter:
         end_datetime: str,
     ) -> Volume4D:
         """
-        This methiod generates a new Volume 4D object based on the latest telemetry
+        Generates a new Volume4D object based on a buffered point.
+
+        Args:
+            lat (float): Latitude of the point.
+            lng (float): Longitude of the point.
+            max_altitude (float): Maximum altitude in meters.
+            min_altitude (float): Minimum altitude in meters.
+            start_datetime (str): Start time in RFC3339 format.
+            end_datetime (str): End time in RFC3339 format.
+
+        Returns:
+            Volume4D: The generated Volume4D object.
         """
+        point = Point(lng, lat)
+        buffered_shape = point.buffer(0.0001)
 
-        p = Point(lat, lng)
-        buffed_s = p.buffer(0.0001)
+        coordinates = list(zip(*buffered_shape.exterior.coords.xy))
+        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
 
-        co_ordinates = list(zip(*buffed_s.exterior.coords.xy))
-        # Convert bounds vertex list
-        polygon_verticies = []
-        for cur_co_ordinate in co_ordinates:
-            v = LatLngPoint(lat=cur_co_ordinate[1], lng=cur_co_ordinate[0])
-            polygon_verticies.append(v)
-
-        # remove the final point
-        polygon_verticies.pop()
-
-        volume_3_d = Volume3D(
-            outline_polygon=Plgn(vertices=polygon_verticies),
-            altitude_lower=Altitude(value=max_altitude, reference="W84", units="M"),
-            altitude_upper=Altitude(value=min_altitude, reference="W84", units="M"),
+        volume_3d = Volume3D(
+            outline_polygon=Plgn(vertices=polygon_vertices),
+            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
         )
 
-        volume_4_d = Volume4D(
-            volume=volume_3_d,
+        volume_4d = Volume4D(
+            volume=volume_3d,
             time_start=Time(format="RFC3339", value=start_datetime),
             time_end=Time(format="RFC3339", value=end_datetime),
         )
 
-        return volume_4_d
+        return volume_4d
 
     def get_geo_json_bounds(self) -> str:
         combined_features = unary_union(self.all_features)
@@ -166,32 +231,38 @@ class OperationalIntentsConverter:
         return bounds
 
     def _convert_operational_intent_to_geojson_feature(self, volume: Volume4D):
+        """
+        Converts a Volume4D object to GeoJSON features.
+
+        Args:
+            volume (Volume4D): The Volume4D object representing the operational intent.
+
+        Returns:
+            list: A list of GeoJSON features.
+        """
         geo_json_features = []
-        v = asdict(volume.volume)
+        volume_dict = asdict(volume.volume)
         time_start = volume.time_start.value
         time_end = volume.time_end.value
-        if "outline_polygon" in v and v["outline_polygon"] is not None:
-            outline_polygon = v["outline_polygon"]
-            point_list = []
 
-            for vertex in outline_polygon["vertices"]:
-                p = Point(vertex["lng"], vertex["lat"])
-                point_list.append(p)
+        if "outline_polygon" in volume_dict and volume_dict["outline_polygon"] is not None:
+            outline_polygon = volume_dict["outline_polygon"]
+            point_list = [Point(vertex["lng"], vertex["lat"]) for vertex in outline_polygon["vertices"]]
             outline_polygon = Polygon([[p.x, p.y] for p in point_list])
             self.all_features.append(outline_polygon)
 
-            oriented = shapely.geometry.polygon.orient(outline_polygon)
-            outline_p = shapely.geometry.mapping(oriented)
+            oriented_polygon = shapely.geometry.polygon.orient(outline_polygon)
+            outline_polygon_geojson = shapely.geometry.mapping(oriented_polygon)
 
             polygon_feature = {
                 "type": "Feature",
                 "properties": {"time_start": time_start, "time_end": time_end},
-                "geometry": outline_p,
+                "geometry": outline_polygon_geojson,
             }
             geo_json_features.append(polygon_feature)
 
-        if "outline_circle" in v and v["outline_circle"] is not None:
-            outline_circle = v["outline_circle"]
+        if "outline_circle" in volume_dict and volume_dict["outline_circle"] is not None:
+            outline_circle = volume_dict["outline_circle"]
             circle_radius = outline_circle["radius"]["value"]
             center_point = Point(outline_circle["center"]["lng"], outline_circle["center"]["lat"])
             utm_center = self.utm_converter(shapely_shape=center_point)
@@ -199,14 +270,13 @@ class OperationalIntentsConverter:
             converted_circle = self.utm_converter(buffered_circle, inverse=True)
             self.all_features.append(converted_circle)
 
-            outline_c = shapely.geometry.mapping(converted_circle)
+            outline_circle_geojson = shapely.geometry.mapping(converted_circle)
 
             circle_feature = {
                 "type": "Feature",
                 "properties": {"time_start": time_start, "time_end": time_end},
-                "geometry": outline_c,
+                "geometry": outline_circle_geojson,
             }
-
             geo_json_features.append(circle_feature)
 
         return geo_json_features

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.core.management.base import BaseCommand
 
@@ -9,11 +10,18 @@ from common.database_operations import (
 )
 from scd_operations import dss_scd_helper
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("django")
+
 
 class Command(BaseCommand):
     help = "This command deletes all flight operations in the Flight Blender database and also clears the DSS if available"
 
     def add_arguments(self, parser):
+        """
+        Add command line arguments to the parser.
+        """
         parser.add_argument(
             "-d",
             "--dry_run",
@@ -30,10 +38,13 @@ class Command(BaseCommand):
             metavar="Specify if the operational intents should also be removed from the DSS",
             default=1,
             type=int,
-            help="Set if it is a dry run",
+            help="Specify if the operational intents should also be removed from the DSS",
         )
 
     def handle(self, *args, **options):
+        """
+        Handle the command execution.
+        """
         dry_run = options["dry_run"]
         clear_dss = options["dss"]
 
@@ -42,16 +53,17 @@ class Command(BaseCommand):
         my_database_reader = FlightBlenderDatabaseReader()
         my_database_writer = FlightBlenderDatabaseWriter()
         all_operations = my_database_reader.get_all_flight_declarations()
+
         for o in all_operations:
             f_a = my_database_reader.get_flight_authorization_by_flight_declaration_obj(flight_declaration=o)
             if dry_run:
-                print("Dry Run : Deleting operation %s" % o.id)
+                logger.info("Dry Run : Deleting operation %s", o.id)
             else:
-                print("Deleting operation %s..." % o.id)
+                logger.info("Deleting operation %s...", o.id)
                 if clear_dss:
                     if f_a:
                         dss_op_int_id = f_a.dss_operational_intent_id
-                        print("Clearing operational intent id  %s in the DSS..." % dss_op_int_id)
+                        logger.info("Clearing operational intent id %s in the DSS...", dss_op_int_id)
                         my_scd_dss_helper = dss_scd_helper.SCDOperations()
                         # Get the OVN
                         op_int_details_key = "flight_opint." + str(f_a.declaration_id)
@@ -69,6 +81,6 @@ class Command(BaseCommand):
                 o.delete()
 
         # Clear out Redis database
-        print("Clearing stored operational intents...")
+        logger.info("Clearing stored operational intents...")
         redis = RedisHelper()
         redis.delete_all_opints()

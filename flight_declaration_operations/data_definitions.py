@@ -58,3 +58,17 @@ class HTTP404Response:
 @dataclass
 class HTTP400Response:
     message: str
+
+
+@dataclass
+class GeoFenceMetadata:
+    start_date: str
+    end_date: str
+    geo_fence_id: str
+
+
+@dataclass
+class FlightDeclarationMetadata:
+    start_date: str
+    end_date: str
+    flight_declaration_id: str
