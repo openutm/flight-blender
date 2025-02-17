@@ -3,7 +3,7 @@ from dataclasses import asdict
 from typing import List, Union
 
 import arrow
-from data_definitions import GeoFenceMetadata
+from .data_definitions import GeoFenceMetadata
 from django.db.models import QuerySet
 from rtree import index
 

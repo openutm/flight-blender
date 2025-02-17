@@ -3,7 +3,7 @@ from dataclasses import asdict
 from typing import List, Union
 
 import arrow
-from data_definitions import FlightDeclarationMetadata
+from .data_definitions import FlightDeclarationMetadata
 from django.db.models import QuerySet
 from rtree import index
 
@@ -22,7 +22,7 @@ class FlightDeclarationRTreeIndexFactory:
         delete_from_index(enumerated_id: int, view: List[float]) -> None:
         generate_flight_declaration_index(all_flight_declarations: Union[QuerySet, List[FlightDeclaration]]) -> None:
         clear_rtree_index() -> None:
-        check_box_intersection(view_box: List[float]) -> List[Metadata]:
+        check_flight_declaration_box_intersection(view_box: List[float]) -> List[FlightDeclarationMetadata]:
     """
 
     def __init__(self, index_name: str):
@@ -93,7 +93,7 @@ class FlightDeclarationRTreeIndexFactory:
             view = [float(i) for i in declaration.bounds.split(",")]
             self.delete_from_index(enumerated_id=declaration_id, view=view)
 
-    def check_box_intersection(self, view_box: List[float]) -> List[Metadata]:
+    def check_flight_declaration_box_intersection(self, view_box: List[float]) -> List[FlightDeclarationMetadata]:
         """
         Checks for intersections with a given bounding box.
 
@@ -101,7 +101,8 @@ class FlightDeclarationRTreeIndexFactory:
             view_box (List[float]): The bounding box coordinates [minx, miny, maxx, maxy].
 
         Returns:
-            List[Metadata]: A list of metadata for intersecting boxes.
+            List[FlightDeclarationMetadata]: A list of metadata for intersecting boxes.
         """
-        intersections = [n.object for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)]
+        intersections = [FlightDeclarationMetadata(**n.object) for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)]
+
         return intersections

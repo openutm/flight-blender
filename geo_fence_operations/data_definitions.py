@@ -186,3 +186,11 @@ class GeoZoneCheckResult:
 class GeoZoneChecksResponse:
     applicableGeozone: List[GeoZoneCheckResult]
     message: Optional[str]
+
+
+@dataclass
+class GeoFenceMetadata:
+    start_date: str
+    end_date: str
+    geo_fence_id: str
+

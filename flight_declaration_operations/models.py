@@ -88,7 +88,7 @@ class FlightDeclaration(models.Model):
             notes (str, optional): URL associated with this tracking entry. Defaults to ''.
         """
 
-        original_state = original_state if original_state is not None else "start"
+        original_state = original_state or "start"
         deltas = {"original_state": str(original_state), "new_state": str(new_state)}
 
         entry = FlightOperationTracking.objects.create(
@@ -107,8 +107,8 @@ class FlightDeclaration(models.Model):
         historic_states = FlightOperationTracking.objects.filter(flight_declaration=self).order_by("created_at")
         for historic_state in historic_states:
             delta = historic_state.deltas
-            original_state = delta["original_state"]
-            new_state = delta["new_state"]
+            original_state = delta.get("original_state", "start")
+            new_state = delta.get("new_state", "start")
             if original_state == "start":
                 original_state = -1
             all_states.append(int(original_state))
