@@ -272,7 +272,7 @@ class PartialCreateOperationalIntentReference:
     """A operational intent reference for the DSS that is stored in the Database"""
 
     volumes: List[Volume4D]
-    priority: str
+    priority: int
     state: str
     off_nominal_volumes: List[Volume4D]
 

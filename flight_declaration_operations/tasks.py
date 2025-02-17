@@ -211,13 +211,25 @@ def send_operational_update_message(
     message_text: str,
     level: str = "info",
     timestamp: str = None,
-):
+) -> None:
+    """
+    Sends an operational update message for a flight declaration.
+
+    Args:
+        flight_declaration_id (str): The ID of the flight declaration.
+        message_text (str): The message text to be sent.
+        level (str, optional): The level of the message (e.g., "info", "error"). Defaults to "info".
+        timestamp (str, optional): The timestamp of the message. If not provided, the current time is used.
+
+    Returns:
+        None
+    """
     if not timestamp:
         now = arrow.now()
         timestamp = now.isoformat()
 
     update_message = FlightDeclarationUpdateMessage(body=message_text, level=level, timestamp=timestamp)
-    amqp_connection_url = env.get("AMQP_URL", 0)
+    amqp_connection_url = env.get("AMQP_URL", "")
     if amqp_connection_url:
         my_notification_helper = NotificationFactory(
             flight_declaration_id=flight_declaration_id,

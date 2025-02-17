@@ -7,9 +7,10 @@ import requests
 from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
+import logging
 
 load_dotenv(find_dotenv())
-
+logger = logging.getLogger("django")
 
 def jwt_get_username_from_payload_handler(payload):
     username = payload.get("sub").replace("|", ".")
@@ -17,6 +18,7 @@ def jwt_get_username_from_payload_handler(payload):
     return username
 
 def requires_scopes(required_scopes):
+    
     """
     Decorator to enforce required scopes for accessing a view.
 
@@ -41,6 +43,7 @@ def requires_scopes(required_scopes):
     s = requests.Session()
 
     def require_scope(f):
+        
         @wraps(f)
         def decorated(*args, **kwargs):
             API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
@@ -57,7 +60,7 @@ def requires_scopes(required_scopes):
                 unverified_token_headers = jwt.get_unverified_header(token)
             except jwt.DecodeError:
                 return JsonResponse({"detail": "Bearer token could not be decoded properly"}, status=401)
-
+            
             if BYPASS_AUTH_TOKEN_VERIFICATION:
                 return handle_bypass_verification(token, f, *args, **kwargs)
 
