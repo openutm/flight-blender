@@ -100,26 +100,26 @@ class MessageVerifier:
     verify_message(request) -> bool:
         Verifies the message using stored public keys.
     """
-        """
-        Retrieves and caches public keys from a remote source or Redis.
-        Returns
-        -------
-        dict
-            A dictionary of public keys with key IDs as keys and key details as values.
-        """
-        # method implementation
-        """
-        Verifies the message using stored public keys.
-        Parameters
-        ----------
-        request : Request
-            The request object containing the message to be verified.
-        Returns
-        -------
-        bool
-            True if the message is successfully verified, False otherwise.
-        """
-        # method implementation
+    """
+    Retrieves and caches public keys from a remote source or Redis.
+    Returns
+    -------
+    dict
+        A dictionary of public keys with key IDs as keys and key details as values.
+    """
+    # method implementation
+    """
+    Verifies the message using stored public keys.
+    Parameters
+    ----------
+    request : Request
+        The request object containing the message to be verified.
+    Returns
+    -------
+    bool
+        True if the message is successfully verified, False otherwise.
+    """
+    # method implementation
 
     def get_public_keys(self):
         """

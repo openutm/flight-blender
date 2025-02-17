@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from marshmallow import Schema, fields, 
+from marshmallow import Schema, fields
 
 class ObservationSchema(Schema):
     lat_dd = fields.Float(required=True)
