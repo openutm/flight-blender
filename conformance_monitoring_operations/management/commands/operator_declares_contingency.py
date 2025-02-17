@@ -9,7 +9,7 @@ from shapely.geometry import Point
 
 from auth_helper.common import get_redis
 from common.data_definitions import FLIGHT_OPINT_KEY, OPERATION_STATES
-from common.database_operations import ArgonServerDatabaseReader
+from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from flight_declaration_operations.utils import OperationalIntentsConverter
 from flight_feed_operations import flight_stream_helper
@@ -51,14 +51,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
-        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
 
         dry_run = 1 if dry_run == "1" else 0
         contingent_state = 4
         contingent_state_str = OPERATION_STATES[contingent_state][1]
 
         my_scd_dss_helper = SCDOperations()
-        my_database_reader = ArgonServerDatabaseReader()
+        my_database_reader = FlightBlenderDatabaseReader()
         my_operational_intent_parser = OperationalIntentReferenceHelper()
         stream_ops = flight_stream_helper.StreamHelperOps()
         obs_helper = flight_stream_helper.ObservationReadOperations()
@@ -182,11 +182,11 @@ class Command(BaseCommand):
                 logger.debug(nominal_or_off_nominal_volumes)
 
                 if not dry_run:
-                    argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+                    flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
                     for subscriber in dss_response_subscribers:
                         subscriptions = subscriber.subscriptions
                         uss_base_url = subscriber.uss_base_url
-                        if argon_server_base_url == uss_base_url:
+                        if flight_blender_base_url == uss_base_url:
                             for s in subscriptions:
                                 subscription_id = s.subscription_id
                                 break

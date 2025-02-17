@@ -1,7 +1,7 @@
 {
 	"info": {
 		"_postman_id": "b15cf272-66f7-4a7a-8036-8ffda1a1a253",
-		"name": "Argon Server API Collections",
+		"name": "Flight Blender API Collections",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "393882"
 	},
@@ -4028,7 +4028,7 @@
 			]
 		},
 		{
-			"name": "PING Argon Server",
+			"name": "PING Flight Blender",
 			"protocolProfileBehavior": {
 				"disabledSystemHeaders": {
 					"content-type": true
@@ -4244,7 +4244,7 @@
 			"response": []
 		},
 		{
-			"name": "Argon Server Openskies Token",
+			"name": "Flight Blender Openskies Token",
 			"request": {
 				"auth": {
 					"type": "oauth2",

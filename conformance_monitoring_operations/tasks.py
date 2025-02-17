@@ -2,7 +2,7 @@ import logging
 
 from dotenv import find_dotenv, load_dotenv
 
-from argon_server.celery import app
+from flight_blender.celery import app
 from flight_feed_operations import flight_stream_helper
 from scd_operations.scd_data_definitions import LatLngPoint
 

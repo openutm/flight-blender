@@ -416,12 +416,12 @@ class OperationalIntentReferenceHelper:
             op_int_details = json.loads(op_int_details_raw)
             reference_full = op_int_details["success_response"]["operational_intent_reference"]
             # dss_response_subscribers = op_int_details["success_response"]["subscribers"]
-            # argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+            # flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
 
             # for subscriber in dss_response_subscribers:
             #     subscriptions = subscriber["subscriptions"]
             #     uss_base_url = subscriber["uss_base_url"]
-            #     if argon_server_base_url == uss_base_url:
+            #     if flight_blender_base_url == uss_base_url:
             #         for s in subscriptions:
             #             subscription_id = s["subscription_id"]
             #             break
@@ -585,7 +585,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
         my_op_int_ref_helper = OperationalIntentReferenceHelper()
         all_uss_operational_intent_details = []
 
@@ -635,14 +635,14 @@ class SCDOperations:
                         uss_base_url=o_i_r["uss_base_url"],
                         subscription_id=o_i_r["subscription_id"],
                     )
-                    # if o_i_r_formatted.uss_base_url != argon_server_base_url:
+                    # if o_i_r_formatted.uss_base_url != flight_blender_base_url:
                     all_uss_operational_intent_details.append(o_i_r_formatted)
 
             for current_uss_operational_intent_detail in all_uss_operational_intent_details:
-                # check the USS for flight volume by using the URL to see if this is stored in Argon Server, DSS will return all intent details including our own
+                # check the USS for flight volume by using the URL to see if this is stored in Flight Blender, DSS will return all intent details including our own
                 current_uss_base_url = current_uss_operational_intent_detail.uss_base_url
-                if current_uss_base_url == argon_server_base_url:
-                    # The opint is from Argon Server itself
+                if current_uss_base_url == flight_blender_base_url:
+                    # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
                     r = get_redis()
                     opint_flightref = "opint_flightref." + str(current_uss_operational_intent_detail.id)
@@ -1053,13 +1053,13 @@ class SCDOperations:
         """This method updates a operational intent from one state to other"""
         auth_token = self.get_auth_token()
         logger.info("Updating operational intent...")
-        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
 
         # Initialize the update request with empty airspace key
         operational_intent_update_payload = OperationalIntentUpdateRequest(
             extents=extents,
             state=new_state,
-            uss_base_url=argon_server_base_url,
+            uss_base_url=flight_blender_base_url,
             subscription_id=subscription_id,
             key=[],
         )
@@ -1124,7 +1124,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
         dss_r = requests.put(
             dss_opint_update_url,
             json=json.loads(json.dumps(asdict(operational_intent_update_payload))),
@@ -1140,7 +1140,7 @@ class SCDOperations:
             for subscriber in subscribers:
                 subscriptions = subscriber["subscriptions"]
                 uss_base_url = subscriber["uss_base_url"]
-                if uss_base_url != argon_server_base_url:
+                if uss_base_url != flight_blender_base_url:
                     all_subscription_states: List[SubscriptionState] = []
                     for subscription in subscriptions:
                         s_state = SubscriptionState(
@@ -1190,13 +1190,13 @@ class SCDOperations:
         }
         management_key = str(uuid.uuid4())
         airspace_keys = []
-        argon_server_base_url = env.get("ARGONSERVER_FQDN", "http://localhost:8000")
-        implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=argon_server_base_url)
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
+        implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=flight_blender_base_url)
         operational_intent_reference = OperationalIntentReference(
             extents=volumes,
             key=airspace_keys,
             state=state,
-            uss_base_url=argon_server_base_url,
+            uss_base_url=flight_blender_base_url,
             new_subscription=implicit_subscription_parameters,
         )
         d_r = OperationalIntentSubmissionStatus(
@@ -1345,7 +1345,7 @@ class SCDOperations:
                 d_r.dss_response = dss_response
                 logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
         else:
-            # When flight is not deconflicted, Argon Server assigns a error code of 500
+            # When flight is not deconflicted, Flight Blender assigns a error code of 500
             logger.info("Flight not deconflicted, there are other flights in the area..")
             d_r = OperationalIntentSubmissionStatus(
                 status="conflict_with_flight",

@@ -12,8 +12,8 @@ servers:
     description: 'Flight Blender API'
 security:
   - AuthFromPassport:
-      - 'argon_server.write'
-      - 'argon_server.read'
+      - 'flight_blender.write'
+      - 'flight_blender.read'
   - AuthFromAuthorizationAuthority:
     - dss.read.identification_service_areas
     - dss.write.identification_service_areas
@@ -100,7 +100,7 @@ paths:
     get:
       security:
       - AuthFromPassport:
-          - argon_server.read
+          - flight_blender.read
       responses:
         '200':
           content:
@@ -122,7 +122,7 @@ paths:
     put:
       summary: 'Create a Remote ID Subscription in the DSS'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description:
         "Create a subscription for an airspace to receive updates of operations in a volume of interest. After extents are submitted, Flight Blender will \
         \ get a appropriate token and create a subscription with a DSS instance, the DSS url needs to be confirmed / set as a part of Flight Blender setup. It will then poll flights through the Flights URLs provided by the DSS "
@@ -238,7 +238,7 @@ paths:
       - telemetry
       summary: 'Add Telemetry observation(s)'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description:
         "Submit data that is compliant with ASTM RemoteID from the vehicle / GCS into Flight Blender, after submission, Flight Blender will \
         \ normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces e.g. Network RID. A single or multiple flight states can be submitted at a given time."
@@ -307,7 +307,7 @@ paths:
     get:
       summary: 'Get flight data compliant with network remote id given a subscription id'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description:
         "By default Flight Blender sends flight data to Flight Spotlight as a scheduled job (push) every x seconds (which can be configured) \
         \ use this endpoint if you plan to implement polling mechanism (pull). This endpoint for e.g. is used in the RID Qualifier or can be to get flights if you are using a polling mechanism for your display client"
@@ -369,7 +369,7 @@ paths:
 
       summary: 'Get remote id data for a given view bounding box'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description: 'This endpoint is used in the context of running the rid_qualifier tool in the DSS. Poll this endpoint to get current remote ID display data as would be visualized by a Display Application. '
 
       responses:
@@ -743,7 +743,7 @@ paths:
     post:
       summary: 'Add Airtraffic observation(s)'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description:
         "Submit air traffic data into Flight Blender, after submission, Flight Blender will \
         \ normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces. A single or multiple observations can be submitted at a given time. No Network Remote ID data should be uploaded from this endpoint."
@@ -803,7 +803,7 @@ paths:
 
       summary: 'Start a stream of air-traffic data'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description:
         "Using this endpoint, you can start a stream of air-traffic observations for sixty seconds using the Opensky Network (https://opensky-network.org/).These observations are automatically submitted to Flight Spotlight for display"
 
@@ -857,7 +857,7 @@ paths:
 
       summary: 'Get Airtraffic observation(s)'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description:
         "Get all air traffic observations within Flight Blender for a view port. No Network Remote ID data will be provided from this endpoint."
       responses:
@@ -898,7 +898,7 @@ paths:
     get:
       summary: 'Get a list of all submitted flight declarations'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description: "Get a list of all Flight declarations in the database, if no start or end date is provided, Flight Blender will provide declarations for today"
 
       parameters:
@@ -983,7 +983,7 @@ paths:
 
       summary: 'Get a list of all flight declarations / operational intents from the USS Network'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description: "Get a list of all Operational Intents from the USSP network"
 
       responses:
@@ -1033,7 +1033,7 @@ paths:
 
       summary: 'Delete the specified flight declaration from Flight Blender'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description: "Delete a flight declaration, used by verification framework to tear down tests."
 
       responses:
@@ -1070,7 +1070,7 @@ paths:
     get:
       operationId: Get all Public Keys
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
 
       description: 'List Authorized Public keys that can be used for submitting remote ID data using the associated private key.'
       parameters: []
@@ -1088,7 +1088,7 @@ paths:
     post:
       operationId: Create a new Public Key
       security:
-        - AuthFromPassport: [ argon_server.write]
+        - AuthFromPassport: [ flight_blender.write]
       description: 'Create a new Authorized Public key. Once this key is submitted to Flight Blender, messages signed by the corresponding private key will be validated and processed.'
       parameters: []
       requestBody:
@@ -1115,7 +1115,7 @@ paths:
     get:
       operationId: Get a single key
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description: 'Get a single Authorized Public key by ID. A JWK json will be returned by Flight Blender.'
       parameters:
       - name: id
@@ -1137,7 +1137,7 @@ paths:
       operationId: Update public key details
       description: 'Update the Public Key URL for a key'
       security:
-        - AuthFromPassport: [ argon_server.write]
+        - AuthFromPassport: [ flight_blender.write]
       parameters:
       - name: id
         in: path
@@ -1169,7 +1169,7 @@ paths:
       operationId: Remove Public Key
       description: 'Remove details of a public key in Flight Blender'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       parameters:
       - name: id
         in: path
@@ -1186,7 +1186,7 @@ paths:
     get:
       summary: 'Get the details of a single flight declaration'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point can be queried to display authorization"
       parameters:
         - in: path
@@ -1236,7 +1236,7 @@ paths:
     put:
       summary: 'Submit a approval /rejection review for an operation'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point to change the status of operation and additionally update the state of the operations as it has commenced"
       parameters:
         - in: path
@@ -1295,7 +1295,7 @@ paths:
     put:
       summary: 'Update the state of a existing Flight Declaration'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description: "By default all flight declarations submitted in Flight Blender are not set a 'Accepted' state, for most operations this would suffice, however the state may be changed / updated manually. "
       parameters:
         - in: path
@@ -1356,7 +1356,7 @@ paths:
       description: "Submit a Flight Declaration into Flight Blender. \
         \ A flight declaration can be added upto 24 hours in advance and follows the ASTM Operational Intent data format. In most cases, you can use Flight Spotlight Launchpad functionality to submit a declaration."
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
 
       requestBody:
         required: true
@@ -1405,7 +1405,7 @@ paths:
     put:
       summary: 'Add a Geofence'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description:
         "Submit a Geofence in the form of a  GeoJSON declaration which is in turn submitted to  \
         \ Flight Spotlight. Geofence can be used to specify areas of interest, restricted areas, constraints etc."
@@ -1456,7 +1456,7 @@ paths:
     put:
       summary: 'Add a Geozone'
       security:
-        - AuthFromPassport: [argon_server.write]
+        - AuthFromPassport: [flight_blender.write]
       description:
         "Submit a Geofence in the form of a GeoZone which is in turn submitted to  \
         \ Flight Spotlight. Geofence can be used to specify areas of interest, restricted areas, constraints etc., Flight Blender will convert the fence into a format that is compatible with the EuroCAE ED-269 standard."
@@ -1507,7 +1507,7 @@ paths:
     get:
       summary: 'Get a list of all submitted Geofence'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description: 'By default all geo fence submitted in Flight Blender has  a start and end date, if none is provided, the server will default to today as start and end date'
 
       parameters:
@@ -1583,7 +1583,7 @@ paths:
     get:
       summary: 'Get details of a single geo fence'
       security:
-        - AuthFromPassport: [argon_server.read]
+        - AuthFromPassport: [flight_blender.read]
       description: 'Show details of a geofence as stored in the database'
       parameters:
         - in: path
@@ -1784,7 +1784,7 @@ paths:
 
       summary: 'Get latest air-traffic data'
       security:
-        - AuthFromPassport:  [argon_server.read]
+        - AuthFromPassport:  [flight_blender.read]
       description:
         "Using this endpoint, you can query a stream of air-traffic observations for the view port provided"
 
@@ -1961,8 +1961,8 @@ components:
         clientCredentials:
           tokenUrl: 'http://id.openskies.sh/oauth/token'
           scopes:
-            argon_server.write: 'Write data into Flight Blender'
-            argon_server.read: 'Read data into Flight Blender'
+            flight_blender.write: 'Write data into Flight Blender'
+            flight_blender.read: 'Read data into Flight Blender'
 
     AuthFromAuthorizationAuthority:
       flows:
@@ -2717,6 +2717,11 @@ components:
         originating_party:
           description: Provide the name of the flight declaration e.g. Flight Blender 102
           type: string
+        bounds:
+          description: The bounding box of the flight declraratoin in minX, minY, maxX, maxY order
+          type: string
+          example: 34.378675201285006,-89.45781948677741,34.403695823615934,-89.4279213143275
+
         submitted_by:
           description: Email address of person submitting this declaration
           type: string

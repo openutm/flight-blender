@@ -30,7 +30,7 @@ class FlightDeclaration(models.Model):
     originating_party = models.CharField(
         max_length=100,
         help_text="Set the party originating this flight, you can add details e.g. Aerobridge Flight 105",
-        default="Argon Server Default",
+        default="Flight Blender Default",
     )
 
     submitted_by = models.EmailField(blank=True, null=True)
