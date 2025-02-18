@@ -6,7 +6,7 @@ from os import environ as env
 from typing import List
 
 import arrow
-import shapely.geometry
+
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
@@ -32,10 +32,14 @@ from .data_definitions import (
     MessageVerificationFailedResponse,
     SingleAirtrafficObservation,
     TrafficInformationDiscoveryResponse,
+    ObservationSchema,
+    StoredFlightMessage
 )
+
+from marshmallow import  ValidationError
 from .models import SignedTelmetryPublicKey
 from .pki_helper import MessageVerifier, ResponseSigningOperations
-from .rid_telemetry_helper import ArgonServerTelemetryValidator, NestedDict
+from .rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
 from .serializers import SignedTelmetryPublicKeySerializer
 from .tasks import start_opensky_network_stream, write_incoming_air_traffic_data
 
@@ -82,7 +86,47 @@ def ping(request):
 @api_view(["POST"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_air_traffic(request):
-    """This is the main POST method that takes in a request for Air traffic observation and processes the input data"""
+    """
+    This is the main POST method that takes in a request for Air traffic observation and processes the input data.
+
+    Args:
+        request (HttpRequest): The HTTP request object containing air traffic observation data.
+
+    Returns:
+        JsonResponse: A JSON response indicating the result of the processing.
+
+    Raises:
+        AssertionError: If the Content-Type of the request is not 'application/json'.
+        KeyError: If required keys are missing in the request data.
+
+    The function performs the following steps:
+    1. Checks if the Content-Type of the request is 'application/json'.
+    2. Extracts the 'observations' from the request data.
+    3. Iterates through each observation and extracts required fields.
+    4. If any required field is missing in an observation, returns a 400 status with an error message.
+    5. If 'metadata' is present in an observation, it is included in the processing.
+    6. Creates a SingleAirtrafficObservation object for each observation and sends it to the task queue.
+    7. Returns a 200 status with an "OK" message upon successful processing.
+
+    Example:
+        A sample request JSON:
+        {
+            "observations": [
+                {
+                    "lat_dd": 37.7749,
+                    "lon_dd": -122.4194,
+                    "altitude_mm": 10000,
+                    "traffic_source": "ADS-B",
+                    "source_type": "sensor",
+                    "icao_address": "ABC123",
+                    "metadata": {
+                        "speed": 500,
+                        "heading": 90
+                    }
+                }
+            ]
+        }
+    """
 
     try:
         assert request.headers["Content-Type"] == "application/json"
@@ -103,19 +147,21 @@ def set_air_traffic(request):
         m = asdict(msg)
         return JsonResponse(m, status=m["status"])
 
+    schema = ObservationSchema()
     for observation in observations:
-        try:
-            lat_dd = observation["lat_dd"]
-            lon_dd = observation["lon_dd"]
-            altitude_mm = observation["altitude_mm"]
-            traffic_source = observation["traffic_source"]
-            source_type = observation["source_type"]
-            icao_address = observation["icao_address"]
 
-        except KeyError:
-            msg = {"message": "One of your observations do not have the mandatory required field"}
+        try:
+            validated_data = schema.load(observation)
+            lat_dd = validated_data["lat_dd"]
+            lon_dd = validated_data["lon_dd"]
+            altitude_mm = validated_data["altitude_mm"]
+            traffic_source = validated_data["traffic_source"]
+            source_type = validated_data["source_type"]
+            icao_address = validated_data["icao_address"]
+
+        except ValidationError as err:
+            msg = {"message": "One of your observations do not have the mandatory required field", "errors": err.messages}
             return JsonResponse(msg, status=400)
-            # logger.error("Not all data was provided")
         metadata = {}
 
         if "metadata" in observation.keys():
@@ -140,64 +186,64 @@ def set_air_traffic(request):
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_air_traffic(request):
-    """This is the end point for the rid_qualifier test DSS network call once a subscription is updated"""
+    """
+    This endpoint retrieves air traffic data within a specified view bounding box.
 
-    # get the view bounding box
-    # get the existing subscription id , if no subscription exists, then reject
+    Args:
+        request (HttpRequest): The HTTP request object containing query parameters.
 
+    Returns:
+        JsonResponse: A JSON response containing air traffic observations within the specified view bounding box.
+
+    Raises:
+        JsonResponse: If the view bounding box is not provided or is invalid, returns a 400 status with an error message.
+    """
+    
     try:
         view = request.query_params["view"]
-        view_port = [float(i) for i in view.split(",")]
-    except Exception:
+        view_port = list(map(float, view.split(",")))
+    except (KeyError, ValueError):
         incorrect_parameters = {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}
-        return JsonResponse(
-            json.loads(json.dumps(incorrect_parameters)),
-            status=400,
-            content_type="application/json",
-        )
+        return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
 
     view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
 
-    b = shapely.geometry.box(view_port[1], view_port[0], view_port[3], view_port[2])
-    co_ordinates = list(zip(*b.exterior.coords.xy))
-    # Convert bounds vertex list
-    vertex_list = []
-    for cur_co_ordinate in co_ordinates:
-        lat_lng = {"lng": 0, "lat": 0}
-        lat_lng["lng"] = cur_co_ordinate[0]
-        lat_lng["lat"] = cur_co_ordinate[1]
-        vertex_list.append(lat_lng)
-    # remove the final point
-    vertex_list.pop()
 
     if view_port_valid:
-        stream_ops = flight_stream_helper.StreamHelperOps()
-        pull_cg = stream_ops.get_pull_cg()
-        all_streams_messages = pull_cg.read()
-
-        unique_flights = []
-        # Keep only the latest message
         try:
-            for message in all_streams_messages:
-                unique_flights.append(
-                    {
-                        "timestamp": message.timestamp,
-                        "seq": message.sequence,
-                        "msg_data": message.data,
-                        "address": message.data["icao_address"],
-                    }
-                )
-            # sort by date
-            unique_flights.sort(key=lambda item: item["timestamp"], reverse=True)
-            # Keep only the latest message
-            distinct_messages = {i["address"]: i for i in reversed(unique_flights)}.values()
+            # Initialize StreamHelperOps to handle stream operations
+            stream_ops = flight_stream_helper.StreamHelperOps()
+            # Get the consumer group for pulling messages
+            pull_cg = stream_ops.get_pull_cg()
+            # Read all messages from the stream
+            all_streams_messages = pull_cg.read()
 
+            unique_flights = [
+                StoredFlightMessage(
+                    timestamp=message.timestamp,
+                    seq=message.sequence,
+                    msg_data=message.data,
+                    icao_address=message.data["icao_address"],
+                )
+                for message in all_streams_messages
+            ]
+
+            # Sort messages by timestamp in descending order
+            unique_flights.sort(key=lambda item: item.timestamp, reverse=True)
+            
+            # Get distinct messages based on ICAO address
+            distinct_messages = {i.icao_address: i for i in reversed(unique_flights)}.values()
+            logger.info("Unique flights sorted by timestamp")
         except KeyError as ke:
+            # Log error if ICAO address is not defined in any message
             logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
             distinct_messages = []
+
+
+
         all_traffic_observations: List[SingleAirtrafficObservation] = []
         for observation in distinct_messages:
-            observation_data = observation["msg_data"]
+            observation_data = observation.msg_data
             observation_metadata = json.loads(observation_data["metadata"])
             so = SingleAirtrafficObservation(
                 lat_dd=observation_data["lat_dd"],
@@ -227,199 +273,196 @@ def get_air_traffic(request):
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def start_opensky_feed(request):
-    # This method takes in a view port as a lat1,lon1,lat2,lon2 coordinate system and for 60 seconds starts the stream of data from the OpenSky Network.
-
+    """
+    Starts the OpenSky Network data stream for a specified viewport.
+    This method takes in a viewport as a lat1, lon1, lat2, lon2 coordinate system and starts the stream of data from the OpenSky Network for 60 seconds.
+    Args:
+        request (HttpRequest): The HTTP request object containing query parameters.
+    Returns:
+        JsonResponse: A JSON response indicating the result of the operation.
+            - If successful, returns a message indicating the stream has started with status 200.
+            - If the viewport parameters are incorrect or invalid, returns an error message with status 400.
+    Raises:
+        None
+    Notes:
+        The viewport must be provided as a query parameter named "view" with four comma-separated values representing the bounding box coordinates: minx, miny, maxx, and maxy.
+    """
     try:
         view = request.query_params["view"]
         view_port = [float(i) for i in view.split(",")]
-    except Exception:
+    except (KeyError, ValueError):
         incorrect_parameters = {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}
+        return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
 
-        return JsonResponse(
-            json.loads(json.dumps(incorrect_parameters)),
-            status=400,
-            content_type="application/json",
-        )
-
-    view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
-
-    if view_port_valid:
-        start_opensky_network_stream.delay(view_port=json.dumps(view_port))
-
-        return JsonResponse(
-            {"message": "Openskies Network stream started"},
-            status=200,
-            content_type="application/json",
-        )
-    else:
+    if not view_port_ops.check_view_port(view_port_coords=view_port):
         view_port_error = {"message": "An incorrect view port bbox was provided"}
+        return JsonResponse(view_port_error, status=400, content_type="application/json")
 
-        return JsonResponse(
-            json.loads(json.dumps(view_port_error)),
-            status=400,
-            content_type="application/json",
-        )
-
+    start_opensky_network_stream.delay(view_port=json.dumps(view_port))
+    return JsonResponse({"message": "Openskies Network stream started"}, status=200, content_type="application/json")
 
 @api_view(["PUT"])
 def set_signed_telemetry(request):
-    # This endpoint sets signed telemetry details into Flight Blender, use this endpoint to securely send signed telemetry information into Flight Blender, since the messages are signed, we turn off any auth requirements for tokens and validate against allowed public keys in Flight Blender.
-
+    """
+    This endpoint sets signed telemetry details into Flight Blender. It securely receives signed telemetry information
+    and validates it against allowed public keys in Flight Blender. Since the messages are signed, authentication 
+    requirements for tokens are turned off.
+    Args:
+        request (HttpRequest): The HTTP request object containing the signed telemetry data.
+    Returns:
+        JsonResponse: A JSON response indicating the result of the operation. Possible responses include:
+            - 400 Bad Request: If message verification fails, required observation keys are missing, flight details 
+              or current states are invalid, or the operation ID does not match any current operation in Flight Blender.
+            - 201 Created: If telemetry data is successfully submitted.
+    The function performs the following steps:
+        1. Verifies the signed message using the MessageVerifier.
+        2. Validates the presence of required observation keys in the request data.
+        3. Iterates through the flight observations and validates the presence of flight details and current states.
+        4. Parses and validates the current states and flight details.
+        5. Checks if the operation ID exists in the current flight declarations and if the operation state is valid.
+        6. Streams the telemetry data if the operation state is valid.
+        7. Returns appropriate JSON responses based on the validation and processing results.
+    """
     my_message_verifier = MessageVerifier()
     my_flight_blender_database_reader = FlightBlenderDatabaseReader()
     my_response_signer = ResponseSigningOperations()
     verified = my_message_verifier.verify_message(request)
 
     if not verified:
-        message_verification_failed_response = MessageVerificationFailedResponse(message="Could not verify against public keys setup in Flight Blender")
         return JsonResponse(
-            asdict(message_verification_failed_response),
+            asdict(MessageVerificationFailedResponse(message="Could not verify against public keys setup in Flight Blender")),
             status=400,
             content_type="application/json",
         )
-    else:
-        raw_data = request.data
-        my_telemetry_validator = ArgonServerTelemetryValidator()
-        observations_exist = my_telemetry_validator.validate_observation_key_exists(raw_request_data=raw_data)
-        if not observations_exist:
-            incorrect_parameters = {"message": "A flight observation object with current state and flight details is necessary"}
-            return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
-        # Get a list of flight data
 
-        rid_observations = raw_data["observations"]
+    raw_data = request.data
+    my_telemetry_validator = FlightBlenderTelemetryValidator()
 
-        unsigned_telemetry_observations: List[SignedUnSignedTelemetryObservations] = []
-        for flight in rid_observations:
-            flight_details_current_states_exist = my_telemetry_validator.validate_flight_details_current_states_exist(flight=flight)
-            if not flight_details_current_states_exist:
-                incorrect_parameters = {"message": "A flights object with current states, flight details is necessary"}
-                return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
+    if not my_telemetry_validator.validate_observation_key_exists(raw_request_data=raw_data):
+        return JsonResponse({"message": "A flight observation object with current state and flight details is necessary"}, status=400, content_type="application/json")
 
-            current_states = flight["current_states"]
-            flight_details = flight["flight_details"]
-            try:
-                all_states: List[RIDAircraftState] = my_telemetry_validator.parse_validate_current_states(current_states=current_states)
-                rid_flight_details = flight_details["rid_details"]
-                f_details: RIDFlightDetails = my_telemetry_validator.parse_validate_rid_details(rid_flight_details=rid_flight_details)
+    rid_observations = raw_data["observations"]
+    unsigned_telemetry_observations = []
 
-            except KeyError as ke:
-                incorrect_parameters = {
-                    "message": (
-                        "A states object with a fully valid current states is necessary, the parsing the following key encountered errors %s" % ke
-                    )
-                }
-                return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
+    for flight in rid_observations:
+        if not my_telemetry_validator.validate_flight_details_current_states_exist(flight=flight):
+            return JsonResponse({"message": "A flights object with current states, flight details is necessary"}, status=400, content_type="application/json")
 
-            single_observation_set = SignedUnSignedTelemetryObservations(current_states=all_states, flight_details=f_details)
+        current_states = flight["current_states"]
+        flight_details = flight["flight_details"]
 
-            unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
+        try:
+            all_states = my_telemetry_validator.parse_validate_current_states(current_states=current_states)
+            f_details = my_telemetry_validator.parse_validate_rid_details(rid_flight_details=flight_details["rid_details"])
+        except KeyError as ke:
+            return JsonResponse({"message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"}, status=400, content_type="application/json")
 
-            operation_id = f_details.id
-            now = arrow.now().isoformat()
-            relevant_operation_ids_qs = my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now)
-            relevant_operation_ids = [str(o) for o in relevant_operation_ids_qs.all()]
-            if operation_id in relevant_operation_ids:
-                # Get flight state:
-                flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
+        single_observation_set = SignedUnSignedTelemetryObservations(current_states=all_states, flight_details=f_details)
+        unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
 
-                if flight_operation.state in [
-                    2,
-                    3,
-                    4,
-                ]:  # Activated, Contingent, Non-conforming
-                    stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
-                else:
-                    operation_state_incorrect_msg = {
-                        "message": "The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first.".format(
-                            operation_id=operation_id
-                        )
-                    }
-                    return JsonResponse(
-                        operation_state_incorrect_msg,
-                        status=400,
-                        content_type="application/json",
-                    )
+        operation_id = f_details.id
+        now = arrow.now().isoformat()
+        relevant_operation_ids = [str(o) for o in my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now).all()]
 
+        if operation_id in relevant_operation_ids:
+            flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
+
+            if flight_operation.state in [2, 3, 4]:  # Activated, Contingent, Non-conforming
+                stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
             else:
-                incorrect_operation_id_msg = {
-                    "message": "The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender".format(
-                        operation_id=operation_id
-                    )
-                }
-                return JsonResponse(
-                    incorrect_operation_id_msg,
-                    status=400,
-                    content_type="application/json",
-                )
+                return JsonResponse({"message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first."}, status=400, content_type="application/json")
+        else:
+            return JsonResponse({"message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"}, status=400, content_type="application/json")
 
-        submission_success = {"message": "Telemetry data successfully submitted"}
-        content_digest = my_response_signer.generate_content_digest(submission_success)
-        signed_data = my_response_signer.sign_json_via_django(submission_success)
-        submission_success["signed"] = signed_data
-        response = JsonResponse(submission_success, status=201, content_type="application/json")
-        response["Content-Digest"] = content_digest
-        response["req"] = request.headers["Signature"]
+    submission_success = {"message": "Telemetry data successfully submitted"}
+    content_digest = my_response_signer.generate_content_digest(submission_success)
+    signed_data = my_response_signer.sign_json_via_django(submission_success)
+    submission_success["signed"] = signed_data
 
-        return response
+    response = JsonResponse(submission_success, status=201, content_type="application/json")
+    response["Content-Digest"] = content_digest
+    response["req"] = request.headers["Signature"]
+
+    return response
 
 
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def traffic_information_discovery_view(request):
+    """
+    Handles the traffic information discovery request.
+    This view processes the request to retrieve traffic information within a specified view port.
+    It validates the view port parameters and checks the format of the requested data.
+    Parameters:
+    request (HttpRequest): The HTTP request object containing query parameters.
+    Query Parameters:
+    - view (str): A comma-separated string representing the bounding box coordinates (minx, miny, maxx, maxy).
+    - format (str, optional): The format of the requested data. Only 'mavlink' is supported.
+    Returns:
+    JsonResponse: A JSON response containing the traffic information discovery details or an error message.
+    Response Codes:
+    - 200: Traffic information discovery information successfully retrieved.
+    - 400: Bad request due to incorrect parameters or unsupported format.
+    """
     try:
         view = request.query_params["view"]
         view_port = [float(i) for i in view.split(",")]
-    except Exception:
-        incorrect_parameters = {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}
-
+    except (KeyError, ValueError):
         return JsonResponse(
-            json.loads(json.dumps(incorrect_parameters)),
+            {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"},
             status=400,
             content_type="application/json",
         )
 
-    view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
-
-    if not view_port_valid:
-        view_port_error = {"message": "An incorrect view port bbox was provided"}
-
+    if not view_port_ops.check_view_port(view_port_coords=view_port):
         return JsonResponse(
-            json.loads(json.dumps(view_port_error)),
+            {"message": "An incorrect view port bbox was provided"},
             status=400,
             content_type="application/json",
         )
 
     data_format = request.query_params.get("format", None)
-
-    if data_format and data_format == "asterix":
-        incorrect_parameters = {"message": "A format query parameter can only be 'mavlink' since 'asterix' is not supported. "}
+    if data_format and data_format != "mavlink":
         return JsonResponse(
-            json.loads(json.dumps(incorrect_parameters)),
+            {"message": "A format query parameter can only be 'mavlink' since 'asterix' is not supported."},
             status=400,
             content_type="application/json",
         )
 
     traffic_information_url = env.get("TRAFFIC_INFORMATION_URL", "https://not_implemented_yet")
-
-    traffic_information_discovery_response = TrafficInformationDiscoveryResponse(
+    response_data = TrafficInformationDiscoveryResponse(
         message="Traffic Information Discovery information successfully retrieved",
         url=traffic_information_url,
         description="Start a QUIC query to the traffic information url service to get traffic information in the specified view port",
     )
 
-    return JsonResponse(asdict(traffic_information_discovery_response), status=200, content_type="application/json")
-
+    return JsonResponse(asdict(response_data), status=200, content_type="application/json")
 
 @api_view(["PUT"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_telemetry(request):
-    """A RIDOperatorDetails object is posted here"""
-    # This endpoints receives data from GCS and / or flights and processes telemetry data.
-    # TODO: Use dacite to parse incoming json into a dataclass
+    """
+    A view to handle the submission of telemetry data from GCS and/or flights.
+    This endpoint receives telemetry data in JSON format, validates it, and processes it accordingly.
+    The data is expected to contain flight observations with current states and flight details.
+    Args:
+        request (HttpRequest): The HTTP request object containing telemetry data in JSON format.
+    Returns:
+        JsonResponse: A JSON response indicating the result of the telemetry data submission.
+                      - 201 status code if the submission is successful.
+                      - 400 status code if there are validation errors or incorrect parameters.
+    Raises:
+        KeyError: If required keys are missing in the telemetry data.
+    Notes:
+        - Uses dacite to parse incoming JSON into a dataclass.
+        - Validates the presence of necessary keys and the correctness of the data.
+        - Checks if the operation ID exists and is in the correct state before processing telemetry data.
+    """
+
     raw_data = request.data
 
     my_flight_blender_database_reader = FlightBlenderDatabaseReader()
-    my_telemetry_validator = ArgonServerTelemetryValidator()
+    my_telemetry_validator = FlightBlenderTelemetryValidator()
 
     observations_exist = my_telemetry_validator.validate_observation_key_exists(raw_request_data=raw_data)
     if not observations_exist:
@@ -431,60 +474,50 @@ def set_telemetry(request):
 
     unsigned_telemetry_observations: List[SignedUnSignedTelemetryObservations] = []
     for flight in rid_observations:
-        flight_details_current_states_exist = my_telemetry_validator.validate_flight_details_current_states_exist(flight=flight)
-        if not flight_details_current_states_exist:
-            incorrect_parameters = {"message": "A flights object with current states, flight details is necessary"}
-            return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
+        if not my_telemetry_validator.validate_flight_details_current_states_exist(flight=flight):
+            return JsonResponse(
+                {"message": "A flights object with current states, flight details is necessary"},
+                status=400,
+                content_type="application/json"
+            )
 
         current_states = flight["current_states"]
         flight_details = flight["flight_details"]
-        try:
-            all_states: List[RIDAircraftState] = my_telemetry_validator.parse_validate_current_states(current_states=current_states)
-            rid_flight_details = flight_details["rid_details"]
-            f_details: RIDFlightDetails = my_telemetry_validator.parse_validate_rid_details(rid_flight_details=rid_flight_details)
 
+        try:
+            all_states = my_telemetry_validator.parse_validate_current_states(current_states=current_states)
+            f_details = my_telemetry_validator.parse_validate_rid_details(rid_flight_details=flight_details["rid_details"])
         except KeyError as ke:
-            incorrect_parameters = {
-                "message": "A states object with a fully valid current states is necessary, the parsing the following key encountered errors %s" % ke
-            }
-            return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
+            return JsonResponse(
+                {"message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"},
+                status=400,
+                content_type="application/json"
+            )
 
         single_observation_set = SignedUnSignedTelemetryObservations(current_states=all_states, flight_details=f_details)
-
         unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
+
         operation_id = f_details.id
         now = arrow.now().isoformat()
-        relevant_operation_ids_qs = my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now)
-        relevant_operation_ids = [str(o) for o in relevant_operation_ids_qs.all()]
-        if operation_id in list(relevant_operation_ids):
-            # Get flight state:
+        relevant_operation_ids = [str(o) for o in my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now).all()]
+
+        if operation_id in relevant_operation_ids:
             flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
 
-            if flight_operation.state in [
-                2,
-                3,
-                4,
-            ]:  # Activated, Contingent, Non-conforming
+            if flight_operation.state in [2, 3, 4]:  # Activated, Contingent, Non-conforming
                 stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
             else:
-                operation_state_incorrect_msg = {
-                    "message": "The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first.".format(
-                        operation_id=operation_id
-                    )
-                }
                 return JsonResponse(
-                    operation_state_incorrect_msg,
+                    {"message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first."},
                     status=400,
-                    content_type="application/json",
+                    content_type="application/json"
                 )
-
         else:
-            incorrect_operation_id_msg = {
-                "message": "The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender".format(
-                    operation_id=operation_id
-                )
-            }
-            return JsonResponse(incorrect_operation_id_msg, status=400, content_type="application/json")
+            return JsonResponse(
+                {"message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"},
+                status=400,
+                content_type="application/json"
+            )
 
     submission_success = {"message": "Telemetry data successfully submitted"}
     return JsonResponse(submission_success, status=201, content_type="application/json")

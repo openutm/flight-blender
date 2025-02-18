@@ -37,6 +37,14 @@ class NestedDict(dict):
 def generate_rid_telemetry_objects(
     signed_telemetry_request: SignedTelemetryRequest,
 ) -> List[SubmittedTelemetryFlightDetails]:
+    
+    """
+    Generate a list of RID telemetry objects from signed telemetry requests.
+    Args:
+        signed_telemetry_request (SignedTelemetryRequest): A list of signed telemetry requests.
+    Returns:
+        List[SubmittedTelemetryFlightDetails]: A list of submitted telemetry flight details objects.
+    """
     all_rid_data = []
 
     for current_signed_telemetry_request in signed_telemetry_request:
@@ -52,6 +60,16 @@ def generate_rid_telemetry_objects(
 def generate_unsigned_rid_telemetry_objects(
     telemetry_request: List[SignedUnSignedTelemetryObservations],
 ) -> List[SubmittedTelemetryFlightDetails]:
+    """
+    Generate a list of unsigned RID telemetry objects from the given telemetry request.
+    Args:
+        telemetry_request (List[SignedUnSignedTelemetryObservations]): A list of telemetry observations 
+        that need to be converted to unsigned RID telemetry objects.
+    Returns:
+        List[SubmittedTelemetryFlightDetails]: A list of submitted telemetry flight details generated 
+        from the given telemetry request.
+    """
+    
     all_rid_data = []
 
     for current_unsigned_telemetry_request in telemetry_request:
@@ -64,23 +82,42 @@ def generate_unsigned_rid_telemetry_objects(
     return all_rid_data
 
 
-class ArgonServerTelemetryValidator:
+class FlightBlenderTelemetryValidator:
+    """
+    A class to validate and parse telemetry data for Flight Blender.
+    Methods
+    -------
+    parse_validate_current_state(current_state) -> RIDAircraftState:
+        Parses and validates a single current state object and returns an RIDAircraftState dataclass.
+    parse_validate_current_states(current_states) -> List[RIDAircraftState]:
+        Parses and validates a list of current state objects and returns a list of RIDAircraftState dataclasses.
+    parse_validate_rid_details(rid_flight_details) -> RIDFlightDetails:
+        Parses and validates RID flight details and returns an RIDFlightDetails dataclass.
+    validate_flight_details_current_states_exist(flight) -> bool:
+        Validates that both flight details and current states exist in the flight data.
+    validate_observation_key_exists(raw_request_data) -> bool:
+        Validates that the 'observations' key exists in the raw request data.
+    """
+
     def parse_validate_current_state(self, current_state) -> RIDAircraftState:
+        def get_value(data, key, default=None):
+            return data[key] if key in data else default
+
         timestamp = Time(
-            value=current_state["timestamp"]["value"],
-            format=current_state["timestamp"]["format"],
+            value=get_value(current_state["timestamp"], "value"),
+            format=get_value(current_state["timestamp"], "format"),
         )
         operational_status = RIDOperationalStatus(current_state["operational_status"])
         _state_position = current_state["position"]
-        # In provided telemetry position and pressure altitude and extrapolated values are optional use if provided else generate them.
-        pressure_altitude = _state_position["pressure_altitude"] if "pressure_altitude" in _state_position else 0.0
-        extrapolated = _state_position["extrapolated"] if "extrapolated" in _state_position else 0
+
+        pressure_altitude = get_value(_state_position, "pressure_altitude", 0.0)
+        extrapolated = get_value(_state_position, "extrapolated", 0)
 
         accuracy_h = HorizontalAccuracy(value=_state_position["accuracy_h"])
         accuracy_v = VerticalAccuracy(value=_state_position["accuracy_v"])
         height = RIDHeight(
-            reference=current_state["height"]["reference"],
-            distance=current_state["height"]["distance"],
+            reference=get_value(current_state["height"], "reference"),
+            distance=get_value(current_state["height"], "distance"),
         )
 
         position = RIDAircraftPosition(
@@ -109,8 +146,14 @@ class ArgonServerTelemetryValidator:
         return s
 
     def parse_validate_current_states(self, current_states) -> List[RIDAircraftState]:
-        """This method parses and validates current state object and returns a dataclass"""
-
+        """
+        Parses and validates a list of current aircraft states.
+        Args:
+            current_states (List[dict]): A list of dictionaries representing the current states of aircraft.
+        Returns:
+            List[RIDAircraftState]: A list of validated and parsed RIDAircraftState objects.
+        """
+        
         all_states = []
 
         for state in current_states:
@@ -119,6 +162,39 @@ class ArgonServerTelemetryValidator:
         return all_states
 
     def parse_validate_rid_details(self, rid_flight_details) -> RIDFlightDetails:
+        """
+        Parses and validates the RID flight details from the provided dictionary.
+        Args:
+            rid_flight_details (dict): A dictionary containing the RID flight details.
+        Returns:
+            RIDFlightDetails: An instance of RIDFlightDetails containing the parsed and validated details.
+        The expected structure of rid_flight_details dictionary:
+        {
+            "id": str,
+            "eu_classification": {
+                "category": str,
+                "class_": str
+            },
+            "uas_id": {
+                "serial_number": str,
+                "registration_id": str,
+                "utm_id": str
+            },
+            "operator_location": {
+                "position": {
+                    "lat": float,
+                    "lng": float
+                }
+            },
+            "operator_id": str,
+            "operation_description": str,
+            "auth_data": {
+                "format": str,
+                "data": str
+            }
+        }
+        """
+
         if "eu_classification" in rid_flight_details.keys():
             eu_classification_details = rid_flight_details["eu_classification"]
 
@@ -168,16 +244,22 @@ class ArgonServerTelemetryValidator:
         return f_details
 
     def validate_flight_details_current_states_exist(self, flight) -> bool:
-        try:
-            assert "flight_details" in flight
-            assert "current_states" in flight
-        except AssertionError:
-            return False
-        return True
+        """
+        Validates if the given flight dictionary contains both 'flight_details' and 'current_states' keys.
+        Args:
+            flight (dict): The flight dictionary to validate.
+        Returns:
+            bool: True if both 'flight_details' and 'current_states' keys exist in the flight dictionary, False otherwise.
+        """
+
+        return "flight_details" in flight and "current_states" in flight
 
     def validate_observation_key_exists(self, raw_request_data) -> bool:
-        try:
-            assert "observations" in raw_request_data
-        except AssertionError:
-            return False
-        return True
+        """
+        Validate that the 'observations' key exists in the provided raw request data.
+        Args:
+            raw_request_data (dict): The raw request data to be validated.
+        Returns:
+            bool: True if the 'observations' key exists in the raw request data, False otherwise.
+        """
+        return "observations" in raw_request_data

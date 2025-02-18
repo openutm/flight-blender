@@ -3,7 +3,7 @@ from os import environ as env
 
 import redis
 from dotenv import find_dotenv, load_dotenv
-from walrus import Database
+from walrus import Database as WalrusDatabase
 from typing import Optional
 
 load_dotenv(find_dotenv())
@@ -37,7 +37,7 @@ def get_redis() -> redis.Redis:
         )
 
 
-def get_walrus_database() -> Database:
+def get_walrus_database() -> WalrusDatabase:
     """
     Get a Walrus Database instance with the configured connection parameters.
 
@@ -49,10 +49,10 @@ def get_walrus_database() -> Database:
     redis_password: Optional[str] = env.get("REDIS_PASSWORD", None)
 
     if redis_password:
-        db = Database(host=redis_host, port=redis_port, password=redis_password)
+        walrus_db = WalrusDatabase(host=redis_host, port=redis_port, password=redis_password)
     else:
-        db = Database(host=redis_host, port=redis_port)
-    return db
+        walrus_db = WalrusDatabase(host=redis_host, port=redis_port)
+    return walrus_db
 
 class RedisHelper:
     def __init__(self):

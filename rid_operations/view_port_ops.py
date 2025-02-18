@@ -1,12 +1,11 @@
 from math import atan2, cos, radians, sin, sqrt
-
 import shapely
 from pyproj import Geod
-from shapely.geometry import box
+from shapely.geometry import box as shapley_box
 
 
-def build_view_port_box(view_port_coords) -> box:
-    box = shapely.geometry.box(
+def build_view_port_box(view_port_coords) -> shapely.geometry.box:
+    box = shapley_box(
         view_port_coords[0],
         view_port_coords[1],
         view_port_coords[2],
@@ -15,7 +14,7 @@ def build_view_port_box(view_port_coords) -> box:
     return box
 
 
-def get_view_port_area(view_box: box) -> int:
+def get_view_port_area(view_box: shapley_box) -> int:
     geod = Geod(ellps="WGS84")
     area = abs(geod.geometry_area_perimeter(view_box)[0])
     return area
@@ -41,24 +40,27 @@ def get_view_port_diagonal_length_kms(view_port_coords) -> float:
 
 
 def check_view_port(view_port_coords) -> bool:
+    """
+    Checks if the given viewport coordinates are valid.
+    The function expects a list of four coordinates representing the viewport:
+    [lat1, lng1, lat2, lng2]. It verifies that the list contains exactly four
+    coordinates and that these coordinates fall within the valid ranges:
+    - Latitude (lat1, lat2) must be between -90 and 90 degrees.
+    - Longitude (lng1, lng2) must be between -180 and 360 degrees.
+    Args:
+        view_port_coords (list): A list of four float values representing the
+                                 viewport coordinates [lat1, lng1, lat2, lng2].
+    Returns:
+        bool: True if the viewport coordinates are valid, False otherwise.
+    """
+
     if len(view_port_coords) != 4:
         return False
-        # return '"view" argument contains the wrong number of coordinates (expected 4, found {})'.format(len(view_port)), 400
 
-    lat_min = min(view_port_coords[0], view_port_coords[2])
-    lat_max = max(view_port_coords[0], view_port_coords[2])
-    lng_min = min(view_port_coords[1], view_port_coords[3])
-    lng_max = max(view_port_coords[1], view_port_coords[3])
+    lat_min, lat_max = sorted(view_port_coords[::2])
+    lng_min, lng_max = sorted(view_port_coords[1::2])
 
-    if lat_min < -90 or lat_min >= 90 or lat_max <= -90 or lat_max > 90 or lng_min < -180 or lng_min >= 360 or lng_max <= -180 or lng_max > 360:
-        # return '"view" coordinates do not fall within the valid range of -90 <= lat <= 90 and -180 <= lng <= 360', 400
+    if not (-90 <= lat_min < 90 and -90 < lat_max <= 90 and -180 <= lng_min < 360 and -180 < lng_max <= 360):
         return False
-    else:
-        return True
 
-
-# def get_view_port_area(view_port) -> float:
-#     geod = Geod(ellps="WGS84")
-#     box = shapely.geometry.box(view_port[0], view_port[1], view_port[2], view_port[3])
-#     area = abs(geod.geometry_area_perimeter(box)[0])
-#     return area
+    return True
