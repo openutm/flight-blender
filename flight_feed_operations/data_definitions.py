@@ -6,10 +6,11 @@ from marshmallow import Schema, fields
 class ObservationSchema(Schema):
     lat_dd = fields.Float(required=True)
     lon_dd = fields.Float(required=True)
-    altitude_mm = fields.Integer(required=True)
-    traffic_source = fields.String(required=True)
-    source_type = fields.String(required=True)
+    altitude_mm = fields.Float(required=True)
     icao_address = fields.String(required=True)
+    traffic_source = fields.Integer(required=True)
+    timestamp = fields.Integer(required=True)
+    source_type = fields.Integer(required=False)
     metadata = fields.Dict(required=False)
 
 @dataclass
@@ -28,13 +29,12 @@ class Observation:
 
 # Extract unique flight messages with necessary details
 @dataclass
-class FlightMessage:
+class StoredFlightMessage:
     timestamp: str
     seq: int
     msg_data: dict
-    address: str
     icao_address: str
-    metadata: Optional[dict]
+    
 
 @dataclass
 class SingleRIDObservation:

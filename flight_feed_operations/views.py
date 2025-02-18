@@ -33,7 +33,7 @@ from .data_definitions import (
     SingleAirtrafficObservation,
     TrafficInformationDiscoveryResponse,
     ObservationSchema,
-    FlightMessage
+    StoredFlightMessage
 )
 
 from marshmallow import  ValidationError
@@ -219,20 +219,21 @@ def get_air_traffic(request):
             all_streams_messages = pull_cg.read()
 
             unique_flights = [
-                FlightMessage(
+                StoredFlightMessage(
                     timestamp=message.timestamp,
                     seq=message.sequence,
                     msg_data=message.data,
-                    icao_address=message.data["icao_address"]
+                    icao_address=message.data["icao_address"],
                 )
                 for message in all_streams_messages
             ]
 
             # Sort messages by timestamp in descending order
             unique_flights.sort(key=lambda item: item.timestamp, reverse=True)
+            
             # Get distinct messages based on ICAO address
             distinct_messages = {i.icao_address: i for i in reversed(unique_flights)}.values()
-
+            logger.info("Unique flights sorted by timestamp")
         except KeyError as ke:
             # Log error if ICAO address is not defined in any message
             logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)

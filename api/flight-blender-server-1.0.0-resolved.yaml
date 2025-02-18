@@ -3276,6 +3276,7 @@ components:
           - timestamp
           - altitude_mm
           - icao_address
+          - traffic_source
 
         properties:
           lon_dd:
@@ -3298,15 +3299,6 @@ components:
           icao_address:
             type: string
             maxLength: 24
-          source_type:
-            enum:
-            - 0
-            - 1
-            type: integer
-            description: >-
-              The type of observation data that is provided:
-              * `0` - True
-              * `1` - Fused
           traffic_source:
             enum:
             - 0
@@ -3336,7 +3328,15 @@ components:
               * `9` - ADS-B
               * `10` - FLARM
               * `11` - Network Remote-ID
-
+          source_type:
+            enum:
+            - 0
+            - 1
+            type: integer
+            description: >-
+              The type of observation data that is provided:
+              * `0` - True
+              * `1` - Fused
           metadata:
             type: object
             description: An arbitrary JSON that can be submitted into Flight Blender
