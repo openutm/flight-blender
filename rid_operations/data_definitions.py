@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
+from implicitdict import ImplicitDict, StringBasedDateTime
+from uas_standards.interuss.automated_testing.rid.v1.injection import (
+    Time,
+    UserNotification,
+)
 
 ## This is the new RID telemetery data class, this will include 2022 RID data formats
 ## For more information see the ASTM RID data definitions at : https://github.com/uastech/standards/blob/dd4016b09fc8cb98f30c2a17b5a088fb2995ab54/remoteid/canonical.yaml
@@ -364,3 +369,11 @@ class SubmittedTelemetryFlightDetails:
     simulated: bool
     recent_positions: List[RIDRecentAircraftPosition]
     operator_details: RIDFlightDetails
+
+
+
+
+class ServiceProviderUserNotifications(ImplicitDict):
+    user_notifications: list[UserNotification] = []
+
+

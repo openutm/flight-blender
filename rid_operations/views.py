@@ -4,10 +4,10 @@ import logging
 import time
 import uuid
 from dataclasses import asdict
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Any
 from uuid import UUID
-
+import datetime
 import arrow
 import shapely.geometry
 from django.http import HttpResponse, JsonResponse
@@ -41,6 +41,12 @@ from .rid_utils import (
     RIDOperatorDetails,
     RIDPositions,
 )
+from implicitdict import ImplicitDict
+from uas_standards.interuss.automated_testing.rid.v1.injection import (
+    Time,
+    UserNotification,
+)
+from .data_definitions import ServiceProviderUserNotifications
 from .tasks import run_ussp_polling_for_rid, stream_rid_test_data
 
 load_dotenv(find_dotenv())
@@ -450,3 +456,22 @@ def delete_test(request, test_id, version):
         r.delete(test_id)
 
     return JsonResponse({}, status=200)
+
+
+@api_view(["GET"])
+@requires_scopes(["rid.inject_test_data"])
+def user_notifications(request):
+    try:
+        after_datetime = request.query_params["after"]
+    except KeyError:
+        return HttpResponse(
+            json.dumps({"message": "The 'after' parameter is required."}),
+            status=400,
+            content_type=RESPONSE_CONTENT_TYPE,
+        )
+
+    after_datetime = arrow.get(after_datetime)
+    time = ImplicitDict.parse({"value": after_datetime.datetime, "format": "RFC3339"}, Time)
+    user_notification = ImplicitDict.parse({"message": "", "observed_at": time}, UserNotification)
+    user_notifications = ImplicitDict.parse({"user_notifications": [user_notification]}, ServiceProviderUserNotifications)
+    return JsonResponse(user_notifications, status=200)
