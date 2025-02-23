@@ -1,18 +1,24 @@
+import datetime
 import hashlib
 import json
 import logging
 import time
 import uuid
 from dataclasses import asdict
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
-import datetime
+
 import arrow
 import shapely.geometry
 from django.http import HttpResponse, JsonResponse
 from dotenv import find_dotenv, load_dotenv
+from implicitdict import ImplicitDict
 from rest_framework.decorators import api_view
+from uas_standards.interuss.automated_testing.rid.v1.injection import (
+    Time,
+    UserNotification,
+)
 
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
@@ -29,6 +35,7 @@ from uss_operations.uss_data_definitions import (
 )
 
 from . import dss_rid_helper, view_port_ops
+from .data_definitions import ServiceProviderUserNotifications
 from .rid_utils import (
     CreateSubscriptionResponse,
     CreateTestResponse,
@@ -41,12 +48,6 @@ from .rid_utils import (
     RIDOperatorDetails,
     RIDPositions,
 )
-from implicitdict import ImplicitDict
-from uas_standards.interuss.automated_testing.rid.v1.injection import (
-    Time,
-    UserNotification,
-)
-from .data_definitions import ServiceProviderUserNotifications
 from .tasks import run_ussp_polling_for_rid, stream_rid_test_data
 
 load_dotenv(find_dotenv())
@@ -437,7 +438,7 @@ def create_test(request, test_id):
         r.set(test_id, json.dumps({"created_at": now.isoformat()}))
         r.expire(test_id, timedelta(seconds=300))
 
-        stream_rid_test_data.delay(requested_flights=json.dumps(requested_flights))  # Send a job to the task queue
+        stream_rid_test_data.delay(requested_flights=json.dumps(requested_flights), test_id=str(test_id))  # Send a job to the task queue
 
     create_test_response = CreateTestResponse(injected_flights=requested_flights, version=1)
 

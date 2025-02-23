@@ -11,6 +11,8 @@ from dotenv import find_dotenv, load_dotenv
 
 from conformance_monitoring_operations.models import TaskScheduler
 from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
+from notification_operations.models import OperatorRIDNotification
+from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
 from scd_operations.scd_data_definitions import PartialCreateOperationalIntentReference
 
@@ -106,6 +108,20 @@ class FlightBlenderDatabaseWriter:
             return False
         except IntegrityError:
             return False
+
+
+    def create_operator_rid_notification(self, operator_rid_notification: OperatorRIDNotificationCreationPayload) -> bool:
+
+        try:
+            operator_rid_notification = OperatorRIDNotification(
+                message = operator_rid_notification.message
+                session_id = operator_rid_notification.session_id
+            )
+            operator_rid_notification.save()
+            return True
+        except IntegrityError:
+            return False
+
 
     def create_flight_declaration(self, flight_declaration_creation: FlightDeclarationCreationPayload) -> bool:
         try:
@@ -229,3 +245,30 @@ class FlightBlenderDatabaseWriter:
 
     def remove_conformance_monitoring_periodic_task(self, conformance_monitoring_task: TaskScheduler):
         conformance_monitoring_task.terminate()
+
+    def create_rid_stream_monitoring_periodic_task(self, session_id: str, end_datetime: str) -> bool:
+        rid_stream_monitoring_job = TaskScheduler()
+        every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
+        now = arrow.now()
+        stream_end = arrow.get(end_datetime)
+        delta = stream_end - now
+        delta_seconds = delta.total_seconds()
+        expires = now.shift(seconds=delta_seconds)
+        task_name = "check_rid_stream_conformance"
+
+        try:
+            p_task = rid_stream_monitoring_job.schedule_every(
+                task_name=task_name,
+                period="seconds",
+                every=every,
+                expires=expires,
+                session_id=session_id,
+            )
+            p_task.start()
+            return True
+        except Exception:
+            logger.error("Could not create periodic task")
+            return False
+
+    def remove_rid_stream_monitoring_periodic_task(self, rid_stream_monitoring_task: TaskScheduler):
+        rid_stream_monitoring_task.terminate()

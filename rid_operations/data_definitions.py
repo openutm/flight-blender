@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
+from uuid import UUID
+
 from implicitdict import ImplicitDict, StringBasedDateTime
 from uas_standards.interuss.automated_testing.rid.v1.injection import (
     Time,
@@ -371,9 +373,10 @@ class SubmittedTelemetryFlightDetails:
     operator_details: RIDFlightDetails
 
 
-
-
 class ServiceProviderUserNotifications(ImplicitDict):
     user_notifications: list[UserNotification] = []
 
 
+class OperatorRIDNotificationCreationPayload(ImplicitDict):
+    message: str
+    session_id: UUID

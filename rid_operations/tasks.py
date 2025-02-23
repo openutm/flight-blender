@@ -54,11 +54,11 @@ def submit_dss_subscription(view, vertex_list, request_uuid):
     myDSSSubscriber = dss_rid_helper.RemoteIDOperations()
     subscription_created = myDSSSubscriber.create_dss_subscription(
         vertex_list=vertex_list,
-        view_port=view,
+        view=view,
         request_uuid=request_uuid,
         subscription_time_delta=subscription_time_delta,
     )
-    logger.info("Subscription creation status: %s" % subscription_created["created"])
+    logger.info("Subscription creation status: %s" % subscription_created.created)
 
 
 @app.task(name="run_ussp_polling_for_rid")
@@ -150,9 +150,12 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
 
 
 @app.task(name="stream_rid_test_data")
-def stream_rid_test_data(requested_flights):
+def stream_rid_test_data(requested_flights, test_id):
     all_requested_flights: List[RIDTestInjection] = []
     rf = json.loads(requested_flights)
+
+    my_database_writer = FlightBlenderDatabaseWriter()
+
     all_positions: List[LatLngPoint] = []
 
     flight_injection_sorted_set = "requested_flight_ss"
@@ -161,6 +164,17 @@ def stream_rid_test_data(requested_flights):
     if r.exists(flight_injection_sorted_set):
         r.delete(flight_injection_sorted_set)
     # Iterate over requested flights and process for storage / querying
+
+    ENABLE_CONFORMANCE_MONITORING = int(os.getenv("ENABLE_CONFORMANCE_MONITORING", 0))
+
+    # Create a job to observe / take actions for the test
+    if ENABLE_CONFORMANCE_MONITORING:
+        rid_monitoring_job = my_database_writer.create_conformance_monitoring_periodic_task(test_id=test_id)
+        if rid_monitoring_job:
+            logger.info("Created monitoring job for {test_id}".format(test_id=test_id))
+        else:
+            logger.info("Error in creating monitoring job for {test_id}".format(sessiontest_id_id=test_id))
+
     all_altitudes = []
     for requested_flight in rf:
         all_telemetry = []
@@ -328,13 +342,13 @@ def stream_rid_test_data(requested_flights):
     altitude_lower = RIDAltitude(value=min(all_altitudes) - 5, reference="W84", units="M")
     altitude_upper = RIDAltitude(value=min(all_altitudes) + 5, reference="W84", units="M")
 
-    volume3D = RIDVolume3D(
+    volume_3_d = RIDVolume3D(
         outline_polygon=outline_polygon,
         altitude_upper=altitude_upper,
         altitude_lower=altitude_lower,
     )
-    volume4D = RIDVolume4D(
-        volume=volume3D,
+    volume_4_d = RIDVolume4D(
+        volume=volume_3_d,
         time_start=RIDTime(value=isa_start_time.isoformat(), format="RFC3339"),
         time_end=RIDTime(value=astm_rid_standard_end_time.isoformat(), format="RFC3339"),
     )
@@ -343,7 +357,7 @@ def stream_rid_test_data(requested_flights):
     my_dss_helper = dss_rid_helper.RemoteIDOperations()
 
     logger.info("Creating a DSS ISA..")
-    my_dss_helper.create_dss_isa(flight_extents=volume4D, uss_base_url=uss_base_url)
+    my_dss_helper.create_dss_isa(flight_extents=volume_4_d, uss_base_url=uss_base_url)
     # # End create ISA in the DSS
 
     r.expire(flight_injection_sorted_set, time=3000)

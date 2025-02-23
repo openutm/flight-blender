@@ -236,13 +236,6 @@ class RIDTestDataStorage:
 
 
 @dataclass
-class RIDTestInjectionProcessing:
-    injection_id: str
-    telemetry: List[FlightState]
-    details_responses: List[RIDTestDetailsResponse]
-
-
-@dataclass
 class HTTPErrorResponse:
     message: str
     status: int
