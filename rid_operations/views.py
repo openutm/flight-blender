@@ -1,11 +1,11 @@
-import datetime
 import hashlib
 import json
 import logging
 import time
 import uuid
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import timedelta
+from os import environ as env
 from typing import Any
 from uuid import UUID
 
@@ -26,6 +26,10 @@ from common.data_definitions import (
     FLIGHTBLENDER_READ_SCOPE,
     FLIGHTBLENDER_WRITE_SCOPE,
     RESPONSE_CONTENT_TYPE,
+)
+from common.database_operations import (
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
 )
 from common.utils import EnhancedJSONEncoder
 from flight_feed_operations import flight_stream_helper
@@ -450,11 +454,23 @@ def create_test(request, test_id):
 def delete_test(request, test_id, version):
     """This is the end point for the rid_qualifier to get details of a flight"""
     # Deleting test
-    test_id = str(test_id)
+    test_id_str = str(test_id)
     r = get_redis()
 
-    if r.exists(test_id):
-        r.delete(test_id)
+    if r.exists(test_id_str):
+        r.delete(test_id_str)
+
+    # Delete the test monitoring job
+    ENABLE_CONFORMANCE_MONITORING = int(env.get("ENABLE_CONFORMANCE_MONITORING", 0))
+    # Create a job to observe / take actions for the test
+    if ENABLE_CONFORMANCE_MONITORING:
+        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_writer = FlightBlenderDatabaseWriter()
+        rid_monitoring_job = my_database_reader.get_rid_monitoring_task(session_id=test_id)
+        if rid_monitoring_job:
+            my_database_writer.remove_rid_stream_monitoring_periodic_task(rid_stream_monitoring_task=rid_monitoring_job)
+
+        logger.info("Error in creating monitoring job for {test_id_str}".format(test_id_str=test_id_str))
 
     return JsonResponse({}, status=200)
 
@@ -470,9 +486,14 @@ def user_notifications(request):
             status=400,
             content_type=RESPONSE_CONTENT_TYPE,
         )
-
+    all_user_notifications = []
     after_datetime = arrow.get(after_datetime)
-    time = ImplicitDict.parse({"value": after_datetime.datetime, "format": "RFC3339"}, Time)
-    user_notification = ImplicitDict.parse({"message": "", "observed_at": time}, UserNotification)
-    user_notifications = ImplicitDict.parse({"user_notifications": [user_notification]}, ServiceProviderUserNotifications)
+    my_database_reader = FlightBlenderDatabaseReader()
+    all_user_notifications = my_database_reader.get_active_user_notifications_between_interval(start_time=after_datetime, end_time=arrow.now())
+    for user_notification in all_user_notifications:
+        time = ImplicitDict.parse({"value": user_notification.created_at, "format": "RFC3339"}, Time)
+        user_notification = ImplicitDict.parse({"message": user_notification.message_details, "observed_at": time}, UserNotification)
+
+    user_notifications = ImplicitDict.parse({"user_notifications": all_user_notifications}, ServiceProviderUserNotifications)
+
     return JsonResponse(user_notifications, status=200)

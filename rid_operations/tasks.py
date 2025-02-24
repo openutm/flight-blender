@@ -8,8 +8,8 @@ from os import environ as env
 from typing import List
 
 import arrow
-from arrow.parser import ParserError
 from dotenv import find_dotenv, load_dotenv
+from rid_telemetry_monitoring import FlightTelemetryRIDEngine
 from shapely.geometry import MultiPoint, Point, box
 
 from auth_helper.common import get_redis
@@ -18,29 +18,19 @@ from flight_blender.celery import app
 from flight_feed_operations import flight_stream_helper
 from flight_feed_operations.data_definitions import SingleRIDObservation
 from flight_feed_operations.tasks import write_incoming_air_traffic_data
-from rid_operations.data_definitions import (
-    UASID,
-    SignedUnsignedTelemetryObservation,
-    UAClassificationEU,
-)
+from rid_operations.data_definitions import UASID, SignedUnsignedTelemetryObservation
 
 from . import dss_rid_helper
 from .rid_utils import (
-    AuthData,
     LatLngPoint,
-    RIDAircraftPosition,
-    RIDAircraftState,
     RIDAltitude,
-    RIDHeight,
-    RIDOperatorDetails,
     RIDPolygon,
-    RIDTestDataStorage,
-    RIDTestDetailsResponse,
     RIDTestInjection,
     RIDTime,
     RIDVolume3D,
     RIDVolume4D,
     SingleObservationMetadata,
+    process_requested_flight,
 )
 
 logger = logging.getLogger("django")
@@ -165,141 +155,14 @@ def stream_rid_test_data(requested_flights, test_id):
         r.delete(flight_injection_sorted_set)
     # Iterate over requested flights and process for storage / querying
 
-    ENABLE_CONFORMANCE_MONITORING = int(os.getenv("ENABLE_CONFORMANCE_MONITORING", 0))
-
-    # Create a job to observe / take actions for the test
-    if ENABLE_CONFORMANCE_MONITORING:
-        rid_monitoring_job = my_database_writer.create_conformance_monitoring_periodic_task(test_id=test_id)
-        if rid_monitoring_job:
-            logger.info("Created monitoring job for {test_id}".format(test_id=test_id))
-        else:
-            logger.info("Error in creating monitoring job for {test_id}".format(sessiontest_id_id=test_id))
-
     all_altitudes = []
+
     for requested_flight in rf:
-        all_telemetry = []
-        all_flight_details = []
-        provided_telemetries = requested_flight["telemetry"]
-        provided_flight_details = requested_flight["details_responses"]
+        processed_flight, _all_positions, _all_altitudes = process_requested_flight(requested_flight=requested_flight)
+        all_positions.extend(_all_positions)
+        all_altitudes.extend(_all_altitudes)
 
-        for provided_flight_detail in provided_flight_details:
-            fd = provided_flight_detail["details"]
-            requested_flight_detail_id = fd["id"]
-
-            op_location = LatLngPoint(lat=fd["operator_location"]["lat"], lng=fd["operator_location"]["lng"])
-            if "auth_data" in fd.keys():
-                auth_data = AuthData(format=fd["auth_data"]["format"], data=fd["auth_data"]["data"])
-            else:
-                auth_data = AuthData(format=0, data="")
-            serial_number = fd["serial_number"] if "serial_number" in fd else "MFR1C123456789ABC"
-            if "uas_id" in fd.keys():
-                uas_id = UASID(
-                    specific_session_id=fd["uas_id"]["specific_session_id"],
-                    serial_number=fd["uas_id"]["serial_number"],
-                    registration_id=fd["uas_id"]["registration_id"],
-                    utm_id=fd["uas_id"]["utm_id"],
-                )
-            else:
-                uas_id = UASID(
-                    specific_session_id="02-a1b2c3d4e5f60708",
-                    serial_number=serial_number,
-                    utm_id="ae1fa066-6d68-4018-8274-af867966978e",
-                    registration_id="MFR1C123456789ABC",
-                )
-            if "eu_classification" in fd.keys():
-                eu_classification = UAClassificationEU(
-                    category=fd["eu_classification"]["category"],
-                    class_=fd["eu_classification"]["class"],
-                )
-            else:
-                eu_classification = UAClassificationEU(category="EUCategoryUndefined", class_="EUClassUndefined")
-
-            flight_detail = RIDOperatorDetails(
-                id=requested_flight_detail_id,
-                operation_description=fd["operation_description"],
-                serial_number=serial_number,
-                registration_number=fd["registration_number"],
-                operator_location=op_location,
-                aircraft_type="NotDeclared",
-                operator_id=fd["operator_id"],
-                auth_data=auth_data,
-                uas_id=uas_id,
-                eu_classification=eu_classification,
-            )
-            pfd = RIDTestDetailsResponse(
-                effective_after=provided_flight_detail["effective_after"],
-                details=flight_detail,
-            )
-            all_flight_details.append(pfd)
-
-            flight_details_storage = "flight_details:" + requested_flight_detail_id
-
-            r.set(flight_details_storage, json.dumps(asdict(flight_detail)))
-            # expire in 5 mins
-            r.expire(flight_details_storage, time=3000)
-
-        # Iterate over telemetry details profided
-        for telemetry_id, provided_telemetry in enumerate(provided_telemetries):
-            pos = provided_telemetry["position"]
-            # In provided telemetry position and pressure altitude and extrapolated values are optional use if provided else generate them.
-            pressure_altitude = pos["pressure_altitude"] if "pressure_altitude" in pos else 0.0
-            extrapolated = pos["extrapolated"] if "extrapolated" in pos else 0
-
-            llp = LatLngPoint(lat=pos["lat"], lng=pos["lng"])
-            all_positions.append(llp)
-            all_altitudes.append(pos["alt"])
-            position = RIDAircraftPosition(
-                lat=pos["lat"],
-                lng=pos["lng"],
-                alt=pos["alt"],
-                accuracy_h=pos["accuracy_h"],
-                accuracy_v=pos["accuracy_v"],
-                extrapolated=extrapolated,
-                pressure_altitude=pressure_altitude,
-            )
-
-            if "height" in provided_telemetry.keys():
-                height = RIDHeight(
-                    distance=provided_telemetry["height"]["distance"],
-                    reference=provided_telemetry["height"]["reference"],
-                )
-            else:
-                height = None
-
-            try:
-                formatted_timestamp = arrow.get(provided_telemetry["timestamp"])
-            except ParserError:
-                logger.info("Error in parsing telemetry timestamp")
-            else:
-                t = RIDAircraftState(
-                    timestamp=RIDTime(value=provided_telemetry["timestamp"], format="RFC3339"),
-                    timestamp_accuracy=provided_telemetry["timestamp_accuracy"],
-                    operational_status=provided_telemetry["operational_status"],
-                    position=position,
-                    track=provided_telemetry["track"],
-                    speed=provided_telemetry["speed"],
-                    speed_accuracy=provided_telemetry["speed_accuracy"],
-                    vertical_speed=provided_telemetry["vertical_speed"],
-                    height=height,
-                )
-                #
-                closest_details_response = min(
-                    all_flight_details,
-                    key=lambda d: abs(arrow.get(d.effective_after) - formatted_timestamp),
-                )
-                flight_state_storage = RIDTestDataStorage(flight_state=t, details_response=closest_details_response)
-                zadd_struct = {json.dumps(asdict(flight_state_storage)): formatted_timestamp.int_timestamp}
-                # Add these as a sorted set in Redis
-                r.zadd(flight_injection_sorted_set, zadd_struct)
-                all_telemetry.append(t)
-
-        requested_flight = RIDTestInjection(
-            injection_id=requested_flight["injection_id"],
-            telemetry=all_telemetry,
-            details_responses=all_flight_details,
-        )
-
-        all_requested_flights.append(requested_flight)
+        all_requested_flights.append(processed_flight)
 
     start_time_of_injection_list = r.zrange(flight_injection_sorted_set, 0, 0, withscores=True)
     start_time_of_injections = arrow.get(start_time_of_injection_list[0][1])
@@ -324,7 +187,7 @@ def stream_rid_test_data(requested_flights, test_id):
     # Create an ISA in the DSS
     position_list: List[Point] = []
     for position in all_positions:
-        position_list.append((position.lng, position.lat))
+        position_list.append(Point(position.lng, position.lat))
 
     multi_points = MultiPoint(position_list)
     bounds = multi_points.minimum_rotated_rectangle.bounds
@@ -353,7 +216,7 @@ def stream_rid_test_data(requested_flights, test_id):
         time_end=RIDTime(value=astm_rid_standard_end_time.isoformat(), format="RFC3339"),
     )
 
-    uss_base_url = env.get("FLIGHTBLENDER_FQDN", "http://host.docker.internal:8000")
+    uss_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
     my_dss_helper = dss_rid_helper.RemoteIDOperations()
 
     logger.info("Creating a DSS ISA..")
@@ -412,6 +275,21 @@ def stream_rid_test_data(requested_flights, test_id):
 
     r.expire(flight_injection_sorted_set, time=3000)
 
+    ENABLE_CONFORMANCE_MONITORING = int(env.get("ENABLE_CONFORMANCE_MONITORING", 0))
+
+    # Create a job to observe / take actions for the test
+    if ENABLE_CONFORMANCE_MONITORING:
+        # create a end time for monitoring the test
+        end_time_of_injections = arrow.get(end_time_of_injections)
+        end_time_of_injections = end_time_of_injections.shift(seconds=10)
+        rid_monitoring_job = my_database_writer.create_rid_stream_monitoring_periodic_task(
+            session_id=test_id, end_datetime=end_time_of_injections.isoformat()
+        )
+        if rid_monitoring_job:
+            logger.info("Created monitoring job for {test_id}".format(test_id=test_id))
+        else:
+            logger.info("Error in creating monitoring job for {test_id}".format(test_id=test_id))
+
     while should_continue:
         now = arrow.now()
         query_time = now
@@ -429,3 +307,24 @@ def stream_rid_test_data(requested_flights, test_id):
         _stream_data(query_time=query_time)
         # Sleep for .2 seconds before submitting the next iteration.
         time.sleep(0.2)
+
+
+@app.task(name="check_rid_stream_conformance")
+def check_rid_stream_conformance(session_id: str, dry_run: str = "1"):
+    # This method conducts flight conformance checks as a async task
+
+    amqp_connection_url = env.get("AMQP_URL", 0)
+    is_dry_run = True if dry_run == "1" else False
+
+    my_rid_stream_checker = FlightTelemetryRIDEngine(session_id=session_id)
+
+    rid_stream_conformant, error_details = my_rid_stream_checker.check_rid_stream_ok()
+
+    if rid_stream_conformant:
+        logger.info("RID Data stream for  {session_id} is OK...".format(session_id=session_id))
+
+    else:
+        logger.info("RID Data stream for {session_id} is NOT OK...".format(session_id=session_id))
+        my_database_writer = FlightBlenderDatabaseWriter()
+        for error_detail in error_details:
+            my_database_writer.create_operator_rid_notification(message=error_detail.message, session_id=session_id)

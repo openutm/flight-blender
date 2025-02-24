@@ -373,6 +373,12 @@ class SubmittedTelemetryFlightDetails:
     operator_details: RIDFlightDetails
 
 
+@dataclass
+class RIDStreamErrorDetail:
+    error_code: int
+    error_description: str
+
+
 class ServiceProviderUserNotifications(ImplicitDict):
     user_notifications: list[UserNotification] = []
 

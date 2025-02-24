@@ -12,7 +12,14 @@ from flight_declaration_operations.models import FlightDeclaration
 
 class TaskScheduler(models.Model):
     periodic_task = models.ForeignKey(PeriodicTask, on_delete=models.CASCADE)
-    flight_declaration = models.OneToOneField(FlightDeclaration, on_delete=models.CASCADE)
+    flight_declaration = models.OneToOneField(
+        FlightDeclaration,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        help_text="The flight declaration that this task is associated with this task scheduler",
+    )
+    session_id = models.UUIDField(blank=True, null=True, help_text="The session id that this task is associated with this task scheduler")
 
     @staticmethod
     def schedule_every(task_name, period, every, flight_declaration, expires, args=None, kwargs=None):
