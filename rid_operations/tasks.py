@@ -9,7 +9,7 @@ from typing import List
 
 import arrow
 from dotenv import find_dotenv, load_dotenv
-from rid_telemetry_monitoring import FlightTelemetryRIDEngine
+from .rid_telemetry_monitoring import FlightTelemetryRIDEngine
 from shapely.geometry import MultiPoint, Point, box
 
 from auth_helper.common import get_redis
@@ -18,7 +18,7 @@ from flight_blender.celery import app
 from flight_feed_operations import flight_stream_helper
 from flight_feed_operations.data_definitions import SingleRIDObservation
 from flight_feed_operations.tasks import write_incoming_air_traffic_data
-from rid_operations.data_definitions import UASID, SignedUnsignedTelemetryObservation
+from rid_operations.data_definitions import UASID, SignedUnsignedTelemetryObservation, OperatorRIDNotificationCreationPayload
 
 from . import dss_rid_helper
 from .rid_utils import (
@@ -141,6 +141,7 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
 
 @app.task(name="stream_rid_test_data")
 def stream_rid_test_data(requested_flights, test_id):
+    test_id = test_id.split('_')[1]
     all_requested_flights: List[RIDTestInjection] = []
     rf = json.loads(requested_flights)
 
@@ -158,7 +159,7 @@ def stream_rid_test_data(requested_flights, test_id):
     all_altitudes = []
 
     for requested_flight in rf:
-        processed_flight, _all_positions, _all_altitudes = process_requested_flight(requested_flight=requested_flight)
+        processed_flight, _all_positions, _all_altitudes = process_requested_flight(requested_flight=requested_flight, flight_injection_sorted_set = flight_injection_sorted_set)
         all_positions.extend(_all_positions)
         all_altitudes.extend(_all_altitudes)
 
@@ -235,16 +236,37 @@ def stream_rid_test_data(requested_flights, test_id):
     query_time_lookup = list(islice(cycled, 0, query_target))
 
     def _stream_data(query_time: arrow.arrow.Arrow):
+        """
+        Stream data based on the given query time.
+        This function retrieves the closest observations from a sorted set in Redis
+        based on the provided query time. It then processes each observation, extracts
+        relevant telemetry and details response data, and creates a SingleRIDObservation
+        object. Finally, it sends a job to the task queue to write the incoming air traffic
+        data to the database.
+        Args:
+            query_time (arrow.arrow.Arrow): The time to query the closest observations.
+        Returns:
+            None
+        Raises:
+            None
+        Note:
+            This function uses Redis to retrieve data and Celery to queue tasks for writing
+            data to the database.
+        """
+        # Function implementation here
+        last_observation_timestamp_key = test_id + "_rid_stream_last_observation_timestamp"
         closest_observations = r.zrangebyscore(
             flight_injection_sorted_set,
             query_time.int_timestamp,
             query_time.int_timestamp,
         )
-        obs_query_dict = {
-            "closest_observation_count": len(closest_observations),
-            "q_time": query_time.isoformat(),
-        }
-        logger.info("Closest observations: {closest_observation_count} found, at query time {q_time}".format(**obs_query_dict))
+        # obs_query_dict = {
+        #     "closest_observation_count": len(closest_observations),
+        #     "q_time": query_time.isoformat(),
+        # }
+        # logger.info("Closest observations: {closest_observation_count} found, at query time {q_time}".format(**obs_query_dict))
+
+
         for closest_observation in closest_observations:
             c_o = json.loads(closest_observation)
             single_telemetry_data = c_o["flight_state"]
@@ -261,6 +283,17 @@ def stream_rid_test_data(requested_flights, test_id):
             source_type = 0
             icao_address = flight_details_id
 
+            last_observation_timestamp = r.get(last_observation_timestamp_key)
+            if last_observation_timestamp:
+                last_observation_timestamp = int(last_observation_timestamp)
+                if abs(last_observation_timestamp - query_time.int_timestamp) <= 1:
+                    logger.info("The last observation was received less than 1 second ago..")
+                else: # The last observation was received more than 1 second ago
+                    write_operator_rid_notification.delay(message="NET0040: RID data stream error, the last observation was received more than 1 second ago", session_id=test_id)
+                    
+
+            r.set(last_observation_timestamp_key, query_time.int_timestamp)
+
             so = SingleRIDObservation(
                 lat_dd=lat_dd,
                 lon_dd=lon_dd,
@@ -270,26 +303,12 @@ def stream_rid_test_data(requested_flights, test_id):
                 icao_address=icao_address,
                 metadata=json.dumps(asdict(observation_metadata)),
             )
+            # TODO: Write to database 
             write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
             logger.debug("Submitted flight observation..")
 
     r.expire(flight_injection_sorted_set, time=3000)
-
-    ENABLE_CONFORMANCE_MONITORING = int(env.get("ENABLE_CONFORMANCE_MONITORING", 0))
-
-    # Create a job to observe / take actions for the test
-    if ENABLE_CONFORMANCE_MONITORING:
-        # create a end time for monitoring the test
-        end_time_of_injections = arrow.get(end_time_of_injections)
-        end_time_of_injections = end_time_of_injections.shift(seconds=10)
-        rid_monitoring_job = my_database_writer.create_rid_stream_monitoring_periodic_task(
-            session_id=test_id, end_datetime=end_time_of_injections.isoformat()
-        )
-        if rid_monitoring_job:
-            logger.info("Created monitoring job for {test_id}".format(test_id=test_id))
-        else:
-            logger.info("Error in creating monitoring job for {test_id}".format(test_id=test_id))
-
+    logger.info("Starting streaming of RID Test Data..")
     while should_continue:
         now = arrow.now()
         query_time = now
@@ -306,15 +325,22 @@ def stream_rid_test_data(requested_flights, test_id):
 
         _stream_data(query_time=query_time)
         # Sleep for .2 seconds before submitting the next iteration.
-        time.sleep(0.2)
+        time.sleep(0.25)
+
+@app.task(name="write_operator_rid_notification")
+def write_operator_rid_notification(message: str, session_id: str):
+    operator_rid_notification = OperatorRIDNotificationCreationPayload(message=message, session_id=session_id)
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)
+
 
 
 @app.task(name="check_rid_stream_conformance")
 def check_rid_stream_conformance(session_id: str, dry_run: str = "1"):
     # This method conducts flight conformance checks as a async task
 
-    amqp_connection_url = env.get("AMQP_URL", 0)
-    is_dry_run = True if dry_run == "1" else False
+    # amqp_connection_url = env.get("AMQP_URL", 0)
+    # is_dry_run = True if dry_run == "1" else False
 
     my_rid_stream_checker = FlightTelemetryRIDEngine(session_id=session_id)
 
@@ -327,4 +353,5 @@ def check_rid_stream_conformance(session_id: str, dry_run: str = "1"):
         logger.info("RID Data stream for {session_id} is NOT OK...".format(session_id=session_id))
         my_database_writer = FlightBlenderDatabaseWriter()
         for error_detail in error_details:
-            my_database_writer.create_operator_rid_notification(message=error_detail.message, session_id=session_id)
+            operator_rid_notification = OperatorRIDNotificationCreationPayload(message=error_detail.error_description, session_id=session_id)
+            my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)

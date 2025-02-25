@@ -52,7 +52,7 @@ from .rid_utils import (
     RIDOperatorDetails,
     RIDPositions,
 )
-from .tasks import run_ussp_polling_for_rid, stream_rid_test_data
+from .tasks import run_ussp_polling_for_rid, stream_rid_test_data,write_operator_rid_notification
 
 load_dotenv(find_dotenv())
 logger = logging.getLogger("django")
@@ -444,6 +444,7 @@ def create_test(request, test_id):
 
         stream_rid_test_data.delay(requested_flights=json.dumps(requested_flights), test_id=str(test_id))  # Send a job to the task queue
 
+    write_operator_rid_notification.delay(message="NET0040: RID data stream error, the last observation was received more than 1 second ago", session_id=test_id)
     create_test_response = CreateTestResponse(injected_flights=requested_flights, version=1)
 
     return JsonResponse(asdict(create_test_response), status=200)
@@ -480,16 +481,18 @@ def delete_test(request, test_id, version):
 def user_notifications(request):
     try:
         after_datetime = request.query_params["after"]
+        before_datetime = request.query_params["before"]
     except KeyError:
         return HttpResponse(
-            json.dumps({"message": "The 'after' parameter is required."}),
+            json.dumps({"message": "Both 'after' and 'before' parameter is required."}),
             status=400,
             content_type=RESPONSE_CONTENT_TYPE,
         )
     all_user_notifications = []
-    after_datetime = arrow.get(after_datetime)
+    after_datetime = arrow.get(after_datetime).datetime
+    before_datetime = arrow.get(before_datetime).datetime
     my_database_reader = FlightBlenderDatabaseReader()
-    all_user_notifications = my_database_reader.get_active_user_notifications_between_interval(start_time=after_datetime, end_time=arrow.now())
+    all_user_notifications = my_database_reader.get_active_user_notifications_between_interval(start_time=after_datetime, end_time=before_datetime)
     for user_notification in all_user_notifications:
         time = ImplicitDict.parse({"value": user_notification.created_at, "format": "RFC3339"}, Time)
         user_notification = ImplicitDict.parse({"message": user_notification.message_details, "observed_at": time}, UserNotification)

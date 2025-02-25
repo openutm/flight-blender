@@ -173,6 +173,11 @@ class RIDHeight:
     distance: float
     reference: str
 
+@dataclass
+class AuthData:
+    format: str
+    data: str
+
 
 @dataclass
 class RIDAuthData:
@@ -310,6 +315,7 @@ class SingleObservationMetadata:
 
 def process_requested_flight(
     requested_flight: dict,
+    flight_injection_sorted_set:str
 ) -> tuple[RIDTestInjection, List[LatLngPoint], List[float]]:
     r = get_redis()
     all_telemetry = []

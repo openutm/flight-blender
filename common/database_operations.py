@@ -5,7 +5,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import List, Union
 from uuid import UUID, uuid4
-
+from django.db.models import QuerySet
 import arrow
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
@@ -56,13 +56,22 @@ class FlightBlenderDatabaseReader:
             return None
 
     def get_flight_authorization_by_flight_declaration(self, flight_declaration_id: str) -> Union[None, FlightAuthorization]:
+        """
+        Retrieves a FlightAuthorization object based on the given flight declaration ID.
+        Args:
+            flight_declaration_id (str): The ID of the flight declaration.
+        Returns:
+            Union[None, FlightAuthorization]: The FlightAuthorization object if found, otherwise None.
+        Raises:
+            FlightDeclaration.DoesNotExist: If the flight declaration with the given ID does not exist.
+            FlightAuthorization.DoesNotExist: If the flight authorization for the given flight declaration does not exist.
+        """
+
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
             flight_authorization = FlightAuthorization.objects.get(declaration=flight_declaration)
             return flight_authorization
-        except FlightDeclaration.DoesNotExist:
-            return None
-        except FlightAuthorization.DoesNotExist:
+        except (FlightDeclaration.DoesNotExist, FlightAuthorization.DoesNotExist):
             return None
 
     def get_current_flight_declaration_ids(self, timestamp: str) -> Union[None, uuid4]:
@@ -105,7 +114,7 @@ class FlightBlenderDatabaseReader:
         except TaskScheduler.DoesNotExist:
             return None
 
-    def get_active_observations_for_session(self, session_id: str) -> Union[None, List[FlightObeservation]]:
+    def get_active_observations_for_session(self, session_id: str) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
         try:
             observations = FlightObeservation.objects.filter(session_id=session_id, active=True)
             return observations
@@ -113,8 +122,8 @@ class FlightBlenderDatabaseReader:
             return None
 
     def get_active_observations_for_session_between_interval(
-        self, start_time: datetime.datetime, end_time: datetime.datetime, session_id: str
-    ) -> Union[None, List[FlightObeservation]]:
+        self, start_time: datetime, end_time: datetime, session_id: str
+    ) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
         try:
             observations = FlightObeservation.objects.filter(session_id=session_id, timestamp__gte=start_time, timestamp__lte=end_time, active=True)
             return observations
@@ -122,12 +131,12 @@ class FlightBlenderDatabaseReader:
             return None
 
     def get_active_user_notifications_between_interval(
-        self, start_time: datetime.datetime, end_time: datetime.datetime
-    ) -> Union[None, List[FlightObeservation]]:
-        try:
-            observations = FlightObeservation.objects.filter(session_id=session_id, timestamp__gte=start_time, timestamp__lte=end_time, active=True)
-            return observations
-        except FlightObeservation.DoesNotExist:
+        self, start_time: datetime, end_time: datetime
+    ) -> Union[None, Union[QuerySet, List[OperatorRIDNotification]]]:
+        try:            
+            notifications = OperatorRIDNotification.objects.filter(created_at__gte=start_time, created_at__lte=end_time, is_active=True)
+            return notifications
+        except OperatorRIDNotification.DoesNotExist:
             return None
 
 
@@ -147,9 +156,7 @@ class FlightBlenderDatabaseWriter:
             operator_rid_notification = OperatorRIDNotification(
                 message=operator_rid_notification.message, session_id=operator_rid_notification.session_id
             )
-
             operator_rid_notification.save()
-
             return True
         except IntegrityError:
             return False
@@ -299,8 +306,11 @@ class FlightBlenderDatabaseWriter:
             logger.error("Created and starting RID stream observation task")
             p_task.start()
             return True
-        except Exception:
-            logger.error("Could not create periodic task")
+        except Exception as e:
+
+            logger.error("Could not create RID stream observation periodic task")
+            logger.error('-----')
+            logger.error(e)
             return False
 
     def remove_rid_stream_monitoring_periodic_task(self, rid_stream_monitoring_task: TaskScheduler):
