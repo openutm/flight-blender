@@ -52,7 +52,11 @@ from .rid_utils import (
     RIDOperatorDetails,
     RIDPositions,
 )
-from .tasks import run_ussp_polling_for_rid, stream_rid_test_data,write_operator_rid_notification
+from .tasks import (
+    run_ussp_polling_for_rid,
+    stream_rid_test_data,
+    write_operator_rid_notification,
+)
 
 load_dotenv(find_dotenv())
 logger = logging.getLogger("django")
@@ -444,7 +448,6 @@ def create_test(request, test_id):
 
         stream_rid_test_data.delay(requested_flights=json.dumps(requested_flights), test_id=str(test_id))  # Send a job to the task queue
 
-    write_operator_rid_notification.delay(message="NET0040: RID data stream error, the last observation was received more than 1 second ago", session_id=test_id)
     create_test_response = CreateTestResponse(injected_flights=requested_flights, version=1)
 
     return JsonResponse(asdict(create_test_response), status=200)
@@ -461,17 +464,8 @@ def delete_test(request, test_id, version):
     if r.exists(test_id_str):
         r.delete(test_id_str)
 
-    # Delete the test monitoring job
-    ENABLE_CONFORMANCE_MONITORING = int(env.get("ENABLE_CONFORMANCE_MONITORING", 0))
-    # Create a job to observe / take actions for the test
-    if ENABLE_CONFORMANCE_MONITORING:
-        my_database_reader = FlightBlenderDatabaseReader()
-        my_database_writer = FlightBlenderDatabaseWriter()
-        rid_monitoring_job = my_database_reader.get_rid_monitoring_task(session_id=test_id)
-        if rid_monitoring_job:
-            my_database_writer.remove_rid_stream_monitoring_periodic_task(rid_stream_monitoring_task=rid_monitoring_job)
-
-        logger.info("Error in creating monitoring job for {test_id_str}".format(test_id_str=test_id_str))
+    # Stop streaming if it exists for this test
+    r.set("stop_streaming_" + test_id_str, "1")
 
     return JsonResponse({}, status=200)
 
@@ -493,10 +487,13 @@ def user_notifications(request):
     before_datetime = arrow.get(before_datetime).datetime
     my_database_reader = FlightBlenderDatabaseReader()
     all_user_notifications = my_database_reader.get_active_user_notifications_between_interval(start_time=after_datetime, end_time=before_datetime)
+    logger.debug(f"Found {len(all_user_notifications)} user notifications..")
+    all_notifications = []
     for user_notification in all_user_notifications:
         time = ImplicitDict.parse({"value": user_notification.created_at, "format": "RFC3339"}, Time)
-        user_notification = ImplicitDict.parse({"message": user_notification.message_details, "observed_at": time}, UserNotification)
+        user_notification = ImplicitDict.parse({"message": user_notification.message, "observed_at": time}, UserNotification)
+        all_notifications.append(user_notification)
 
-    user_notifications = ImplicitDict.parse({"user_notifications": all_user_notifications}, ServiceProviderUserNotifications)
+    user_notifications = ImplicitDict.parse({"user_notifications": all_notifications}, ServiceProviderUserNotifications)
 
     return JsonResponse(user_notifications, status=200)

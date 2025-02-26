@@ -30,6 +30,7 @@ from rid_operations.rid_utils import (
     RIDFlightResponse,
     RIDHeight,
     RIDOperatorDetails,
+    RIDTime,
     TelemetryFlightDetails,
 )
 
@@ -315,9 +316,12 @@ def get_uss_flights(request):
                     logger.error("Error in metadata data in the stream %s" % ke)
 
                 telemetry_data_dict = observation_data_dict["telemetry"]
-
                 details_response_dict = observation_data_dict["details_response"]["details"]
 
+                height = RIDHeight(
+                    distance=telemetry_data_dict["height"]["distance"],
+                    reference=telemetry_data_dict["height"]["reference"],
+                )
                 position = RIDAircraftPosition(
                     lat=telemetry_data_dict["position"]["lat"],
                     lng=telemetry_data_dict["position"]["lng"],
@@ -326,13 +330,10 @@ def get_uss_flights(request):
                     accuracy_v=telemetry_data_dict["position"]["accuracy_v"],
                     extrapolated=telemetry_data_dict["position"]["extrapolated"],
                     pressure_altitude=telemetry_data_dict["position"]["pressure_altitude"],
-                )
-                height = RIDHeight(
-                    distance=telemetry_data_dict["height"]["distance"],
-                    reference=telemetry_data_dict["height"]["reference"],
+                    height=height,
                 )
                 current_state = RIDAircraftState(
-                    timestamp=Time(
+                    timestamp=RIDTime(
                         value=telemetry_data_dict["timestamp"]["value"],
                         format=telemetry_data_dict["timestamp"]["format"],
                     ),
@@ -366,7 +367,7 @@ def get_uss_flights(request):
                 current_flight = TelemetryFlightDetails(
                     operator_details=operator_details,
                     id=details_response_dict["id"],
-                    aircraft_type="NotDeclared",
+                    aircraft_type=details_response_dict["aircraft_type"],
                     current_state=current_state,
                     simulated=True,
                     recent_positions=[],
@@ -376,13 +377,13 @@ def get_uss_flights(request):
                 # see if it matches the viewport
 
                 # show / add metadata it if it does
-                rid_response = RIDFlightResponse(timestamp=Time(value=now, format="RFC3339"), flights=rid_flights)
+                rid_response = RIDFlightResponse(timestamp=RIDTime(value=now, format="RFC3339"), flights=rid_flights)
 
                 return JsonResponse(json.loads(json.dumps(asdict(rid_response))), status=200)
 
     else:
         # show / add metadata it if it does
-        rid_response = RIDFlightResponse(timestamp=now, flights=[])
+        rid_response = RIDFlightResponse(timestamp=RIDTime(value=now, format="RFC3339"), flights=[])
 
         return JsonResponse(json.loads(json.dumps(asdict(rid_response))), status=200)
 
