@@ -222,7 +222,7 @@ class RIDFlightDetails:
     id: str
     eu_classification: Optional[UAClassificationEU] = None
     uas_id: Optional[UASID] = None
-    operator_location: Optional[OperatorLocation] = None
+    operator_location: Optional[LatLngPoint] = None
     auth_data: Optional[RIDAuthData] = None
     operator_id: Optional[str] = ""
     operation_description: Optional[str] = ""

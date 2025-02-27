@@ -19,6 +19,7 @@ from flight_feed_operations.data_definitions import SingleRIDObservation
 from flight_feed_operations.tasks import write_incoming_air_traffic_data
 from rid_operations.data_definitions import (
     UASID,
+    LatLngPoint,
     OperatorRIDNotificationCreationPayload,
     SignedUnsignedTelemetryObservation,
     UAClassificationEU,
@@ -27,7 +28,6 @@ from rid_operations.data_definitions import (
 from . import dss_rid_helper
 from .rid_telemetry_monitoring import FlightTelemetryRIDEngine
 from .rid_utils import (
-    LatLngPoint,
     RIDAircraftPosition,
     RIDAircraftState,
     RIDAltitude,
@@ -72,7 +72,7 @@ def process_requested_flight(
         if "auth_data" in fd.keys():
             auth_data = RIDAuthData(format=fd["auth_data"]["format"], data=fd["auth_data"]["data"])
         else:
-            auth_data = RIDAuthData(format="0", data="")
+            auth_data = RIDAuthData(format=0, data="")
         serial_number = fd["serial_number"] if "serial_number" in fd else "MFR1C123456789ABC"
         if "uas_id" in fd.keys():
             uas_id = UASID(
@@ -88,13 +88,12 @@ def process_requested_flight(
                 utm_id="ae1fa066-6d68-4018-8274-af867966978e",
                 registration_id="MFR1C123456789ABC",
             )
-        if "eu_classification" in fd.keys():
+        eu_classification = None
+        if fd.get("eu_classification"):
             eu_classification = UAClassificationEU(
                 category=fd["eu_classification"]["category"],
                 class_=fd["eu_classification"]["class"],
             )
-        else:
-            eu_classification = UAClassificationEU()
         flight_detail = RIDOperatorDetails(
             id=requested_flight_detail_id,
             operation_description=fd["operation_description"],
@@ -479,24 +478,27 @@ def stream_rid_test_data(requested_flights, test_id):
 
     r.expire(flight_injection_sorted_set, time=3000)
     logger.info("Starting streaming of RID Test Data..")
+
+    streaming_start_time = start_time_of_injections.shift(seconds=0.5)
     while should_continue:
         now = arrow.now()
         query_time = now
         _should_stop_streaming = r.get("stop_streaming_" + test_id)
         should_stop_streaming = int(_should_stop_streaming) if _should_stop_streaming else 0
+
         if should_stop_streaming or now > astm_rid_standard_end_time:
             should_continue = False
-            logger.info("End flight streaming ... %s" % arrow.now().isoformat())
+            logger.info("End flight streaming ... %s", arrow.now().isoformat())
             continue
 
         if now > end_time_of_injections:
             last_observation = all_telemetry_details[-1]
             query_time = arrow.get(last_observation[1])
 
-        if now > start_time_of_injections:
+        if now > streaming_start_time:
             _stream_data(query_time=query_time)
 
-        time.sleep(0.5)
+        time.sleep(0.3)
 
 
 @app.task(name="write_operator_rid_notification")

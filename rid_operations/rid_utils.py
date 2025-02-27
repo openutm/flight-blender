@@ -1,4 +1,5 @@
 import enum
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import List, Literal, NamedTuple, Optional, Union
 
@@ -6,7 +7,7 @@ from implicitdict import StringBasedDateTime
 
 from scd_operations.scd_data_definitions import Volume4D
 
-from .data_definitions import UASID, UAClassificationEU
+from .data_definitions import UASID, OperatorLocation, UAClassificationEU
 
 
 @dataclass
@@ -16,7 +17,7 @@ class RIDTime:
 
 
 @dataclass
-class LatLngPoint:
+class RIDLatLngPoint:
     lat: float
     lng: float
 
@@ -72,7 +73,7 @@ class RIDAltitude:
 
 @dataclass
 class RIDPolygon:
-    vertices: List[LatLngPoint]
+    vertices: List[RIDLatLngPoint]
 
 
 @dataclass
@@ -173,14 +174,14 @@ class RIDAircraftPosition:
 
 @dataclass
 class AuthData:
-    format: str
-    data: str
+    format: int
+    data: Optional[str] = ""
 
 
 @dataclass
 class RIDAuthData:
-    format: str
-    data: str
+    format: int
+    data: Optional[str] = ""
 
 
 @dataclass
@@ -194,7 +195,7 @@ class RIDOperatorDetails:
     id: str
 
     operator_id: Optional[str]
-    operator_location: Optional[LatLngPoint]
+    operator_location: Optional[RIDLatLngPoint]
     operation_description: Optional[str]
     auth_data: Optional[RIDAuthData]
     serial_number: Optional[str]

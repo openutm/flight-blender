@@ -39,12 +39,11 @@ from uss_operations.uss_data_definitions import (
 )
 
 from . import dss_rid_helper, view_port_ops
-from .data_definitions import ServiceProviderUserNotifications
+from .data_definitions import LatLngPoint, ServiceProviderUserNotifications
 from .rid_utils import (
     CreateSubscriptionResponse,
     CreateTestResponse,
     HTTPErrorResponse,
-    LatLngPoint,
     Position,
     RIDCapabilitiesResponse,
     RIDDisplayDataResponse,
@@ -466,6 +465,10 @@ def delete_test(request, test_id, version):
 
     # Stop streaming if it exists for this test
     r.set("stop_streaming_" + test_id_str, "1")
+
+    stream_ops = flight_stream_helper.StreamHelperOps()
+    pull_cg = stream_ops.get_pull_cg()
+    all_streams_messages = pull_cg.read()
 
     return JsonResponse({}, status=200)
 
