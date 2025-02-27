@@ -22,11 +22,12 @@ class TaskScheduler(models.Model):
     session_id = models.UUIDField(blank=True, null=True, help_text="The session id that this task is associated with this task scheduler")
 
     @staticmethod
-    def schedule_every(task_name, period, every, flight_declaration, expires, args=None, kwargs=None):
+    def schedule_every(task_name, period, every, flight_declaration, session_id, expires, args=None, kwargs=None):
         """schedules a task by name every "every" "period". So an example call would be:
         TaskScheduler('mycustomtask', 'seconds', 30, [1,2,3])
         that would schedule your custom task to run every 30 seconds with the arguments 1,2 and 3 passed to the actual task.
         """
+        flight_declaration_id = str(flight_declaration.id) if flight_declaration else "00000000-0000-0000-0000-000000000000"
         permissible_periods = ["days", "hours", "minutes", "seconds"]
         if period not in permissible_periods:
             raise Exception("Invalid period specified")
@@ -47,18 +48,14 @@ class TaskScheduler(models.Model):
             name=ptask_name,
             task=task_name,
             interval=interval_schedule,
-            kwargs=json.dumps(
-                {
-                    "flight_declaration_id": str(flight_declaration.id),
-                }
-            ),
+            kwargs=json.dumps({"flight_declaration_id": flight_declaration_id, "session_id": session_id}),
         )
         if args:
             ptask.args = args
         if kwargs:
             ptask.kwargs = kwargs
         ptask.save()
-        return TaskScheduler.objects.create(periodic_task=ptask, flight_declaration=flight_declaration)
+        return TaskScheduler.objects.create(periodic_task=ptask, session_id=session_id, flight_declaration=flight_declaration)
 
     def stop(self):
         """pauses the task"""

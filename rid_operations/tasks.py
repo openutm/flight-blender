@@ -509,11 +509,9 @@ def write_operator_rid_notification(message: str, session_id: str):
 
 
 @app.task(name="check_rid_stream_conformance")
-def check_rid_stream_conformance(session_id: str, dry_run: str = "1"):
+def check_rid_stream_conformance(session_id: str, flight_declaration_id=None, dry_run: str = "1"):
     # This method conducts flight conformance checks as a async task
 
-    # amqp_connection_url = env.get("AMQP_URL", 0)
-    # is_dry_run = True if dry_run == "1" else False
 
     my_rid_stream_checker = FlightTelemetryRIDEngine(session_id=session_id)
 

@@ -9,7 +9,7 @@ from django.db.models import QuerySet
 import arrow
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
-
+import uuid
 from conformance_monitoring_operations.models import TaskScheduler
 from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
 from flight_feed_operations.models import FlightObeservation
@@ -261,6 +261,7 @@ class FlightBlenderDatabaseWriter:
         conformance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
         now = arrow.now()
+        session_id = uuid.uuid4()
         fd_end = arrow.get(flight_declaration.end_datetime)
         delta = fd_end - now
         delta_seconds = delta.total_seconds()
@@ -274,6 +275,7 @@ class FlightBlenderDatabaseWriter:
                 every=every,
                 expires=expires,
                 flight_declaration=flight_declaration,
+                session_id= session_id
             )
             p_task.start()
             return True
@@ -301,16 +303,14 @@ class FlightBlenderDatabaseWriter:
                 every=every,
                 expires=expires,
                 session_id=session_id,
+                flight_declaration=None,
             )
 
             logger.error("Created and starting RID stream observation task")
             p_task.start()
             return True
         except Exception as e:
-
-            logger.error("Could not create RID stream observation periodic task")
-            logger.error('-----')
-            logger.error(e)
+            logger.error("Could not create RID stream observation periodic task %s" % e)
             return False
 
     def remove_rid_stream_monitoring_periodic_task(self, rid_stream_monitoring_task: TaskScheduler):
