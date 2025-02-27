@@ -7,7 +7,7 @@ from flight_feed_operations import flight_stream_helper
 from scd_operations.scd_data_definitions import LatLngPoint
 
 from . import custom_signals
-from .utils import ArgonServerConformanceEngine
+from .utils import FlightBlenderConformanceEngine
 
 load_dotenv(find_dotenv())
 
@@ -25,7 +25,7 @@ def check_flight_conformance(flight_declaration_id: str, dry_run: str = "1"):
 
     dry_run = True if dry_run == "1" else False
     d_run = "1" if dry_run else "0"
-    my_conformance_ops = ArgonServerConformanceEngine()
+    my_conformance_ops = FlightBlenderConformanceEngine()
 
     flight_authorization_conformant = my_conformance_ops.check_flight_authorization_conformance(flight_declaration_id=flight_declaration_id)
     if flight_authorization_conformant:
@@ -47,7 +47,7 @@ def check_flight_conformance(flight_declaration_id: str, dry_run: str = "1"):
 def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: str = "1"):
     # This method checks the conformance status for ongoing operations and sends notifications / via the notifications channel
     dry_run = True if dry_run == "1" else False
-    my_conformance_ops = ArgonServerConformanceEngine()
+    my_conformance_ops = FlightBlenderConformanceEngine()
     # Get Telemetry
     stream_ops = flight_stream_helper.StreamHelperOps()
     read_cg = stream_ops.get_read_cg()
