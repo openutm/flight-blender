@@ -121,7 +121,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
     my_database_reader = FlightBlenderDatabaseReader()
 
     operation_id_str = str(flight_plan_id)
-    logger.info("*********************")
     logger.info(operation_id_str)
 
     if request.method == "PUT":
@@ -488,6 +487,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 )
 
     elif request.method == "DELETE":
+        print('here')
         op_int_details_key = FLIGHT_OPINT_KEY + operation_id_str
         op_int_detail_raw = r.get(op_int_details_key)
 
@@ -498,7 +498,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
             opint_id = op_int_detail["success_response"]["operational_intent_reference"]["id"]
             ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
             logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-            my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)
+            deletion_response = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)            
             r.delete(op_int_details_key)
             my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id_str)
 

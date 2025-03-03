@@ -812,6 +812,10 @@ class SCDOperations:
         elif dss_r_status_code == 409:
             common_400_response = CommonDSS4xxResponse(message="The provided ovn does not match the current version of existing operational intent")
             delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=409, message=common_400_response)
+            print('@@@@')
+            print(dss_operational_intent_ref_id)
+            print(delete_op_int_status)
+            print('@@@@')
 
         elif dss_r_status_code == 412:
             common_400_response = CommonDSS4xxResponse(
@@ -1236,18 +1240,24 @@ class SCDOperations:
             )
             return d_r
 
-        logger.info(
-            "Found {all_existing_operational_intent_details:02} operational intent references in the DSS".format(
-                all_existing_operational_intent_details=len(all_existing_operational_intent_details)
-            )
-        )
-
-        if all_existing_operational_intent_details:
+        if isinstance(all_existing_operational_intent_details, list):
             logger.info(
-                "Checking deconfliction status with {num_existing_op_ints:02} operational intent details".format(
-                    num_existing_op_ints=len(all_existing_operational_intent_details)
+                "Found {all_existing_operational_intent_details:02} operational intent references in the DSS".format(
+                    all_existing_operational_intent_details=len(all_existing_operational_intent_details)
                 )
             )
+        else:
+            logger.info("No operational intent references found in the DSS")
+
+        if all_existing_operational_intent_details:
+            if isinstance(all_existing_operational_intent_details, list):
+                logger.info(
+                    "Checking deconfliction status with {num_existing_op_ints:02} operational intent details".format(
+                        num_existing_op_ints=len(all_existing_operational_intent_details)
+                    )
+                )
+            else:
+                logger.info("No operational intent details to check for deconfliction.")
             my_ind_volumes_converter = VolumesConverter()
             my_ind_volumes_converter.convert_volumes_to_geojson(volumes=volumes)
             ind_volumes_polygon = my_ind_volumes_converter.get_minimum_rotated_rectangle()

@@ -215,11 +215,13 @@ class DSSAreaClearHandler:
                 if flight_details:
                     deletion_success = False
                     operation_id = flight_details["flight_id"]
-                    op_int_details_key = "flight_opint." + operation_id
+                    op_int_details_key = "flight_opint." + operation_id                    
                     if r.exists(op_int_details_key):
                         op_int_detail_raw = r.get(op_int_details_key)
                         my_scd_dss_helper = dss_scd_helper.SCDOperations()
                         # op_int_detail_raw = op_int_details.decode()
+                        
+                        
                         op_int_detail = json.loads(op_int_detail_raw)
                         ovn = op_int_detail["success_response"]["operational_intent_reference"]["ovn"]
                         opint_id = op_int_detail["success_response"]["operational_intent_reference"]["id"]
@@ -227,14 +229,22 @@ class DSSAreaClearHandler:
                         logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
 
                         deletion_request = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)
-
                         if deletion_request.status == 200:
                             logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             deletion_success = True
+                        else:
+                            logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
+                            logger.error(deletion_request.text)
+                            deletion_success = False
+
                         all_deletion_requests_status.append(deletion_success)
+
+            
+            message = "Some operational intents in the area failed to clear" if not all(all_deletion_requests_status) else "All operational intents in the area cleared successfully"
+
             clear_area_status = ClearAreaResponseOutcome(
                 success=all(all_deletion_requests_status),
-                message="All operational intents in the area cleared successfully",
+                message=message,
                 timestamp=arrow.now().isoformat(),
             )
 
