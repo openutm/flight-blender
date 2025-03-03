@@ -133,14 +133,13 @@ class RemoteIDOperations:
                             subscription_id=sub["subscription_id"],
                             notification_index=sub["notification_index"],
                         )
-                        all_s.append(s)
+                        all_s.append(asdict(s))
 
                     subscriber_to_notify = SubscriberToNotify(url=subscriber["url"], subscriptions=all_s)
                     dss_r_subs.append(subscriber_to_notify)
 
                 for subscriber in dss_r_subs:
-                    url = "{}/{}".format(subscriber.url, new_isa_id)
-
+                    url = "{}/uss/identification_service_areas/{}".format(subscriber.url, new_isa_id)
                     try:
                         ext = tldextract.extract(subscriber.url)
                     except Exception:
@@ -149,6 +148,7 @@ class RemoteIDOperations:
                         if ext.domain in [
                             "localhost",
                             "internal",
+                            "localutm",
                         ]:  # for host.docker.internal type calls
                             uss_audience = "localhost"
                         else:
@@ -156,7 +156,7 @@ class RemoteIDOperations:
 
                     # Notify subscribers
                     payload = {
-                        "service_area": service_area,
+                        "service_area": asdict(service_area),
                         "subscriptions": subscriber.subscriptions,
                         "extents": json.loads(json.dumps(asdict(flight_extents))),
                     }
@@ -167,9 +167,12 @@ class RemoteIDOperations:
                         "Authorization": "Bearer " + auth_credentials["access_token"],
                     }
                     try:
-                        requests.post(url, headers=headers, json=json.loads(json.dumps(payload)))
+                        response = requests.post(url, headers=headers, json=json.loads(json.dumps(payload)))
                     except Exception as re:
                         logger.error("Error in sending subscriber notification to %s :  %s " % (url, re))
+                    if response.status_code == 204:
+                        logger.info(response.status_code)
+                        logger.info("Successfully notified subscriber %s" % url)
 
                 logger.info("Successfully created a DSS ISA %s" % new_isa_id)
                 # iterate over the service areas to get flights URL to poll

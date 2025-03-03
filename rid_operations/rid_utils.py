@@ -1,4 +1,5 @@
 import enum
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import List, Literal, NamedTuple, Optional, Union
 
@@ -6,7 +7,7 @@ from implicitdict import StringBasedDateTime
 
 from scd_operations.scd_data_definitions import Volume4D
 
-from .data_definitions import UASID, UAClassificationEU
+from .data_definitions import UASID, OperatorLocation, UAClassificationEU
 
 
 @dataclass
@@ -16,7 +17,7 @@ class RIDTime:
 
 
 @dataclass
-class LatLngPoint:
+class RIDLatLngPoint:
     lat: float
     lng: float
 
@@ -72,7 +73,7 @@ class RIDAltitude:
 
 @dataclass
 class RIDPolygon:
-    vertices: List[LatLngPoint]
+    vertices: List[RIDLatLngPoint]
 
 
 @dataclass
@@ -113,8 +114,8 @@ class ISACreationRequest:
 class IdentificationServiceArea:
     uss_base_url: str
     owner: str
-    time_start: StringBasedDateTime
-    time_end: StringBasedDateTime
+    time_start: RIDTime
+    time_end: RIDTime
     version: str
     id: str
 
@@ -154,6 +155,12 @@ class RIDCapabilitiesResponse:
 
 
 @dataclass
+class RIDHeight:
+    distance: float
+    reference: str
+
+
+@dataclass
 class RIDAircraftPosition:
     lat: float
     lng: float
@@ -162,18 +169,19 @@ class RIDAircraftPosition:
     accuracy_v: str
     extrapolated: Optional[bool]
     pressure_altitude: Optional[float]
+    height: Optional[RIDHeight]
 
 
 @dataclass
-class RIDHeight:
-    distance: float
-    reference: str
+class AuthData:
+    format: int
+    data: Optional[str] = ""
 
 
 @dataclass
 class RIDAuthData:
-    format: str
-    data: str
+    format: int
+    data: Optional[str] = ""
 
 
 @dataclass
@@ -187,7 +195,7 @@ class RIDOperatorDetails:
     id: str
 
     operator_id: Optional[str]
-    operator_location: Optional[LatLngPoint]
+    operator_location: Optional[RIDLatLngPoint]
     operation_description: Optional[str]
     auth_data: Optional[RIDAuthData]
     serial_number: Optional[str]
@@ -236,13 +244,6 @@ class RIDTestDataStorage:
 
 
 @dataclass
-class RIDTestInjectionProcessing:
-    injection_id: str
-    telemetry: List[FlightState]
-    details_responses: List[RIDTestDetailsResponse]
-
-
-@dataclass
 class HTTPErrorResponse:
     message: str
     status: int
@@ -262,7 +263,7 @@ class CreateTestResponse:
 
 @dataclass
 class RIDAircraftState:
-    timestamp: StringBasedDateTime
+    timestamp: RIDTime
     timestamp_accuracy: float
     speed_accuracy: str
     position: RIDAircraftPosition
@@ -301,14 +302,8 @@ class TelemetryFlightDetails:
 
 @dataclass
 class RIDFlightResponse:
-    timestamp: str
+    timestamp: RIDTime
     flights: List[TelemetryFlightDetails]
-
-
-@dataclass
-class AuthData:
-    format: str
-    data: str
 
 
 @dataclass

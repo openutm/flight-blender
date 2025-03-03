@@ -354,7 +354,55 @@ paths:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
       tags:
         - rid
-
+  /rid/user_notifications:
+      get:
+        operationId: QueryUserNotifications
+        security:
+          - TestAuth:
+              - rid.inject_test_data
+        parameters:
+          - name: after
+            description: >-
+              Do not include any notifications observed before this time. 
+              The property 'observed_at' in UserNotification is to be used for comparison.
+            schema:
+              type: string
+              format: date-time
+            example: '2024-04-22T16:36:50.52Z'
+            in: query
+            required: true
+          - name: before
+            description: >-
+              Do not include any notifications observed after this time. 
+              This time must be after the time specified in 'after' parameter. 
+              If not provided, then the value defaults to now. 
+              The property 'observed_at' in UserNotification is to be used for comparison.
+            schema:
+              type: string
+              format: date-time
+            example: '2024-04-22T16:41:50.52Z'
+            in: query
+            required: false
+        responses:
+          '200':
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/QueryUserNotificationsResponse'
+            description: User notifications sent retrieved successfully.
+          '400':
+            description: The request was missing 'after' query parameter, or the request was otherwise invalid.
+          '401':
+            description: Bearer access token was not provided in Authorization header, token could not be decoded, or token was invalid.
+          '403':
+            description: The access token was decoded successfully but did not include a scope appropriate to this endpoint.
+        summary: User notifications
+        description: >-
+          Returns the list of user notifications observed by the virtual user and applicable to the query parameters.  
+          The implementation of this endpoint requires that the user notifications be available for querying until the end of a test run.
+          The user notifications should be available to be queried within 5 seconds of observation by the virtual user.
+        tags:
+          - rid-qualifier
   /rid/display_data:
     get:
       parameters:
@@ -5013,6 +5061,30 @@ components:
           type: string
           example: |-
             Unable to download the dataset https://caa.example.com/geozones.json. Connection refused.
+    UserNotification:
+      type: object
+      description: Notification observed by virtual user.
+      required:
+        - observed_at
+      properties:
+        observed_at:
+          anyOf:
+            - $ref: '#/components/schemas/Time'
+          description: Time at which the virtual user observed the notification.
+        message:
+          description: Message presented to the user, description of notification, or other means of helping identify the nature of the notification, for the purpose of increased readability of test reports.
+          type: string
+    QueryUserNotificationsResponse:
+      type: object
+      description: Response object for query request for notifications observed by the virtual user.
+      required:
+        - user_notifications
+      properties:
+        user_notifications:
+          description: List of applicable observed user notifications.
+          type: array
+          items:
+            $ref: '#/components/schemas/UserNotification'
 
     #######################################################################
     #################### Start of ED-269 definitions    ###################

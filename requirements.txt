@@ -27,3 +27,4 @@ dj-database-url==2.1.0
 django-celery-beat==2.7.0
 wait-for-it==2.3.0
 numpy==2.2.1
+uas_standards==3.4.0

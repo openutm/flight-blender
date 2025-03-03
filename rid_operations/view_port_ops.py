@@ -1,4 +1,5 @@
 from math import atan2, cos, radians, sin, sqrt
+
 import shapely
 from pyproj import Geod
 from shapely.geometry import box as shapley_box
@@ -14,10 +15,10 @@ def build_view_port_box(view_port_coords) -> shapely.geometry.box:
     return box
 
 
-def get_view_port_area(view_box: shapley_box) -> int:
-    geod = Geod(ellps="WGS84")
-    area = abs(geod.geometry_area_perimeter(view_box)[0])
-    return area
+# def get_view_port_area(view_box: shapley_box) -> int:
+#     geod = Geod(ellps="WGS84")
+#     area = abs(geod.geometry_area_perimeter(view_box)[0])
+#     return area
 
 
 def get_view_port_diagonal_length_kms(view_port_coords) -> float:

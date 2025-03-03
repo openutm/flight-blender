@@ -2,15 +2,19 @@ import json
 import logging
 import os
 from dataclasses import asdict
+from datetime import datetime
 from typing import List, Union
-from uuid import uuid4
-
+from uuid import UUID, uuid4
+from django.db.models import QuerySet
 import arrow
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
-
+import uuid
 from conformance_monitoring_operations.models import TaskScheduler
 from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
+from flight_feed_operations.models import FlightObeservation
+from notification_operations.models import OperatorRIDNotification
+from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
 from scd_operations.scd_data_definitions import PartialCreateOperationalIntentReference
 
@@ -52,13 +56,22 @@ class FlightBlenderDatabaseReader:
             return None
 
     def get_flight_authorization_by_flight_declaration(self, flight_declaration_id: str) -> Union[None, FlightAuthorization]:
+        """
+        Retrieves a FlightAuthorization object based on the given flight declaration ID.
+        Args:
+            flight_declaration_id (str): The ID of the flight declaration.
+        Returns:
+            Union[None, FlightAuthorization]: The FlightAuthorization object if found, otherwise None.
+        Raises:
+            FlightDeclaration.DoesNotExist: If the flight declaration with the given ID does not exist.
+            FlightAuthorization.DoesNotExist: If the flight authorization for the given flight declaration does not exist.
+        """
+
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
             flight_authorization = FlightAuthorization.objects.get(declaration=flight_declaration)
             return flight_authorization
-        except FlightDeclaration.DoesNotExist:
-            return None
-        except FlightAuthorization.DoesNotExist:
+        except (FlightDeclaration.DoesNotExist, FlightAuthorization.DoesNotExist):
             return None
 
     def get_current_flight_declaration_ids(self, timestamp: str) -> Union[None, uuid4]:
@@ -95,6 +108,37 @@ class FlightBlenderDatabaseReader:
         except TaskScheduler.DoesNotExist:
             return None
 
+    def get_rid_monitoring_task(self, session_id: UUID) -> Union[None, TaskScheduler]:
+        try:
+            return TaskScheduler.objects.get(session_id=session_id)
+        except TaskScheduler.DoesNotExist:
+            return None
+
+    def get_active_observations_for_session(self, session_id: str) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
+        try:
+            observations = FlightObeservation.objects.filter(session_id=session_id, active=True)
+            return observations
+        except FlightObeservation.DoesNotExist:
+            return None
+
+    def get_active_observations_for_session_between_interval(
+        self, start_time: datetime, end_time: datetime, session_id: str
+    ) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
+        try:
+            observations = FlightObeservation.objects.filter(session_id=session_id, timestamp__gte=start_time, timestamp__lte=end_time, active=True)
+            return observations
+        except FlightObeservation.DoesNotExist:
+            return None
+
+    def get_active_user_notifications_between_interval(
+        self, start_time: datetime, end_time: datetime
+    ) -> Union[None, Union[QuerySet, List[OperatorRIDNotification]]]:
+        try:            
+            notifications = OperatorRIDNotification.objects.filter(created_at__gte=start_time, created_at__lte=end_time, is_active=True)
+            return notifications
+        except OperatorRIDNotification.DoesNotExist:
+            return None
+
 
 class FlightBlenderDatabaseWriter:
     def delete_flight_declaration(self, flight_declaration_id: str) -> bool:
@@ -104,6 +148,16 @@ class FlightBlenderDatabaseWriter:
             return True
         except FlightDeclaration.DoesNotExist:
             return False
+        except IntegrityError:
+            return False
+
+    def create_operator_rid_notification(self, operator_rid_notification: OperatorRIDNotificationCreationPayload) -> bool:
+        try:
+            operator_rid_notification = OperatorRIDNotification(
+                message=operator_rid_notification.message, session_id=operator_rid_notification.session_id
+            )
+            operator_rid_notification.save()
+            return True
         except IntegrityError:
             return False
 
@@ -207,6 +261,7 @@ class FlightBlenderDatabaseWriter:
         conformance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
         now = arrow.now()
+        session_id = uuid.uuid4()
         fd_end = arrow.get(flight_declaration.end_datetime)
         delta = fd_end - now
         delta_seconds = delta.total_seconds()
@@ -220,6 +275,7 @@ class FlightBlenderDatabaseWriter:
                 every=every,
                 expires=expires,
                 flight_declaration=flight_declaration,
+                session_id= session_id
             )
             p_task.start()
             return True
@@ -229,3 +285,33 @@ class FlightBlenderDatabaseWriter:
 
     def remove_conformance_monitoring_periodic_task(self, conformance_monitoring_task: TaskScheduler):
         conformance_monitoring_task.terminate()
+
+    def create_rid_stream_monitoring_periodic_task(self, session_id: str, end_datetime: str) -> bool:
+        rid_stream_monitoring_job = TaskScheduler()
+        every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
+        now = arrow.now()
+        stream_end = arrow.get(end_datetime)
+        delta = stream_end - now
+        delta_seconds = delta.total_seconds()
+        expires = now.shift(seconds=delta_seconds)
+        task_name = "check_rid_stream_conformance"
+
+        try:
+            p_task = rid_stream_monitoring_job.schedule_every(
+                task_name=task_name,
+                period="seconds",
+                every=every,
+                expires=expires,
+                session_id=session_id,
+                flight_declaration=None,
+            )
+
+            logger.error("Created and starting RID stream observation task")
+            p_task.start()
+            return True
+        except Exception as e:
+            logger.error("Could not create RID stream observation periodic task %s" % e)
+            return False
+
+    def remove_rid_stream_monitoring_periodic_task(self, rid_stream_monitoring_task: TaskScheduler):
+        rid_stream_monitoring_task.terminate()

@@ -35,5 +35,6 @@ urlpatterns = [
     # RID Qualifier data: Injection views
     path("tests/<uuid:test_id>", rid_views.create_test),
     path("tests/<uuid:test_id>/<str:version>", rid_views.delete_test),
+    path("user_notifications", rid_views.user_notifications),
     path("capabilities", rid_views.get_rid_capabilities),
 ]
