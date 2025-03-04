@@ -29,7 +29,7 @@ def is_time_between(begin_time, end_time, check_time=None):
         return check_time >= begin_time or check_time <= end_time
 
 
-class ArgonServerConformanceEngine:
+class FlightBlenderConformanceEngine:
     def is_operation_conformant_via_telemetry(
         self,
         flight_declaration_id: str,

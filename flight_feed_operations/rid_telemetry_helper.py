@@ -37,7 +37,6 @@ class NestedDict(dict):
 def generate_rid_telemetry_objects(
     signed_telemetry_request: SignedTelemetryRequest,
 ) -> List[SubmittedTelemetryFlightDetails]:
-    
     """
     Generate a list of RID telemetry objects from signed telemetry requests.
     Args:
@@ -63,13 +62,13 @@ def generate_unsigned_rid_telemetry_objects(
     """
     Generate a list of unsigned RID telemetry objects from the given telemetry request.
     Args:
-        telemetry_request (List[SignedUnSignedTelemetryObservations]): A list of telemetry observations 
+        telemetry_request (List[SignedUnSignedTelemetryObservations]): A list of telemetry observations
         that need to be converted to unsigned RID telemetry objects.
     Returns:
-        List[SubmittedTelemetryFlightDetails]: A list of submitted telemetry flight details generated 
+        List[SubmittedTelemetryFlightDetails]: A list of submitted telemetry flight details generated
         from the given telemetry request.
     """
-    
+
     all_rid_data = []
 
     for current_unsigned_telemetry_request in telemetry_request:
@@ -153,7 +152,7 @@ class FlightBlenderTelemetryValidator:
         Returns:
             List[RIDAircraftState]: A list of validated and parsed RIDAircraftState objects.
         """
-        
+
         all_states = []
 
         for state in current_states:
@@ -194,16 +193,15 @@ class FlightBlenderTelemetryValidator:
             }
         }
         """
-
+        eu_classification = None
         if "eu_classification" in rid_flight_details.keys():
             eu_classification_details = rid_flight_details["eu_classification"]
+            if eu_classification_details is not None:
+                eu_classification = UAClassificationEU(
+                    category=eu_classification_details["category"],
+                    class_=eu_classification_details["class_"],
+                )
 
-            eu_classification = UAClassificationEU(
-                category=eu_classification_details["category"],
-                class_=eu_classification_details["class_"],
-            )
-        else:
-            eu_classification = UAClassificationEU(category="", class_="")
         if "uas_id" in rid_flight_details.keys():
             uas_id_details = rid_flight_details["uas_id"]
             uas_id = UASID(
