@@ -376,7 +376,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         e_date = arrow.get(end_date, "YYYY-MM-DD") if end_date else present.shift(days=1)
 
         all_fd_within_timelimits = FlightDeclaration.objects.filter(start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat())
-        logger.info("Found %s flight declarations" % len(all_fd_within_timelimits))
+        logger.info("Found %s flight declaration" % len(all_fd_within_timelimits))
 
         if view_port:
             my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name="opint_idx")
@@ -393,9 +393,11 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         end_date = self.request.query_params.get("end_date", None)
         view = self.request.query_params.get("view", None)
         view_port = [float(i) for i in view.split(",")] if view else []
+        
         return self.get_relevant_flight_declaration(view_port=view_port, start_date=start_date, end_date=end_date)
 
     def get(self, request, *args, **kwargs):
+        
         return self.list(request, *args, **kwargs)
     
     def post(self, request, *args, **kwargs):

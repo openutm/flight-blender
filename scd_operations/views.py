@@ -498,11 +498,17 @@ def upsert_close_flight_plan(request, flight_plan_id):
             opint_id = op_int_detail["success_response"]["operational_intent_reference"]["id"]
             ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
             logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-            deletion_response = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)            
-            r.delete(op_int_details_key)
-            my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id_str)
+            deletion_response = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)
+            if deletion_response.status == 200:
+                logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
+                r.delete(op_int_details_key)
+                my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id_str)
+                flight_planning_deletion_response = flight_planning_deletion_success_response
+            else:
+                logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
+                logger.error(deletion_response.text)
+                flight_planning_deletion_response = flight_planning_deletion_failure_response
 
-            flight_planning_deletion_response = flight_planning_deletion_success_response
         else:
             flight_planning_deletion_response = flight_planning_deletion_failure_response
 

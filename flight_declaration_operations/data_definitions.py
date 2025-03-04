@@ -53,6 +53,9 @@ class CreateFlightDeclarationRequestSchema(Schema):
     exchange_type = fields.Str(required=False)
     flight_id = fields.Str(required=False)
     contact_url = fields.Url(required=False)
+    is_approved = fields.Bool(required=False)
+    submitted_by = fields.Str(required=False)
+
 
 
 @dataclass
