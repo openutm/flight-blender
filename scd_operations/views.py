@@ -39,7 +39,6 @@ from .scd_data_definitions import (
     OperationalIntentStorageVolumes,
     OperationalIntentSubmissionStatus,
     SCDTestStatusResponse,
-    SuccessfulOperationalIntentFlightIDStorage,
     USSCapabilitiesResponseEnum,
 )
 from .scd_test_harness_helper import (
@@ -414,15 +413,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 r.set(flight_opint, json.dumps(asdict(operational_intent_full_details)))
                 r.expire(name=flight_opint, time=opint_subscription_end_time)
 
-                # Store the details of the operational intent reference
-                flight_op_int_storage = SuccessfulOperationalIntentFlightIDStorage(
-                    operation_id=operation_id_str,
-                    operational_intent_id=flight_planning_submission.operational_intent_id,
-                )
-                opint_flightref = "opint_flightref." + flight_planning_submission.operational_intent_id
-
-                r.set(opint_flightref, json.dumps(asdict(flight_op_int_storage)))
-                r.expire(name=opint_flightref, time=opint_subscription_end_time)
                 # End store flight DSS
                 planned_test_injection_response.operational_intent_id = flight_planning_submission.operational_intent_id
                 # Create a flight declaration with operation id
@@ -442,6 +432,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 flight_authorization = my_database_writer.create_flight_authorization_with_submitted_operational_intent(
                     flight_declaration=flight_declaration,
                     dss_operational_intent_id=flight_planning_submission.operational_intent_id,
+                    ovn=flight_planning_submission.dss_response.operational_intent_reference.ovn,
                 )
                 # End create operational intent
 
@@ -487,7 +478,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 )
 
     elif request.method == "DELETE":
-        print('here')
         op_int_details_key = FLIGHT_OPINT_KEY + operation_id_str
         op_int_detail_raw = r.get(op_int_details_key)
 

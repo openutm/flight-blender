@@ -20,6 +20,7 @@ from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
 from common.auth_token_audience_helper import generate_audience_from_base_url
 from common.data_definitions import FLIGHT_OPINT_KEY, VALID_OPERATIONAL_INTENT_STATES
+from common.database_operations import FlightBlenderDatabaseReader
 from rid_operations import rtree_helper
 
 from .flight_planning_data_definitions import FlightPlanningInjectionData
@@ -572,6 +573,7 @@ class SCDOperations:
     def __init__(self):
         self.dss_base_url = env.get("DSS_BASE_URL", "0")
         self.r = get_redis()
+        self.database_reader = FlightBlenderDatabaseReader()
 
     def get_nearby_operational_intents(self, volumes: List[Volume4D]) -> List[OperationalIntentDetailsUSSResponse]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
@@ -585,7 +587,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
         my_op_int_ref_helper = OperationalIntentReferenceHelper()
         all_uss_operational_intent_details = []
 
@@ -644,15 +646,15 @@ class SCDOperations:
                 if current_uss_base_url == flight_blender_base_url:
                     # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
-                    r = get_redis()
-                    opint_flightref = "opint_flightref." + str(current_uss_operational_intent_detail.id)
-                    opint_ref_raw = r.get(opint_flightref)
-                    opint_ref = json.loads(opint_ref_raw)
-                    opint_id = opint_ref["operation_id"]
-                    flight_opint = FLIGHT_OPINT_KEY + opint_id
 
-                    if r.exists(flight_opint):
-                        op_int_details_raw = r.get(flight_opint)
+                    flight_authorization = self.database_reader.get_flight_authorization_by_operational_intent_id(
+                        str(current_uss_operational_intent_detail.id)
+                    )
+                    operational_intent_id = str(flight_authorization.declaration.id)
+                    flight_opint = FLIGHT_OPINT_KEY + operational_intent_id
+
+                    if self.r.exists(flight_opint):
+                        op_int_details_raw = self.r.get(flight_opint)
                         op_int_details = json.loads(op_int_details_raw)
                         op_int_ref = op_int_details["success_response"]["operational_intent_reference"]
                         op_int_det = op_int_details["operational_intent_details"]
@@ -812,10 +814,6 @@ class SCDOperations:
         elif dss_r_status_code == 409:
             common_400_response = CommonDSS4xxResponse(message="The provided ovn does not match the current version of existing operational intent")
             delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=409, message=common_400_response)
-            print('@@@@')
-            print(dss_operational_intent_ref_id)
-            print(delete_op_int_status)
-            print('@@@@')
 
         elif dss_r_status_code == 412:
             common_400_response = CommonDSS4xxResponse(
@@ -1194,7 +1192,7 @@ class SCDOperations:
         }
         management_key = str(uuid.uuid4())
         airspace_keys = []
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
         implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=flight_blender_base_url)
         operational_intent_reference = OperationalIntentReference(
             extents=volumes,

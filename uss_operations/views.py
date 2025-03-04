@@ -13,6 +13,8 @@ from shapely.geometry import Point
 import rid_operations.view_port_ops as view_port_ops
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
+from common.data_definitions import FLIGHT_OPINT_KEY
+from common.database_operations import FlightBlenderDatabaseReader
 from common.utils import EnhancedJSONEncoder
 from flight_feed_operations import flight_stream_helper
 from rid_operations.data_definitions import (
@@ -135,14 +137,12 @@ def USSOpIntDetailTelemetry(request, opint_id):
 @requires_scopes(["utm.strategic_coordination"])
 def USSOpIntDetails(request, opint_id):
     r = get_redis()
-    opint_flightref = "opint_flightref." + str(opint_id)
 
-    if r.exists(opint_flightref):
-        opint_ref_raw = r.get(opint_flightref)
-        opint_ref = json.loads(opint_ref_raw)
-        opint_id = opint_ref["operation_id"]
-        flight_opint = "flight_opint." + opint_id
-
+    my_database_reader = FlightBlenderDatabaseReader()
+    flight_authorization = my_database_reader.get_flight_authorization_by_operational_intent_id(str(opint_id))
+    if flight_authorization:
+        operational_intent_id = str(flight_authorization.declaration.id)
+        flight_opint = FLIGHT_OPINT_KEY + operational_intent_id
         if r.exists(flight_opint):
             op_int_details_raw = r.get(flight_opint)
             op_int_details = json.loads(op_int_details_raw)

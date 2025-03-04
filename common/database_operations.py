@@ -1,15 +1,17 @@
 import json
 import logging
 import os
+import uuid
 from dataclasses import asdict
 from datetime import datetime
 from typing import List, Union
 from uuid import UUID, uuid4
-from django.db.models import QuerySet
+
 import arrow
+from django.db.models import QuerySet
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
-import uuid
+
 from conformance_monitoring_operations.models import TaskScheduler
 from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
 from flight_feed_operations.models import FlightObeservation
@@ -74,6 +76,24 @@ class FlightBlenderDatabaseReader:
         except (FlightDeclaration.DoesNotExist, FlightAuthorization.DoesNotExist):
             return None
 
+    def get_flight_authorization_by_operational_intent_id(self, operational_intent_id: str) -> Union[None, FlightAuthorization]:
+        """
+        Retrieves a FlightAuthorization object based on the given flight declaration ID.
+        Args:
+            flight_declaration_id (str): The ID of the flight declaration.
+        Returns:
+            Union[None, FlightAuthorization]: The FlightAuthorization object if found, otherwise None.
+        Raises:
+            FlightDeclaration.DoesNotExist: If the flight declaration with the given ID does not exist.
+            FlightAuthorization.DoesNotExist: If the flight authorization for the given flight declaration does not exist.
+        """
+
+        try:
+            flight_authorization = FlightAuthorization.objects.get(dss_operational_intent_id=operational_intent_id)
+            return flight_authorization
+        except FlightAuthorization.DoesNotExist:
+            return None
+
     def get_current_flight_declaration_ids(self, timestamp: str) -> Union[None, uuid4]:
         """This method gets flight operation ids that are active in the system within near the time interval"""
         ts = arrow.get(timestamp)
@@ -133,7 +153,7 @@ class FlightBlenderDatabaseReader:
     def get_active_user_notifications_between_interval(
         self, start_time: datetime, end_time: datetime
     ) -> Union[None, Union[QuerySet, List[OperatorRIDNotification]]]:
-        try:            
+        try:
             notifications = OperatorRIDNotification.objects.filter(created_at__gte=start_time, created_at__lte=end_time, is_active=True)
             return notifications
         except OperatorRIDNotification.DoesNotExist:
@@ -182,13 +202,10 @@ class FlightBlenderDatabaseWriter:
         flight_declaration.save()
 
     def create_flight_authorization_with_submitted_operational_intent(
-        self, flight_declaration: FlightDeclaration, dss_operational_intent_id: str
+        self, flight_declaration: FlightDeclaration, dss_operational_intent_id: str, ovn: str
     ) -> bool:
         try:
-            flight_authorization = FlightAuthorization(
-                declaration=flight_declaration,
-                dss_operational_intent_id=dss_operational_intent_id,
-            )
+            flight_authorization = FlightAuthorization(declaration=flight_declaration, dss_operational_intent_id=dss_operational_intent_id, ovn=ovn)
             flight_authorization.save()
             return True
 
@@ -234,6 +251,15 @@ class FlightBlenderDatabaseWriter:
         except Exception:
             return False
 
+    def update_flight_authorization_op_int_ovn(self, flight_authorization: FlightAuthorization, dss_operational_intent_id: str, ovn: str) -> bool:
+        try:
+            flight_authorization.dss_operational_intent_id = dss_operational_intent_id
+            flight_authorization.ovn = ovn
+            flight_authorization.save()
+            return True
+        except Exception:
+            return False
+
     def update_flight_operation_operational_intent(
         self,
         flight_declaration_id: str,
@@ -270,12 +296,7 @@ class FlightBlenderDatabaseWriter:
 
         try:
             p_task = conformance_monitoring_job.schedule_every(
-                task_name=task_name,
-                period="seconds",
-                every=every,
-                expires=expires,
-                flight_declaration=flight_declaration,
-                session_id= session_id
+                task_name=task_name, period="seconds", every=every, expires=expires, flight_declaration=flight_declaration, session_id=session_id
             )
             p_task.start()
             return True
