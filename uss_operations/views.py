@@ -2,9 +2,11 @@ import json
 import logging
 import time
 from dataclasses import asdict
+from typing import List
 from uuid import UUID
 
 import arrow
+from dacite import from_dict
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from rest_framework.decorators import api_view
@@ -14,7 +16,10 @@ import rid_operations.view_port_ops as view_port_ops
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
 from common.data_definitions import FLIGHT_OPINT_KEY
-from common.database_operations import FlightBlenderDatabaseReader
+from common.database_operations import (
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
+)
 from common.utils import EnhancedJSONEncoder
 from flight_feed_operations import flight_stream_helper
 from rid_operations.data_definitions import (
@@ -35,6 +40,11 @@ from rid_operations.rid_utils import (
     RIDTime,
     TelemetryFlightDetails,
 )
+from scd_operations.dss_scd_helper import (
+    OperationalIntentReferenceHelper,
+    VolumesConverter,
+)
+from scd_operations.scd_data_definitions import OperationalIntentStorage, Volume4D
 
 from .uss_data_definitions import (
     FlightDetailsNotFoundMessage,
@@ -46,6 +56,7 @@ from .uss_data_definitions import (
     OperationalIntentUSSDetails,
     OperatorDetailsSuccessResponse,
     Time,
+    UpdateChangedOpIntDetailsPost,
     UpdateOperationalIntent,
     VehicleTelemetry,
     VehicleTelemetryResponse,
@@ -70,43 +81,62 @@ def is_valid_uuid(uuid_to_test, version=4):
 @requires_scopes(["utm.strategic_coordination"])
 def uss_update_opint_details(request):
     # Get notifications from peer uss re changed operational intent details https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/astm-utm/Protocol/cb7cf962d3a0c01b5ab12502f5f54789624977bf/utm.yaml#tag/p2p_utm/operation/notifyOperationalIntentDetailsChanged
+    database_reader = FlightBlenderDatabaseReader()
+    database_writer = FlightBlenderDatabaseWriter()
+    my_geo_json_converter = VolumesConverter()
+    op_int_update_details_data = request.data
+    r = get_redis()
+    op_int_update_detail = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
 
-    # my_geo_json_converter = dss_scd_helper.VolumesConverter()
-    # op_int_update_details_data = request.data
-    # r = get_redis()
-    # op_int_update_detail = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
-    # my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
+    print("Opint update details %s" % op_int_update_detail)
+
+    my_operational_intent_parser = OperationalIntentReferenceHelper()
     # Write the operational Intent
-    # operation_id_str = op_int_update_detail.operational_intent_id
-    # op_int_details_key = "flight_opint." + operation_id_str
-    logger.info("incoming...")
-    # logger.info(op_int_update_detail)
-    # operational_intent_reference = op_int_update_detail.operational_intent.reference
-    # operational_intent_details = op_int_update_detail.operational_intent.details
-    # volumes = operational_intent_details.volumes
+    operation_id_str = op_int_update_detail.operational_intent_id
+    print("Operation ID %s" % operation_id_str)
 
-    # all_volumes: List[Volume4D] = []
-    # for volume in volumes:
-    #     v4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=volume)
-    #     all_volumes.append(v4D)
+    op_int_details_key = FLIGHT_OPINT_KEY + operation_id_str
+    if r.exists(op_int_details_key):
+        stored_opint_details_str = r.get(op_int_details_key)
+        stored_opint_details = json.loads(stored_opint_details_str)
 
-    # my_geo_json_converter.convert_volumes_to_geojson(volumes=all_volumes)
-    # view_rect_bounds = my_geo_json_converter.get_bounds()
-    # success_response = OpenS
-    # operational_intent_full_details = OperationalIntentStorage(
-    #     bounds=view_rect_bounds,
-    #     start_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_start)),
-    #     end_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_end)),
-    #     alt_max=50,
-    #     alt_min=25,
-    #     success_response=op_int_submission.dss_response,
-    #     operational_intent_details=op_int_update_detail.operational_intent,
-    # )
+        original_dss_success_response = stored_opint_details["success_response"]
+        logger.info("incoming...")
+        # logger.info(op_int_update_detail)
+        operational_intent_reference = op_int_update_detail.operational_intent.reference
+        ovn = operational_intent_reference.ovn
 
-    # r.set(op_int_details_key, json.dumps(asdict(operational_intent_full_details)))
-    # r.expire(name=op_int_details_key, time=opint_subscription_end_time)
+        flight_authorization = database_reader.get_flight_authorization_by_operational_intent_ref_id(operational_intent_ref_id=str(operation_id_str))
+        # update the ovn
+        database_writer.update_flight_authorization_op_int_ovn(
+            flight_authorization=flight_authorization, dss_operational_intent_id=operation_id_str, ovn=ovn
+        )
 
-    # # Read the new operational intent
+        operational_intent_details = op_int_update_detail.operational_intent.details
+        volumes = operational_intent_details.volumes
+
+        all_volumes: List[Volume4D] = []
+        for volume in volumes:
+            volume_4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=volume)
+            all_volumes.append(volume_4D)
+
+        my_geo_json_converter.convert_volumes_to_geojson(volumes=all_volumes)
+        view_rect_bounds = my_geo_json_converter.get_bounds()
+        # success_response = OpenS
+        operational_intent_full_details = OperationalIntentStorage(
+            bounds=view_rect_bounds,
+            start_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_start)),
+            end_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_end)),
+            alt_max=50,
+            alt_min=25,
+            success_response=original_dss_success_response,
+            operational_intent_details=op_int_update_detail.operational_intent,
+        )
+
+        r.set(op_int_details_key, json.dumps(asdict(operational_intent_full_details)))
+        r.expire(name=op_int_details_key, time=opint_subscription_end_time)
+
+    # Read the new operational intent
     # Store the opint, see what other operations conflict the opint
 
     updated_success = UpdateOperationalIntent(message="New or updated full operational intent information received successfully ")
@@ -139,7 +169,7 @@ def USSOpIntDetails(request, opint_id):
     r = get_redis()
 
     my_database_reader = FlightBlenderDatabaseReader()
-    flight_authorization = my_database_reader.get_flight_authorization_by_operational_intent_id(str(opint_id))
+    flight_authorization = my_database_reader.get_flight_authorization_by_operational_intent_ref_id(str(opint_id))
     if flight_authorization:
         operational_intent_id = str(flight_authorization.declaration.id)
         flight_opint = FLIGHT_OPINT_KEY + operational_intent_id

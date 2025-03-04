@@ -76,7 +76,7 @@ class FlightBlenderDatabaseReader:
         except (FlightDeclaration.DoesNotExist, FlightAuthorization.DoesNotExist):
             return None
 
-    def get_flight_authorization_by_operational_intent_id(self, operational_intent_id: str) -> Union[None, FlightAuthorization]:
+    def get_flight_authorization_by_operational_intent_ref_id(self, operational_intent_ref_id: str) -> Union[None, FlightAuthorization]:
         """
         Retrieves a FlightAuthorization object based on the given flight declaration ID.
         Args:
@@ -89,7 +89,7 @@ class FlightBlenderDatabaseReader:
         """
 
         try:
-            flight_authorization = FlightAuthorization.objects.get(dss_operational_intent_id=operational_intent_id)
+            flight_authorization = FlightAuthorization.objects.get(dss_operational_intent_id=operational_intent_ref_id)
             return flight_authorization
         except FlightAuthorization.DoesNotExist:
             return None

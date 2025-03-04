@@ -120,7 +120,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
     my_database_reader = FlightBlenderDatabaseReader()
 
     operation_id_str = str(flight_plan_id)
-    logger.info(operation_id_str)
+    logger.info("Processing -> {operation_id_str}".format(operation_id_str=operation_id_str))
 
     if request.method == "PUT":
         scd_test_data = request.data
@@ -316,10 +316,8 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
             elif operational_intent_update_job.status == 999:
                 # The update cannot be sent to the DSS, there is additional information that needs to be sent
-                logger.info(operational_intent_update_job.additional_information)
                 logger.info("Flight not sent to DSS..")
                 if flight_plan_exists_in_flight_blender and operational_intent_update_job.additional_information.check_id.value == "B":
-                    logger.info(operational_intent_update_job.additional_information.tentative_flight_plan_processing_response.value)
                     if operational_intent_update_job.additional_information.tentative_flight_plan_processing_response.value == "OkToFly":
                         return Response(
                             json.loads(
@@ -386,7 +384,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 off_nominal_volumes=off_nominal_volumes,
                 priority=flight_planning_priority,
             )
-
             if flight_planning_submission.status == "success":
                 # Successfully submitted to the DSS, save the operational intent in Redis
                 # Notify the subscribers that the operational intent has been updated
@@ -434,6 +431,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     dss_operational_intent_id=flight_planning_submission.operational_intent_id,
                     ovn=flight_planning_submission.dss_response.operational_intent_reference.ovn,
                 )
+
                 # End create operational intent
 
             elif flight_planning_submission.status == "conflict_with_flight":
@@ -478,25 +476,24 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 )
 
     elif request.method == "DELETE":
+        my_database_reader = FlightBlenderDatabaseReader()
+        flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=operation_id_str)
         op_int_details_key = FLIGHT_OPINT_KEY + operation_id_str
-        op_int_detail_raw = r.get(op_int_details_key)
-
-        if op_int_detail_raw:
-            op_int_detail = json.loads(op_int_detail_raw)
-
-            ovn = op_int_detail["success_response"]["operational_intent_reference"]["ovn"]
-            opint_id = op_int_detail["success_response"]["operational_intent_reference"]["id"]
+        if flight_authorization:
+            ovn = flight_authorization.ovn
+            opint_id = flight_authorization.dss_operational_intent_id
             ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
             logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
+
             deletion_response = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)
             if deletion_response.status == 200:
                 logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-                r.delete(op_int_details_key)
-                my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id_str)
+                # r.delete(op_int_details_key)
+                # my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id_str)
                 flight_planning_deletion_response = flight_planning_deletion_success_response
             else:
                 logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-                logger.error(deletion_response.text)
+                logger.error(deletion_response.status)
                 flight_planning_deletion_response = flight_planning_deletion_failure_response
 
         else:
