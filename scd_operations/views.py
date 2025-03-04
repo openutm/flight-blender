@@ -201,7 +201,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 json.loads(json.dumps(asdict(failed_planning_response), cls=EnhancedJSONEncoder)),
                 status=status.HTTP_200_OK,
             )
-        # End get auth token for DSS interactions
+            
 
         my_geo_json_converter.convert_volumes_to_geojson(volumes=flight_planning_volumes)
         view_rect_bounds = my_geo_json_converter.get_bounds()
@@ -248,7 +248,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 extents=provided_volumes_off_nominal_volumes,
                 new_state=generated_operational_intent_state,
                 current_state=current_state_str,
-                ovn=stored_operational_intent_details.reference.ovn,
                 subscription_id=stored_operational_intent_details.reference.subscription_id,
                 deconfliction_check=deconfliction_check,
                 priority=scd_test_data.intended_flight.astm_f3548_21.priority,

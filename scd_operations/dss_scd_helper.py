@@ -654,6 +654,11 @@ class SCDOperations:
                     flight_authorization = self.database_reader.get_flight_authorization_by_operational_intent_ref_id(
                         str(current_uss_operational_intent_detail.id)
                     )
+                    if flight_authorization:
+                        self.database_writer.update_flight_authorization_ovn(
+                            flight_authorization=flight_authorization, ovn=current_uss_operational_intent_detail.ovn
+                        )
+
                     operational_intent_id = str(flight_authorization.declaration.id)
                     flight_opint = FLIGHT_OPINT_KEY + operational_intent_id
 
@@ -958,19 +963,7 @@ class SCDOperations:
         current_network_opint_details_full: List[OpInttoCheckDetails],
         operational_intent_ref_id: str,
     ) -> List[OpInttoCheckDetails]:
-        """The DSS returns all the volumes including ours, We dont need to check deconflicton for operation ID that we are updating, this operation will always intersect / overlap, we therefore remove this from our deconfliction check"""
-        print("***************")
-        print(current_network_opint_details_full)
-        print("***************")
-        for curnet_opint in current_network_opint_details_full:
-            flight_authorization = self.database_reader.get_flight_authorization_by_operational_intent_ref_id(
-                operational_intent_ref_id=curnet_opint.id
-            )
-            """Update the stored OVN"""
-            if flight_authorization:
-                self.database_writer.update_flight_authorization_op_int_ovn(
-                    flight_authorization=flight_authorization, dss_operational_intent_id=curnet_opint.id, ovn=curnet_opint.ovn
-                )
+        """The DSS returns all the volumes including ours, We dont need to check deconflicton for operation ID that we are updating, we therefore remove this from our deconfliction check and also update stored OVN"""
 
         all_existing_operational_intent_details = list(
             filter(
@@ -986,13 +979,17 @@ class SCDOperations:
         operational_intent_ref_id: str,
     ) -> Union[None, str]:
         """This method gets the latest ovn from the dss for the specified operational intent reference"""
-        ovn = None
-        relevant_op_int_id = [x for x in current_network_opint_details_full if x.id == operational_intent_ref_id]
 
-        for current_opint_details in relevant_op_int_id:
-            ovn = current_opint_details.ovn
+        updated_ovn = next(
+            (
+                current_network_opint_detail.ovn
+                for current_network_opint_detail in current_network_opint_details_full
+                if current_network_opint_detail.id == operational_intent_ref_id
+            ),
+            None,
+        )
 
-        return ovn
+        return updated_ovn
 
     def generate_airspace_keys(self, current_network_opint_details_full: List[OpInttoCheckDetails]) -> List[str]:
         airspace_keys = []
@@ -1116,22 +1113,11 @@ class SCDOperations:
             current_network_opint_details_full=current_network_opint_details_full,
             operational_intent_ref_id=operational_intent_ref_id,
         )
-        updated_ovn = self.get_updated_ovn(
+        latest_ovn = self.get_updated_ovn(
             current_network_opint_details_full=current_network_opint_details_full,
             operational_intent_ref_id=operational_intent_ref_id,
         )
-
-        ovn = updated_ovn if updated_ovn else ovn
-        # Update the OVN once the latest OVN is retrieved
-        # for current_opint_details in current_network_opint_details_full:
-        #     flight_authorization = self.database_reader.get_flight_authorization_by_operational_intent_ref_id(
-        #         operational_intent_ref_id=operational_intent_ref_id
-        #     )
-        #     if flight_authorization:
-        #         self.database_writer.update_flight_authorization_op_int_ovn(
-        #             flight_authorization=flight_authorization, dss_operational_intent_id=operational_intent_ref_id, ovn=ovn
-        #         )
-
+        updated_ovn = latest_ovn if latest_ovn else ovn
         airspace_keys = self.generate_airspace_keys(current_network_opint_details_full=current_network_opint_details_full)
         operational_intent_update_payload.key = airspace_keys
         if all_existing_operational_intent_details:
@@ -1158,13 +1144,13 @@ class SCDOperations:
             )
             return opint_update_result
 
-        dss_opint_update_url = self.dss_base_url + "dss/v1/operational_intent_references/" + operational_intent_ref_id + "/" + ovn
+        dss_opint_update_url = self.dss_base_url + "dss/v1/operational_intent_references/" + operational_intent_ref_id + "/" + updated_ovn
         headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
         dss_r = requests.put(
             dss_opint_update_url,
             json=json.loads(json.dumps(asdict(operational_intent_update_payload))),

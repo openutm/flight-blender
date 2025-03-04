@@ -251,6 +251,14 @@ class FlightBlenderDatabaseWriter:
         except Exception:
             return False
 
+    def update_flight_authorization_ovn(self, flight_authorization: FlightAuthorization, ovn:str) -> bool:
+        try:
+            flight_authorization.ovn = ovn
+            flight_authorization.save()
+            return True
+        except Exception:
+            return False
+
     def update_flight_authorization_op_int_ovn(self, flight_authorization: FlightAuthorization, dss_operational_intent_id: str, ovn: str) -> bool:
         try:
             flight_authorization.dss_operational_intent_id = dss_operational_intent_id
