@@ -674,9 +674,9 @@ class SCDOperations:
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
                     uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
-
+                    logger.info(current_uss_base_url, uss_audience)
                     uss_auth_token = self.get_auth_token(audience=uss_audience)
-                    logger.debug("Auth Token {uss_auth_token}".format(uss_auth_token=uss_auth_token))
+                    logger.info("Auth Token {uss_auth_token}".format(uss_auth_token=uss_auth_token))
                     uss_headers = {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + uss_auth_token["access_token"],
@@ -727,6 +727,7 @@ class SCDOperations:
                             404,
                             500,
                         ]:
+                            logger.debug(uss_operational_intent_request.json())
                             logger.error(
                                 "Error in querying peer USS about operational intent (ID: {uss_op_int_id}) details from uss with base url {uss_base_url}".format(
                                     uss_op_int_id=current_uss_operational_intent_detail.id,
@@ -1061,9 +1062,9 @@ class SCDOperations:
         current_state: str,
         new_state: str,
         subscription_id: str,
+        ovn: str,
         deconfliction_check=False,
         priority: int = 0,
-        ovn: Optional[str] = None,
     ) -> OperationalIntentUpdateResponse:
         """
         Update a specified operational intent reference in the DSS.

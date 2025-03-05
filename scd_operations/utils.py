@@ -5,6 +5,8 @@ from itertools import cycle
 import arrow
 
 from auth_helper.common import get_redis
+from common.data_definitions import FLIGHT_OPINT_KEY
+from common.database_operations import FlightBlenderDatabaseWriter
 from rid_operations import rtree_helper
 
 from . import dss_scd_helper
@@ -195,6 +197,7 @@ class DSSAreaClearHandler:
 
     def clear_area_request(self, extent_raw) -> ClearAreaResponse:
         r = get_redis()
+        my_database_writer = FlightBlenderDatabaseWriter()
         # Create a list of Volume4D objects
         my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
         volume4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=extent_raw)
@@ -203,7 +206,7 @@ class DSSAreaClearHandler:
         my_geo_json_converter.convert_volumes_to_geojson(volumes=[volume4D])
         view_rect_bounds = my_geo_json_converter.get_bounds()
         my_rtree_helper = rtree_helper.OperationalIntentsIndexFactory(index_name=INDEX_NAME)
-        my_rtree_helper.generate_operational_intents_index(pattern="flight_opint.*")
+        my_rtree_helper.generate_active_flights_operational_intents_index()
         op_ints_exist = my_rtree_helper.check_op_ints_exist()
         all_existing_op_ints_in_area = []
         if op_ints_exist:
@@ -215,13 +218,12 @@ class DSSAreaClearHandler:
                 if flight_details:
                     deletion_success = False
                     operation_id = flight_details["flight_id"]
-                    op_int_details_key = "flight_opint." + operation_id                    
+                    op_int_details_key = FLIGHT_OPINT_KEY + operation_id
                     if r.exists(op_int_details_key):
                         op_int_detail_raw = r.get(op_int_details_key)
                         my_scd_dss_helper = dss_scd_helper.SCDOperations()
                         # op_int_detail_raw = op_int_details.decode()
-                        
-                        
+
                         op_int_detail = json.loads(op_int_detail_raw)
                         ovn = op_int_detail["success_response"]["operational_intent_reference"]["ovn"]
                         opint_id = op_int_detail["success_response"]["operational_intent_reference"]["id"]
@@ -232,15 +234,22 @@ class DSSAreaClearHandler:
                         if deletion_request.status == 200:
                             logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             deletion_success = True
+
+                            r.delete(op_int_details_key)
+                            my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id)
+
                         else:
                             logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-                            logger.error(deletion_request.text)
+                            logger.error(deletion_request.dss_response)
                             deletion_success = False
 
                         all_deletion_requests_status.append(deletion_success)
 
-            
-            message = "Some operational intents in the area failed to clear" if not all(all_deletion_requests_status) else "All operational intents in the area cleared successfully"
+            message = (
+                "Some operational intents in the area failed to clear"
+                if not all(all_deletion_requests_status)
+                else "All operational intents in the area cleared successfully"
+            )
 
             clear_area_status = ClearAreaResponseOutcome(
                 success=all(all_deletion_requests_status),
@@ -254,7 +263,7 @@ class DSSAreaClearHandler:
                 message="All operational intents in the area cleared successfully",
                 timestamp=arrow.now().isoformat(),
             )
-        my_rtree_helper.clear_rtree_index(pattern="flight_opint.*")
+        my_rtree_helper.clear_rtree_index()
         clear_area_response = ClearAreaResponse(outcome=clear_area_status)
 
         return clear_area_response

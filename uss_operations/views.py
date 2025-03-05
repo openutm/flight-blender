@@ -88,8 +88,6 @@ def uss_update_opint_details(request):
     r = get_redis()
     op_int_update_detail = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
 
-    print("Opint update details %s" % op_int_update_detail)
-
     my_operational_intent_parser = OperationalIntentReferenceHelper()
     # Write the operational Intent
     operation_id_str = op_int_update_detail.operational_intent_id

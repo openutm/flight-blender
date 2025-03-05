@@ -106,6 +106,12 @@ class FlightBlenderDatabaseReader:
         ).values_list("id", flat=True)
         return relevant_ids
 
+    def check_active_activated_flights_exist(self) -> bool:
+        return FlightDeclaration.objects.filter().filter(state__in=[1, 2]).exists()
+
+    def get_active_activated_flight_declarations(self) -> Union[QuerySet, List[FlightDeclaration]]:
+        return FlightDeclaration.objects.filter().filter(state__in=[1, 2])
+
     def get_current_flight_accepted_activated_declaration_ids(self, now: str) -> Union[None, uuid4]:
         """This method gets flight operation ids that are active in the system"""
         n = arrow.get(now)
@@ -251,7 +257,7 @@ class FlightBlenderDatabaseWriter:
         except Exception:
             return False
 
-    def update_flight_authorization_ovn(self, flight_authorization: FlightAuthorization, ovn:str) -> bool:
+    def update_flight_authorization_ovn(self, flight_authorization: FlightAuthorization, ovn: str) -> bool:
         try:
             flight_authorization.ovn = ovn
             flight_authorization.save()
