@@ -92,9 +92,10 @@ class DSSOperationalIntentsCreator:
 
             # Update flight Authorization and Flight State
             if op_int_submission.status_code == 201:
-                my_database_writer.update_flight_authorization_op_int(
+                my_database_writer.update_flight_authorization_op_int_ovn(
                     flight_authorization=flight_authorization,
                     dss_operational_intent_id=op_int_submission.operational_intent_id,
+                    ovn=op_int_submission.dss_response.operational_intent_reference.ovn,
                 )
                 # Update operation state
                 logger.info("Updating state from Processing to Accepted...")

@@ -505,12 +505,6 @@ class OperationalIntentReferenceDSSDetails:
 
 
 @dataclass
-class SuccessfulOperationalIntentFlightIDStorage:
-    operation_id: str
-    operational_intent_id: str
-
-
-@dataclass
 class OpInttoCheckDetails:
     ovn: str
     shape: Plgn

@@ -142,8 +142,15 @@ class FlightAuthorization(models.Model):
         max_length=36,
         blank=True,
         null=True,
-        help_text="Once the operational intent is shared on the DSS the operational intent is is stored here. By default nothing is stored here.",
+        help_text="Once the operational intent is shared on the DSS the operational intent is stored here. By default nothing is stored here.",
     )
+    ovn = models.CharField(
+        max_length=36,
+        blank=True,
+        null=True,
+        help_text="Once the operational intent is created, the OVN is stored here.",
+    )
+
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

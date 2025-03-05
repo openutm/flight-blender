@@ -98,7 +98,7 @@ class Volume3D:
     outline_polygon: Polygon
     altitude_lower: Altitude
     altitude_upper: Altitude
-    outline_circle: Circle = None
+    outline_circle: Optional[Circle] = None
 
 
 class OperationalIntentState(str, enum.Enum):

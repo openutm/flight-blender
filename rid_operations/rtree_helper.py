@@ -1,13 +1,15 @@
 import hashlib
 import json
 import logging
-from auth_helper.common import get_redis
-from scd_operations.scd_data_definitions import Altitude, OpInttoCheckDetails, Time
 from typing import List
 
+import arrow
 from rtree import index
 from shapely.geometry import Polygon
 
+from auth_helper.common import get_redis
+from common.database_operations import FlightBlenderDatabaseReader
+from scd_operations.scd_data_definitions import Altitude, OpInttoCheckDetails, Time
 
 logger = logging.getLogger("django")
 
@@ -54,29 +56,25 @@ class OperationalIntentsIndexFactory:
     def delete_from_index(self, enumerated_id: int, view: List[float]):
         self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
 
-    def check_op_ints_exist(self, pattern: str = None) -> bool:
+    def check_op_ints_exist(self) -> bool:
         """This method generates a rTree index of currently active operational indexes"""
-        pattern = pattern if pattern else "flight_opint.*"
+        my_database_reader = FlightBlenderDatabaseReader()
+        return my_database_reader.check_active_activated_flights_exist()
 
-        all_op_ints = self.r.keys(pattern=pattern)
-        if all_op_ints:
-            return True
-        else:
-            return False
+    def generate_active_flights_operational_intents_index(self) -> None:
+        """This method generates a rTree index of currently active operational intents"""
 
-    def generate_operational_intents_index(self, pattern: str = None) -> None:
-        """This method generates a rTree index of currently active operational indexes"""
-        pattern = pattern if pattern else "flight_opint.*"
+        my_database_reader = FlightBlenderDatabaseReader()
+        flight_declarations = my_database_reader.get_active_activated_flight_declarations()
 
-        all_op_ints = self.r.keys(pattern=pattern)
-        for flight_idx, flight_id in enumerate(all_op_ints):
-            flight_id_str = flight_id.split(".")[1]
+        for flight_declaration in flight_declarations:
+            flight_id_str = str(flight_declaration.id)
+
             enumerated_flight_id = int(hashlib.sha256(flight_id_str.encode("utf-8")).hexdigest(), 16) % 10**8
-            operational_intent_view_raw = self.r.get(flight_id)
-            operational_intent_view = json.loads(operational_intent_view_raw)
-            split_view = operational_intent_view["bounds"].split(",")
-            start_time = operational_intent_view["start_time"]
-            end_time = operational_intent_view["end_time"]
+
+            split_view = flight_declaration.bounds.split(",")
+            start_time = flight_declaration.start_datetime
+            end_time = flight_declaration.end_datetime
             view = [float(i) for i in split_view]
 
             self.add_box_to_index(
@@ -87,18 +85,18 @@ class OperationalIntentsIndexFactory:
                 end_time=end_time,
             )
 
-    def clear_rtree_index(self, pattern: str):
+    def clear_rtree_index(self):
         """Method to delete all boxes from the index"""
-        pattern = pattern if pattern else "flight_opint.*"
 
-        all_op_ints = self.r.keys(pattern=pattern)
-        for flight_idx, flight_id in enumerate(all_op_ints):
-            flight_id_str = flight_id.split(".")[1]
+        my_database_reader = FlightBlenderDatabaseReader()
+        flight_declarations = my_database_reader.get_active_activated_flight_declarations()
+
+        for flight_declaration in flight_declarations:
+            flight_id_str = str(flight_declaration.id)
 
             enumerated_flight_id = int(hashlib.sha256(flight_id_str.encode("utf-8")).hexdigest(), 16) % 10**8
-            operational_intent_view_raw = self.r.get(flight_id)
-            operational_intent_view = json.loads(operational_intent_view_raw)
-            split_view = operational_intent_view["bounds"].split(",")
+
+            split_view = flight_declaration.bounds.split(",")
             view = [float(i) for i in split_view]
             self.delete_from_index(enumerated_id=enumerated_flight_id, view=view)
 

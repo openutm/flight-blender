@@ -27,7 +27,6 @@ from scd_operations.scd_data_definitions import (
     OperationalIntentStorage,
     OperationalIntentUSSDetails,
     SubscriptionState,
-    SuccessfulOperationalIntentFlightIDStorage,
 )
 
 logger = logging.getLogger("django")
@@ -116,6 +115,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             ###### Change via new state check helper
 
             flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
+
             fa = my_database_reader.get_flight_authorization_by_flight_declaration_obj(flight_declaration=flight_declaration)
 
             logger.info("Saving created operational intent details..")
@@ -136,15 +136,6 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             r.set(flight_opint, json.dumps(asdict(operational_intent_full_details)))
             r.expire(name=flight_opint, time=delta)
 
-            # Store the details of the operational intent reference
-            flight_op_int_storage = SuccessfulOperationalIntentFlightIDStorage(
-                operation_id=str(flight_declaration_id),
-                operational_intent_id=created_opint,
-            )
-
-            opint_flightref = "opint_flightref." + created_opint
-            r.set(opint_flightref, json.dumps(asdict(flight_op_int_storage)))
-            r.expire(name=opint_flightref, time=delta)
             logger.info("Changing operation state..")
             original_state = flight_declaration.state
             accepted_state = OPERATION_STATES[1][0]
