@@ -654,6 +654,7 @@ class SCDOperations:
                     flight_authorization = self.database_reader.get_flight_authorization_by_operational_intent_ref_id(
                         str(current_uss_operational_intent_detail.id)
                     )
+                    # TODO: Check if this can be removed
                     if flight_authorization:
                         self.database_writer.update_flight_authorization_ovn(
                             flight_authorization=flight_authorization, ovn=current_uss_operational_intent_detail.ovn
@@ -673,10 +674,9 @@ class SCDOperations:
                     op_int_details_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
-                    uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
-                    logger.info(current_uss_base_url, uss_audience)
+                    uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)                    
                     uss_auth_token = self.get_auth_token(audience=uss_audience)
-                    logger.info("Auth Token {uss_auth_token}".format(uss_auth_token=uss_auth_token))
+                    logger.debug("Auth Token {uss_auth_token}".format(uss_auth_token=uss_auth_token))
                     uss_headers = {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + uss_auth_token["access_token"],

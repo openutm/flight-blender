@@ -24,4 +24,4 @@ def generate_audience_from_base_url(base_url: str) -> str:
     elif ext.domain == "localutm":
         return process_localutm(subdomain=ext.subdomain, domain=ext.domain)
 
-    return ext.domain if not ext.suffix else ".".join(ext[:3])
+    return ext.subdomain + "." + ext.domain + "." + ext.suffix
