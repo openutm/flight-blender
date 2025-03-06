@@ -15,7 +15,8 @@ from marshmallow import ValidationError
 from rest_framework import generics
 from rest_framework.decorators import api_view
 import uuid
-from auth_helper.utils import get_redis, requires_scopes
+from auth_helper.common import get_redis
+from auth_helper.utils import requires_scopes
 from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from common.database_operations import FlightBlenderDatabaseReader
 from rid_operations import view_port_ops
@@ -164,7 +165,7 @@ def set_air_traffic(request, session_id):
         if "metadata" in observation.keys():
             metadata = observation["metadata"]
 
-        session_id = session_id if session_id else "00000000-0000-0000-0000-000000000000"
+        session_id = str(session_id) if session_id else "00000000-0000-0000-0000-000000000000"
         so = SingleAirtrafficObservation(
             session_id=session_id,
             lat_dd=lat_dd,
@@ -235,7 +236,7 @@ def get_air_traffic(request, session_id):
         for observation in all_observations:
             icao_address = observation.icao_address
             if icao_address not in latest_observations or observation.timestamp > latest_observations[icao_address].timestamp:
-            latest_observations[icao_address] = observation
+                latest_observations[icao_address] = observation
 
         # Extract the latest observations
         distinct_messages = latest_observations.values()
