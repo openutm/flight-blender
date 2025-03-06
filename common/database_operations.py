@@ -14,6 +14,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from conformance_monitoring_operations.models import TaskScheduler
 from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
+from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
 from notification_operations.models import OperatorRIDNotification
 from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
@@ -33,6 +34,13 @@ class FlightBlenderDatabaseReader:
     """
     A file to unify read and write operations to the database. Eventually caching etc. can be added via this file
     """
+
+    def get_flight_observations(self, after_datetime: arrow.arrow.Arrow) -> Union[None, List[FlightObeservation]]:
+        try:
+            observations = FlightObeservation.objects.filter(created_at__gte=after_datetime).order_by("created_at")
+            return observations
+        except FlightObeservation.DoesNotExist:
+            return None
 
     def get_all_flight_declarations(self) -> Union[None, List[FlightDeclaration]]:
         flight_declarations = FlightDeclaration.objects.all()
@@ -140,18 +148,20 @@ class FlightBlenderDatabaseReader:
         except TaskScheduler.DoesNotExist:
             return None
 
-    def get_active_observations_for_session(self, session_id: str) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
+    def get_active_rid_observations_for_session(self, session_id: str) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
         try:
-            observations = FlightObeservation.objects.filter(session_id=session_id, active=True)
+            observations = FlightObeservation.objects.filter(session_id=session_id, traffic_source=11)
             return observations
         except FlightObeservation.DoesNotExist:
             return None
 
-    def get_active_observations_for_session_between_interval(
+    def get_active_rid_observations_for_session_between_interval(
         self, start_time: datetime, end_time: datetime, session_id: str
     ) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
         try:
-            observations = FlightObeservation.objects.filter(session_id=session_id, timestamp__gte=start_time, timestamp__lte=end_time, active=True)
+            observations = FlightObeservation.objects.filter(
+                session_id=session_id, timestamp__gte=start_time, timestamp__lte=end_time, traffic_source=11
+            )
             return observations
         except FlightObeservation.DoesNotExist:
             return None
@@ -167,6 +177,24 @@ class FlightBlenderDatabaseReader:
 
 
 class FlightBlenderDatabaseWriter:
+    def write_flight_observation(self, single_observation: SingleAirtrafficObservation) -> bool:
+        session_id = single_observation.session_id if single_observation.session_id else "00000000-0000-0000-0000-000000000000"
+        try:
+            flight_observation = FlightObeservation(
+                session_id=session_id,
+                traffic_source=single_observation.traffic_source,
+                latitude_dd=single_observation.lat_dd,
+                longitude_dd=single_observation.lon_dd,
+                altitude_mm=single_observation.altitude_mm,
+                source_type=single_observation.source_type,
+                icao_address=single_observation.icao_address,
+                metadata=json.dumps(single_observation.metadata),
+            )
+            flight_observation.save()
+            return True
+        except IntegrityError:
+            return False
+
     def delete_flight_declaration(self, flight_declaration_id: str) -> bool:
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)

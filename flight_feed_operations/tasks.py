@@ -7,9 +7,11 @@ from os import environ as env
 import arrow
 import pandas as pd
 import requests
+from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Transformer
-
+import uuid
+from common.database_operations import FlightBlenderDatabaseWriter
 from flight_blender.celery import app
 
 from . import flight_stream_helper
@@ -21,13 +23,14 @@ ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
+
 logger = logging.getLogger("django")
 
 #### Airtraffic Endpoint
 
 
 @app.task(name="write_incoming_air_traffic_data")
-def write_incoming_air_traffic_data(observation):
+def write_incoming_air_traffic_data(observation: str):
     """
     Processes and writes incoming air traffic data.
     This function takes an observation in JSON format, parses it, and writes it to a stream.
@@ -37,15 +40,14 @@ def write_incoming_air_traffic_data(observation):
     Returns:
         str: The message ID of the added observation.
     """
+    my_database_writer = FlightBlenderDatabaseWriter()
 
     obs = json.loads(observation)
+    obs["metadata"] = json.loads(obs["metadata"])
+    single_air_traffic_observation = from_dict(data=obs, data_class=SingleAirtrafficObservation)
     logger.debug("Writing observation..")
-
-    my_stream_ops = flight_stream_helper.StreamHelperOps()
-    cg = my_stream_ops.get_pull_cg()
-    msg_id = cg.all_observations.add(obs)
-    cg.all_observations.trim(1000)
-    return msg_id
+    # TODO: Write this observation to the Database
+    my_database_writer.write_flight_observation(single_air_traffic_observation)
 
 
 lonlat_to_webmercator = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
@@ -61,7 +63,7 @@ def start_opensky_network_stream(view_port: str):
     """
     Starts streaming data from the OpenSky Network within the specified viewport.
     Args:
-        view_port (str): A JSON string representing the viewport coordinates in the format 
+        view_port (str): A JSON string representing the viewport coordinates in the format
                          [lng_min, lat_min, lng_max, lat_max].
     The function performs the following steps:
     1. Parses the viewport JSON string to extract the coordinates.
@@ -90,11 +92,10 @@ def start_opensky_network_stream(view_port: str):
     end_time = arrow.now().shift(seconds=60)
 
     logger.info("Querying OpenSkies Network for one minute.. ")
+    sesion_id = uuid.uuid4()
 
     while arrow.now() < end_time:
-        url_data = (
-            f"https://opensky-network.org/api/states/all?lamin={lat_min}&lomin={lng_min}&lamax={lat_max}&lomax={lng_max}"
-        )
+        url_data = f"https://opensky-network.org/api/states/all?lamin={lat_min}&lomin={lng_min}&lamax={lat_max}&lomax={lng_max}"
         response = requests.get(
             url_data,
             auth=(env.get("OPENSKY_NETWORK_USERNAME"), env.get("OPENSKY_NETWORK_PASSWORD")),
@@ -129,6 +130,7 @@ def start_opensky_network_stream(view_port: str):
 
                 for _, row in flight_df.iterrows():
                     so = SingleAirtrafficObservation(
+                        session_id=str(sesion_id),
                         lat_dd=row["lat"],
                         lon_dd=row["long"],
                         altitude_mm=row["baro_altitude"],

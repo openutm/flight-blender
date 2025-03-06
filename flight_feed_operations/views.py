@@ -6,16 +6,16 @@ from os import environ as env
 from typing import List
 
 import arrow
-
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
 from dotenv import find_dotenv, load_dotenv
 from jwcrypto import jwk
+from marshmallow import ValidationError
 from rest_framework import generics
 from rest_framework.decorators import api_view
 
-from auth_helper.utils import requires_scopes
+from auth_helper.utils import get_redis, requires_scopes
 from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from common.database_operations import FlightBlenderDatabaseReader
 from rid_operations import view_port_ops
@@ -30,13 +30,11 @@ from . import flight_stream_helper
 from .data_definitions import (
     FlightObservationsProcessingResponse,
     MessageVerificationFailedResponse,
-    SingleAirtrafficObservation,
-    TrafficInformationDiscoveryResponse,
     ObservationSchema,
-    StoredFlightMessage
+    SingleAirtrafficObservation,
+    StoredFlightMessage,
+    TrafficInformationDiscoveryResponse,
 )
-
-from marshmallow import  ValidationError
 from .models import SignedTelmetryPublicKey
 from .pki_helper import MessageVerifier, ResponseSigningOperations
 from .rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
@@ -85,7 +83,7 @@ def ping(request):
 
 @api_view(["POST"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
-def set_air_traffic(request):
+def set_air_traffic(request, session_id):
     """
     This is the main POST method that takes in a request for Air traffic observation and processes the input data.
 
@@ -149,7 +147,6 @@ def set_air_traffic(request):
 
     schema = ObservationSchema()
     for observation in observations:
-
         try:
             validated_data = schema.load(observation)
             lat_dd = validated_data["lat_dd"]
@@ -167,7 +164,9 @@ def set_air_traffic(request):
         if "metadata" in observation.keys():
             metadata = observation["metadata"]
 
+        session_id = session_id if session_id else "00000000-0000-0000-0000-000000000000"
         so = SingleAirtrafficObservation(
+            session_id=session_id,
             lat_dd=lat_dd,
             lon_dd=lon_dd,
             altitude_mm=altitude_mm,
@@ -179,13 +178,13 @@ def set_air_traffic(request):
 
         write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
 
-    op = FlightObservationsProcessingResponse(message="OK", status=200)
+    op = FlightObservationsProcessingResponse(message="OK", status=201)
     return JsonResponse(asdict(op), status=op.status)
 
 
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
-def get_air_traffic(request):
+def get_air_traffic(request, session_id):
     """
     This endpoint retrieves air traffic data within a specified view bounding box.
 
@@ -198,7 +197,7 @@ def get_air_traffic(request):
     Raises:
         JsonResponse: If the view bounding box is not provided or is invalid, returns a 400 status with an error message.
     """
-    
+
     try:
         view = request.query_params["view"]
         view_port = list(map(float, view.split(",")))
@@ -208,66 +207,65 @@ def get_air_traffic(request):
 
     view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
 
-
-    if view_port_valid:
-        try:
-            # Initialize StreamHelperOps to handle stream operations
-            stream_ops = flight_stream_helper.StreamHelperOps()
-            # Get the consumer group for pulling messages
-            pull_cg = stream_ops.get_pull_cg()
-            # Read all messages from the stream
-            all_streams_messages = pull_cg.read()
-
-            unique_flights = [
-                StoredFlightMessage(
-                    timestamp=message.timestamp,
-                    seq=message.sequence,
-                    msg_data=message.data,
-                    icao_address=message.data["icao_address"],
-                )
-                for message in all_streams_messages
-            ]
-
-            # Sort messages by timestamp in descending order
-            unique_flights.sort(key=lambda item: item.timestamp, reverse=True)
-            
-            # Get distinct messages based on ICAO address
-            distinct_messages = {i.icao_address: i for i in reversed(unique_flights)}.values()
-            logger.info("Unique flights sorted by timestamp")
-        except KeyError as ke:
-            # Log error if ICAO address is not defined in any message
-            logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
-            distinct_messages = []
-
-
-
-        all_traffic_observations: List[SingleAirtrafficObservation] = []
-        for observation in distinct_messages:
-            observation_data = observation.msg_data
-            observation_metadata = json.loads(observation_data["metadata"])
-            so = SingleAirtrafficObservation(
-                lat_dd=observation_data["lat_dd"],
-                lon_dd=observation_data["lon_dd"],
-                altitude_mm=observation_data["altitude_mm"],
-                traffic_source=observation_data["traffic_source"],
-                source_type=observation_data["source_type"],
-                icao_address=observation_data["icao_address"],
-                metadata=observation_metadata,
-            )
-            all_traffic_observations.append(asdict(so))
-
-        return JsonResponse(
-            {"observations": all_traffic_observations},
-            status=200,
-            content_type="application/json",
-        )
-    else:
+    if not view_port_valid:
         view_port_error = {"message": "A incorrect view port bbox was provided"}
         return JsonResponse(
             json.loads(json.dumps(view_port_error)),
             status=400,
             content_type="application/json",
         )
+    try:
+        my_database_reader = FlightBlenderDatabaseReader()
+        r = get_redis()
+        key = "last_reading_for_{session_id}".format(session_id=session_id)
+        now = arrow.now()
+        one_second_before_now = now.shift(seconds=-1)
+        if r.eixsts(key):
+            last_reading_time = r.get(key)
+            after_datetime = arrow.get(last_reading_time)
+        else:
+            after_datetime = one_second_before_now
+
+        r.set(key, arrow.now().isoformat())
+        r.expire(key, 6000)
+        all_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
+
+        # Create a dictionary to store the latest observation for each icao_address
+        latest_observations = {}
+        for observation in all_observations:
+            icao_address = observation.icao_address
+            if icao_address not in latest_observations or observation.timestamp > latest_observations[icao_address].timestamp:
+            latest_observations[icao_address] = observation
+
+        # Extract the latest observations
+        distinct_messages = latest_observations.values()
+
+
+        logger.info("Distinct messages %s" % distinct_messages)
+    except KeyError as ke:
+        # Log error if ICAO address is not defined in any message
+        logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
+        distinct_messages = []
+
+    all_traffic_observations: List[SingleAirtrafficObservation] = []
+    for observation in distinct_messages:
+        observation_metadata = json.loads(observation.metadata)
+        so = SingleAirtrafficObservation(
+            lat_dd=observation["lat_dd"],
+            lon_dd=observation["lon_dd"],
+            altitude_mm=observation["altitude_mm"],
+            traffic_source=observation["traffic_source"],
+            source_type=observation["source_type"],
+            icao_address=observation["icao_address"],
+            metadata=observation_metadata,
+        )
+        all_traffic_observations.append(asdict(so))
+
+    return JsonResponse(
+        {"observations": all_traffic_observations},
+        status=200,
+        content_type="application/json",
+    )
 
 
 @api_view(["GET"])
@@ -301,17 +299,18 @@ def start_opensky_feed(request):
     start_opensky_network_stream.delay(view_port=json.dumps(view_port))
     return JsonResponse({"message": "Openskies Network stream started"}, status=200, content_type="application/json")
 
+
 @api_view(["PUT"])
 def set_signed_telemetry(request):
     """
     This endpoint sets signed telemetry details into Flight Blender. It securely receives signed telemetry information
-    and validates it against allowed public keys in Flight Blender. Since the messages are signed, authentication 
+    and validates it against allowed public keys in Flight Blender. Since the messages are signed, authentication
     requirements for tokens are turned off.
     Args:
         request (HttpRequest): The HTTP request object containing the signed telemetry data.
     Returns:
         JsonResponse: A JSON response indicating the result of the operation. Possible responses include:
-            - 400 Bad Request: If message verification fails, required observation keys are missing, flight details 
+            - 400 Bad Request: If message verification fails, required observation keys are missing, flight details
               or current states are invalid, or the operation ID does not match any current operation in Flight Blender.
             - 201 Created: If telemetry data is successfully submitted.
     The function performs the following steps:
@@ -339,14 +338,18 @@ def set_signed_telemetry(request):
     my_telemetry_validator = FlightBlenderTelemetryValidator()
 
     if not my_telemetry_validator.validate_observation_key_exists(raw_request_data=raw_data):
-        return JsonResponse({"message": "A flight observation object with current state and flight details is necessary"}, status=400, content_type="application/json")
+        return JsonResponse(
+            {"message": "A flight observation object with current state and flight details is necessary"}, status=400, content_type="application/json"
+        )
 
     rid_observations = raw_data["observations"]
     unsigned_telemetry_observations = []
 
     for flight in rid_observations:
         if not my_telemetry_validator.validate_flight_details_current_states_exist(flight=flight):
-            return JsonResponse({"message": "A flights object with current states, flight details is necessary"}, status=400, content_type="application/json")
+            return JsonResponse(
+                {"message": "A flights object with current states, flight details is necessary"}, status=400, content_type="application/json"
+            )
 
         current_states = flight["current_states"]
         flight_details = flight["flight_details"]
@@ -355,7 +358,11 @@ def set_signed_telemetry(request):
             all_states = my_telemetry_validator.parse_validate_current_states(current_states=current_states)
             f_details = my_telemetry_validator.parse_validate_rid_details(rid_flight_details=flight_details["rid_details"])
         except KeyError as ke:
-            return JsonResponse({"message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"}, status=400, content_type="application/json")
+            return JsonResponse(
+                {"message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"},
+                status=400,
+                content_type="application/json",
+            )
 
         single_observation_set = SignedUnSignedTelemetryObservations(current_states=all_states, flight_details=f_details)
         unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
@@ -370,9 +377,21 @@ def set_signed_telemetry(request):
             if flight_operation.state in [2, 3, 4]:  # Activated, Contingent, Non-conforming
                 stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
             else:
-                return JsonResponse({"message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first."}, status=400, content_type="application/json")
+                return JsonResponse(
+                    {
+                        "message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first."
+                    },
+                    status=400,
+                    content_type="application/json",
+                )
         else:
-            return JsonResponse({"message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"}, status=400, content_type="application/json")
+            return JsonResponse(
+                {
+                    "message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"
+                },
+                status=400,
+                content_type="application/json",
+            )
 
     submission_success = {"message": "Telemetry data successfully submitted"}
     content_digest = my_response_signer.generate_content_digest(submission_success)
@@ -438,6 +457,7 @@ def traffic_information_discovery_view(request):
 
     return JsonResponse(asdict(response_data), status=200, content_type="application/json")
 
+
 @api_view(["PUT"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_telemetry(request):
@@ -476,9 +496,7 @@ def set_telemetry(request):
     for flight in rid_observations:
         if not my_telemetry_validator.validate_flight_details_current_states_exist(flight=flight):
             return JsonResponse(
-                {"message": "A flights object with current states, flight details is necessary"},
-                status=400,
-                content_type="application/json"
+                {"message": "A flights object with current states, flight details is necessary"}, status=400, content_type="application/json"
             )
 
         current_states = flight["current_states"]
@@ -491,7 +509,7 @@ def set_telemetry(request):
             return JsonResponse(
                 {"message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"},
                 status=400,
-                content_type="application/json"
+                content_type="application/json",
             )
 
         single_observation_set = SignedUnSignedTelemetryObservations(current_states=all_states, flight_details=f_details)
@@ -508,15 +526,19 @@ def set_telemetry(request):
                 stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
             else:
                 return JsonResponse(
-                    {"message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first."},
+                    {
+                        "message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first."
+                    },
                     status=400,
-                    content_type="application/json"
+                    content_type="application/json",
                 )
         else:
             return JsonResponse(
-                {"message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"},
+                {
+                    "message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"
+                },
                 status=400,
-                content_type="application/json"
+                content_type="application/json",
             )
 
     submission_success = {"message": "Telemetry data successfully submitted"}
