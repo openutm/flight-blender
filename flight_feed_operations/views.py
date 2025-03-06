@@ -14,7 +14,7 @@ from jwcrypto import jwk
 from marshmallow import ValidationError
 from rest_framework import generics
 from rest_framework.decorators import api_view
-
+import uuid
 from auth_helper.utils import get_redis, requires_scopes
 from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from common.database_operations import FlightBlenderDatabaseReader
@@ -295,8 +295,9 @@ def start_opensky_feed(request):
     if not view_port_ops.check_view_port(view_port_coords=view_port):
         view_port_error = {"message": "An incorrect view port bbox was provided"}
         return JsonResponse(view_port_error, status=400, content_type="application/json")
-
-    start_opensky_network_stream.delay(view_port=json.dumps(view_port))
+    
+    sesion_id = uuid.uuid4()
+    start_opensky_network_stream.delay(view_port=json.dumps(view_port), sesion_id=str(sesion_id))
     return JsonResponse({"message": "Openskies Network stream started"}, status=200, content_type="application/json")
 
 

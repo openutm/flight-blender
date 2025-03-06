@@ -10,11 +10,9 @@ import requests
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Transformer
-import uuid
 from common.database_operations import FlightBlenderDatabaseWriter
 from flight_blender.celery import app
 
-from . import flight_stream_helper
 from .data_definitions import SingleAirtrafficObservation
 
 load_dotenv(find_dotenv())
@@ -59,7 +57,7 @@ def mercator_transform(lon, lat):
 
 
 @app.task(name="start_opensky_network_stream")
-def start_opensky_network_stream(view_port: str):
+def start_opensky_network_stream(view_port: str, session_id:str):
     """
     Starts streaming data from the OpenSky Network within the specified viewport.
     Args:
@@ -92,7 +90,6 @@ def start_opensky_network_stream(view_port: str):
     end_time = arrow.now().shift(seconds=60)
 
     logger.info("Querying OpenSkies Network for one minute.. ")
-    sesion_id = uuid.uuid4()
 
     while arrow.now() < end_time:
         url_data = f"https://opensky-network.org/api/states/all?lamin={lat_min}&lomin={lng_min}&lamax={lat_max}&lomax={lng_max}"
@@ -130,7 +127,7 @@ def start_opensky_network_stream(view_port: str):
 
                 for _, row in flight_df.iterrows():
                     so = SingleAirtrafficObservation(
-                        session_id=str(sesion_id),
+                        session_id=sesion_id,
                         lat_dd=row["lat"],
                         lon_dd=row["long"],
                         altitude_mm=row["baro_altitude"],
