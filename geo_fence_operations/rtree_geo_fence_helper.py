@@ -68,6 +68,9 @@ class GeoFenceRTreeIndexFactory:
             fence_idx_str = str(fence.id)
             fence_id = int(hashlib.sha256(fence_idx_str.encode("utf-8")).hexdigest(), 16) % 10**8
             view = [float(coord) for coord in fence.bounds.split(",")]
+            # Swap the coordinates to store as latitude, longitude format
+            view = [view[1], view[0], view[3], view[2]]
+
             self.add_box_to_index(
                 id=fence_id,
                 geo_fence_id=fence_idx_str,
@@ -99,5 +102,6 @@ class GeoFenceRTreeIndexFactory:
         Returns:
             List[dict]: A list of metadata dictionaries for each intersecting box.
         """
+
         intersections = [n.object for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)]
         return intersections

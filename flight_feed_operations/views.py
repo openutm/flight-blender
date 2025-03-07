@@ -219,45 +219,43 @@ def get_air_traffic(request, session_id):
         my_database_reader = FlightBlenderDatabaseReader()
         r = get_redis()
         key = "last_reading_for_{session_id}".format(session_id=session_id)
-        now = arrow.now()
-        one_second_before_now = now.shift(seconds=-1)
-        if r.eixsts(key):
+        if r.exists(key):
             last_reading_time = r.get(key)
             after_datetime = arrow.get(last_reading_time)
         else:
+            now = arrow.now()
+            one_second_before_now = now.shift(seconds=-1)
             after_datetime = one_second_before_now
 
         r.set(key, arrow.now().isoformat())
-        r.expire(key, 6000)
+        r.expire(key, 300)
         all_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
 
         # Create a dictionary to store the latest observation for each icao_address
         latest_observations = {}
         for observation in all_observations:
-            icao_address = observation.icao_address
-            if icao_address not in latest_observations or observation.timestamp > latest_observations[icao_address].timestamp:
-                latest_observations[icao_address] = observation
-
-        # Extract the latest observations
-        distinct_messages = latest_observations.values()
+            icao_address = observation["icao_address"]
+            if icao_address not in latest_observations or observation["timestamp"] > latest_observations[icao_address]["timestamp"]:
+                latest_observations["icao_address"] = observation
 
 
-        logger.info("Distinct messages %s" % distinct_messages)
+        logger.info("Distinct messages: %s" % len(latest_observations))
     except KeyError as ke:
         # Log error if ICAO address is not defined in any message
         logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
-        distinct_messages = []
+        
 
     all_traffic_observations: List[SingleAirtrafficObservation] = []
-    for observation in distinct_messages:
-        observation_metadata = json.loads(observation.metadata)
+    for icao_address in latest_observations:
+        observation = latest_observations[icao_address]
+        observation_metadata = json.loads(observation['metadata'])
         so = SingleAirtrafficObservation(
-            lat_dd=observation["lat_dd"],
-            lon_dd=observation["lon_dd"],
+            lat_dd=observation["latitude_dd"],
+            lon_dd=observation["longitude_dd"],
             altitude_mm=observation["altitude_mm"],
             traffic_source=observation["traffic_source"],
             source_type=observation["source_type"],
-            icao_address=observation["icao_address"],
+            icao_address=icao_address,
             metadata=observation_metadata,
         )
         all_traffic_observations.append(asdict(so))

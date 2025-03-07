@@ -35,9 +35,9 @@ class FlightBlenderDatabaseReader:
     A file to unify read and write operations to the database. Eventually caching etc. can be added via this file
     """
 
-    def get_flight_observations(self, after_datetime: arrow.arrow.Arrow) -> Union[None, List[FlightObeservation]]:
+    def get_flight_observations(self, after_datetime: arrow.arrow.Arrow) -> Union[None, List[QuerySet]]:
         try:
-            observations = FlightObeservation.objects.filter(created_at__gte=after_datetime).order_by("created_at")
+            observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
             return observations
         except FlightObeservation.DoesNotExist:
             return None

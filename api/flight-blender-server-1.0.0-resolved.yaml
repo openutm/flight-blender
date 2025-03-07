@@ -3205,6 +3205,9 @@ components:
             lower_limit:
               type: number
               format: float
+            name:
+              type: string
+              example: "Sample GeoFence"
 
           nullable: true
         id:

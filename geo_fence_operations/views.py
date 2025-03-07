@@ -40,15 +40,16 @@ from .data_definitions import (
     GeoZoneChecksResponse,
     GeoZoneFilterPosition,
     GeoZoneHttpsSource,
+    GeoFencePutSchema
 )
 from .models import GeoFence
 from .serializers import (
-    GeoFenceRequestSerializer,
+    
     GeoFenceSerializer,
     GeoSpatialMapListSerializer,
 )
 from .tasks import download_geozone_source, write_geo_zone
-
+from marshmallow import ValidationError
 logger = logging.getLogger("django")
 
 INDEX_NAME = "geofence_proc"
@@ -66,22 +67,21 @@ def set_geo_fence(request: HttpRequest):
             status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             content_type="application/json",
         )
-
-    stream = io.BytesIO(request.body)
-    json_payload = JSONParser().parse(stream)
-
-    serializer = GeoFenceRequestSerializer(data=json_payload)
-    if not serializer.is_valid():
+    geofence_create_request = GeoFencePutSchema()
+    geo_fence_request_data = request.data
+    
+    try:
+        geo_fence_request_data = geofence_create_request.load(geo_fence_request_data)
+    except ValidationError as err:        
         return HttpResponse(
-            JSONRenderer().render(serializer.errors),
+            JSONRenderer().render(err.messages),
             status=status.HTTP_400_BAD_REQUEST,
             content_type="application/json",
         )
 
-    geo_fence_request = serializer.create(serializer.validated_data)
-
     shp_features = []
-    for feature in geo_fence_request.features:
+    
+    for feature in geo_fence_request_data['features']:
         shp_features.append(shape(feature["geometry"]))
     combined_features = unary_union(shp_features)
     bnd_tuple = combined_features.bounds
@@ -98,7 +98,7 @@ def set_geo_fence(request: HttpRequest):
     lower_limit = Decimal(feature["properties"]["lower_limit"])
     name = feature["properties"]["name"]
 
-    raw_geo_fence = json.dumps(json_payload)
+    raw_geo_fence = json.dumps(geo_fence_request_data)
     geo_f = GeoFence(
         raw_geo_fence=raw_geo_fence,
         start_datetime=start_time,
@@ -171,8 +171,11 @@ class GeoFenceList(mixins.ListModelMixin, generics.GenericAPIView):
         else:
             s_date = present.shift(days=-1)
             e_date = present.shift(days=1)
-
-        all_fences_within_timelimits = GeoFence.objects.filter(start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat())
+        
+        all_fences_within_timelimits = GeoFence.objects.filter(
+            start_datetime__lte=e_date.isoformat(), end_datetime__gte=s_date.isoformat()
+        )
+        
         logger.info("Found %s geofences" % len(all_fences_within_timelimits))
 
         if view_port:
