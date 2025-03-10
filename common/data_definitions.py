@@ -44,3 +44,19 @@ VALID_OPERATIONAL_INTENT_STATES = ["Accepted", "Activated", "Nonconforming", "Co
 
 FLIGHT_OPINT_KEY = "flight_opint."
 RESPONSE_CONTENT_TYPE = "application/json"
+
+
+FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
+    (0, _("1090ES")),
+    (1, _("UAT")),
+    (2, _("Multi-radar (MRT)")),
+    (3, _("MLAT")),
+    (4, _("SSR")),
+    (5, _("PSR")),
+    (6, _("Mode-S")),
+    (7, _("MRT")),
+    (8, _("SSR + PSR Fused")),
+    (9, _("ADS-B")),
+    (10, _("FLARM")),
+    (11, _("Network Remote-ID")),
+)

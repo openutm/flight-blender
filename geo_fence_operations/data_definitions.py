@@ -4,6 +4,31 @@ from typing import Dict, List, Literal, Optional, Union
 
 from implicitdict import ImplicitDict
 
+from marshmallow import Schema, fields
+
+class GeoJSONFeatureProperties(Schema):
+    name= fields.Str(required=True)
+    upper_limit = fields.Int(required=True)
+    lower_limit = fields.Int(required=True)
+    start_time = fields.Str(required=False)
+    end_time = fields.Str(required=False)
+
+class GeoJSONFeatureGeometry(Schema):
+    type = fields.Str(required=True)
+    coordinates = fields.List((fields.List(fields.List(fields.Float()), required=True)))
+
+
+class GeoJSONFeature(Schema):
+    type = fields.Str(required=True)
+    properties = fields.Nested(GeoJSONFeatureProperties)
+    geometry = fields.Nested(GeoJSONFeatureGeometry)
+
+
+class GeoFencePutSchema(Schema):
+    type = fields.Str(required=True)
+    features = fields.List(fields.Nested(lambda: GeoJSONFeature()), required=True)
+    
+
 
 class GeoAwarenessStatusResponseEnum(str, enum.Enum):
     """A enum to specify if the USS is ready (or not)"""

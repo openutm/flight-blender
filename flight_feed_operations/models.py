@@ -2,6 +2,8 @@ import uuid
 
 from django.db import models
 
+from common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE
+
 # Create your models here.
 
 
@@ -42,18 +44,17 @@ class FlightObeservation(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session_id = models.UUIDField(help_text="Session ID for the stream")
+    session_id = models.UUIDField(help_text="Session ID for the stream", blank=True, null=True)
     latitude_dd = models.FloatField(help_text="Latitude of the observation")
     longitude_dd = models.FloatField(help_text="Longitude of the observation")
     altitude_mm = models.FloatField(help_text="Altitude of the observation")
-    timestamp = models.DateTimeField(help_text="Timestamp of the observation", db_index=True)
-    traffic_source = models.IntegerField(help_text="Traffic source of the observation")
+    traffic_source = models.IntegerField(choices=FLIGHT_OBSERVATION_TRAFFIC_SOURCE, help_text="Source of the observation")
     source_type = models.IntegerField(help_text="Source type of the observation")
     icao_address = models.TextField(help_text="ICAO address of the observation")
 
     metadata = models.TextField(help_text="Raw data for the RID stream")
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

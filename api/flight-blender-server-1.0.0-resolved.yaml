@@ -363,7 +363,7 @@ paths:
         parameters:
           - name: after
             description: >-
-              Do not include any notifications observed before this time. 
+              Do not include any notifications observed before this time.
               The property 'observed_at' in UserNotification is to be used for comparison.
             schema:
               type: string
@@ -373,9 +373,9 @@ paths:
             required: true
           - name: before
             description: >-
-              Do not include any notifications observed after this time. 
-              This time must be after the time specified in 'after' parameter. 
-              If not provided, then the value defaults to now. 
+              Do not include any notifications observed after this time.
+              This time must be after the time specified in 'after' parameter.
+              If not provided, then the value defaults to now.
               The property 'observed_at' in UserNotification is to be used for comparison.
             schema:
               type: string
@@ -398,7 +398,7 @@ paths:
             description: The access token was decoded successfully but did not include a scope appropriate to this endpoint.
         summary: User notifications
         description: >-
-          Returns the list of user notifications observed by the virtual user and applicable to the query parameters.  
+          Returns the list of user notifications observed by the virtual user and applicable to the query parameters.
           The implementation of this endpoint requires that the user notifications be available for querying until the end of a test run.
           The user notifications should be available to be queried within 5 seconds of observation by the virtual user.
         tags:
@@ -789,6 +789,13 @@ paths:
 
   /flight_stream/set_air_traffic:
     post:
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        description: A UUID string identifying the session id associated with observation.
+        schema:
+          type: string
       summary: 'Add Airtraffic observation(s)'
       security:
         - AuthFromPassport: [flight_blender.write]
@@ -803,11 +810,9 @@ paths:
               type: object
               properties:
                 observations:
-                  $ref: '#/components/schemas/ArrayOfObservations'
+                  $ref: '#/components/schemas/FlightObservationProcessingResponse'
 
       responses:
-        '200':
-          description: 'OK'
         '201':
           description: 'Airtraffic data added'
         '400':
@@ -902,6 +907,14 @@ paths:
             example: 29.97816,31.13296,29.98025,31.13535
 
           required: true
+
+        - name: session_id
+          in: path
+          required: true
+          description: A UUID string identifying the session id associated with observation.
+          schema:
+            type: string
+
 
       summary: 'Get Airtraffic observation(s)'
       security:
@@ -3192,6 +3205,9 @@ components:
             lower_limit:
               type: number
               format: float
+            name:
+              type: string
+              example: "Sample GeoFence"
 
           nullable: true
         id:
@@ -3314,6 +3330,16 @@ components:
             type: object
             $ref: '#/components/schemas/RIDOperatorDetails'
 
+    FlightObservationProcessingResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: 'Flight observation data successfully processed'
+        status:
+          type: integer
+          example: 201
+
     ArrayOfObservations:
       type: array
       items:
@@ -3327,6 +3353,10 @@ components:
           - traffic_source
 
         properties:
+          session_id:
+            format: string
+            example:  "b1b9b1b9-1b9b-1b9b-1b9b-1b9b1b9b1b9b"
+            description: Session ID associated with the observation
           lon_dd:
             type: number
             format: float

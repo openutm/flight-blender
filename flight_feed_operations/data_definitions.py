@@ -3,6 +3,7 @@ from typing import Optional
 
 from marshmallow import Schema, fields
 
+
 class ObservationSchema(Schema):
     lat_dd = fields.Float(required=True)
     lon_dd = fields.Float(required=True)
@@ -13,11 +14,13 @@ class ObservationSchema(Schema):
     source_type = fields.Integer(required=False)
     metadata = fields.Dict(required=False)
 
+
 @dataclass
 class SingleObservationMetadata:
     """A class to store RemoteID metadata"""
 
     aircraft_type: str
+
 
 @dataclass
 class Observation:
@@ -27,6 +30,7 @@ class Observation:
     address: str
     metadata: dict
 
+
 # Extract unique flight messages with necessary details
 @dataclass
 class StoredFlightMessage:
@@ -34,7 +38,7 @@ class StoredFlightMessage:
     seq: int
     msg_data: dict
     icao_address: str
-    
+
 
 @dataclass
 class SingleRIDObservation:
@@ -60,6 +64,7 @@ class SingleAirtrafficObservation:
     source_type: int
     icao_address: str
     metadata: Optional[dict]
+    session_id: Optional[str] = ""
 
 
 @dataclass

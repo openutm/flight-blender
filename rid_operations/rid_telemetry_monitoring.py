@@ -24,7 +24,7 @@ class FlightTelemetryRIDEngine:
         now = arrow.now()
         four_seconds_before_now = arrow.now().shift(seconds=-4)
         # Get all the observations since last visit
-        relevant_observations = my_database_reader.get_active_observations_for_session_between_interval(
+        relevant_observations = my_database_reader.get_active_rid_observations_for_session_between_interval(
             session_id=self.session_id, start_time=four_seconds_before_now, end_time=now
         )
 
