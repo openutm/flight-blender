@@ -1,6 +1,7 @@
 # Create your views here.
 import json
 import logging
+import uuid
 from dataclasses import asdict
 from os import environ as env
 from typing import List
@@ -14,7 +15,7 @@ from jwcrypto import jwk
 from marshmallow import ValidationError
 from rest_framework import generics
 from rest_framework.decorators import api_view
-import uuid
+
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
 from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
@@ -238,17 +239,15 @@ def get_air_traffic(request, session_id):
             if icao_address not in latest_observations or observation["timestamp"] > latest_observations[icao_address]["timestamp"]:
                 latest_observations["icao_address"] = observation
 
-
         logger.info("Distinct messages: %s" % len(latest_observations))
     except KeyError as ke:
         # Log error if ICAO address is not defined in any message
         logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
-        
 
     all_traffic_observations: List[SingleAirtrafficObservation] = []
     for icao_address in latest_observations:
         observation = latest_observations[icao_address]
-        observation_metadata = json.loads(observation['metadata'])
+        observation_metadata = json.loads(observation["metadata"])
         so = SingleAirtrafficObservation(
             lat_dd=observation["latitude_dd"],
             lon_dd=observation["longitude_dd"],
@@ -294,9 +293,9 @@ def start_opensky_feed(request):
     if not view_port_ops.check_view_port(view_port_coords=view_port):
         view_port_error = {"message": "An incorrect view port bbox was provided"}
         return JsonResponse(view_port_error, status=400, content_type="application/json")
-    
+
     sesion_id = uuid.uuid4()
-    start_opensky_network_stream.delay(view_port=json.dumps(view_port), sesion_id=str(sesion_id))
+    start_opensky_network_stream.delay(view_port=json.dumps(view_port), session_id=str(sesion_id))
     return JsonResponse({"message": "Openskies Network stream started"}, status=200, content_type="application/json")
 
 
