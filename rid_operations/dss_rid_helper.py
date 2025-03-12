@@ -18,6 +18,7 @@ from dotenv import find_dotenv, load_dotenv
 from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
 from common.data_definitions import RESPONSE_CONTENT_TYPE
+from common.database_operations import FlightBlenderDatabaseWriter
 from rid_operations.rid_utils import RIDTime, SubscriptionResponse
 
 from .rid_utils import (
@@ -292,21 +293,16 @@ class RemoteIDOperations:
                     "version": new_subscription_version,
                 }
 
-                subscription_id_flights = "all_uss_flights:" + new_subscription_id
-
-                self.r.hmset(subscription_id_flights, flights_dict)
-                # expire keys in fifteen seconds
-                self.r.expire(name=subscription_id_flights, time=subscription_seconds_timedelta)
-
-                sub_id = "sub-" + request_uuid
-
-                self.r.set(sub_id, view)
-                self.r.expire(name=sub_id, time=subscription_seconds_timedelta)
-
                 view_hash = int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
-                view_sub = "view_sub-" + str(view_hash)
-                self.r.set(view_sub, 1)
-                self.r.expire(name=view_sub, time=subscription_seconds_timedelta)
+
+                my_database_writer = FlightBlenderDatabaseWriter()
+                my_database_writer.create_rid_subscription_record(
+                    record_id=request_uuid,
+                    view_hash=view_hash,
+                    end_datetime=fifteen_seconds_from_now.isoformat(),
+                    view=view,
+                    flights_dict=json.dumps(flights_dict),
+                )
 
                 return subscription_response
 

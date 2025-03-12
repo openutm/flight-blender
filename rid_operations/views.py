@@ -85,12 +85,11 @@ class SubscriptionHelper:
         self.my_rid_output_helper = RIDOutputHelper()
 
     def check_subscription_exists(self, view) -> bool:
-        r = get_redis()
-        subscription_found = 0
+        my_database_reader = FlightBlenderDatabaseReader()
         view_hash = int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
-        view_sub = "view_sub-" + str(view_hash)
-        subscription_found = r.exists(view_sub)
-        return bool(subscription_found)
+        subscription_found = my_database_reader.check_rid_subscription_record_by_view_hash_exists(view_hash=view_hash)
+
+        return subscription_found
 
     def create_new_subscription(self, request_id, view: str, vertex_list: list):
         subscription_time_delta = 15
@@ -193,15 +192,16 @@ def get_rid_data(request, subscription_id):
             mimetype=RESPONSE_CONTENT_TYPE,
         )
 
-    r = get_redis()
+    my_database_reader = FlightBlenderDatabaseReader()
     flights_dict = {}
     # Get the flights URL from the DSS and put it in
     # reasonably we won't have more than 500 subscriptions active
-    sub_to_check = "sub-" + subscription_id
+    subscription_record_exists = my_database_reader.check_rid_subscription_record_by_id_exists(record_id=subscription_id)
 
-    if r.exists(sub_to_check):
-        stored_subscription_details = "all_uss_flights:" + subscription_id
-        flights_dict = r.get(stored_subscription_details)
+    if subscription_record_exists:
+        subscription_record = my_database_reader.get_rid_subscription_record_by_id(record_id=subscription_id)
+        flights_dict = json.loads(subscription_record.flight_details)
+
         logger.info("Sleeping 2 seconds..")
         time.sleep(2)
         # run_ussp_polling_for_rid.delay()
@@ -227,35 +227,32 @@ def get_rid_data(request, subscription_id):
 def dss_isa_callback(request, subscription_id):
     """This is the call back end point that other USSes in the DSS network call once a subscription is updated"""
     service_areas = request.get("service_area", 0)
-
-    try:
-        assert service_areas != 0
-        r = get_redis()
-        # Get the flights URL from the DSS and put it in the flights_url
-        flights_key = "all_uss_flights:" + subscription_id
-        subscription_view_key = "sub-" + subscription_id
-        flights_dict = r.hgetall(flights_key)
-        subscription_view = r.get(subscription_view_key)
-
-        all_flights_url = flights_dict["all_flights_url"]
-        logger.info(all_flights_url)
-        for new_flight in service_areas:
-            all_flights_url += new_flight["flights_url"] + "?view=" + subscription_view + " "
-
-        flights_dict["all_uss_flights"] = all_flights_url
-        r.hmset(flights_key, flights_dict)
-        r.expire(name=flights_key, time=30)  # if a AOI is updated then keep the subscription active for 30 seconds
-
-    except AssertionError:
+    if not service_areas:
         return HttpResponse(
             "Incorrect data in the POST URL",
             status=400,
             content_type=RESPONSE_CONTENT_TYPE,
         )
 
-    else:
-        # All OK return a empty response
-        return HttpResponse(status=204, content_type=RESPONSE_CONTENT_TYPE)
+    my_database_reader = FlightBlenderDatabaseReader()
+    subscription_record = my_database_reader.get_rid_subscription_record_by_id(record_id=subscription_id)
+    subscription_view = subscription_record.view
+    flights_dict = json.loads(subscription_record.flight_details)
+
+    all_flights_url = flights_dict["all_flights_url"]
+    logger.info(all_flights_url)
+    for new_flight in service_areas:
+        all_flights_url += new_flight["flights_url"] + "?view=" + subscription_view + " "
+
+    flights_dict["all_flights_url"] = all_flights_url
+    # Update flight details in the database
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer.update_flight_details_in_rid_subscription_record(
+        subscription_record=subscription_record, flights_dict=json.dumps(flights_dict)
+    )
+
+    # All OK return a empty response
+    return HttpResponse(status=204, content_type=RESPONSE_CONTENT_TYPE)
 
 
 @api_view(["GET"])
