@@ -1,11 +1,14 @@
 import json
+from dataclasses import asdict
 from itertools import zip_longest
 
 from dotenv import find_dotenv, load_dotenv
 
 from auth_helper.common import get_walrus_database
-from .data_definitions import Observation
-from dataclasses import asdict
+from common.database_operations import FlightBlenderDatabaseReader
+
+from .data_definitions import FlightObeservationSchema, Observation
+
 load_dotenv(find_dotenv())
 
 
@@ -13,6 +16,7 @@ load_dotenv(find_dotenv())
 def batcher(iterable, n):
     args = [iter(iterable)] * n
     return zip_longest(*args)
+
 
 class StreamHelperOps:
     """
@@ -90,6 +94,7 @@ class StreamHelperOps:
 
         return cg
 
+
 class ObservationReadOperations:
     """
     A class to handle reading operations for observations.
@@ -113,7 +118,41 @@ class ObservationReadOperations:
         - "metadata": The metadata extracted from the message data and parsed as JSON.
     """
 
-    def get_observations(self, cg)->list[Observation]:
+    def get_flight_observations(self, session_id: str, after_datetime: str) -> list[FlightObeservationSchema]:
+        """
+        Retrieves and processes observations from the given consumer group.
+        Args:
+            cg: The consumer group object from which to read messages.
+        Returns:
+            A list of dictionaries, each containing the following keys:
+            - "timestamp": The timestamp of the message.
+            - "seq": The sequence number of the message.
+            - "msg_data": The data of the message.
+            - "address": The ICAO address extracted from the message data.
+            - "metadata": The metadata extracted and parsed from the message data.
+        """
+        my_database_reader = FlightBlenderDatabaseReader()
+
+        pending_messages = []
+        all_flight_observations = my_database_reader.get_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
+        for message in all_flight_observations:
+            observation = FlightObeservationSchema(
+                id=message.sequence,
+                session_id=message["session_id"],
+                latitude_dd=message["latitude_dd"],
+                longitude_dd=message["longitude_dd"],
+                altitude_mm=message["altitude_mm"],
+                traffic_source=message["traffic_source"],
+                source_type=message["source_type"],
+                icao_address=message["icao_address"],
+                created_at=message["created_at"],
+                updated_at=message["updated_at"],
+                metadata=json.loads(message["metadata"]),
+            )
+            pending_messages.append(asdict(observation))
+        return pending_messages
+
+    def get_observations(self, cg) -> list[Observation]:
         """
         Retrieves and processes observations from the given consumer group.
         Args:

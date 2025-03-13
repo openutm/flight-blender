@@ -8,7 +8,7 @@ from typing import List, Union
 from uuid import UUID, uuid4
 
 import arrow
-from django.db.models import QuerySet
+from django.db.models import QuerySet, ValuesQuerySet
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
 
@@ -36,12 +36,15 @@ class FlightBlenderDatabaseReader:
     A file to unify read and write operations to the database. Eventually caching etc. can be added via this file
     """
 
-    def get_flight_observations(self, after_datetime: arrow.arrow.Arrow) -> Union[None, List[QuerySet]]:
-        try:
-            observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
-            return observations
-        except FlightObeservation.DoesNotExist:
-            return None
+    def get_flight_observations(self, after_datetime: arrow.arrow.Arrow) -> ValuesQuerySet:
+        observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
+        return observations
+
+    def get_flight_observations_by_session(self, session_id: str, after_datetime: arrow.arrow.Arrow) -> ValuesQuerySet:
+        observations = (
+            FlightObeservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
+        )
+        return observations
 
     def get_all_flight_declarations(self) -> Union[None, List[FlightDeclaration]]:
         flight_declarations = FlightDeclaration.objects.all()
