@@ -68,6 +68,7 @@ class SingleRIDObservation:
     source_type: int
     icao_address: str
     metadata: Optional[dict]
+    session_id: Optional[str] = ""
 
 
 @dataclass

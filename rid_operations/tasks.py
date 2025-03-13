@@ -273,6 +273,7 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
             icao_address = flight_details_id
 
             so = SingleRIDObservation(
+                session_id=operation_id,
                 lat_dd=lat_dd,
                 lon_dd=lon_dd,
                 altitude_mm=altitude_mm,
@@ -459,6 +460,7 @@ def stream_rid_test_data(requested_flights, test_id):
             r.set(last_observation_timestamp_key, query_time.int_timestamp)
 
             so = SingleRIDObservation(
+                session_id=test_id,
                 lat_dd=lat_dd,
                 lon_dd=lon_dd,
                 altitude_mm=altitude_mm,

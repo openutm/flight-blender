@@ -210,14 +210,16 @@ def get_rid_data(request, subscription_id):
         time.sleep(2)
 
     if bool(flights_dict):
-        all_flights_rid_data = []
-        stream_ops = flight_stream_helper.StreamHelperOps()
-        push_cg = stream_ops.push_cg()
+        # Get the last observation of the flight telemetry
         obs_helper = flight_stream_helper.ObservationReadOperations()
-        all_flights_rid_data = obs_helper.get_observations(push_cg)
+        all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=subscription_id)
+        # Get the latest telemetry
 
+        if not all_flights_telemetry_data:
+            logger.error("No telemetry data found for session_id {subscription_id}".format(subscription_id=subscription_id))
+            return
         return HttpResponse(
-            json.dumps(all_flights_rid_data),
+            json.dumps(all_flights_telemetry_data),
             status=200,
             content_type=RESPONSE_CONTENT_TYPE,
         )
@@ -467,10 +469,6 @@ def delete_test(request, test_id, version):
 
     # Stop streaming if it exists for this test
     r.set("stop_streaming_" + test_id_str, "1")
-
-    stream_ops = flight_stream_helper.StreamHelperOps()
-    pull_cg = stream_ops.get_pull_cg()
-    all_streams_messages = pull_cg.read()
 
     return JsonResponse({}, status=200)
 
