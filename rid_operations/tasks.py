@@ -221,21 +221,15 @@ def run_ussp_polling_for_rid():
         logger.info("Setting Polling Lock..")
 
         r.set(async_polling_lock, "1")
-        r.expire(async_polling_lock, timedelta(minutes=5))
+        r.expire(async_polling_lock, timedelta(minutes=1.5))
 
         for k in range(120):
             poll_uss_for_flights_async.apply_async(expires=2)
-            time.sleep(2)
+            time.sleep(0.5)
 
         r.delete(async_polling_lock)
 
     logger.debug("Finishing USSP polling..")
-
-
-@app.task(name="create_rid_subscription_record")
-def create_rid_subscription_record(record_id: str, end_datetime: str, view: str):
-    my_database_writer = FlightBlenderDatabaseWriter()
-    my_database_writer.create_rid_subscription_record(record_id=record_id, end_datetime=end_datetime, view=view)
 
 
 @app.task(name="poll_uss_for_flights_async")
@@ -244,17 +238,15 @@ def poll_uss_for_flights_async():
 
     my_database_reader = FlightBlenderDatabaseReader()
 
-    stream_ops = flight_stream_helper.StreamHelperOps()
-    pull_cg = stream_ops.get_pull_cg()
-    all_observations = pull_cg.all_observations
-
     flights_dict = {}
     all_subscription_records = my_database_reader.get_all_rid_simulated_subscription_records()
+    logger.info("Polling USSP for RID data..")
 
     for subscription_record in all_subscription_records:
-        subscription_id = str(subscription_record.id)
-        flights_dict = subscription_record.flight_details
-        myDSSSubscriber.query_uss_for_rid(flights_dict, all_observations, subscription_id)
+        subscription_id = str(subscription_record.subscription_id)
+        view = subscription_record.view
+        flight_details = subscription_record.flight_details
+        myDSSSubscriber.query_uss_for_rid(flight_details=flight_details, subscription_id=subscription_id, view=view)
 
 
 @app.task(name="stream_rid_telemetry_data")

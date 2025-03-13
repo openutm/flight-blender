@@ -103,6 +103,17 @@ class SubscriberToNotify:
 
 
 @dataclass
+class RIDSubscription:
+    id: str
+    uss_base_url: str
+    owner: str
+    notification_index: int
+    time_end: RIDTime
+    time_start: RIDTime
+    version: str
+
+
+@dataclass
 class ISACreationRequest:
     """A object to hold details of a request that indicates the DSS"""
 
@@ -310,3 +321,10 @@ class RIDFlightResponse:
 class SingleObservationMetadata:
     details_response: RIDTestDetailsResponse
     telemetry: RIDAircraftState
+
+
+@dataclass
+class RIDFlightsRecord:
+    service_areas: List[IdentificationServiceArea]
+    subscription: RIDSubscription
+    extents: Optional[RIDVolume4D] = None

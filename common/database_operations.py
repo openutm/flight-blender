@@ -18,7 +18,7 @@ from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
 from notification_operations.models import OperatorRIDNotification
 from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
-from rid_operations.models import RIDDSSSubscription
+from rid_operations.models import ISASubscription
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
 from scd_operations.scd_data_definitions import PartialCreateOperationalIntentReference
 
@@ -176,20 +176,20 @@ class FlightBlenderDatabaseReader:
         except OperatorRIDNotification.DoesNotExist:
             return None
 
-    def check_rid_subscription_record_by_view_hash_exists(self, view_hash: str) -> bool:
-        rid_subscription_exists = RIDDSSSubscription.objects.filter(view_hash=view_hash).exists()
+    def check_rid_subscription_record_by_view_hash_exists(self, view_hash: int) -> bool:
+        rid_subscription_exists = ISASubscription.objects.filter(view_hash=view_hash).exists()
         return rid_subscription_exists
 
-    def check_rid_subscription_record_by_id_exists(self, record_id: str) -> bool:
-        rid_subscription_exists = RIDDSSSubscription.objects.filter(id=record_id).exists()
-        return rid_subscription_exists
+    def check_rid_subscription_record_by_subscription_id_exists(self, subscription_id: str) -> bool:
+        rid_subscription_record_exists = ISASubscription.objects.filter(subscription_id=subscription_id).exists()
+        return rid_subscription_record_exists
 
-    def get_rid_subscription_record_by_id(self, record_id: str) -> RIDDSSSubscription:
-        rid_subscription_exists = RIDDSSSubscription.objects.get(id=record_id)
-        return rid_subscription_exists
+    def get_rid_subscription_record_by_subscription_id(self, subscription_id: str) -> ISASubscription:
+        rid_subscription_record = ISASubscription.objects.get(subscription_id=subscription_id)
+        return rid_subscription_record
 
-    def get_all_rid_simulated_subscription_records(self) -> QuerySet[RIDDSSSubscription]:
-        return RIDDSSSubscription.objects.filter(simulated=True)
+    def get_all_rid_simulated_subscription_records(self) -> QuerySet[ISASubscription]:
+        return ISASubscription.objects.filter(is_simulated=True)
 
 
 class FlightBlenderDatabaseWriter:
@@ -395,27 +395,35 @@ class FlightBlenderDatabaseWriter:
     def remove_rid_stream_monitoring_periodic_task(self, rid_stream_monitoring_task: TaskScheduler):
         rid_stream_monitoring_task.terminate()
 
-    def create_rid_subscription_record(self, record_id: str, view: str, view_hash: int, end_datetime: str, flights_dict: str) -> bool:
+    def create_rid_subscription_record(
+        self, subscription_id: str, record_id: str, view: str, view_hash: int, end_datetime: str, flights_dict: str, is_simulated: bool
+    ) -> bool:
         try:
-            rid_subscription = RIDDSSSubscription(
-                id=record_id, view=view, view_hash=view_hash, end_datetime=end_datetime, flight_details=flights_dict
+            rid_subscription = ISASubscription(
+                id=record_id,
+                subscription_id=subscription_id,
+                view=view,
+                view_hash=view_hash,
+                end_datetime=end_datetime,
+                flight_details=flights_dict,
+                is_simulated=is_simulated,
             )
             rid_subscription.save()
             return True
         except IntegrityError:
             return False
 
-    def update_flight_details_in_rid_subscription_record(self, subscription_record: RIDDSSSubscription, flights_dict: str) -> bool:
+    def update_flight_details_in_rid_subscription_record(self, existing_subscription_record: ISASubscription, flights_dict: str) -> bool:
         try:
-            subscription_record.flight_details = flights_dict
-            subscription_record.save()
+            existing_subscription_record.flight_details = flights_dict
+            existing_subscription_record.save()
             return True
         except Exception:
             return False
 
     def delete_all_simulated_rid_subscription_records(self) -> bool:
         try:
-            RIDDSSSubscription.objects.filter(is_simulated=True).delete()
+            ISASubscription.objects.filter(is_simulated=True).delete()
             return True
         except Exception:
             return False

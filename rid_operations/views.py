@@ -11,6 +11,7 @@ from uuid import UUID
 
 import arrow
 import shapely.geometry
+from dacite import from_dict
 from django.http import HttpResponse, JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from implicitdict import ImplicitDict
@@ -35,6 +36,7 @@ from common.utils import EnhancedJSONEncoder
 from flight_feed_operations import flight_stream_helper
 from uss_operations.uss_data_definitions import (
     FlightDetailsNotFoundMessage,
+    GenericErrorResponseMessage,
     OperatorDetailsSuccessResponse,
 )
 
@@ -44,12 +46,18 @@ from .rid_utils import (
     CreateSubscriptionResponse,
     CreateTestResponse,
     HTTPErrorResponse,
+    IdentificationServiceArea,
     Position,
     RIDCapabilitiesResponse,
     RIDDisplayDataResponse,
     RIDFlight,
+    RIDFlightsRecord,
     RIDOperatorDetails,
     RIDPositions,
+    RIDSubscription,
+    RIDVolume4D,
+    SubscriptionResponse,
+    SubscriptionState,
 )
 from .tasks import (
     run_ussp_polling_for_rid,
@@ -91,14 +99,11 @@ class SubscriptionHelper:
 
         return subscription_found
 
-    def create_new_subscription(self, request_id, view: str, vertex_list: list):
+    def create_new_subscription(self, request_id, view: str, vertex_list: list, is_simulated: bool) -> SubscriptionResponse:
         subscription_time_delta = 15
         my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
         subscription_r = my_dss_subscriber.create_dss_subscription(
-            vertex_list=vertex_list,
-            view=view,
-            request_uuid=request_id,
-            subscription_time_delta=subscription_time_delta,
+            vertex_list=vertex_list, view=view, request_uuid=request_id, subscription_time_delta=subscription_time_delta, is_simulated=is_simulated
         )
         subscription_response = self.my_rid_output_helper.make_json_compatible(subscription_r)
         return subscription_response
@@ -152,7 +157,7 @@ def create_dss_subscription(request, *args, **kwargs):
     request_id = str(uuid.uuid4())
 
     my_subscription_helper = SubscriptionHelper()
-    subscription_r = my_subscription_helper.create_new_subscription(request_id=request_id, vertex_list=vertex_list, view=view)
+    subscription_r = my_subscription_helper.create_new_subscription(request_id=request_id, vertex_list=vertex_list, view=view, is_simulated=False)
 
     if subscription_r.created:
         m = CreateSubscriptionResponse(
@@ -181,7 +186,7 @@ def create_dss_subscription(request, *args, **kwargs):
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_rid_data(request, subscription_id):
-    """This is the GET endpoint for remote id data given a DSS subscription id. Flight Blender will store flight URLs and every time the data is queried"""
+    """This is the GET endpoint for remote id data given a DSS subscription id. Flight Blender will store flight URLs and every time the data is queried, it is mainly used by Flight Spotlight"""
 
     try:
         UUID(subscription_id, version=4)
@@ -196,15 +201,13 @@ def get_rid_data(request, subscription_id):
     flights_dict = {}
     # Get the flights URL from the DSS and put it in
     # reasonably we won't have more than 500 subscriptions active
-    subscription_record_exists = my_database_reader.check_rid_subscription_record_by_id_exists(record_id=subscription_id)
+    subscription_record_exists = my_database_reader.check_rid_subscription_record_by_subscription_id_exists(subscription_id=subscription_id)
 
     if subscription_record_exists:
-        subscription_record = my_database_reader.get_rid_subscription_record_by_id(record_id=subscription_id)
+        subscription_record = my_database_reader.get_rid_subscription_record_by_subscription_id(subscription_id=subscription_id)
         flights_dict = json.loads(subscription_record.flight_details)
-
         logger.info("Sleeping 2 seconds..")
         time.sleep(2)
-        # run_ussp_polling_for_rid.delay()
 
     if bool(flights_dict):
         all_flights_rid_data = []
@@ -224,34 +227,53 @@ def get_rid_data(request, subscription_id):
 
 @api_view(["POST"])
 @requires_scopes(["dss.write.identification_service_areas"])
-def dss_isa_callback(request, subscription_id):
+def dss_isa_callback(request, isa_id):
     """This is the call back end point that other USSes in the DSS network call once a subscription is updated"""
-    service_areas = request.get("service_area", 0)
-    if not service_areas:
-        return HttpResponse(
-            "Incorrect data in the POST URL",
-            status=400,
-            content_type=RESPONSE_CONTENT_TYPE,
-        )
 
-    my_database_reader = FlightBlenderDatabaseReader()
-    subscription_record = my_database_reader.get_rid_subscription_record_by_id(record_id=subscription_id)
-    subscription_view = subscription_record.view
-    flights_dict = json.loads(subscription_record.flight_details)
+    _service_area = request.data["service_area"] if "service_area" in request.data else None
 
-    all_flights_url = flights_dict["all_flights_url"]
-    logger.info(all_flights_url)
-    for new_flight in service_areas:
-        all_flights_url += new_flight["flights_url"] + "?view=" + subscription_view + " "
+    if _service_area:
+        updated_service_area = from_dict(data_class=IdentificationServiceArea, data=request.data["service_area"])
+    else:
+        updated_service_area = None
 
-    flights_dict["all_flights_url"] = all_flights_url
-    # Update flight details in the database
-    my_database_writer = FlightBlenderDatabaseWriter()
-    my_database_writer.update_flight_details_in_rid_subscription_record(
-        subscription_record=subscription_record, flights_dict=json.dumps(flights_dict)
-    )
+    _subscriptions = request.data["subscriptions"]
 
-    # All OK return a empty response
+    for _subscription in _subscriptions:
+        subscription = from_dict(data_class=SubscriptionState, data=_subscription)
+
+        if "extents" in request.data:
+            extents = from_dict(data_class=RIDVolume4D, data=request.data["extents"])
+        else:
+            extents = None
+
+        if updated_service_area:
+            my_database_reader = FlightBlenderDatabaseReader()
+            existing_subscription_record = my_database_reader.get_rid_subscription_record_by_subscription_id(
+                subscription_id=subscription.subscription_id
+            )
+            existing_subscription_view = existing_subscription_record.view
+
+            existing_flight_details = json.loads(existing_subscription_record.flight_details)
+            subscription = from_dict(data_class=RIDSubscription, data=existing_flight_details["subscription"])
+            existing_service_areas = existing_flight_details["service_areas"]
+
+            updated_service_areas_db = []
+            for _exisiting_service_area in existing_service_areas:
+                service_area = from_dict(data_class=IdentificationServiceArea, data=_exisiting_service_area)
+                if _exisiting_service_area["id"] == isa_id:
+                    updated_service_areas_db.append(updated_service_area)
+                else:
+                    updated_service_areas_db.append(service_area)
+
+            flights_record = RIDFlightsRecord(service_areas=updated_service_areas_db, subscription=subscription, extents=extents)
+            # Update flight details in the database
+            my_database_writer = FlightBlenderDatabaseWriter()
+            my_database_writer.update_flight_details_in_rid_subscription_record(
+                existing_subscription_record=existing_subscription_record,
+                flights_dict=json.dumps(asdict(flights_record, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)})),
+            )
+
     return HttpResponse(status=204, content_type=RESPONSE_CONTENT_TYPE)
 
 
@@ -293,6 +315,7 @@ def get_display_data(request):
     # get the existing subscription id , if no subscription exists, then reject
     request_id = str(uuid.uuid4())
     my_rid_output_helper = RIDOutputHelper()
+    my_database_reader = FlightBlenderDatabaseReader()
     try:
         view = request.query_params["view"]
         view_port = [float(i) for i in view.split(",")]
@@ -306,6 +329,13 @@ def get_display_data(request):
 
     view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
 
+    view_port_diagonal = view_port_ops.get_view_port_diagonal_length_kms(view_port_coords=view_port)
+
+    logger.info("View port diagonal %s" % view_port_diagonal)
+    if (view_port_diagonal) > 7:
+        view_port_too_large_msg = GenericErrorResponseMessage(message="The requested view %s rectangle is too large" % view)
+        return JsonResponse(json.loads(json.dumps(asdict(view_port_too_large_msg))), status=413)
+
     b = shapely.geometry.box(view_port[1], view_port[0], view_port[3], view_port[2])
     co_ordinates = list(zip(*b.exterior.coords.xy))
     # Convert bounds vertex list
@@ -317,83 +347,58 @@ def get_display_data(request):
         vertex_list.append(lat_lng)
     # remove the final point
     vertex_list.pop()
+    rid_flights = []
 
     if view_port_valid:
         # stream_id = hashlib.md5(view.encode('utf-8')).hexdigest()
         # create a subscription
         my_subscription_helper = SubscriptionHelper()
         subscription_exists = my_subscription_helper.check_subscription_exists(view)
+
         if not subscription_exists:
             logger.info("Creating Subscription..")
-            subscription_response = my_subscription_helper.create_new_subscription(request_id=request_id, vertex_list=vertex_list, view=view)
+            subscription_response = my_subscription_helper.create_new_subscription(
+                request_id=request_id, vertex_list=vertex_list, view=view, is_simulated=True
+            )
             run_ussp_polling_for_rid.delay()
             logger.info("Sleeping 2 seconds..")
             time.sleep(2)
 
-            logger.debug(subscription_response)
-
-        stream_ops = flight_stream_helper.StreamHelperOps()
-        pull_cg = stream_ops.get_pull_cg()
-        all_streams_messages = pull_cg.read()
-
-        unique_flights = []
         # Keep only the latest message
-        try:
-            for message in all_streams_messages:
-                if message.data != "":
-                    unique_flights.append(
-                        {
-                            "timestamp": message.timestamp,
-                            "seq": message.sequence,
-                            "msg_data": message.data,
-                            "address": message.data["icao_address"],
-                        }
-                    )
-            # sort by date
-            unique_flights.sort(key=lambda item: item["timestamp"], reverse=True)
-            # Keep only the latest message
-            distinct_messages = {i["address"]: i for i in reversed(unique_flights)}.values()
+        distinct_messages = my_database_reader.get_active_rid_observations_for_session(session_id=request_id)
 
-        except KeyError as ke:
-            logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
-            distinct_messages = []
-        rid_flights = []
+        distinct_messages = distinct_messages if distinct_messages else []
 
-        for all_observations_messages in distinct_messages:
+        for observation_message in distinct_messages:
             all_recent_positions = []
             recent_paths = []
             try:
-                observation_data = all_observations_messages["msg_data"]
-            except KeyError as ke:
-                logger.error("Error in data in the stream %s" % ke)
-            else:
-                try:
-                    observation_metadata = observation_data["metadata"]
-                    observation_metadata_dict = json.loads(observation_metadata)
-                    recent_positions = observation_metadata_dict["recent_positions"]
+                observation_metadata = observation_message.metadata
+                observation_metadata_dict = json.loads(observation_metadata)
+                recent_positions = observation_metadata_dict["recent_positions"]
 
-                    for recent_position in recent_positions:
-                        all_recent_positions.append(
-                            Position(
-                                lat=recent_position["position"]["lat"],
-                                lng=recent_position["position"]["lng"],
-                                alt=recent_position["position"]["alt"],
-                            )
+                for recent_position in recent_positions:
+                    all_recent_positions.append(
+                        Position(
+                            lat=recent_position["position"]["lat"],
+                            lng=recent_position["position"]["lng"],
+                            alt=recent_position["position"]["alt"],
                         )
+                    )
 
-                    recent_paths.append(RIDPositions(positions=all_recent_positions))
+                recent_paths.append(RIDPositions(positions=all_recent_positions))
 
-                except KeyError as ke:
-                    logger.error("Error in metadata data in the stream %s" % ke)
+            except KeyError as ke:
+                logger.error("Error in metadata data in the stream %s" % ke)
 
             most_recent_position = Position(
-                lat=observation_data["lat_dd"],
-                lng=observation_data["lon_dd"],
-                alt=observation_data["altitude_mm"],
+                lat=observation_data.latitude_dd,
+                lng=observation_data.longitude_dd,
+                alt=observation_data.altitude_mm,
             )
 
             current_flight = RIDFlight(
-                id=observation_data["icao_address"],
+                id=observation_data.icao_address,
                 most_recent_position=most_recent_position,
                 recent_paths=recent_paths,
             )
