@@ -37,7 +37,6 @@ if ENV_FILE:
             Makes a request to the authentication service to retrieve credentials for the given audience and scope.
         """
 
-
         def __init__(self):
             self.redis = get_redis()
             self.now = datetime.now()
@@ -76,22 +75,23 @@ if ENV_FILE:
             self.redis.expire(cache_key, timedelta(minutes=58))
 
         def _get_rid_credentials(self, audience: str):
-            return self._request_credentials(audience, "rid.service_provider")
+            return self._request_credentials(audience, ["rid.service_provider", "rid.display_provider"])
 
         def _get_scd_credentials(self, audience: str):
-            return self._request_credentials(audience, "utm.strategic_coordination utm.conformance_monitoring_sa")
+            return self._request_credentials(audience, ["utm.strategic_coordination", "utm.conformance_monitoring_sa"])
 
         def _get_cmsa_credentials(self, audience: str):
-            return self._request_credentials(audience, "utm.conformance_monitoring_sa")
+            return self._request_credentials(audience, ["utm.conformance_monitoring_sa"])
 
-        def _request_credentials(self, audience: str, scope: str):
+        def _request_credentials(self, audience: str, scopes: list[str]):
             issuer = audience if audience == "localhost" else None
+            scopes_str = " ".join(scopes)
 
             if audience in ["localhost", "host.docker.internal"]:
                 payload = {
                     "grant_type": "client_credentials",
                     "intended_audience": env.get("DSS_SELF_AUDIENCE"),
-                    "scope": scope,
+                    "scope": scopes_str,
                     "issuer": issuer,
                 }
             else:
@@ -100,7 +100,7 @@ if ENV_FILE:
                     "client_id": env.get("AUTH_DSS_CLIENT_ID"),
                     "client_secret": env.get("AUTH_DSS_CLIENT_SECRET"),
                     "intended_audience": audience,
-                    "scope": scope,
+                    "scope": scopes_str,
                 }
 
             url = env.get("DSS_AUTH_URL") + env.get("DSS_AUTH_TOKEN_ENDPOINT")

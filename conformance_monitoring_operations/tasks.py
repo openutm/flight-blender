@@ -20,7 +20,7 @@ logger = logging.getLogger("django")
 
 # This method conducts flight conformance checks as a async tasks
 @app.task(name="check_flight_conformance")
-def check_flight_conformance(flight_declaration_id: str,session_id:str, dry_run: str = "1"):
+def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_run: str = "1"):
     # This method checks the conformance status for ongoing operations and sends notifications / via the notifications channel
 
     dry_run = True if dry_run == "1" else False
@@ -49,26 +49,23 @@ def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: s
     dry_run = True if dry_run == "1" else False
     my_conformance_ops = FlightBlenderConformanceEngine()
     # Get Telemetry
-    stream_ops = flight_stream_helper.StreamHelperOps()
-    read_cg = stream_ops.get_read_cg()
     obs_helper = flight_stream_helper.ObservationReadOperations()
-    all_flights_rid_data = obs_helper.get_observations(read_cg)
+    all_flights_rid_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
     # Get the latest telemetry
 
     if not all_flights_rid_data:
         logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
         return
 
-    all_flights_rid_data.sort(key=lambda item: item["timestamp"], reverse=True)
-    distinct_messages = {i["address"]: i for i in reversed(all_flights_rid_data)}.values()
+    distinct_messages = all_flights_rid_data if all_flights_rid_data else []
 
-    for message in list(distinct_messages):
-        metadata = message["metadata"]
+    for message in distinct_messages:
+        metadata = message.metadata
         if metadata["flight_details"]["id"] == flight_declaration_id:
-            lat_dd = message["msg_data"]["lat_dd"]
-            lon_dd = message["msg_data"]["lon_dd"]
-            altitude_m_wgs84 = message["msg_data"]["altitude_mm"]
-            aircraft_id = message["address"]
+            lat_dd = message.latitude_dd
+            lon_dd = message.longitude_dd
+            altitude_m_wgs84 = message.altitude_mm
+            aircraft_id = message.icao_address
 
             conformant_via_telemetry = my_conformance_ops.is_operation_conformant_via_telemetry(
                 flight_declaration_id=flight_declaration_id,

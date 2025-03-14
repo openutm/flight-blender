@@ -23,6 +23,23 @@ class SingleObservationMetadata:
 
 
 @dataclass
+class FlightObeservationSchema:
+    id: str
+    session_id: str
+    latitude_dd: float
+    longitude_dd: float
+    altitude_mm: float
+    traffic_source: int
+    source_type: int
+    icao_address: str
+
+    created_at: str
+    updated_at: str
+
+    metadata: dict
+
+
+@dataclass
 class Observation:
     timestamp: str
     seq: int
@@ -51,6 +68,7 @@ class SingleRIDObservation:
     source_type: int
     icao_address: str
     metadata: Optional[dict]
+    session_id: Optional[str] = ""
 
 
 @dataclass

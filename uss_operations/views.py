@@ -284,45 +284,22 @@ def get_uss_flights(request):
 
     # summary_information_only = True if view_port_area > 22500 else False
 
-    stream_ops = flight_stream_helper.StreamHelperOps()
-    pull_cg = stream_ops.get_pull_cg()
-    all_streams_messages = pull_cg.read()
-    unique_flights = []
     distinct_messages = []
     # Keep only the latest message
 
-    for message in all_streams_messages:
-        message_exist = message.data.get("icao_address", None) or None
-        if message_exist:
-            lat = float(message.data["lat_dd"])
-            lng = float(message.data["lon_dd"])
-            point = Point(lat, lng)
-            point_in_polygon = view_box.contains(point)
-            # logger.debug(point_in_polygon)
-            if point_in_polygon:
-                unique_flights.append(
-                    {
-                        "timestamp": message.timestamp,
-                        "seq": message.sequence,
-                        "msg_data": message.data,
-                        "address": message.data["icao_address"],
-                    }
-                )
-            else:
-                logger.info("Point not in polygon %s " % view_box)
-    # sort by date
-    unique_flights.sort(key=lambda item: item["timestamp"], reverse=True)
+    # Get the last observation of the flight telemetry
+    obs_helper = flight_stream_helper.ObservationReadOperations()
+    all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
+    # Get the latest telemetry
+
+    if not all_flights_telemetry_data:
+        logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
+        return
+
+    distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []
 
     now = arrow.now().isoformat()
-    if unique_flights:
-        # Keep only the latest message
-        distinct_messages = {i["address"]: i for i in reversed(unique_flights)}.values()
-
-        # except KeyError as ke:
-        #     logger.error("Error in sorting distinct messages, key %s name not found" % ke)
-        #     error_msg = GenericErrorResponseMessage(message="Error in retrieving flight data")
-        #     return JsonResponse(json.loads(json.dumps(asdict(error_msg))), status=500)
-
+    if distinct_messages:
         for all_observations_messages in distinct_messages:
             # if summary_information_only:
             #     summary = SummaryFlightsOnly(number_of_flights=len(distinct_messages), timestamp=now)

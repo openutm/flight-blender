@@ -1,13 +1,13 @@
 import logging
 from os import environ as env
+from typing import Optional
 
 import redis
 from dotenv import find_dotenv, load_dotenv
-from walrus import Database as WalrusDatabase
-from typing import Optional
 
 load_dotenv(find_dotenv())
 logger = logging.getLogger("django")
+
 
 def get_redis() -> redis.Redis:
     """
@@ -37,23 +37,6 @@ def get_redis() -> redis.Redis:
         )
 
 
-def get_walrus_database() -> WalrusDatabase:
-    """
-    Get a Walrus Database instance with the configured connection parameters.
-
-    Returns:
-        Database: A Walrus Database instance.
-    """
-    redis_host: str = env.get("REDIS_HOST", "redis")
-    redis_port: int = int(env.get("REDIS_PORT", 6379))
-    redis_password: Optional[str] = env.get("REDIS_PASSWORD", None)
-
-    if redis_password:
-        walrus_db = WalrusDatabase(host=redis_host, port=redis_port, password=redis_password)
-    else:
-        walrus_db = WalrusDatabase(host=redis_host, port=redis_port)
-    return walrus_db
-
 class RedisHelper:
     def __init__(self):
         """
@@ -66,7 +49,7 @@ class RedisHelper:
     def _get_redis_instance(self) -> redis.Redis:
         """
         Get a Redis instance with the configured connection parameters.
-        
+
         Returns:
             redis.Redis: A Redis instance.
         """

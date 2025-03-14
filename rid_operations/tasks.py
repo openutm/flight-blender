@@ -12,7 +12,10 @@ from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import MultiPoint, Point, box
 
 from auth_helper.common import get_redis
-from common.database_operations import FlightBlenderDatabaseWriter
+from common.database_operations import (
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
+)
 from flight_blender.celery import app
 from flight_feed_operations import flight_stream_helper
 from flight_feed_operations.data_definitions import SingleRIDObservation
@@ -218,11 +221,11 @@ def run_ussp_polling_for_rid():
         logger.info("Setting Polling Lock..")
 
         r.set(async_polling_lock, "1")
-        r.expire(async_polling_lock, timedelta(minutes=5))
+        r.expire(async_polling_lock, timedelta(minutes=1.5))
 
         for k in range(120):
             poll_uss_for_flights_async.apply_async(expires=2)
-            time.sleep(2)
+            time.sleep(0.5)
 
         r.delete(async_polling_lock)
 
@@ -233,25 +236,17 @@ def run_ussp_polling_for_rid():
 def poll_uss_for_flights_async():
     myDSSSubscriber = dss_rid_helper.RemoteIDOperations()
 
-    stream_ops = flight_stream_helper.StreamHelperOps()
-    pull_cg = stream_ops.get_pull_cg()
-    all_observations = pull_cg.all_observations
+    my_database_reader = FlightBlenderDatabaseReader()
 
-    # TODO: Get existing flight details from subscription
-    r = get_redis()
     flights_dict = {}
-    # Get the flights URL from the DSS and put it in
-    for keybatch in flight_stream_helper.batcher(
-        r.scan_iter("all_uss_flights:*"), 100
-    ):  # reasonably we won't have more than 100 subscriptions active
-        key_batch_set = set(keybatch)
-        for key in key_batch_set:
-            if key:
-                flights_dict = r.hgetall(key)
-                logger.debug("Flights Dict %s" % flights_dict)
-                if bool(flights_dict):
-                    subscription_id = key.split(":")[1]
-                    myDSSSubscriber.query_uss_for_rid(flights_dict, all_observations, subscription_id)
+    all_subscription_records = my_database_reader.get_all_rid_simulated_subscription_records()
+    logger.info("Polling USSP for RID data..")
+
+    for subscription_record in all_subscription_records:
+        subscription_id = str(subscription_record.subscription_id)
+        view = subscription_record.view
+        flight_details = subscription_record.flight_details
+        myDSSSubscriber.query_uss_for_rid(flight_details=flight_details, subscription_id=subscription_id, view=view)
 
 
 @app.task(name="stream_rid_telemetry_data")
@@ -278,6 +273,7 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
             icao_address = flight_details_id
 
             so = SingleRIDObservation(
+                session_id=operation_id,
                 lat_dd=lat_dd,
                 lon_dd=lon_dd,
                 altitude_mm=altitude_mm,
@@ -464,6 +460,7 @@ def stream_rid_test_data(requested_flights, test_id):
             r.set(last_observation_timestamp_key, query_time.int_timestamp)
 
             so = SingleRIDObservation(
+                session_id=test_id,
                 lat_dd=lat_dd,
                 lon_dd=lon_dd,
                 altitude_mm=altitude_mm,
@@ -511,7 +508,6 @@ def write_operator_rid_notification(message: str, session_id: str):
 @app.task(name="check_rid_stream_conformance")
 def check_rid_stream_conformance(session_id: str, flight_declaration_id=None, dry_run: str = "1"):
     # This method conducts flight conformance checks as a async task
-
 
     my_rid_stream_checker = FlightTelemetryRIDEngine(session_id=session_id)
 

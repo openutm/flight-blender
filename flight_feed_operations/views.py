@@ -217,26 +217,14 @@ def get_air_traffic(request, session_id):
             content_type="application/json",
         )
     try:
-        my_database_reader = FlightBlenderDatabaseReader()
-        r = get_redis()
-        key = "last_reading_for_{session_id}".format(session_id=session_id)
-        if r.exists(key):
-            last_reading_time = r.get(key)
-            after_datetime = arrow.get(last_reading_time)
-        else:
-            now = arrow.now()
-            one_second_before_now = now.shift(seconds=-1)
-            after_datetime = one_second_before_now
-
-        r.set(key, arrow.now().isoformat())
-        r.expire(key, 300)
-        all_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
+        my_observation_reader = flight_stream_helper.ObservationReadOperations()
+        all_observations = my_observation_reader.get_flight_observations(session_id=session_id)
 
         # Create a dictionary to store the latest observation for each icao_address
         latest_observations = {}
         for observation in all_observations:
-            icao_address = observation["icao_address"]
-            if icao_address not in latest_observations or observation["timestamp"] > latest_observations[icao_address]["timestamp"]:
+            icao_address = observation.icao_address
+            if icao_address not in latest_observations or observation.created_at > latest_observations[icao_address]["timestamp"]:
                 latest_observations["icao_address"] = observation
 
         logger.info("Distinct messages: %s" % len(latest_observations))
@@ -249,11 +237,11 @@ def get_air_traffic(request, session_id):
         observation = latest_observations[icao_address]
         observation_metadata = json.loads(observation["metadata"])
         so = SingleAirtrafficObservation(
-            lat_dd=observation["latitude_dd"],
-            lon_dd=observation["longitude_dd"],
-            altitude_mm=observation["altitude_mm"],
-            traffic_source=observation["traffic_source"],
-            source_type=observation["source_type"],
+            lat_dd=observation.latitude_dd,
+            lon_dd=observation.longitude_dd,
+            altitude_mm=observation.altitude_mm,
+            traffic_source=observation.traffic_source,
+            source_type=observation.source_type,
             icao_address=icao_address,
             metadata=observation_metadata,
         )

@@ -24,7 +24,7 @@ urlpatterns = [
     # USSP RID views
     ### This is the call back url to DSS
     path(
-        "uss/identification_service_areas/<uuid:subscription_id>",
+        "uss/identification_service_areas/<uuid:isa_id>",
         rid_views.dss_isa_callback,
     ),
     # Get RID data (PULL)

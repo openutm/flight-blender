@@ -13,19 +13,30 @@ from typing import List, Union
 
 import requests
 import tldextract
+from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 
 from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
+from common.auth_token_audience_helper import generate_audience_from_base_url
 from common.data_definitions import RESPONSE_CONTENT_TYPE
-from rid_operations.rid_utils import RIDTime, SubscriptionResponse
+from common.database_operations import FlightBlenderDatabaseWriter
+from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 
 from .rid_utils import (
     IdentificationServiceArea,
     ISACreationRequest,
     ISACreationResponse,
+    RIDAltitude,
+    RIDFlightsRecord,
+    RIDLatLngPoint,
+    RIDPolygon,
+    RIDSubscription,
+    RIDTime,
+    RIDVolume3D,
     RIDVolume4D,
     SubscriberToNotify,
+    SubscriptionResponse,
     SubscriptionState,
     Volume4D,
 )
@@ -187,12 +198,8 @@ class RemoteIDOperations:
                 return asdict(isa_creation_response)
 
     def create_dss_subscription(
-        self,
-        vertex_list: list,
-        view: str,
-        request_uuid,
-        subscription_time_delta: int = 30,
-    ):
+        self, vertex_list: list, view: str, request_uuid, subscription_time_delta: int = 30, is_simulated: bool = False
+    ) -> SubscriptionResponse:
         """This method PUTS /dss/subscriptions"""
         subscription_response = SubscriptionResponse(created=False, dss_subscription_id=None, notification_index=0)
 
@@ -221,14 +228,16 @@ class RemoteIDOperations:
         else:
             # A token from authority was received,
             new_subscription_id = str(uuid.uuid4())
-            dss_subscription_url = self.dss_base_url + "dss/subscriptions/" + new_subscription_id
-
+            dss_subscription_url = self.dss_base_url + "rid/v2/dss/subscriptions/" + new_subscription_id
             # check if a subscription already exists for this view_port
 
-            callback_url = env.get("FLIGHTBLENDER_FQDN", "https://www.https://www.flightblender.com") + "/dss/identification_service_areas"
             now = datetime.now()
+            # callback_url = env.get("FLIGHTBLENDER_FQDN", "https://www.https://www.flightblender.com") + "/dss/identification_service_areas"
 
-            callback_url += "/" + new_subscription_id
+            # callback_url += "/" + new_subscription_id
+
+            uss_base_url = env.get("FLIGHTBLENDER_FQDN", "https://www.https://www.flightblender.com") + "/rid"
+
             subscription_seconds_timedelta = timedelta(seconds=subscription_time_delta)
             current_time = now.isoformat() + "Z"
             fifteen_seconds_from_now = now + subscription_seconds_timedelta
@@ -237,19 +246,23 @@ class RemoteIDOperations:
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_token["access_token"],
             }
-            volume_object = {
-                "spatial_volume": {
-                    "footprint": {"vertices": vertex_list},
-                    "altitude_lo": 0.5,
-                    "altitude_hi": 800,
-                },
-                "time_start": current_time,
-                "time_end": fifteen_seconds_from_now_isoformat,
-            }
+
+            lat_lng_list = [RIDLatLngPoint(lat=v["lat"], lng=v["lng"]) for v in vertex_list]
+
+            isa_polygon = RIDPolygon(vertices=lat_lng_list)
+            volume_three_d = RIDVolume3D(
+                outline_polygon=isa_polygon,
+                altitude_lower=RIDAltitude(value=0.5, reference="W84", units="M"),
+                altitude_upper=RIDAltitude(value=800, reference="W84", units="M"),
+            )
+            time_start = RIDTime(value=current_time, format="RFC3339")
+            time_end = RIDTime(value=fifteen_seconds_from_now_isoformat, format="RFC3339")
+
+            volume_object = RIDVolume4D(volume=volume_three_d, time_start=time_start, time_end=time_end)
 
             payload = {
-                "extents": volume_object,
-                "callbacks": {"identification_service_area_url": callback_url},
+                "extents": asdict(volume_object),
+                "uss_base_url": uss_base_url,
             }
 
             try:
@@ -260,7 +273,7 @@ class RemoteIDOperations:
 
             try:
                 assert dss_r.status_code == 200
-                subscription_response.created = bool(1)
+                subscription_response.created = True
             except AssertionError:
                 logger.error("Error in creating subscription in the DSS %s" % dss_r.text)
                 return subscription_response
@@ -269,89 +282,68 @@ class RemoteIDOperations:
 
                 service_areas = dss_response["service_areas"]
                 dss_subscription_details = dss_response["subscription"]
-                subscription_id = dss_subscription_details["id"]
-                notification_index = dss_subscription_details["notification_index"]
-                new_subscription_version = dss_subscription_details["version"]
+
+                dss_subscription_details = from_dict(data_class=RIDSubscription, data=dss_response["subscription"])
+                subscription_id = dss_subscription_details.id
+                notification_index = dss_subscription_details.notification_index
                 subscription_response.notification_index = notification_index
                 subscription_response.dss_subscription_id = subscription_id
                 # logger.info("Successfully created a DSS subscription ID %s" % subscription_id)
-                # iterate over the service areas to get flights URL to poll
-                flights_url_list = ""
+                # iterate over the service areas to generatio flights URL to poll
 
-                for service_area in service_areas:
-                    flights_url = service_area["flights_url"]
-                    flights_url_list += flights_url + "?view=" + view + " "
-
-                flights_dict = {
-                    "request_id": request_uuid,
-                    "subscription_id": subscription_id,
-                    "all_flights_url": flights_url_list,
-                    "notification_index": notification_index,
-                    "view": view,
-                    "expire_at": fifteen_seconds_from_now_isoformat,
-                    "version": new_subscription_version,
-                }
-
-                subscription_id_flights = "all_uss_flights:" + new_subscription_id
-
-                self.r.hmset(subscription_id_flights, flights_dict)
-                # expire keys in fifteen seconds
-                self.r.expire(name=subscription_id_flights, time=subscription_seconds_timedelta)
-
-                sub_id = "sub-" + request_uuid
-
-                self.r.set(sub_id, view)
-                self.r.expire(name=sub_id, time=subscription_seconds_timedelta)
+                flights_dict = RIDFlightsRecord(service_areas=service_areas, subscription=dss_subscription_details)
 
                 view_hash = int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
-                view_sub = "view_sub-" + str(view_hash)
-                self.r.set(view_sub, 1)
-                self.r.expire(name=view_sub, time=subscription_seconds_timedelta)
+
+                my_database_writer = FlightBlenderDatabaseWriter()
+                my_database_writer.create_rid_subscription_record(
+                    subscription_id=subscription_id,
+                    record_id=request_uuid,
+                    view_hash=view_hash,
+                    end_datetime=fifteen_seconds_from_now_isoformat,
+                    is_simulated=is_simulated,
+                    view=view,
+                    flights_dict=json.dumps(asdict(flights_dict, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)})),
+                )
 
                 return subscription_response
 
-    def delete_dss_subscription(self, subscription_id):
+    def delete_dss_subscription(self, subscription_id: str):
         """This module calls the DSS to delete a subscription"""
 
         pass
 
-    def query_uss_for_rid(self, flights_dict, all_observations, subscription_id: str):
+    def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
+        _flight_details = from_dict(data_class=RIDFlightsRecord, data=json.loads(flight_details))
+
+        my_database_writer = FlightBlenderDatabaseWriter()
         authority_credentials = dss_auth_helper.AuthorityCredentialsGetter()
-        all_flights_urls_string = flights_dict["all_flights_url"]
-        logger.debug("Flight url list : %s" % all_flights_urls_string)
-        all_flights_url = all_flights_urls_string.split()
-        for cur_flight_url in all_flights_url:
-            audience = "localhost"
-            try:
-                ext = tldextract.extract(cur_flight_url)
-            except Exception as e:
-                logger.error("Error in extracting TLD {current_flight_url} domain: {error}".format(current_flight_url=cur_flight_url, error=e))
-            else:
-                if ext.domain in [
-                    "localhost",
-                    "internal",
-                ]:  # for allowing host.docker.internal setup as well
-                    audience = "localhost"
-                else:
-                    audience = ".".join(ext[:3])  # get the subdomain, domain and suffix and create a audience and get credentials
+
+        all_flights_url = []
+        for _service_area in _flight_details.service_areas:
+            rid_query_url = _service_area.uss_base_url + "/uss/flights" + "?view=" + view
+
+            logger.debug("Flight url list : %s" % all_flights_url)
+            audience = generate_audience_from_base_url(base_url=_service_area.uss_base_url)
 
             auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_credentials["access_token"],
             }
-            flights_request = requests.get(cur_flight_url, headers=headers)
+            flights_request = requests.get(rid_query_url, headers=headers)
 
             if flights_request.status_code == 200:
                 # https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/uastech/standards/astm_rid_1.0/remoteid/canonical.yaml#tag/p2p_rid/paths/~1v1~1uss~1flights/get
                 flights_response = flights_request.json()
+
                 all_flights = flights_response["flights"]
                 for flight in all_flights:
                     flight_id = flight["id"]
                     try:
                         assert flight.get("current_state") is not None
                     except AssertionError:
-                        logger.error("There is no current_state provided by SP on the flights url %s" % cur_flight_url)
+                        logger.error("There is no current_state provided by SP on the flights url %s" % rid_query_url)
                         logger.debug(json.dumps(flight))
                     else:
                         flight_current_state = flight["current_state"]
@@ -371,17 +363,21 @@ class RemoteIDOperations:
                         if {"lat", "lng", "alt"} <= position.keys():
                             # check if lat / lng / alt existis
                             single_observation = {
+                                "session_id": subscription_id,
                                 "icao_address": flight_id,
-                                "traffic_source": 1,
+                                "traffic_source": 11,
                                 "source_type": 1,
                                 "lat_dd": position["lat"],
                                 "lon_dd": position["lng"],
                                 "altitude_mm": position["alt"],
-                                "metadata": json.dumps(flight_metadata),
+                                "metadata": flight_metadata,
                             }
+                            single_observation = from_dict(data_class=SingleAirtrafficObservation, data=single_observation)
+                            logger.info("________")
+                            logger.info(single_observation)
                             # write incoming data directly
-                            all_observations.add(single_observation)
-                            all_observations.trim(1000)
+                            my_database_writer.write_flight_observation(single_observation=single_observation)
+
                         else:
                             logger.error("Error in received flights data: %{url}s ".format(**flight))
 

@@ -4,7 +4,7 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from typing import List, Union
+from typing import Any, List, Union
 from uuid import UUID, uuid4
 
 import arrow
@@ -18,6 +18,7 @@ from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
 from notification_operations.models import OperatorRIDNotification
 from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
+from rid_operations.models import ISASubscription
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
 from scd_operations.scd_data_definitions import PartialCreateOperationalIntentReference
 
@@ -35,12 +36,15 @@ class FlightBlenderDatabaseReader:
     A file to unify read and write operations to the database. Eventually caching etc. can be added via this file
     """
 
-    def get_flight_observations(self, after_datetime: arrow.arrow.Arrow) -> Union[None, List[QuerySet]]:
-        try:
-            observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
-            return observations
-        except FlightObeservation.DoesNotExist:
-            return None
+    def get_flight_observations(self, after_datetime: arrow.arrow.Arrow):
+        observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
+        return observations
+
+    def get_flight_observations_by_session(self, session_id: str, after_datetime: arrow.arrow.Arrow):
+        observations = (
+            FlightObeservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
+        )
+        return observations
 
     def get_all_flight_declarations(self) -> Union[None, List[FlightDeclaration]]:
         flight_declarations = FlightDeclaration.objects.all()
@@ -150,7 +154,7 @@ class FlightBlenderDatabaseReader:
 
     def get_active_rid_observations_for_session(self, session_id: str) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
         try:
-            observations = FlightObeservation.objects.filter(session_id=session_id, traffic_source=11)
+            observations = FlightObeservation.objects.filter(session_id=session_id, traffic_source=11).order_by("-created_at")
             return observations
         except FlightObeservation.DoesNotExist:
             return None
@@ -174,6 +178,21 @@ class FlightBlenderDatabaseReader:
             return notifications
         except OperatorRIDNotification.DoesNotExist:
             return None
+
+    def check_rid_subscription_record_by_view_hash_exists(self, view_hash: int) -> bool:
+        rid_subscription_exists = ISASubscription.objects.filter(view_hash=view_hash).exists()
+        return rid_subscription_exists
+
+    def check_rid_subscription_record_by_subscription_id_exists(self, subscription_id: str) -> bool:
+        rid_subscription_record_exists = ISASubscription.objects.filter(subscription_id=subscription_id).exists()
+        return rid_subscription_record_exists
+
+    def get_rid_subscription_record_by_subscription_id(self, subscription_id: str) -> ISASubscription:
+        rid_subscription_record = ISASubscription.objects.get(subscription_id=subscription_id)
+        return rid_subscription_record
+
+    def get_all_rid_simulated_subscription_records(self) -> QuerySet[ISASubscription]:
+        return ISASubscription.objects.filter(is_simulated=True)
 
 
 class FlightBlenderDatabaseWriter:
@@ -326,23 +345,26 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def create_conformance_monitoring_periodic_task(self, flight_declaration: FlightDeclaration) -> bool:
+        
         conformance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
         now = arrow.now()
-        session_id = uuid.uuid4()
+        session_id = str(uuid.uuid4())
         fd_end = arrow.get(flight_declaration.end_datetime)
         delta = fd_end - now
         delta_seconds = delta.total_seconds()
         expires = now.shift(seconds=delta_seconds)
         task_name = "check_flight_conformance"
-
+        logger.info("Creating periodic task for conformance monitoring exipres at %s" % expires)
         try:
             p_task = conformance_monitoring_job.schedule_every(
-                task_name=task_name, period="seconds", every=every, expires=expires, flight_declaration=flight_declaration, session_id=session_id
-            )
+                task_name=task_name, period="seconds", every=every, expires=expires.isoformat(), flight_declaration=flight_declaration, session_id=session_id
+            )            
+            
             p_task.start()
             return True
-        except Exception:
+        except Exception as e:            
+            print(e)
             logger.error("Could not create periodic task")
             return False
 
@@ -378,3 +400,36 @@ class FlightBlenderDatabaseWriter:
 
     def remove_rid_stream_monitoring_periodic_task(self, rid_stream_monitoring_task: TaskScheduler):
         rid_stream_monitoring_task.terminate()
+
+    def create_rid_subscription_record(
+        self, subscription_id: str, record_id: str, view: str, view_hash: int, end_datetime: str, flights_dict: str, is_simulated: bool
+    ) -> bool:
+        try:
+            rid_subscription = ISASubscription(
+                id=record_id,
+                subscription_id=subscription_id,
+                view=view,
+                view_hash=view_hash,
+                end_datetime=end_datetime,
+                flight_details=flights_dict,
+                is_simulated=is_simulated,
+            )
+            rid_subscription.save()
+            return True
+        except IntegrityError:
+            return False
+
+    def update_flight_details_in_rid_subscription_record(self, existing_subscription_record: ISASubscription, flights_dict: str) -> bool:
+        try:
+            existing_subscription_record.flight_details = flights_dict
+            existing_subscription_record.save()
+            return True
+        except Exception:
+            return False
+
+    def delete_all_simulated_rid_subscription_records(self) -> bool:
+        try:
+            ISASubscription.objects.filter(is_simulated=True).delete()
+            return True
+        except Exception:
+            return False

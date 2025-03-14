@@ -160,40 +160,23 @@ class Command(BaseCommand):
                 )
 
                 ## Update / expand volume
-                stream_ops = flight_stream_helper.StreamHelperOps()
-                push_cg = stream_ops.push_cg()
+
                 obs_helper = flight_stream_helper.ObservationReadOperations()
-                all_flights_rid_data = obs_helper.get_observations(push_cg)
+
                 # Get the last observation of the flight telemetry
-                unique_flights = []
-                relevant_observation = {}
+                obs_helper = flight_stream_helper.ObservationReadOperations()
+                all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
+                # Get the latest telemetry
 
-                # Keep only the latest message
-                try:
-                    for message in all_flights_rid_data:
-                        unique_flights.append(
-                            {
-                                "timestamp": message.timestamp,
-                                "seq": message.sequence,
-                                "msg_data": message.data,
-                                "address": message.data["icao_address"],
-                            }
-                        )
-                    # sort by date
-                    unique_flights.sort(key=lambda item: item["timestamp"], reverse=True)
-                    # Keep only the latest message
-                    distinct_messages = {i["address"]: i for i in reversed(unique_flights)}.values()
-                    for index, rid_observation in enumerate(distinct_messages):
-                        if rid_observation.get("icao_address") == flight_declaration_id:
-                            relevant_observation = rid_observation
+                if not all_flights_telemetry_data:
+                    logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
+                    return
 
-                            break
-                except KeyError as ke:
-                    logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
-                    distinct_messages = []
+                distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []
+                relevant_observation = distinct_messages[0]
 
-                lat_dd = relevant_observation["lat_dd"]
-                lon_dd = relevant_observation["lon_dd"]
+                lat_dd = relevant_observation.latitude_dd
+                lon_dd = relevant_observation.longitude_dd
                 rid_location = Point(lon_dd, lat_dd)
                 # check if it is within declared bounds
                 # TODO: This code is same as the C7check in the conformance / utils file. Need to refactor
