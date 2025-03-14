@@ -73,7 +73,7 @@ class ObservationReadOperations:
         all_flight_observations = my_database_reader.get_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
         for message in all_flight_observations:
             observation = FlightObeservationSchema(
-                id=message.sequence,
+                id=message["id"],
                 session_id=message["session_id"],
                 latitude_dd=message["latitude_dd"],
                 longitude_dd=message["longitude_dd"],
@@ -85,7 +85,7 @@ class ObservationReadOperations:
                 updated_at=message["updated_at"],
                 metadata=json.loads(message["metadata"]),
             )
-            pending_messages.append(asdict(observation))
+            pending_messages.append(observation)
         return pending_messages
 
     def get_observations(self, cg) -> list[Observation]:

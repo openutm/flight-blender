@@ -345,23 +345,26 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def create_conformance_monitoring_periodic_task(self, flight_declaration: FlightDeclaration) -> bool:
+        
         conformance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
         now = arrow.now()
-        session_id = uuid.uuid4()
+        session_id = str(uuid.uuid4())
         fd_end = arrow.get(flight_declaration.end_datetime)
         delta = fd_end - now
         delta_seconds = delta.total_seconds()
         expires = now.shift(seconds=delta_seconds)
         task_name = "check_flight_conformance"
-
+        logger.info("Creating periodic task for conformance monitoring exipres at %s" % expires)
         try:
             p_task = conformance_monitoring_job.schedule_every(
-                task_name=task_name, period="seconds", every=every, expires=expires, flight_declaration=flight_declaration, session_id=session_id
-            )
+                task_name=task_name, period="seconds", every=every, expires=expires.isoformat(), flight_declaration=flight_declaration, session_id=session_id
+            )            
+            
             p_task.start()
             return True
-        except Exception:
+        except Exception as e:            
+            print(e)
             logger.error("Could not create periodic task")
             return False
 
