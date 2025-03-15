@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo Waiting for DBs...
-if ! wait-for-it --parallel --service redis-flight-blender:6379; then
+if ! wait-for-it --parallel --service redis-blender:6379; then
     exit
 fi
 

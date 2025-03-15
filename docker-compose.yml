@@ -1,6 +1,6 @@
 version: "3"
 services:
-  redis-flight-blender:
+  redis-blender:
     platform: linux/amd64
     command: ["redis-server", "/redis.conf", "--requirepass", "$REDIS_PASSWORD"]
     image: "redis:latest"
@@ -8,14 +8,14 @@ services:
       - "6379"
     volumes:
       - ./config/redis.conf:/redis.conf
-    container_name: "redis-flight-blender"
+    container_name: "redis-blender"
     env_file:
       - ".env"
     networks:
       - interop_ecosystem_network
-  db-flight-blender:
+  db-blender:
     platform: linux/amd64
-    container_name: "db-flight-blender"
+    container_name: "db-blender"
     image: postgres
     expose:
       - "5432"
@@ -41,8 +41,8 @@ services:
       - "8000"
       - "5678:5678"
     depends_on:
-      - redis-flight-blender
-      - db-flight-blender
+      - redis-blender
+      - db-blender
     volumes:
       - .:/app
     networks:
@@ -61,7 +61,7 @@ services:
     volumes:
       - .:/app
     depends_on:
-      - redis-flight-blender
+      - redis-blender
     networks:
       - interop_ecosystem_network
 
@@ -81,9 +81,9 @@ services:
   #   volumes:
   #     - .:/app
   #   depends_on:
-  #     redis-flight-blender:
+  #     redis-blender:
   #       condition: service_started
-  #     db-flight-blender:
+  #     db-blender:
   #       condition: service_started
   #     flight-blender-celery:
   #       condition: service_started
