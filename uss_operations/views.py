@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+import uuid
 from dataclasses import asdict
 from typing import List
 from uuid import UUID
@@ -47,6 +48,7 @@ from scd_operations.dss_scd_helper import (
 from scd_operations.scd_data_definitions import OperationalIntentStorage, Volume4D
 
 from .uss_data_definitions import (
+    ErrorReport,
     FlightDetailsNotFoundMessage,
     GenericErrorResponseMessage,
     OperationalIntentDetails,
@@ -159,6 +161,25 @@ def USSOpIntDetailTelemetry(request, opint_id):
         next_telemetry_opportunity=Time(format="RFC3339", value=five_seconds_from_now.isoformat()),
     )
     return JsonResponse(json.loads(json.dumps(asdict(telemetry_response), cls=EnhancedJSONEncoder)), status=200)
+
+
+@api_view(["POST"])
+@requires_scopes(
+    [
+        "utm.strategic_coordination",
+        "utm.constraint_processing",
+        "utm.constraint_management",
+        "utm.conformance_monitoring_sa",
+        "utm.availability_arbitration",
+    ],
+    allow_any=True,
+)
+def peer_uss_report_notification(request):
+    error_report = from_dict(data_class=ErrorReport, data=request.data)
+    logger.error("Error report received: %s" % error_report)
+    report_id = str(uuid.uuid4())
+
+    return JsonResponse(json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)), status=201)
 
 
 @api_view(["GET"])

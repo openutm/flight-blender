@@ -1,5 +1,5 @@
-import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Literal, Optional, Union
 
 from rid_operations.rid_utils import RIDOperatorDetails
@@ -101,7 +101,7 @@ class Volume3D:
     outline_circle: Optional[Circle] = None
 
 
-class OperationalIntentState(str, enum.Enum):
+class OperationalIntentState(str, Enum):
     """A test is either pass or fail or could not be processed, currently not"""
 
     Accepted = "Accepted"
@@ -171,7 +171,7 @@ Longitude = float
 """Degrees of longitude east of the Prime Meridian, with reference to the WGS84 ellipsoid."""
 
 
-class PositionAccuracyVertical(str, enum.Enum):
+class PositionAccuracyVertical(str, Enum):
     """Vertical error that is likely to be present in this reported position. This is the GVA enumeration from ADS-B, plus some finer values for UAS."""
 
     VAUnknown = "VAUnknown"
@@ -184,7 +184,7 @@ class PositionAccuracyVertical(str, enum.Enum):
     VA1m = "VA1m"
 
 
-class PositionAccuracyHorizontal(str, enum.Enum):
+class PositionAccuracyHorizontal(str, Enum):
     """Horizontal error that is likely to be present in this reported position. This is the NACp enumeration from ADS-B, plus 1m for a more complete range for UAS."""
 
     HAUnknown = "HAUnknown"
@@ -215,7 +215,7 @@ class Position:
     extrapolated: Optional[bool] = False
 
 
-class VelocityUnitsSpeed(str, enum.Enum):
+class VelocityUnitsSpeed(str, Enum):
     MetersPerSecond = "MetersPerSecond"
 
 
@@ -242,3 +242,56 @@ class VehicleTelemetryResponse:
     operational_intent_id: str
     telemetry: Optional[VehicleTelemetry]
     next_telemetry_opportunity: Optional[Time]
+
+
+class ExchangeRecordRecorderRole(str, Enum):
+    """A coded value that indicates the role of the logging USS: 'Client' (initiating a request to a remote USS) or 'Server' (handling a request from a remote USS)"""
+
+    Client = "Client"
+    Server = "Server"
+
+
+@dataclass
+class ExchangeRecord:
+    """Details of a request/response data exchange."""
+
+    url: str
+    """Full URL of request."""
+
+    method: str
+    """HTTP verb used by requester (e.g., "PUT," "GET," etc.)"""
+
+    recorder_role: ExchangeRecordRecorderRole
+    """A coded value that indicates the role of the logging USS: 'Client' (initiating a request to a remote USS) or 'Server' (handling a request from a remote USS)"""
+
+    request_time: Time
+    """The time at which the request was sent/received."""
+
+    response_time: Optional[Time]
+    """The time at which the response was sent/received."""
+
+    problem: Optional[str]
+    """'Human-readable description of the problem with the exchange, if any.'"""
+
+    headers: Optional[list] = field(default_factory=list)
+    """Set of headers associated with request or response. Requires 'Authorization:' field (at a minimum)"""
+
+    request_body: Optional[str] = ""
+    """Base64-encoded body content sent/received as a request."""
+
+    response_body: Optional[str] = ""
+    """Base64-encoded body content sent/received in response to request."""
+
+    response_code: Optional[int] = 0
+    """HTTP response code sent/received in response to request."""
+
+
+@dataclass
+class ErrorReport:
+    """A report informing a server of a communication problem."""
+
+    report_id: Optional[str]
+    """ID assigned by the server receiving the report.  Not populated when submitting a report."""
+
+    exchange: ExchangeRecord
+    """The request (by this USS) and response associated with the error."""

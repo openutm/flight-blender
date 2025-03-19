@@ -589,6 +589,82 @@ paths:
         required: true
 
 
+
+  #
+  # USS endpoints for reports
+  #
+  /uss/v1/reports:
+    summary: Error reports of issues communicating with a peer USS.
+    post:
+      tags:
+      - Reports
+      - p2p_utm
+      security:
+      - Authority:
+        - utm.strategic_coordination
+      - Authority:
+        - utm.constraint_processing
+      - Authority:
+        - utm.constraint_management
+      - Authority:
+        - utm.conformance_monitoring_sa
+      - Authority:
+        - utm.availability_arbitration
+      summary: >-
+        Notify USS of an error encountered that might otherwise go unnoticed.
+      operationId: makeUssReport
+      description: >-
+        Endpoint to provide feedback (errors, etc.) that might otherwise go
+        unnoticed by this USS.  This endpoint is used for all feedback related
+        to operational intents and constraints.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorReport'
+        required: true
+      responses:
+        '201':
+          description: Report received and successfully archived.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorReport'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: >-
+            * One or more parameters were missing or invalid.
+
+            * The report could not be parsed, or contains unrecognized data.
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: >-
+            Bearer access token was not provided in Authorization header, token
+            could not be decoded, or token was invalid.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: >-
+            * The access token was decoded successfully but did not include a
+            scope appropriate to this endpoint.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: >-
+            The client issued too many requests in a short period of time.
+
+
+
   /uss/v1/operational_intents/{entityid}:
     summary: Query detailed information of an operational intent from submitted Flight Blender, this is used in the context of strategic deconfliction.
     parameters:
@@ -5273,7 +5349,83 @@ components:
           example: >-
             U-space flight authorisations are not blocked by the USSP according to geo-awareness data (GM1 Article 10 (7)).
 
+    ErrorReport:
+      type: object
+      description: A report informing a server of a communication problem.
+      required:
+      - exchange
+      properties:
+        report_id:
+          type: string
+          maxLength: 128
+          description: >-
+            ID assigned by the server receiving the report.  Not populated when
+            submitting a report.
+        exchange:
+          anyOf:
+          - $ref: '#/components/schemas/ExchangeRecord'
+          description: >-
+            The request (by this USS) and response associated with the error.
 
+    ExchangeRecord:
+      type: object
+      description: Details of a request/response data exchange.
+      required:
+      - url
+      - method
+      - recorder_role
+      - request_time
+      - request_source
+      properties:
+        url:
+          type: string
+          description: Full URL of request.
+        method:
+          type: string
+          description: HTTP verb used by requester (e.g., "PUT," "GET," etc.)
+        headers:
+          description: >-
+            Set of headers associated with request or response. Requires
+            'Authorization:' field (at a minimum)
+          type: array
+          items:
+            type: string
+          default: [ ]
+        recorder_role:
+          type: string
+          description: >-
+            A coded value that indicates the role of the logging USS: 'Client'
+            (initiating a request to a remote USS) or 'Server' (handling a
+            request from a remote USS)
+          enum:
+          - Client
+          - Server
+        request_time:
+          description: The time at which the request was sent/received.
+          anyOf:
+          - $ref: '#/components/schemas/Time'
+        request_body:
+          description: Base64-encoded body content sent/received as a request.
+          type: string
+          default: ''
+        response_time:
+          description: The time at which the response was sent/received.
+          anyOf:
+          - $ref: '#/components/schemas/Time'
+        response_body:
+          type: string
+          default: ''
+          description: >-
+            Base64-encoded body content sent/received in response to request.
+        response_code:
+          type: integer
+          format: int32
+          default: 0
+          description: HTTP response code sent/received in response to request.
+        problem:
+          type: string
+          description: >-
+            'Human-readable description of the problem with the exchange, if any.'
 
 tags:
   - name: uss

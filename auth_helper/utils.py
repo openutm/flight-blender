@@ -1,4 +1,5 @@
 import json
+import logging
 from functools import wraps
 from os import environ as env
 
@@ -7,18 +8,18 @@ import requests
 from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
-import logging
 
 load_dotenv(find_dotenv())
 logger = logging.getLogger("django")
+
 
 def jwt_get_username_from_payload_handler(payload):
     username = payload.get("sub").replace("|", ".")
     authenticate(remote_user=username)
     return username
 
-def requires_scopes(required_scopes):
-    
+
+def requires_scopes(required_scopes, allow_any: bool = False):
     """
     Decorator to enforce required scopes for accessing a view.
 
@@ -39,11 +40,9 @@ def requires_scopes(required_scopes):
         JsonResponse: If the authorization token is missing, invalid, or does not contain the required scopes.
     """
 
-
     s = requests.Session()
 
     def require_scope(f):
-        
         @wraps(f)
         def decorated(*args, **kwargs):
             API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
@@ -60,7 +59,7 @@ def requires_scopes(required_scopes):
                 unverified_token_headers = jwt.get_unverified_header(token)
             except jwt.DecodeError:
                 return JsonResponse({"detail": "Bearer token could not be decoded properly"}, status=401)
-            
+
             if BYPASS_AUTH_TOKEN_VERIFICATION:
                 return handle_bypass_verification(token, f, *args, **kwargs)
 
@@ -84,10 +83,17 @@ def requires_scopes(required_scopes):
                     algorithms=["RS256"],
                     options={"require": ["exp", "iss", "aud"]},
                 )
-            except (jwt.ImmatureSignatureError, jwt.ExpiredSignatureError, jwt.InvalidAudienceError, jwt.InvalidIssuerError, jwt.InvalidSignatureError, jwt.DecodeError):
+            except (
+                jwt.ImmatureSignatureError,
+                jwt.ExpiredSignatureError,
+                jwt.InvalidAudienceError,
+                jwt.InvalidIssuerError,
+                jwt.InvalidSignatureError,
+                jwt.DecodeError,
+            ):
                 return JsonResponse({"detail": "Invalid token"}, status=401)
-
-            if set(required_scopes).issubset(set(decoded.get("scope", "").split())):
+            decoded_scopes_set = set(decoded.get("scope", "").split())
+            if (allow_any and decoded_scopes_set & set(required_scopes)) or set(required_scopes).issubset(decoded_scopes_set):
                 return f(*args, **kwargs)
 
             return JsonResponse({"message": "You don't have access to this resource"}, status=403)
