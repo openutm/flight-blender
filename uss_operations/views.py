@@ -7,7 +7,8 @@ from typing import List
 from uuid import UUID
 
 import arrow
-from dacite import from_dict
+from dacite import from_dict, Config
+from enum import Enum
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from rest_framework.decorators import api_view
@@ -175,9 +176,10 @@ def USSOpIntDetailTelemetry(request, opint_id):
     allow_any=True,
 )
 def peer_uss_report_notification(request):
-    error_report = from_dict(data_class=ErrorReport, data=request.data)
-    logger.error("Error report received: %s" % error_report)
+    error_report = from_dict(data_class=ErrorReport, data=request.data,config=Config(cast=[Enum]))  
+    logger.info("Error report received: %s" % error_report)
     report_id = str(uuid.uuid4())
+    error_report.report_id = report_id
 
     return JsonResponse(json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)), status=201)
 
