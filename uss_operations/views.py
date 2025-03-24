@@ -93,7 +93,7 @@ def uss_update_opint_details(request):
     my_operational_intent_parser = OperationalIntentReferenceHelper()
     # Write the operational Intent
     operation_id_str = op_int_update_detail.operational_intent_id
-    print("Operation ID %s" % operation_id_str)
+    logger.info("Operation ID %s" % operation_id_str)
 
     op_int_details_key = FLIGHT_OPINT_KEY + operation_id_str
     if r.exists(op_int_details_key):
@@ -423,7 +423,7 @@ def get_uss_flights(request):
 def get_uss_flight_details(request, flight_id):
     """This is the end point for the rid_qualifier to get details of a flight"""
     r = get_redis()
-    flight_details_storage = "flight_details:" + flight_id
+    flight_details_storage = "flight_details:" + str(flight_id)
     if r.exists(flight_details_storage):
         flight_details_raw = r.get(flight_details_storage)
         flight_details = json.loads(flight_details_raw)

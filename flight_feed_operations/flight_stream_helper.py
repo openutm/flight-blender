@@ -21,25 +21,25 @@ def batcher(iterable, n):
 
 class ObservationReadOperations:
     """
-    A class to handle reading operations for observations.
-    Methods
-    -------
-    get_observations(cg)
-        Reads messages from the given consumer group and returns a list of pending messages.
+    A class to handle operations related to reading flight observations.
+    Methods:
+        get_flight_observations(session_id: str) -> list[FlightObeservationSchema]:
+            Retrieves and processes flight observations for a given session ID.
+        Retrieves and processes observations from the given session ID.
+            session_id (str): The session ID for which to retrieve flight observations.
+            list[FlightObeservationSchema]: A list of FlightObeservationSchema objects, each containing the following attributes:
+                - id: The unique identifier of the observation.
+                - session_id: The session ID associated with the observation.
+                - latitude_dd: The latitude in decimal degrees.
+                - longitude_dd: The longitude in decimal degrees.
+                - altitude_mm: The altitude in millimeters.
+                - traffic_source: The source of the traffic data.
+                - source_type: The type of the source.
+                - icao_address: The ICAO address extracted from the message data.
+                - created_at: The timestamp when the observation was created.
+                - updated_at: The timestamp when the observation was last updated.
+                - metadata: The metadata extracted and parsed from the message data.
 
-    Parameters
-    ----------
-    cg : ConsumerGroup
-        The consumer group from which to read messages.
-    Returns
-    -------
-    list
-        A list of dictionaries, each containing the following keys:
-        - "timestamp": The timestamp of the message.
-        - "seq": The sequence number of the message.
-        - "msg_data": The data of the message.
-        - "address": The ICAO address extracted from the message data.
-        - "metadata": The metadata extracted from the message data and parsed as JSON.
     """
 
     def get_flight_observations(self, session_id: str) -> list[FlightObeservationSchema]:
@@ -55,6 +55,7 @@ class ObservationReadOperations:
             - "address": The ICAO address extracted from the message data.
             - "metadata": The metadata extracted and parsed from the message data.
         """
+
         my_database_reader = FlightBlenderDatabaseReader()
 
         r = get_redis()
@@ -86,31 +87,4 @@ class ObservationReadOperations:
                 metadata=json.loads(message["metadata"]),
             )
             pending_messages.append(observation)
-        return pending_messages
-
-    def get_observations(self, cg) -> list[Observation]:
-        """
-        Retrieves and processes observations from the given consumer group.
-        Args:
-            cg: The consumer group object from which to read messages.
-        Returns:
-            A list of dictionaries, each containing the following keys:
-            - "timestamp": The timestamp of the message.
-            - "seq": The sequence number of the message.
-            - "msg_data": The data of the message.
-            - "address": The ICAO address extracted from the message data.
-            - "metadata": The metadata extracted and parsed from the message data.
-        """
-
-        messages = cg.read()
-        pending_messages = []
-        for message in messages:
-            observation = Observation(
-                timestamp=message.timestamp,
-                seq=message.sequence,
-                msg_data=message.data,
-                address=message.data["icao_address"],
-                metadata=json.loads(message.data["metadata"]),
-            )
-            pending_messages.append(asdict(observation))
         return pending_messages

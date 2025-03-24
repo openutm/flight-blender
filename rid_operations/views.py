@@ -16,6 +16,7 @@ from django.http import HttpResponse, JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from implicitdict import ImplicitDict
 from rest_framework.decorators import api_view
+from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiagonalKm
 from uas_standards.interuss.automated_testing.rid.v1.injection import (
     Time,
     UserNotification,
@@ -51,6 +52,7 @@ from .rid_utils import (
     RIDCapabilitiesResponse,
     RIDDisplayDataResponse,
     RIDFlight,
+    RIDFlightDetails,
     RIDFlightsRecord,
     RIDOperatorDetails,
     RIDPositions,
@@ -83,7 +85,7 @@ class RIDOutputHelper:
             return struct
 
 
-class SubscriptionHelper:
+class SubscriptionsHelper:
     """
     A class to help with DSS subscriptions, check if a subscription exists or create a new one
 
@@ -92,18 +94,26 @@ class SubscriptionHelper:
     def __init__(self):
         self.my_rid_output_helper = RIDOutputHelper()
 
+    def get_view_hash(self, view) -> int:
+        return int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
+
     def check_subscription_exists(self, view) -> bool:
         my_database_reader = FlightBlenderDatabaseReader()
-        view_hash = int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
+        view_hash = self.get_view_hash(view)
         subscription_found = my_database_reader.check_rid_subscription_record_by_view_hash_exists(view_hash=view_hash)
 
         return subscription_found
 
-    def create_new_subscription(self, request_id, view: str, vertex_list: list, is_simulated: bool) -> SubscriptionResponse:
-        subscription_time_delta = 15
+    def create_new_rid_subscription(
+        self, request_id: str, subscription_duration_seconds: int, view: str, vertex_list: list, is_simulated: bool
+    ) -> SubscriptionResponse:
         my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
         subscription_r = my_dss_subscriber.create_dss_subscription(
-            vertex_list=vertex_list, view=view, request_uuid=request_id, subscription_time_delta=subscription_time_delta, is_simulated=is_simulated
+            vertex_list=vertex_list,
+            view=view,
+            request_uuid=request_id,
+            subscription_duration_seconds=subscription_duration_seconds,
+            is_simulated=is_simulated,
         )
         subscription_response = self.my_rid_output_helper.make_json_compatible(subscription_r)
         return subscription_response
@@ -156,8 +166,10 @@ def create_dss_subscription(request, *args, **kwargs):
 
     request_id = str(uuid.uuid4())
 
-    my_subscription_helper = SubscriptionHelper()
-    subscription_r = my_subscription_helper.create_new_subscription(request_id=request_id, vertex_list=vertex_list, view=view, is_simulated=False)
+    my_subscription_helper = SubscriptionsHelper()
+    subscription_r = my_subscription_helper.create_new_rid_subscription(
+        request_id=request_id, vertex_list=vertex_list, view=view, is_simulated=False, subscription_duration_seconds=30
+    )
 
     if subscription_r.created:
         m = CreateSubscriptionResponse(
@@ -254,7 +266,6 @@ def dss_isa_callback(request, isa_id):
             existing_subscription_record = my_database_reader.get_rid_subscription_record_by_subscription_id(
                 subscription_id=subscription.subscription_id
             )
-            existing_subscription_view = existing_subscription_record.view
 
             existing_flight_details = json.loads(existing_subscription_record.flight_details)
             subscription = from_dict(data_class=RIDSubscription, data=existing_flight_details["subscription"])
@@ -284,28 +295,19 @@ def dss_isa_callback(request, isa_id):
 def get_flight_data(request, flight_id):
     """This is the end point for the rid_qualifier to get details of a flight"""
     r = get_redis()
-    flight_details_storage = "flight_details:" + flight_id
+    flight_details_storage = "flight_details:" + str(flight_id)
+
     if r.exists(flight_details_storage):
         flight_details = r.get(flight_details_storage)
-        location = LatLngPoint(lat=flight_details["location"]["lat"], lng=flight_details["location"]["lng"])
-        flight_detail = RIDOperatorDetails(
-            id=flight_details["id"],
-            operator_id=flight_details["operator_id"],
-            operator_location=location,
-            operator_description=flight_details["operator_description"],
-            auth_data={},
-            serial_number=flight_details["serial_number"],
-            registration_number=flight_details["registration_number"],
-        )
+
+        flight_detail = from_dict(data_class=RIDFlightDetails, data=json.loads(flight_details))
+
         flight_details_full = OperatorDetailsSuccessResponse(details=flight_detail)
-        return JsonResponse(
-            json.loads(json.dumps(asdict(flight_details_full))),
-            status=200,
-            mimetype=RESPONSE_CONTENT_TYPE,
-        )
+        flight_details_response = asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)})
+        return JsonResponse(json.loads(json.dumps(flight_details_response)), status=200)
     else:
         fd = FlightDetailsNotFoundMessage(message="The requested flight could not be found")
-        return JsonResponse(json.loads(json.dumps(asdict(fd))), status=404, mimetype="application/json")
+        return JsonResponse(json.loads(json.dumps(asdict(fd))), status=404)
 
 
 @api_view(["GET"])
@@ -332,15 +334,17 @@ def get_display_data(request):
     view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
 
     view_port_diagonal = view_port_ops.get_view_port_diagonal_length_kms(view_port_coords=view_port)
-
+    logger.info("********")
     logger.info("View port diagonal %s" % view_port_diagonal)
+    logger.info("********")
     if (view_port_diagonal) > 7:
         view_port_too_large_msg = GenericErrorResponseMessage(message="The requested view %s rectangle is too large" % view)
         return JsonResponse(json.loads(json.dumps(asdict(view_port_too_large_msg))), status=413)
+    should_cluster = True if view_port_diagonal >= NetDetailsMaxDisplayAreaDiagonalKm else False
 
     b = shapely.geometry.box(view_port[1], view_port[0], view_port[3], view_port[2])
     co_ordinates = list(zip(*b.exterior.coords.xy))
-    # Convert bounds vertex list
+
     vertex_list = []
     for cur_co_ordinate in co_ordinates:
         lat_lng = {"lng": 0, "lat": 0}
@@ -354,22 +358,54 @@ def get_display_data(request):
     if view_port_valid:
         # stream_id = hashlib.md5(view.encode('utf-8')).hexdigest()
         # create a subscription
-        my_subscription_helper = SubscriptionHelper()
+        my_subscription_helper = SubscriptionsHelper()
         subscription_exists = my_subscription_helper.check_subscription_exists(view)
+        view_hash = my_subscription_helper.get_view_hash(view)
 
         if not subscription_exists:
-            logger.info("Creating Subscription..")
-            subscription_response = my_subscription_helper.create_new_subscription(
-                request_id=request_id, vertex_list=vertex_list, view=view, is_simulated=True
+            subscription_duration_seconds = 20
+            subscription_end_time = arrow.now().shift(seconds=subscription_duration_seconds).datetime
+            logger.info("Creating Subscription till end time %s" % subscription_end_time)
+            my_subscription_helper.create_new_rid_subscription(
+                subscription_duration_seconds=subscription_duration_seconds,
+                request_id=request_id,
+                vertex_list=vertex_list,
+                view=view,
+                is_simulated=True,
             )
-            run_ussp_polling_for_rid.delay()
+
+            run_ussp_polling_for_rid.delay(session_id=request_id, end_time=subscription_end_time)
+
             logger.info("Sleeping 2 seconds..")
             time.sleep(2)
 
         # Keep only the latest message
-        distinct_messages = my_database_reader.get_active_rid_observations_for_session(session_id=request_id)
+
+        # Get the last reading for view hash
+
+        r = get_redis()
+        key = "last_reading_for_view_hash_{view_hash}".format(view_hash=view_hash)
+        if r.exists(key):
+            last_reading_time = r.get(key)
+            after_datetime = arrow.get(last_reading_time)
+        else:
+            now = arrow.now()
+            one_second_before_now = now.shift(seconds=-1)
+            after_datetime = one_second_before_now
+
+        r.set(key, arrow.now().isoformat())
+        r.expire(key, 300)
+
+        distinct_messages = my_database_reader.get_active_rid_observations_for_view(start_time=after_datetime.datetime, end_time=arrow.now().datetime)
+        logger.debug("Found %s distinct messages" % len(distinct_messages))
 
         distinct_messages = distinct_messages if distinct_messages else []
+        unique_messages = {}
+        for message in distinct_messages:
+            if message.icao_address not in unique_messages:
+                unique_messages[message.icao_address] = message
+        distinct_messages = list(unique_messages.values())
+        logger.debug("Found %s distinct messages" % len(distinct_messages))
 
         for observation_message in distinct_messages:
             all_recent_positions = []
@@ -394,20 +430,26 @@ def get_display_data(request):
                 logger.error("Error in metadata data in the stream %s" % ke)
 
             most_recent_position = Position(
-                lat=observation_data.latitude_dd,
-                lng=observation_data.longitude_dd,
-                alt=observation_data.altitude_mm,
+                lat=observation_message.latitude_dd,
+                lng=observation_message.longitude_dd,
+                alt=observation_message.altitude_mm,
             )
 
             current_flight = RIDFlight(
-                id=observation_data.icao_address,
+                id=observation_message.icao_address,
                 most_recent_position=most_recent_position,
                 recent_paths=recent_paths,
             )
 
             rid_flights.append(current_flight)
 
+        # my_rid_helper = dss_rid_helper.RemoteIDOperations()
+        # if should_cluster:
+        #     clusters = my_rid_helper.generate_cluster_details(rid_flights=rid_flights, view_box=b)
+        # else:
+        #     clusters = []
         rid_display_data = RIDDisplayDataResponse(flights=rid_flights, clusters=[])
+
         rid_flights_dict = my_rid_output_helper.make_json_compatible(rid_display_data)
 
         return JsonResponse(
@@ -466,6 +508,9 @@ def delete_test(request, test_id, version):
 
     if r.exists(test_id_str):
         r.delete(test_id_str)
+
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer.delete_all_simulated_rid_subscription_records()
 
     # Stop streaming if it exists for this test
     r.set("stop_streaming_" + test_id_str, "1")

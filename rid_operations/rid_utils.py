@@ -30,6 +30,14 @@ class Position(NamedTuple):
     alt: float
 
 
+class ClusterPosition(NamedTuple):
+    """A class to hold most recent position for remote id data"""
+
+    lat: float
+    lng: float
+    alt: Optional[float] = None
+
+
 class RIDPositions(NamedTuple):
     """A list of positions for RID"""
 
@@ -42,15 +50,15 @@ class RIDFlight(NamedTuple):
     recent_paths: List[RIDPositions]
 
 
-class ClusterDetails(NamedTuple):
-    corners: List[Position]
+class ClusterDetail(NamedTuple):
+    corners: List[ClusterPosition]
     area_sqm: float
     number_of_flights: float
 
 
 class RIDDisplayDataResponse(NamedTuple):
     flights: List[RIDFlight]
-    clusters: List[ClusterDetails]
+    clusters: List[ClusterDetail]
 
 
 @dataclass
@@ -217,6 +225,17 @@ class RIDOperatorDetails:
 
 
 @dataclass
+class RIDFlightDetails:
+    id: str
+    operator_id: Optional[str]
+    operator_location: Optional[OperatorLocation]
+    operation_description: Optional[str]
+    auth_data: Optional[RIDAuthData]
+    eu_classification: Optional[UAClassificationEU] = None
+    uas_id: Optional[UASID] = None
+
+
+@dataclass
 class FlightState:
     timestamp: StringBasedDateTime
     timestamp_accuracy: float
@@ -238,7 +257,7 @@ class FlightState:
 @dataclass
 class RIDTestDetailsResponse:
     effective_after: str
-    details: RIDOperatorDetails
+    details: RIDFlightDetails
 
 
 @dataclass

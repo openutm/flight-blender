@@ -8,6 +8,7 @@ from typing import List
 
 import arrow
 from arrow.parser import ParserError
+from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import MultiPoint, Point, box
 
@@ -31,11 +32,14 @@ from rid_operations.data_definitions import (
 from . import dss_rid_helper
 from .rid_telemetry_monitoring import FlightTelemetryRIDEngine
 from .rid_utils import (
+    OperatorLocation,
     RIDAircraftPosition,
     RIDAircraftState,
     RIDAltitude,
     RIDAuthData,
+    RIDFlightDetails,
     RIDHeight,
+    RIDLatLngPoint,
     RIDOperatorDetails,
     RIDPolygon,
     RIDTestDataStorage,
@@ -62,21 +66,18 @@ def process_requested_flight(
     all_altitudes = []
     provided_telemetries = requested_flight["telemetry"]
     provided_flight_details = requested_flight["details_responses"]
-    try:
-        aircraft_type = requested_flight["aircraft_type"]
-    except KeyError:
-        aircraft_type = "NotDeclared"
 
     for provided_flight_detail in provided_flight_details:
         fd = provided_flight_detail["details"]
         requested_flight_detail_id = fd["id"]
-
-        op_location = LatLngPoint(lat=fd["operator_location"]["lat"], lng=fd["operator_location"]["lng"])
+        operator_location = None
+        uas_id = None
+        eu_classification = None
+        auth_data = None
+        if "operator_location" in fd.keys():
+            operator_location = from_dict(data_class=OperatorLocation, data=fd["operator_location"])
         if "auth_data" in fd.keys():
             auth_data = RIDAuthData(format=fd["auth_data"]["format"], data=fd["auth_data"]["data"])
-        else:
-            auth_data = RIDAuthData(format=0, data="")
-        serial_number = fd["serial_number"] if "serial_number" in fd else "MFR1C123456789ABC"
         if "uas_id" in fd.keys():
             uas_id = UASID(
                 specific_session_id=fd["uas_id"]["specific_session_id"],
@@ -84,26 +85,14 @@ def process_requested_flight(
                 registration_id=fd["uas_id"]["registration_id"],
                 utm_id=fd["uas_id"]["utm_id"],
             )
-        else:
-            uas_id = UASID(
-                specific_session_id="02-a1b2c3d4e5f60708",
-                serial_number=serial_number,
-                utm_id="ae1fa066-6d68-4018-8274-af867966978e",
-                registration_id="MFR1C123456789ABC",
-            )
-        eu_classification = None
+
         if fd.get("eu_classification"):
-            eu_classification = UAClassificationEU(
-                category=fd["eu_classification"]["category"],
-                class_=fd["eu_classification"]["class"],
-            )
-        flight_detail = RIDOperatorDetails(
+            eu_classification = from_dict(data_class=UAClassificationEU, data=fd["eu_classfication"])
+
+        flight_detail = RIDFlightDetails(
             id=requested_flight_detail_id,
             operation_description=fd["operation_description"],
-            serial_number=serial_number,
-            registration_number=fd["registration_number"],
-            operator_location=op_location,
-            aircraft_type=aircraft_type,
+            operator_location=operator_location,
             operator_id=fd["operator_id"],
             auth_data=auth_data,
             uas_id=uas_id,
@@ -195,25 +184,38 @@ def process_requested_flight(
 
 @app.task(name="submit_dss_subscription")
 def submit_dss_subscription(view, vertex_list, request_uuid):
-    subscription_time_delta = 30
-    myDSSSubscriber = dss_rid_helper.RemoteIDOperations()
-    subscription_created = myDSSSubscriber.create_dss_subscription(
+    subscription_duration_seconds = 30
+    my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
+    subscription_created = my_dss_subscriber.create_dss_subscription(
         vertex_list=vertex_list,
         view=view,
         request_uuid=request_uuid,
-        subscription_time_delta=subscription_time_delta,
+        subscription_duration_seconds=subscription_duration_seconds,
     )
     logger.info("Subscription creation status: %s" % subscription_created.created)
 
 
 @app.task(name="run_ussp_polling_for_rid")
-def run_ussp_polling_for_rid():
+def run_ussp_polling_for_rid(end_time: str, session_id: str):
     """This method is a wrapper for repeated polling of UTMSPs for Network RID information"""
-    logger.debug("Starting USSP polling.. ")
+    logger.info("Starting USSP polling.. ")
     # Define start and end time
+    now = arrow.now()
+    end_time_formatted = arrow.get(end_time)
 
-    async_polling_lock = "async_polling_lock"  # This
+    delta = end_time_formatted - now
+    polling_duration = delta.total_seconds()
+    logger.info("Polling duration: %s" % polling_duration)
+
+    my_database_reader = FlightBlenderDatabaseReader()
+    subscription_record = my_database_reader.get_rid_subscription_record_by_id(id=session_id)
+    logger.info("Polling USSP for RID data..")
+
     r = get_redis()
+
+    async_polling_lock = f"async_polling_lock_{session_id}"  # This
+
+    my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
 
     if r.exists(async_polling_lock):
         logger.info("Polling is ongoing, not setting additional polling tasks..")
@@ -221,32 +223,18 @@ def run_ussp_polling_for_rid():
         logger.info("Setting Polling Lock..")
 
         r.set(async_polling_lock, "1")
-        r.expire(async_polling_lock, timedelta(minutes=1.5))
+        r.expire(async_polling_lock, timedelta(seconds=polling_duration))
+        while arrow.now() < end_time_formatted:
+            subscription_id = str(subscription_record.subscription_id)
+            view = subscription_record.view
+            flight_details = subscription_record.flight_details
+            my_dss_subscriber.query_uss_for_rid(flight_details=flight_details, subscription_id=subscription_id, view=view)
 
-        for k in range(120):
-            poll_uss_for_flights_async.apply_async(expires=2)
-            time.sleep(0.5)
+            time.sleep(0.6)
 
         r.delete(async_polling_lock)
 
-    logger.debug("Finishing USSP polling..")
-
-
-@app.task(name="poll_uss_for_flights_async")
-def poll_uss_for_flights_async():
-    myDSSSubscriber = dss_rid_helper.RemoteIDOperations()
-
-    my_database_reader = FlightBlenderDatabaseReader()
-
-    flights_dict = {}
-    all_subscription_records = my_database_reader.get_all_rid_simulated_subscription_records()
-    logger.info("Polling USSP for RID data..")
-
-    for subscription_record in all_subscription_records:
-        subscription_id = str(subscription_record.subscription_id)
-        view = subscription_record.view
-        flight_details = subscription_record.flight_details
-        myDSSSubscriber.query_uss_for_rid(flight_details=flight_details, subscription_id=subscription_id, view=view)
+    logger.debug("Finished USSP polling..")
 
 
 @app.task(name="stream_rid_telemetry_data")
