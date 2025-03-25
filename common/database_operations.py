@@ -152,6 +152,17 @@ class FlightBlenderDatabaseReader:
         except TaskScheduler.DoesNotExist:
             return None
 
+    def get_active_rid_observations_for_view(
+        self, start_time: datetime, end_time: datetime
+    ) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
+        try:
+            observations = FlightObeservation.objects.filter(created_at__gte=start_time, created_at__lte=end_time, traffic_source=11).order_by(
+                "-created_at"
+            )
+            return observations
+        except FlightObeservation.DoesNotExist:
+            return None
+
     def get_active_rid_observations_for_session(self, session_id: str) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
         try:
             observations = FlightObeservation.objects.filter(session_id=session_id, traffic_source=11).order_by("-created_at")
@@ -164,7 +175,7 @@ class FlightBlenderDatabaseReader:
     ) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
         try:
             observations = FlightObeservation.objects.filter(
-                session_id=session_id, timestamp__gte=start_time, timestamp__lte=end_time, traffic_source=11
+                session_id=session_id, created_at__gte=start_time, created_at__lte=end_time, traffic_source=11
             )
             return observations
         except FlightObeservation.DoesNotExist:
@@ -192,7 +203,11 @@ class FlightBlenderDatabaseReader:
         return rid_subscription_record
 
     def get_all_rid_simulated_subscription_records(self) -> QuerySet[ISASubscription]:
-        return ISASubscription.objects.filter(is_simulated=True)
+        now = arrow.now().datetime
+        return ISASubscription.objects.filter(is_simulated=True, end_datetime__gte=now, created_at__lte=now)
+
+    def get_rid_subscription_record_by_id(self, id: str) -> ISASubscription:
+        return ISASubscription.objects.get(id=id)
 
 
 class FlightBlenderDatabaseWriter:
@@ -345,7 +360,6 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def create_conformance_monitoring_periodic_task(self, flight_declaration: FlightDeclaration) -> bool:
-        
         conformance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
         now = arrow.now()
@@ -355,16 +369,21 @@ class FlightBlenderDatabaseWriter:
         delta_seconds = delta.total_seconds()
         expires = now.shift(seconds=delta_seconds)
         task_name = "check_flight_conformance"
-        logger.info("Creating periodic task for conformance monitoring exipres at %s" % expires)
+        logger.info("Creating periodic task for conformance monitoring expires at %s" % expires)
         try:
             p_task = conformance_monitoring_job.schedule_every(
-                task_name=task_name, period="seconds", every=every, expires=expires.isoformat(), flight_declaration=flight_declaration, session_id=session_id
-            )            
-            
+                task_name=task_name,
+                period="seconds",
+                every=every,
+                expires=expires.isoformat(),
+                flight_declaration=flight_declaration,
+                session_id=session_id,
+            )
+
             p_task.start()
             return True
-        except Exception as e:            
-            print(e)
+        except Exception as e:
+            logger.debug(e)
             logger.error("Could not create periodic task")
             return False
 

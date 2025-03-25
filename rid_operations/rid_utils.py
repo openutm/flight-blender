@@ -3,7 +3,8 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import List, Literal, NamedTuple, Optional, Union
 
-from implicitdict import StringBasedDateTime
+from implicitdict import ImplicitDict, StringBasedDateTime
+from shapely.geometry import Point
 
 from scd_operations.scd_data_definitions import Volume4D
 
@@ -30,6 +31,14 @@ class Position(NamedTuple):
     alt: float
 
 
+class ClusterPosition(NamedTuple):
+    """A class to hold most recent position for remote id data"""
+
+    lat: float
+    lng: float
+    alt: Optional[float] = None
+
+
 class RIDPositions(NamedTuple):
     """A list of positions for RID"""
 
@@ -42,15 +51,23 @@ class RIDFlight(NamedTuple):
     recent_paths: List[RIDPositions]
 
 
-class ClusterDetails(NamedTuple):
-    corners: List[Position]
+class Cluster(ImplicitDict):
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    points: List[Point]
+
+
+class ClusterDetail(NamedTuple):
+    corners: List[ClusterPosition]
     area_sqm: float
     number_of_flights: float
 
 
 class RIDDisplayDataResponse(NamedTuple):
     flights: List[RIDFlight]
-    clusters: List[ClusterDetails]
+    clusters: List[ClusterDetail]
 
 
 @dataclass
@@ -217,6 +234,17 @@ class RIDOperatorDetails:
 
 
 @dataclass
+class RIDFlightDetails:
+    id: str
+    operator_id: Optional[str]
+    operator_location: Optional[OperatorLocation]
+    operation_description: Optional[str]
+    auth_data: Optional[RIDAuthData]
+    eu_classification: Optional[UAClassificationEU] = None
+    uas_id: Optional[UASID] = None
+
+
+@dataclass
 class FlightState:
     timestamp: StringBasedDateTime
     timestamp_accuracy: float
@@ -238,7 +266,7 @@ class FlightState:
 @dataclass
 class RIDTestDetailsResponse:
     effective_after: str
-    details: RIDOperatorDetails
+    details: RIDFlightDetails
 
 
 @dataclass
