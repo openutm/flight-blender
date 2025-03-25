@@ -5,6 +5,7 @@
 import hashlib
 import json
 import logging
+import math
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta
@@ -16,7 +17,11 @@ import tldextract
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Geod
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import LineString, Point, Polygon, box
+from uas_standards.astm.f3411.v22a.constants import (
+    NetMinClusterSizePercent,
+    NetMinObfuscationDistanceM,
+)
 
 from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
@@ -33,6 +38,7 @@ from rid_operations.data_definitions import (
 )
 
 from .rid_utils import (
+    Cluster,
     ClusterDetail,
     ClusterPosition,
     IdentificationServiceArea,
@@ -64,27 +70,86 @@ if ENV_FILE:
     load_dotenv(ENV_FILE)
 
 
+geod = Geod(ellps="WGS84")
+
+
 class RemoteIDOperations:
     def __init__(self):
         self.dss_base_url = env.get("DSS_BASE_URL", "000")
         self.r = get_redis()
 
     def compute_polygon_area(self, polygon: Polygon):
-        geod = Geod(ellps="WGS84")
         poly_area_m2, poly_perimeter = geod.geometry_area_perimeter(polygon)
-        poly_area_hectares = poly_area_m2 / 10000  # convert from m^2 to hectares
-        return poly_area_hectares
 
-    def generate_cluster_details(self, rid_flights: List[RIDFlight], view_box) -> List[ClusterDetail]:
+        return poly_area_m2
+
+    def extend_cluster(self, view_area_sqm: float, min_x: float, min_y: float, max_x: float, max_y: float, all_positions: list[Point]) -> Cluster:
+        """Code from InterUSS monitoring mocks"""
+
+        cluster = Cluster(
+            x_min=min_x,
+            x_max=max_x,
+            y_min=min_y,
+            y_max=max_y,
+            points=all_positions,
+        )
+
+        cluster_width = geod.geometry_length(LineString([Point(min_x, min_y), Point(max_x, min_y)]))
+        cluster_height = geod.geometry_length(LineString([Point(min_x, min_y), Point(min_x, max_y)]))
+        cluster_area = cluster_width * cluster_height
+
+        # Extend cluster width to match the minimum distance required by NET0490
+        if cluster_width < 2 * NetMinObfuscationDistanceM:
+            delta = NetMinObfuscationDistanceM - cluster_width / 2
+            cluster = Cluster(
+                x_min=min_x - delta,
+                x_max=max_x + delta,
+                y_min=min_y,
+                y_max=max_y,
+                points=all_positions,
+            )
+
+        # Extend cluster height to match the minimum distance required by NET0490
+        if cluster_height < 2 * NetMinObfuscationDistanceM:
+            delta = NetMinObfuscationDistanceM - cluster_height / 2
+            cluster = Cluster(
+                x_min=min_x,
+                x_max=max_x,
+                y_min=min_y - delta,
+                y_max=max_y + delta,
+                points=all_positions,
+            )
+
+        # Extend cluster to the minimum area size required by NET0480
+        min_cluster_area = view_area_sqm * NetMinClusterSizePercent / 100
+
+        if cluster_area < min_cluster_area:
+            scale = math.sqrt(min_cluster_area / cluster_area) / 2
+            cluster = Cluster(
+                x_min=min_x - scale * cluster_width,
+                x_max=max_x + scale * cluster_width,
+                y_min=min_y - scale * cluster_height,
+                y_max=max_y + scale * cluster_height,
+                points=all_positions,
+            )
+
+        return cluster
+
+    def generate_cluster_details(self, rid_flights: List[RIDFlight], view_box: Polygon) -> List[ClusterDetail]:
         all_positions: list[Point] = []
+
+        view_min = view_box.bounds[0:2]
+        view_max = view_box.bounds[2:4]
+
+        view_min_point = Point(view_min[0], view_min[1])
+        view_max_point = Point(view_max[0], view_max[1])
+        all_positions.append(view_min_point)
+        all_positions.append(view_max_point)
 
         for rid_flight in rid_flights:
             flight_most_recent_position = rid_flight.most_recent_position
             position = Point(flight_most_recent_position.lat, flight_most_recent_position.lng)
             all_positions.append(position)
-
-        if not all_positions:
-            return []
 
         min_x, min_y, max_x, max_y = all_positions[0].bounds
         for position in all_positions[1:]:
@@ -95,19 +160,27 @@ class RemoteIDOperations:
             max_y = max(max_y, y_max)
 
         # bounding_box_polygon = box(min_x, min_y, max_x, max_y)
-
         bounding_box_area_sq_meters = self.compute_polygon_area(view_box)
+
+        extended_cluster = self.extend_cluster(
+            view_area_sqm=bounding_box_area_sq_meters,
+            min_x=min_x,
+            min_y=min_y,
+            max_x=max_x,
+            max_y=max_y,
+            all_positions=all_positions,
+        )
         number_of_flights = len(rid_flights)
-        cluster_details = ClusterDetail(
+        cluster = ClusterDetail(
             corners=[
-                ClusterPosition(lat=min_y, lng=min_x),
-                ClusterPosition(lat=min_y, lng=max_x),
-                ClusterPosition(lat=max_y, lng=max_x),
-                ClusterPosition(lat=max_y, lng=min_x),
+                ClusterPosition(lat=extended_cluster.y_min, lng=extended_cluster.x_min),
+                ClusterPosition(lat=extended_cluster.y_max, lng=extended_cluster.x_max),
             ],
             area_sqm=bounding_box_area_sq_meters,
             number_of_flights=number_of_flights,
         )
+        cluster_details = [cluster]
+
         return cluster_details
 
     def create_dss_isa(

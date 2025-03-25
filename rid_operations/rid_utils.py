@@ -3,7 +3,8 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import List, Literal, NamedTuple, Optional, Union
 
-from implicitdict import StringBasedDateTime
+from implicitdict import ImplicitDict, StringBasedDateTime
+from shapely.geometry import Point
 
 from scd_operations.scd_data_definitions import Volume4D
 
@@ -48,6 +49,14 @@ class RIDFlight(NamedTuple):
     id: str
     most_recent_position: Position
     recent_paths: List[RIDPositions]
+
+
+class Cluster(ImplicitDict):
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
+    points: List[Point]
 
 
 class ClusterDetail(NamedTuple):

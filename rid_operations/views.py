@@ -332,11 +332,9 @@ def get_display_data(request):
         )
 
     view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
-
     view_port_diagonal = view_port_ops.get_view_port_diagonal_length_kms(view_port_coords=view_port)
-    logger.info("********")
     logger.info("View port diagonal %s" % view_port_diagonal)
-    logger.info("********")
+
     if (view_port_diagonal) > 7:
         view_port_too_large_msg = GenericErrorResponseMessage(message="The requested view %s rectangle is too large" % view)
         return JsonResponse(json.loads(json.dumps(asdict(view_port_too_large_msg))), status=413)
@@ -360,7 +358,6 @@ def get_display_data(request):
         # create a subscription
         my_subscription_helper = SubscriptionsHelper()
         subscription_exists = my_subscription_helper.check_subscription_exists(view)
-        view_hash = my_subscription_helper.get_view_hash(view)
 
         if not subscription_exists:
             subscription_duration_seconds = 20
@@ -383,20 +380,12 @@ def get_display_data(request):
 
         # Get the last reading for view hash
 
-        r = get_redis()
-        key = "last_reading_for_view_hash_{view_hash}".format(view_hash=view_hash)
-        if r.exists(key):
-            last_reading_time = r.get(key)
-            after_datetime = arrow.get(last_reading_time)
-        else:
-            now = arrow.now()
-            one_second_before_now = now.shift(seconds=-1)
-            after_datetime = one_second_before_now
+        now = arrow.now()
+        thirty_seconds_before_now = now.shift(seconds=-30)
 
-        r.set(key, arrow.now().isoformat())
-        r.expire(key, 300)
-
-        distinct_messages = my_database_reader.get_active_rid_observations_for_view(start_time=after_datetime.datetime, end_time=arrow.now().datetime)
+        distinct_messages = my_database_reader.get_active_rid_observations_for_view(
+            start_time=thirty_seconds_before_now.datetime, end_time=now.datetime
+        )
         logger.debug("Found %s distinct messages" % len(distinct_messages))
 
         distinct_messages = distinct_messages if distinct_messages else []
@@ -405,7 +394,7 @@ def get_display_data(request):
             if message.icao_address not in unique_messages:
                 unique_messages[message.icao_address] = message
         distinct_messages = list(unique_messages.values())
-        logger.debug("Found %s distinct messages" % len(distinct_messages))
+        logger.info("Found %s distinct messages" % len(distinct_messages))
 
         for observation_message in distinct_messages:
             all_recent_positions = []
@@ -443,15 +432,16 @@ def get_display_data(request):
 
             rid_flights.append(current_flight)
 
-        # my_rid_helper = dss_rid_helper.RemoteIDOperations()
-        # if should_cluster:
-        #     clusters = my_rid_helper.generate_cluster_details(rid_flights=rid_flights, view_box=b)
-        # else:
-        #     clusters = []
-        rid_display_data = RIDDisplayDataResponse(flights=rid_flights, clusters=[])
+        my_rid_helper = dss_rid_helper.RemoteIDOperations()
+        clusters = []
+        if should_cluster:
+            clusters = my_rid_helper.generate_cluster_details(rid_flights=rid_flights, view_box=b)
+            rid_flights = []
+
+        rid_display_data = RIDDisplayDataResponse(flights=rid_flights, clusters=clusters)
 
         rid_flights_dict = my_rid_output_helper.make_json_compatible(rid_display_data)
-
+        logger.info(rid_flights_dict)
         return JsonResponse(
             {
                 "flights": rid_flights_dict["flights"],
