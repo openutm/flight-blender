@@ -16,14 +16,11 @@ from marshmallow import ValidationError
 from rest_framework import generics
 from rest_framework.decorators import api_view
 
-from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
 from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from common.database_operations import FlightBlenderDatabaseReader
 from rid_operations import view_port_ops
 from rid_operations.data_definitions import (
-    RIDAircraftState,
-    RIDFlightDetails,
     SignedUnSignedTelemetryObservations,
 )
 from rid_operations.tasks import stream_rid_telemetry_data
@@ -34,7 +31,6 @@ from .data_definitions import (
     MessageVerificationFailedResponse,
     ObservationSchema,
     SingleAirtrafficObservation,
-    StoredFlightMessage,
     TrafficInformationDiscoveryResponse,
 )
 from .models import SignedTelmetryPublicKey
