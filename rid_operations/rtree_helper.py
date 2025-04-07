@@ -1,6 +1,5 @@
 import hashlib
 import logging
-from typing import List
 
 from rtree import index
 from shapely.geometry import Polygon
@@ -36,7 +35,7 @@ class OperationalIntentsIndexFactory:
         self,
         enumerated_id: int,
         flight_id: str,
-        view: List[float],
+        view: list[float],
         start_time: str,
         end_time: str,
     ):
@@ -51,7 +50,7 @@ class OperationalIntentsIndexFactory:
             obj=metadata,
         )
 
-    def delete_from_index(self, enumerated_id: int, view: List[float]):
+    def delete_from_index(self, enumerated_id: int, view: list[float]):
         self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
 
     def check_op_ints_exist(self) -> bool:
@@ -102,12 +101,12 @@ class OperationalIntentsIndexFactory:
         """Method to delete / close index"""
         self.idx.close()
 
-    def check_box_intersection(self, view_box: List[float]):
+    def check_box_intersection(self, view_box: list[float]):
         intersections = [n.object for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)]
         return intersections
 
 
-def check_polygon_intersection(op_int_details: List[OpInttoCheckDetails], polygon_to_check: Polygon) -> bool:
+def check_polygon_intersection(op_int_details: list[OpInttoCheckDetails], polygon_to_check: Polygon) -> bool:
     idx = index.Index()
     for pos, op_int_detail in enumerate(op_int_details):
         idx.insert(pos, op_int_detail.shape.bounds)

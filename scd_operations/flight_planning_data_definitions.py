@@ -1,7 +1,7 @@
 import enum
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from uss_operations.uss_data_definitions import Volume4D
 
@@ -38,16 +38,16 @@ class PlanningActivityResult(str, enum.Enum):
 @dataclass
 class CloseFlightPlanResponse:
     planning_result: PlanningActivityResult
-    notes: Optional[str]
+    notes: str | None
     flight_plan_status: FlightPlanCurrentStatus
-    includes_advisories: Optional[AdvisoryInclusion]
+    includes_advisories: AdvisoryInclusion | None
 
 
 @dataclass
 class UpsertFlightPlanResponse:
     flight_plan_status: FlightPlanCurrentStatus
     notes: str
-    includes_advisories: Optional[AdvisoryInclusion]
+    includes_advisories: AdvisoryInclusion | None
     planning_result: PlanningActivityResult
 
 
@@ -147,20 +147,20 @@ class FlightAuthorisationData:
     operation_mode: OperationMode
     operation_category: OperationCategory
     uas_class: UASClass
-    identification_technologies: List[str]
-    uas_type_certificate: Optional[str]
-    connectivity_methods: List[str]
+    identification_technologies: list[str]
+    uas_type_certificate: str | None
+    connectivity_methods: list[str]
     endurance_minutes: float
     emergency_procedure_url: str
     operator_id: str
-    uas_id: Optional[str]
+    uas_id: str | None
 
 
 @dataclass
 class BasicFlightPlanInformation:
     usage_state: UsageState
     uas_state: UasState
-    area: Optional[List[Volume4D]]
+    area: list[Volume4D] | None
 
 
 @dataclass
@@ -170,23 +170,23 @@ class ASTMF354821OpIntentInformation:
 
 @dataclass
 class RPAS26FlightDetails:
-    operator_type: Optional[OperatorType]
-    uas_serial_numbers: Optional[List[str]]
-    uas_registration_numbers: Optional[List[str]]
-    aircraft_type: Optional[AircraftType]
-    flight_profile: Optional[FlightProfile]
-    pilot_license_number: Optional[str]
-    pilot_phone_number: Optional[str]
-    operator_number: Optional[str]
+    operator_type: OperatorType | None
+    uas_serial_numbers: list[str] | None
+    uas_registration_numbers: list[str] | None
+    aircraft_type: AircraftType | None
+    flight_profile: FlightProfile | None
+    pilot_license_number: str | None
+    pilot_phone_number: str | None
+    operator_number: str | None
 
 
 @dataclass
 class FlightPlan:
     basic_information: BasicFlightPlanInformation
-    astm_f3548_21: Optional[ASTMF354821OpIntentInformation]
-    uspace_flight_authorisation: Optional[FlightAuthorisationData]
-    rpas_operating_rules_2_6: Optional[RPAS26FlightDetails] = dict
-    additional_information: Optional[Dict[str, Any]] = dict
+    astm_f3548_21: ASTMF354821OpIntentInformation | None
+    uspace_flight_authorisation: FlightAuthorisationData | None
+    rpas_operating_rules_2_6: RPAS26FlightDetails | None = dict
+    additional_information: dict[str, Any] | None = dict
 
 
 @dataclass
@@ -199,9 +199,9 @@ class FlightPlanningRequest:
 class FlightPlanningInjectionData:
     """Class for keeping track of an operational intent test injections"""
 
-    volumes: Optional[List[Volume4D]]
+    volumes: list[Volume4D] | None
     priority: int
-    off_nominal_volumes: Optional[List[Volume4D]]
+    off_nominal_volumes: list[Volume4D] | None
     uas_state: UasState
     usage_state: UsageState
     state: str
@@ -209,6 +209,6 @@ class FlightPlanningInjectionData:
 
 @dataclass
 class FlightPlanningUSSDetails:
-    volumes: List[Volume4D]
+    volumes: list[Volume4D]
     priority: int
-    off_nominal_volumes: Optional[List[Volume4D]]
+    off_nominal_volumes: list[Volume4D] | None

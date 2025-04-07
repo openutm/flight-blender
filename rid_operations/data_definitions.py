@@ -150,13 +150,13 @@ class Radius:
 
 @dataclass
 class RIDAuthData:
-    data: Optional[str] = ""
-    format: Optional[int] = 0
+    data: str | None = ""
+    format: int | None = 0
 
 
 @dataclass
 class ErrorResponse:
-    message: Optional[str] = ""
+    message: str | None = ""
 
 
 GeoPolygonString = str
@@ -165,7 +165,7 @@ GeoPolygonString = str
 @dataclass
 class RIDHeight:
     reference: Reference
-    distance: Optional[float] = 0
+    distance: float | None = 0
 
 
 @dataclass
@@ -187,72 +187,72 @@ class Altitude:
 
 @dataclass
 class OperatingArea:
-    aircraft_count: Optional[int] = None
-    volumes: Optional[List[OperatingArea]] = list
+    aircraft_count: int | None = None
+    volumes: list[OperatingArea] | None = list
 
 
 @dataclass
 class Polygon:
-    vertices: List[LatLngPoint]
+    vertices: list[LatLngPoint]
 
 
 @dataclass
 class UASID:
-    specific_session_id: Optional[SpecificSessionID] = None
-    serial_number: Optional[str] = ""
-    registration_id: Optional[str] = ""
-    utm_id: Optional[str] = ""
+    specific_session_id: SpecificSessionID | None = None
+    serial_number: str | None = ""
+    registration_id: str | None = ""
+    utm_id: str | None = ""
 
 
 @dataclass
 class OperatorLocation:
     position: LatLngPoint
-    altitude: Optional[Altitude] = None
-    altitude_type: Optional[AltitudeType] = None
+    altitude: Altitude | None = None
+    altitude_type: AltitudeType | None = None
 
 
 @dataclass
 class UAClassificationEU:
-    category: Optional[Category] = "EUCategoryUndefined"
-    class_: Optional[Class] = "EUClassUndefined"
+    category: Category | None = "EUCategoryUndefined"
+    class_: Class | None = "EUClassUndefined"
 
 
 @dataclass
 class RIDFlightDetails:
     id: str
-    eu_classification: Optional[UAClassificationEU] = None
-    uas_id: Optional[UASID] = None
-    operator_location: Optional[LatLngPoint] = None
-    auth_data: Optional[RIDAuthData] = None
-    operator_id: Optional[str] = ""
-    operation_description: Optional[str] = ""
+    eu_classification: UAClassificationEU | None = None
+    uas_id: UASID | None = None
+    operator_location: LatLngPoint | None = None
+    auth_data: RIDAuthData | None = None
+    operator_id: str | None = ""
+    operation_description: str | None = ""
 
 
 @dataclass
 class Circle:
-    center: Optional[LatLngPoint] = None
-    radius: Optional[Radius] = None
+    center: LatLngPoint | None = None
+    radius: Radius | None = None
 
 
 @dataclass
 class Volume3D:
-    outline_circle: Optional[Circle] = None
-    outline_polygon: Optional[Polygon] = None
-    altitude_lower: Optional[Altitude] = None
-    altitude_upper: Optional[Altitude] = None
+    outline_circle: Circle | None = None
+    outline_polygon: Polygon | None = None
+    altitude_lower: Altitude | None = None
+    altitude_upper: Altitude | None = None
 
 
 @dataclass
 class Volume4D:
     volume: Volume3D
-    time_start: Optional[Time] = None
-    time_end: Optional[Time] = None
+    time_start: Time | None = None
+    time_end: Time | None = None
 
 
 @dataclass
 class SubscriptionState:
     subscription_id: SubscriptionUUID
-    notification_index: Optional[SubscriptionNotificationIndex] = 0
+    notification_index: SubscriptionNotificationIndex | None = 0
 
 
 @dataclass
@@ -266,15 +266,15 @@ class RIDAircraftPosition:
     lng: Longitude
     accuracy_h: HorizontalAccuracy
     accuracy_v: VerticalAccuracy
-    height: Optional[RIDHeight]
-    alt: Optional[float] = -1000
-    pressure_altitude: Optional[float] = -1000
-    extrapolated: Optional[bool] = False
+    height: RIDHeight | None
+    alt: float | None = -1000
+    pressure_altitude: float | None = -1000
+    extrapolated: bool | None = False
 
 
 @dataclass
 class SubscriberToNotify:
-    subscriptions: List[SubscriptionState]
+    subscriptions: list[SubscriptionState]
     url: URL
 
 
@@ -319,9 +319,9 @@ class Subscription:
     uss_base_url: SubscriptionUSSBaseURL
     owner: str
     version: Version
-    time_end: Optional[Time]
-    time_start: Optional[Time][SubscriptionNotificationIndex] = 0
-    notification_index: Optional[int] = 0
+    time_end: Time | None
+    time_start: Time | SubscriptionNotificationIndex = 0
+    notification_index: int | None = 0
 
 
 @dataclass
@@ -340,10 +340,10 @@ class RIDAircraftState:
     timestamp_accuracy: float
     position: RIDAircraftPosition
     speed_accuracy: SpeedAccuracy
-    operational_status: Optional[RIDOperationalStatus] = "Undeclared"
-    speed: Optional[float] = 255
-    track: Optional[float] = 361
-    vertical_speed: Optional[float] = 63
+    operational_status: RIDOperationalStatus | None = "Undeclared"
+    speed: float | None = 255
+    track: float | None = 361
+    vertical_speed: float | None = 63
 
 
 @dataclass
@@ -354,13 +354,13 @@ class SignedUnsignedTelemetryObservation:
 
 @dataclass
 class SignedUnSignedTelemetryObservations:
-    current_states: List[RIDAircraftState]
+    current_states: list[RIDAircraftState]
     flight_details: RIDFlightDetails
 
 
 @dataclass
 class SignedTelemetryRequest:
-    observations: List[SignedUnsignedTelemetryObservation]
+    observations: list[SignedUnsignedTelemetryObservation]
 
 
 @dataclass
@@ -369,7 +369,7 @@ class SubmittedTelemetryFlightDetails:
     aircraft_type: str
     current_state: RIDAircraftState
     simulated: bool
-    recent_positions: List[RIDRecentAircraftPosition]
+    recent_positions: list[RIDRecentAircraftPosition]
     operator_details: RIDFlightDetails
 
 

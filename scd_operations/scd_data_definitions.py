@@ -1,6 +1,6 @@
 import enum
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Union
+from typing import Literal
 
 from implicitdict import StringBasedDateTime
 from shapely.geometry import Polygon as Plgn
@@ -34,7 +34,7 @@ class Time:
 class Polygon:
     """A class to hold the polygon object"""
 
-    vertices: List[LatLngPoint]  # A minimum of three LatLngPoints
+    vertices: list[LatLngPoint]  # A minimum of three LatLngPoints
 
 
 @dataclass
@@ -49,7 +49,7 @@ class Circle:
 class Altitude:
     """A class to hold altitude"""
 
-    value: Union[int, float]
+    value: int | float
     reference: str
     units: str
 
@@ -61,7 +61,7 @@ class Volume3D:
     outline_polygon: Polygon
     altitude_lower: Altitude
     altitude_upper: Altitude
-    outline_circle: Optional[Circle] = None
+    outline_circle: Circle | None = None
 
 
 class OperationalIntentState(str, enum.Enum):
@@ -84,16 +84,16 @@ class Volume4D:
 
 @dataclass
 class OperationalIntentStorageVolumes:
-    volumes: List[Volume4D]
+    volumes: list[Volume4D]
 
 
 @dataclass
 class OperationalIntentTestInjection:
     """Class for keeping track of an operational intent test injections"""
 
-    volumes: List[Volume4D]
+    volumes: list[Volume4D]
     priority: int
-    off_nominal_volumes: Optional[List[Volume4D]]
+    off_nominal_volumes: list[Volume4D] | None
     state: Literal[
         OperationalIntentState.Accepted,
         OperationalIntentState.Activated,
@@ -178,7 +178,7 @@ class FlightAuthorizationDataPayload:
         UASClass.C4,
     ]
     identification_technologies: Literal[IDTechnology.Network, IDTechnology.Broadcast]
-    connectivity_methods: List[str]
+    connectivity_methods: list[str]
     endurance_minutes: int
     emergency_procedure_url: str
     operator_id: str
@@ -211,7 +211,7 @@ class SCDTestStatusResponse:
 
 @dataclass
 class CapabilitiesResponse:
-    capabilities: List[
+    capabilities: list[
         Literal[
             USSCapabilitiesResponseEnum.BasicStrategicConflictDetection,
             USSCapabilitiesResponseEnum.FlightAuthorisationValidation,
@@ -260,26 +260,26 @@ class ImplicitSubscriptionParameters:
 class OperationalIntentReference:
     """A operational intent reference for the DSS"""
 
-    extents: List[Volume4D]
-    key: List[str]
+    extents: list[Volume4D]
+    key: list[str]
     state: str
     uss_base_url: str
-    new_subscription: Optional[ImplicitSubscriptionParameters] = None
+    new_subscription: ImplicitSubscriptionParameters | None = None
 
 
 @dataclass
 class PartialCreateOperationalIntentReference:
     """A operational intent reference for the DSS that is stored in the Database"""
 
-    volumes: List[Volume4D]
+    volumes: list[Volume4D]
     priority: int
     state: str
-    off_nominal_volumes: List[Volume4D]
+    off_nominal_volumes: list[Volume4D]
 
 
 @dataclass
 class OpIntSubscribers:
-    subscribers: List[str]
+    subscribers: list[str]
 
 
 @dataclass
@@ -309,21 +309,21 @@ class SubscriptionState:
 
 @dataclass
 class SubscriberToNotify:
-    subscriptions: List[SubscriptionState]
+    subscriptions: list[SubscriptionState]
     uss_base_url: str
 
 
 @dataclass
 class OperationalIntentSubmissionSuccess:
-    subscribers: List[SubscriberToNotify]
+    subscribers: list[SubscriberToNotify]
     operational_intent_reference: OperationalIntentReferenceDSSResponse
 
 
 @dataclass
 class OperationalIntentUSSDetails:
-    volumes: List[Volume4D]
+    volumes: list[Volume4D]
     priority: int
-    off_nominal_volumes: Optional[List[Volume4D]]
+    off_nominal_volumes: list[Volume4D] | None
 
 
 @dataclass
@@ -363,7 +363,7 @@ class OperationalIntentSubmissionError:
 
 @dataclass
 class OperationalIntentSubmissionStatus:
-    dss_response: Union[OperationalIntentSubmissionSuccess, OperationalIntentSubmissionError]
+    dss_response: OperationalIntentSubmissionSuccess | OperationalIntentSubmissionError
     status: str
     status_code: int
     message: str
@@ -374,7 +374,7 @@ class OperationalIntentSubmissionStatus:
 class NotifyPeerUSSPostPayload:
     operational_intent_id: str
     operational_intent: OperationalIntentDetailsUSSResponse
-    subscriptions: List[SubscriptionState]
+    subscriptions: list[SubscriptionState]
 
 
 @dataclass
@@ -389,7 +389,7 @@ class DeleteOperationalIntentConstuctor:
 class DeleteOperationalIntentResponseSuccess:
     """This method holds details of the data the DSS provides once a operational intent is deleted"""
 
-    subscribers: List[str]
+    subscribers: list[str]
     operational_intent_reference: OperationalIntentReferenceDSSResponse
 
 
@@ -415,14 +415,14 @@ class CommonDSS2xxResponse:
 
 @dataclass
 class DeleteOperationalIntentResponse:
-    dss_response: Union[DeleteOperationalIntentResponseSuccess, CommonDSS4xxResponse]
+    dss_response: DeleteOperationalIntentResponseSuccess | CommonDSS4xxResponse
     status: int
-    message: Union[CommonDSS4xxResponse, CommonDSS2xxResponse]
+    message: CommonDSS4xxResponse | CommonDSS2xxResponse
 
 
 @dataclass
 class OperationalIntentUpdateSuccessResponse:
-    subscribers: List[SubscriberToNotify]
+    subscribers: list[SubscriberToNotify]
     operational_intent_reference: OperationalIntentReferenceDSSResponse
 
 
@@ -472,23 +472,23 @@ class ShouldSendtoDSSProcessingResponse:
 
 @dataclass
 class OperationalIntentUpdateResponse:
-    dss_response: Union[OperationalIntentUpdateSuccessResponse, CommonDSS4xxResponse, CommonPeer9xxResponse]
+    dss_response: OperationalIntentUpdateSuccessResponse | CommonDSS4xxResponse | CommonPeer9xxResponse
     status: int
-    message: Union[CommonDSS4xxResponse, CommonDSS2xxResponse, str]
-    additional_information: Optional[ShouldSendtoDSSProcessingResponse] = None
+    message: CommonDSS4xxResponse | CommonDSS2xxResponse | str
+    additional_information: ShouldSendtoDSSProcessingResponse | None = None
 
 
 @dataclass
 class USSNotificationResponse:
     status: int
-    message: Union[CommonDSS4xxResponse, CommonDSS2xxResponse]
+    message: CommonDSS4xxResponse | CommonDSS2xxResponse
 
 
 @dataclass
 class OperationalIntentUpdateRequest:
-    extents: List[Volume4D]
+    extents: list[Volume4D]
     state: str
-    key: List[str]
+    key: list[str]
     uss_base_url: str
     subscription_id: str
 

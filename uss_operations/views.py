@@ -4,7 +4,6 @@ import time
 import uuid
 from dataclasses import asdict
 from enum import Enum
-from typing import List
 from uuid import UUID
 
 import arrow
@@ -115,7 +114,7 @@ def uss_update_opint_details(request):
         operational_intent_details = op_int_update_detail.operational_intent.details
         volumes = operational_intent_details.volumes
 
-        all_volumes: List[Volume4D] = []
+        all_volumes: list[Volume4D] = []
         for volume in volumes:
             volume_4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=volume)
             all_volumes.append(volume_4D)
@@ -315,7 +314,7 @@ def get_uss_flights(request):
     # Get the latest telemetry
 
     if not all_flights_telemetry_data:
-        logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
+        logger.error(f"No telemetry data found for operation {flight_declaration_id}")
         return
 
     distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []

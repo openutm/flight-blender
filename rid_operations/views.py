@@ -225,7 +225,7 @@ def get_rid_data(request, subscription_id):
         # Get the latest telemetry
 
         if not all_flights_telemetry_data:
-            logger.error("No telemetry data found for session_id {subscription_id}".format(subscription_id=subscription_id))
+            logger.error(f"No telemetry data found for session_id {subscription_id}")
             return
         return HttpResponse(
             json.dumps(all_flights_telemetry_data),

@@ -4,7 +4,6 @@ import time
 from dataclasses import asdict
 from datetime import timedelta
 from os import environ as env
-from typing import List
 
 import arrow
 from arrow.parser import ParserError
@@ -55,11 +54,11 @@ load_dotenv(find_dotenv())
 
 def process_requested_flight(
     requested_flight: dict, flight_injection_sorted_set: str, test_id: str
-) -> tuple[RIDTestInjection, List[LatLngPoint], List[float]]:
+) -> tuple[RIDTestInjection, list[LatLngPoint], list[float]]:
     r = get_redis()
     all_telemetry = []
     all_flight_details = []
-    all_positions: List[LatLngPoint] = []
+    all_positions: list[LatLngPoint] = []
     all_altitudes = []
     provided_telemetries = requested_flight["telemetry"]
     provided_flight_details = requested_flight["details_responses"]
@@ -275,9 +274,9 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
 @app.task(name="stream_rid_test_data")
 def stream_rid_test_data(requested_flights, test_id):
     test_id = test_id.split("_")[1]
-    all_requested_flights: List[RIDTestInjection] = []
+    all_requested_flights: list[RIDTestInjection] = []
     rf = json.loads(requested_flights)
-    all_positions: List[LatLngPoint] = []
+    all_positions: list[LatLngPoint] = []
 
     flight_injection_sorted_set = "requested_flight_ss"
     r = get_redis()
@@ -318,7 +317,7 @@ def stream_rid_test_data(requested_flights, test_id):
     astm_rid_standard_end_time = end_time_of_injections.shift(seconds=ASTM_TIME_SHIFT_SECS)
 
     # Create an ISA in the DSS
-    position_list: List[Point] = []
+    position_list: list[Point] = []
     for position in all_positions:
         position_list.append(Point(position.lng, position.lat))
 
@@ -328,7 +327,7 @@ def stream_rid_test_data(requested_flights, test_id):
     b = box(bounds[1], bounds[0], bounds[3], bounds[2])
     co_ordinates = list(zip(*b.exterior.coords.xy))
 
-    polygon_verticies: List[LatLngPoint] = []
+    polygon_verticies: list[LatLngPoint] = []
     for co_ordinate in co_ordinates:
         ll = LatLngPoint(lat=co_ordinate[0], lng=co_ordinate[1])
         polygon_verticies.append(ll)
@@ -499,10 +498,10 @@ def check_rid_stream_conformance(session_id: str, flight_declaration_id=None, dr
     rid_stream_conformant, error_details = my_rid_stream_checker.check_rid_stream_ok()
 
     if rid_stream_conformant:
-        logger.info("RID Data stream for  {session_id} is OK...".format(session_id=session_id))
+        logger.info(f"RID Data stream for  {session_id} is OK...")
 
     else:
-        logger.info("RID Data stream for {session_id} is NOT OK...".format(session_id=session_id))
+        logger.info(f"RID Data stream for {session_id} is NOT OK...")
         my_database_writer = FlightBlenderDatabaseWriter()
         for error_detail in error_details:
             operator_rid_notification = OperatorRIDNotificationCreationPayload(message=error_detail.error_description, session_id=session_id)

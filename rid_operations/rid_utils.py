@@ -1,6 +1,6 @@
 import enum
 from dataclasses import asdict, dataclass, field
-from typing import List, Literal, NamedTuple, Optional, Union
+from typing import Literal, NamedTuple
 
 from implicitdict import ImplicitDict, StringBasedDateTime
 from shapely.geometry import Point
@@ -35,19 +35,19 @@ class ClusterPosition(NamedTuple):
 
     lat: float
     lng: float
-    alt: Optional[float] = None
+    alt: float | None = None
 
 
 class RIDPositions(NamedTuple):
     """A list of positions for RID"""
 
-    positions: List[Position]
+    positions: list[Position]
 
 
 class RIDFlight(NamedTuple):
     id: str
     most_recent_position: Position
-    recent_paths: List[RIDPositions]
+    recent_paths: list[RIDPositions]
 
 
 class Cluster(ImplicitDict):
@@ -55,18 +55,18 @@ class Cluster(ImplicitDict):
     x_max: float
     y_min: float
     y_max: float
-    points: List[Point]
+    points: list[Point]
 
 
 class ClusterDetail(NamedTuple):
-    corners: List[ClusterPosition]
+    corners: list[ClusterPosition]
     area_sqm: float
     number_of_flights: float
 
 
 class RIDDisplayDataResponse(NamedTuple):
-    flights: List[RIDFlight]
-    clusters: List[ClusterDetail]
+    flights: list[RIDFlight]
+    clusters: list[ClusterDetail]
 
 
 @dataclass
@@ -74,7 +74,7 @@ class SubscriptionResponse:
     """A object to hold details of a request for creation of subscription in the DSS"""
 
     created: bool
-    dss_subscription_id: Optional[str]
+    dss_subscription_id: str | None
     notification_index: int
 
 
@@ -82,14 +82,14 @@ class SubscriptionResponse:
 class RIDAltitude:
     """A class to hold altitude"""
 
-    value: Union[int, float]
+    value: int | float
     reference: str
     units: str
 
 
 @dataclass
 class RIDPolygon:
-    vertices: List[RIDLatLngPoint]
+    vertices: list[RIDLatLngPoint]
 
 
 @dataclass
@@ -115,7 +115,7 @@ class SubscriptionState:
 @dataclass
 class SubscriberToNotify:
     url: str
-    subscriptions: List[SubscriptionState] = field(default_factory=[])
+    subscriptions: list[SubscriptionState] = field(default_factory=[])
 
 
 @dataclass
@@ -152,7 +152,7 @@ class ISACreationResponse:
     """A object to hold details of a request for creation of an ISA in the DSS"""
 
     created: bool
-    subscribers: List[SubscriberToNotify]
+    subscribers: list[SubscriberToNotify]
     service_area: IdentificationServiceArea
 
 
@@ -161,7 +161,7 @@ class CreateSubscriptionResponse(NamedTuple):
 
     message: str
     id: str
-    dss_subscription_response: Optional[SubscriptionResponse]
+    dss_subscription_response: SubscriptionResponse | None
 
 
 class RIDCapabilitiesResponseEnum(str, enum.Enum):
@@ -173,7 +173,7 @@ class RIDCapabilitiesResponseEnum(str, enum.Enum):
 
 @dataclass
 class RIDCapabilitiesResponse:
-    capabilities: List[
+    capabilities: list[
         Literal[
             RIDCapabilitiesResponseEnum.ASTMRID2019,
             RIDCapabilitiesResponseEnum.ASTMRID2022,
@@ -194,21 +194,21 @@ class RIDAircraftPosition:
     alt: float
     accuracy_h: str
     accuracy_v: str
-    extrapolated: Optional[bool]
-    pressure_altitude: Optional[float]
-    height: Optional[RIDHeight]
+    extrapolated: bool | None
+    pressure_altitude: float | None
+    height: RIDHeight | None
 
 
 @dataclass
 class AuthData:
     format: int
-    data: Optional[str] = ""
+    data: str | None = ""
 
 
 @dataclass
 class RIDAuthData:
     format: int
-    data: Optional[str] = ""
+    data: str | None = ""
 
 
 @dataclass
@@ -221,39 +221,39 @@ class OperatorAltitude:
 class RIDOperatorDetails:
     id: str
 
-    operator_id: Optional[str]
-    operator_location: Optional[RIDLatLngPoint]
-    operation_description: Optional[str]
-    auth_data: Optional[RIDAuthData]
-    serial_number: Optional[str]
-    registration_number: Optional[str]
-    aircraft_type: Optional[str] = None
-    eu_classification: Optional[UAClassificationEU] = None
-    uas_id: Optional[UASID] = None
+    operator_id: str | None
+    operator_location: RIDLatLngPoint | None
+    operation_description: str | None
+    auth_data: RIDAuthData | None
+    serial_number: str | None
+    registration_number: str | None
+    aircraft_type: str | None = None
+    eu_classification: UAClassificationEU | None = None
+    uas_id: UASID | None = None
 
 
 @dataclass
 class RIDFlightDetails:
     id: str
-    operator_id: Optional[str]
-    operator_location: Optional[OperatorLocation]
-    operation_description: Optional[str]
-    auth_data: Optional[RIDAuthData]
-    eu_classification: Optional[UAClassificationEU] = None
-    uas_id: Optional[UASID] = None
+    operator_id: str | None
+    operator_location: OperatorLocation | None
+    operation_description: str | None
+    auth_data: RIDAuthData | None
+    eu_classification: UAClassificationEU | None = None
+    uas_id: UASID | None = None
 
 
 @dataclass
 class FlightState:
     timestamp: StringBasedDateTime
     timestamp_accuracy: float
-    operational_status: Optional[str]
+    operational_status: str | None
     position: RIDAircraftPosition
     track: float
     speed: float
     speed_accuracy: str
     vertical_speed: float
-    height: Optional[RIDHeight]
+    height: RIDHeight | None
     group_radius: int
     group_ceiling: int
     group_floor: int
@@ -271,8 +271,8 @@ class RIDTestDetailsResponse:
 @dataclass
 class RIDTestInjection:
     injection_id: str
-    telemetry: List[FlightState]
-    details_responses: List[RIDTestDetailsResponse]
+    telemetry: list[FlightState]
+    details_responses: list[RIDTestDetailsResponse]
 
 
 @dataclass
@@ -289,13 +289,13 @@ class HTTPErrorResponse:
 
 @dataclass
 class CreateTestPayload:
-    requested_flights: List[RIDTestInjection]
+    requested_flights: list[RIDTestInjection]
     test_id: str
 
 
 @dataclass
 class CreateTestResponse:
-    injected_flights: List[RIDTestInjection]
+    injected_flights: list[RIDTestInjection]
     version: int
 
 
@@ -305,11 +305,11 @@ class RIDAircraftState:
     timestamp_accuracy: float
     speed_accuracy: str
     position: RIDAircraftPosition
-    operational_status: Optional[str] = None
-    track: Optional[float] = None
-    speed: Optional[float] = None
-    vertical_speed: Optional[float] = None
-    height: Optional[RIDHeight] = None
+    operational_status: str | None = None
+    track: float | None = None
+    speed: float | None = None
+    vertical_speed: float | None = None
+    height: RIDHeight | None = None
 
     def as_dict(self):
         data = asdict(self)
@@ -334,14 +334,14 @@ class TelemetryFlightDetails:
     aircraft_type: str
     current_state: RIDAircraftState
     simulated: bool
-    recent_positions: List[RIDRecentAircraftPosition]
+    recent_positions: list[RIDRecentAircraftPosition]
     operator_details: RIDOperatorDetails
 
 
 @dataclass
 class RIDFlightResponse:
     timestamp: RIDTime
-    flights: List[TelemetryFlightDetails]
+    flights: list[TelemetryFlightDetails]
 
 
 @dataclass
@@ -352,6 +352,6 @@ class SingleObservationMetadata:
 
 @dataclass
 class RIDFlightsRecord:
-    service_areas: List[IdentificationServiceArea]
+    service_areas: list[IdentificationServiceArea]
     subscription: RIDSubscription
-    extents: Optional[RIDVolume4D] = None
+    extents: RIDVolume4D | None = None

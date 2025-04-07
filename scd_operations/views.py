@@ -120,7 +120,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
     my_database_reader = FlightBlenderDatabaseReader()
 
     operation_id_str = str(flight_plan_id)
-    logger.info("Processing -> {operation_id_str}".format(operation_id_str=operation_id_str))
+    logger.info(f"Processing -> {operation_id_str}")
 
     if request.method == "PUT":
         scd_test_data = request.data
@@ -413,7 +413,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 )
                 # Store flight DSS response and operational intent reference
                 flight_opint = FLIGHT_OPINT_KEY + operation_id_str
-                logger.info("Flight with operational intent id {flight_opint} created".format(flight_opint=operation_id_str))
+                logger.info(f"Flight with operational intent id {operation_id_str} created")
                 r.set(flight_opint, json.dumps(asdict(operational_intent_full_details)))
                 r.expire(name=flight_opint, time=opint_subscription_end_time)
 

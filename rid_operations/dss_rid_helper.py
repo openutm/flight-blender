@@ -10,7 +10,6 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from os import environ as env
-from typing import List, Union
 
 import requests
 import tldextract
@@ -132,7 +131,7 @@ class RemoteIDOperations:
 
         return cluster
 
-    def generate_cluster_details(self, rid_flights: List[RIDFlight], view_box: Polygon) -> List[ClusterDetail]:
+    def generate_cluster_details(self, rid_flights: list[RIDFlight], view_box: Polygon) -> list[ClusterDetail]:
         all_positions: list[Point] = []
 
         view_min = view_box.bounds[0:2]
@@ -182,7 +181,7 @@ class RemoteIDOperations:
 
     def create_dss_isa(
         self,
-        flight_extents: Union[RIDVolume4D, Volume4D],
+        flight_extents: RIDVolume4D | Volume4D,
         uss_base_url: str,
         expiration_time_seconds: int = 30,
     ) -> ISACreationResponse:
@@ -261,7 +260,7 @@ class RemoteIDOperations:
 
                 dss_response_subscribers = dss_response["subscribers"]
 
-                dss_r_subs: List[SubscriberToNotify] = []
+                dss_r_subs: list[SubscriberToNotify] = []
                 for subscriber in dss_response_subscribers:
                     subs = subscriber["subscriptions"]
                     all_s = []
@@ -276,7 +275,7 @@ class RemoteIDOperations:
                     dss_r_subs.append(subscriber_to_notify)
 
                 for subscriber in dss_r_subs:
-                    url = "{}/uss/identification_service_areas/{}".format(subscriber.url, new_isa_id)
+                    url = f"{subscriber.url}/uss/identification_service_areas/{new_isa_id}"
                     try:
                         ext = tldextract.extract(subscriber.url)
                     except Exception:
@@ -306,7 +305,7 @@ class RemoteIDOperations:
                     try:
                         response = requests.post(url, headers=headers, json=json.loads(json.dumps(payload)))
                     except Exception as re:
-                        logger.error("Error in sending subscriber notification to %s :  %s " % (url, re))
+                        logger.error(f"Error in sending subscriber notification to {url} :  {re} ")
                     if response.status_code == 204:
                         logger.info(response.status_code)
                         logger.info("Successfully notified subscriber %s" % url)
