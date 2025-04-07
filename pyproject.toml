@@ -43,6 +43,7 @@ dev = [
     "codespell>=2.4.1",
     "pre-commit>=4.2.0",
     "pylint-django>=2.6.1",
+    "pylint-pytest>=1.1.8",
     "pyright>=1.1.398",
     "ruff>=0.11.4",
 ]

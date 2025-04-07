@@ -448,6 +448,7 @@ dev = [
     { name = "codespell" },
     { name = "pre-commit" },
     { name = "pylint-django" },
+    { name = "pylint-pytest" },
     { name = "pyright" },
     { name = "ruff" },
 ]
@@ -491,6 +492,7 @@ dev = [
     { name = "codespell", specifier = ">=2.4.1" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pylint-django", specifier = ">=2.6.1" },
+    { name = "pylint-pytest", specifier = ">=1.1.8" },
     { name = "pyright", specifier = ">=1.1.398" },
     { name = "ruff", specifier = ">=0.11.4" },
 ]
@@ -571,6 +573,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/cf/fd/c45a898b594dd486d28265ebcc4aab7a0aedb5528d4f83c0596166594806/implicitdict-2.3.0.tar.gz", hash = "sha256:7d7bc8c0e688cfcd16788fd762cf5e438c0380b023e14de3061d8a952d2fe65e", size = 27239 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3c/93/0d57f0e1a65f4bbe2c846b50dda0c6e367ddcefe6cfac14fd1a594bf9e66/implicitdict-2.3.0-py3-none-any.whl", hash = "sha256:8861d017bef318353f6eb71d2bed782d938ee74cb202f5fcdf64176f937c7be8", size = 17296 },
+]
+
+[[package]]
+name = "iniconfig"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f2/97/ebf4da567aa6827c909642694d71c9fcf53e5b504f2d96afea02718862f3/iniconfig-2.1.0.tar.gz", hash = "sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7", size = 4793 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2c/e1/e6716421ea10d38022b952c159d5161ca1193197fb744506875fbb87ea7b/iniconfig-2.1.0-py3-none-any.whl", hash = "sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760", size = 6050 },
 ]
 
 [[package]]
@@ -799,6 +810,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pluggy"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/2d/02d4312c973c6050a18b314a5ad0b3210edb65a906f868e31c111dede4a6/pluggy-1.5.0.tar.gz", hash = "sha256:2cffa88e94fdc978c4c574f15f9e59b7f4201d439195c3715ca9e2486f1d0cf1", size = 67955 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/5f/e351af9a41f866ac3f1fac4ca0613908d9a41741cfcf2228f4ad853b697d/pluggy-1.5.0-py3-none-any.whl", hash = "sha256:44e1ad92c8ca002de6377e165f3e0f1be63266ab4d554740532335b9d75ea669", size = 20556 },
+]
+
+[[package]]
 name = "pre-commit"
 version = "4.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -937,6 +957,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pylint-pytest"
+version = "1.1.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pylint" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/b2/5d39125fedd30bfa50f755bdb30f1d5ee2ebde5f54ca7f7bc4cc4e9d51ef/pylint_pytest-1.1.8.tar.gz", hash = "sha256:5c862c88870aa8eb1b376df48ab9e820b5bdadfe37d965aa9ac567a6305955ca", size = 12793 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/34/e5ef1ee982cc211d5feda95032a7f48d96542cd8985eb722f539e7b9e877/pylint_pytest-1.1.8-py3-none-any.whl", hash = "sha256:8a532c1709c161406b8459bfc414c57a32a4ab488efd4bc97a22a21cb235331f", size = 10761 },
+]
+
+[[package]]
 name = "pyproj"
 version = "3.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -970,6 +1003,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/24/d6/48740f1d029e9fc4194880d1ad03dcf0ba3a8f802e0e166b8f63350b3584/pyright-1.1.398.tar.gz", hash = "sha256:357a13edd9be8082dc73be51190913e475fa41a6efb6ec0d4b7aab3bc11638d8", size = 3892675 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/58/e0/5283593f61b3c525d6d7e94cfb6b3ded20b3df66e953acaf7bb4f23b3f6e/pyright-1.1.398-py3-none-any.whl", hash = "sha256:0a70bfd007d9ea7de1cf9740e1ad1a40a122592cfe22a3f6791b06162ad08753", size = 5780235 },
+]
+
+[[package]]
+name = "pytest"
+version = "8.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/09/9d/78b3785134306efe9329f40815af45b9215068d6ae4747ec0bc91ff1f4aa/pytest-8.2.0.tar.gz", hash = "sha256:d507d4482197eac0ba2bae2e9babf0672eb333017bcedaa5fb1a3d42c1174b3f", size = 1422883 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/43/6b1debd95ecdf001bc46789a933f658da3f9738c65f32db3f4e8f2a4ca97/pytest-8.2.0-py3-none-any.whl", hash = "sha256:1733f0620f6cda4095bbf0d9ff8022486e91892245bb9e7d5542c018f612f233", size = 339229 },
 ]
 
 [[package]]
