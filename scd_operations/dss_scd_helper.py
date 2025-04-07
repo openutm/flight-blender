@@ -56,9 +56,6 @@ from .scd_data_definitions import (
     OperationalIntentUSSDetails,
     OpInttoCheckDetails,
     OpIntUpdateCheckResultCodes,
-)
-from .scd_data_definitions import Polygon as Plgn
-from .scd_data_definitions import (
     QueryOperationalIntentPayload,
     Radius,
     ShouldSendtoDSSProcessingResponse,
@@ -69,6 +66,7 @@ from .scd_data_definitions import (
     Volume3D,
     Volume4D,
 )
+from .scd_data_definitions import Polygon as Plgn
 
 load_dotenv(find_dotenv())
 
@@ -674,7 +672,7 @@ class SCDOperations:
                     op_int_details_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
-                    uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)                    
+                    uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
                     uss_auth_token = self.get_auth_token(audience=uss_audience)
                     logger.debug("Auth Token {uss_auth_token}".format(uss_auth_token=uss_auth_token))
                     uss_headers = {

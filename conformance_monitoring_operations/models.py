@@ -34,7 +34,7 @@ class TaskScheduler(models.Model):
         if period not in permissible_periods:
             raise Exception("Invalid period specified")
         # create the periodic task and the interval
-        ptask_name = "%s_%s" % (
+        ptask_name = "{}_{}".format(
             task_name,
             datetime.now(),
         )  # create some name for the period task

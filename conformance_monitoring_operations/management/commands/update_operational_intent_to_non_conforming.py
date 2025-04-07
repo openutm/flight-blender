@@ -60,9 +60,7 @@ class Command(BaseCommand):
         current_state = flight_declaration.state
         current_state_str = OPERATION_STATES[current_state][1]
         if not flight_declaration:
-            raise CommandError(
-                "Flight Declaration with ID {flight_declaration_id} does not exist".format(flight_declaration_id=flight_declaration_id)
-            )
+            raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
 
         my_scd_dss_helper = SCDOperations()
         flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=flight_declaration_id)

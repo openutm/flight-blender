@@ -4,7 +4,6 @@ import logging
 import uuid
 from dataclasses import asdict
 from os import environ as env
-from typing import List
 
 import arrow
 from django.http import JsonResponse
@@ -228,7 +227,7 @@ def get_air_traffic(request, session_id):
         # Log error if ICAO address is not defined in any message
         logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
 
-    all_traffic_observations: List[SingleAirtrafficObservation] = []
+    all_traffic_observations: list[SingleAirtrafficObservation] = []
     for icao_address in latest_observations:
         observation = latest_observations[icao_address]
         observation_metadata = json.loads(observation["metadata"])
@@ -475,7 +474,7 @@ def set_telemetry(request):
 
     rid_observations = raw_data["observations"]
 
-    unsigned_telemetry_observations: List[SignedUnSignedTelemetryObservations] = []
+    unsigned_telemetry_observations: list[SignedUnSignedTelemetryObservations] = []
     for flight in rid_observations:
         if not my_telemetry_validator.validate_flight_details_current_states_exist(flight=flight):
             return JsonResponse(

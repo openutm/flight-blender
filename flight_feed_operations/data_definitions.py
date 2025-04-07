@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from marshmallow import Schema, fields
 
@@ -67,8 +66,8 @@ class SingleRIDObservation:
     traffic_source: int
     source_type: int
     icao_address: str
-    metadata: Optional[dict]
-    session_id: Optional[str] = ""
+    metadata: dict | None
+    session_id: str | None = ""
 
 
 @dataclass
@@ -81,8 +80,8 @@ class SingleAirtrafficObservation:
     traffic_source: int
     source_type: int
     icao_address: str
-    metadata: Optional[dict]
-    session_id: Optional[str] = ""
+    metadata: dict | None
+    session_id: str | None = ""
 
 
 @dataclass

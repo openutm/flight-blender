@@ -5,7 +5,7 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
-from implicitdict import ImplicitDict, StringBasedDateTime
+from implicitdict import ImplicitDict
 from uas_standards.interuss.automated_testing.rid.v1.injection import (
     Time,
     UserNotification,

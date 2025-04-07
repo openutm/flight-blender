@@ -2,7 +2,7 @@
 
 ![blender-logo](images/blender-logo.jpg)
 
-Flight Blender is the UTM data processing engine for the OpenUTM stack. 
+Flight Blender is the UTM data processing engine for the OpenUTM stack.
 
 Argon server is a backend / data-processing engine to stand up standards-compliant UTM services that adhere to the latest regulations on UTM / U-Space in the EU and other jurisdictions. Specifically, it gives you:
 

@@ -17,7 +17,7 @@ import tldextract
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Geod
-from shapely.geometry import LineString, Point, Polygon, box
+from shapely.geometry import LineString, Point, Polygon
 from uas_standards.astm.f3411.v22a.constants import (
     NetMinClusterSizePercent,
     NetMinObfuscationDistanceM,
@@ -31,8 +31,6 @@ from common.database_operations import FlightBlenderDatabaseWriter
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from rid_operations.data_definitions import (
     UASID,
-    Altitude,
-    LatLngPoint,
     OperatorLocation,
     UAClassificationEU,
 )
@@ -50,7 +48,6 @@ from .rid_utils import (
     RIDFlightDetails,
     RIDFlightsRecord,
     RIDLatLngPoint,
-    RIDOperatorDetails,
     RIDPolygon,
     RIDSubscription,
     RIDTime,

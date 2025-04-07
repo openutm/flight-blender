@@ -3,16 +3,15 @@ import logging
 import time
 import uuid
 from dataclasses import asdict
+from enum import Enum
 from typing import List
 from uuid import UUID
 
 import arrow
-from dacite import from_dict, Config
-from enum import Enum
+from dacite import Config, from_dict
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from rest_framework.decorators import api_view
-from shapely.geometry import Point
 
 import rid_operations.view_port_ops as view_port_ops
 from auth_helper.common import get_redis
@@ -176,7 +175,7 @@ def USSOpIntDetailTelemetry(request, opint_id):
     allow_any=True,
 )
 def peer_uss_report_notification(request):
-    error_report = from_dict(data_class=ErrorReport, data=request.data,config=Config(cast=[Enum]))  
+    error_report = from_dict(data_class=ErrorReport, data=request.data, config=Config(cast=[Enum]))
     logger.info("Error report received: %s" % error_report)
     report_id = str(uuid.uuid4())
     error_report.report_id = report_id

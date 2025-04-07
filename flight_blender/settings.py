@@ -97,7 +97,7 @@ WSGI_APPLICATION = "flight_blender.wsgi.application"
 
 DATABASES = {}
 USE_LOCAL_SQLITE_DATABASE = os.getenv("USE_LOCAL_SQLITE_DATABASE", 0)
-if USE_LOCAL_SQLITE_DATABASE:    
+if USE_LOCAL_SQLITE_DATABASE:
     DATABASES = {
         "default": {
             "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),

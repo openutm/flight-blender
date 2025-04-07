@@ -14,7 +14,6 @@
         "pycache",
         "USSP"
     ],
-    "ruff.showNotifications": "onWarning",
     "pylint.args": [
         "--load-plugins=pylint_django",
         "--disable=all",

@@ -1,12 +1,10 @@
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
-
-from shapely.geometry import shape
-
-from geo_fence_operations.models import GeoFence
-from flight_declaration_operations.models import FlightDeclaration  
 
 from marshmallow import Schema, fields
+
+from flight_declaration_operations.models import FlightDeclaration
+from geo_fence_operations.models import GeoFence
+
 
 class CreateFlightDeclarationRequestSchema(Schema):
     """
@@ -34,6 +32,7 @@ class CreateFlightDeclarationRequestSchema(Schema):
         flight_id (str): The ID of the flight.
         contact_url (str): The contact URL for the flight.
     """
+
     originating_party = fields.Str(required=True)
     start_datetime = fields.DateTime(required=True)
     end_datetime = fields.DateTime(required=True)
@@ -57,13 +56,12 @@ class CreateFlightDeclarationRequestSchema(Schema):
     submitted_by = fields.Str(required=False)
 
 
-
 @dataclass
 class IntersectionCheckResult:
-    all_relevant_fences:List[GeoFence]
-    all_relevant_declarations: List[FlightDeclaration]
+    all_relevant_fences: list[GeoFence]
+    all_relevant_declarations: list[FlightDeclaration]
     is_approved: bool
-    declaration_state:int
+    declaration_state: int
 
 
 @dataclass
@@ -90,6 +88,7 @@ class HTTP404Response:
 @dataclass
 class HTTP400Response:
     message: str
+
 
 @dataclass
 class FlightDeclarationMetadata:

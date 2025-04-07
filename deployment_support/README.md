@@ -69,5 +69,4 @@ A: Check the existing Postgres port and/or shut down Postgres if you have it. Fl
 A: Check the [API Specification](http://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/openutm/flight-blender/master/api/flight-blender-1.0.0-resolved.yaml) to see the appropriate endpoints and/or download the [Postman Collection](../api/flight_blender_api.postman_collection.json) to see the endpoints.
 
 **Q: Is there a guide on how to configure Flight Passport to be used with Flight Blender + Spotlight?**
-A: Yes, there is a small [OAUTH Infrastructure](https://github.com/openutm/deployment/blob/main/oauth_infrastructure.md) document. 
-
+A: Yes, there is a small [OAUTH Infrastructure](https://github.com/openutm/deployment/blob/main/oauth_infrastructure.md) document.

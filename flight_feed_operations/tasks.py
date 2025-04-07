@@ -10,6 +10,7 @@ import requests
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Transformer
+
 from common.database_operations import FlightBlenderDatabaseWriter
 from flight_blender.celery import app
 
@@ -57,7 +58,7 @@ def mercator_transform(lon, lat):
 
 
 @app.task(name="start_opensky_network_stream")
-def start_opensky_network_stream(view_port: str, session_id:str):
+def start_opensky_network_stream(view_port: str, session_id: str):
     """
     Starts streaming data from the OpenSky Network within the specified viewport.
     Args:

@@ -59,9 +59,7 @@ class Command(BaseCommand):
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         if not flight_declaration:
-            raise CommandError(
-                "Flight Declaration with ID {flight_declaration_id} does not exist".format(flight_declaration_id=flight_declaration_id)
-            )
+            raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
 
         current_state = flight_declaration.state
         current_state_str = OPERATION_STATES[current_state][1]
@@ -153,4 +151,4 @@ class Command(BaseCommand):
                 logger.info("Dry run, not submitting to the DSS")
 
         else:
-            logger.info("Operational intent with {flight_declaration_id} does not exist...".format(flight_declaration_id=flight_declaration_id))
+            logger.info(f"Operational intent with {flight_declaration_id} does not exist...")

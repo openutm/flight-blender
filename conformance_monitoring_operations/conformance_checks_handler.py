@@ -129,13 +129,10 @@ class FlightOperationConformanceHelper:
                         flight_declaration=self.flight_declaration
                     )
                     if conformance_monitoring_job:
-                        logger.info(
-                            "Created conformance monitoring job for {flight_declaration_id}".format(flight_declaration_id=self.flight_declaration_id)
-                        )
+                        logger.info(f"Created conformance monitoring job for {self.flight_declaration_id}")
                     else:
                         logger.info(
                             "Error in creating conformance monitoring job for {flight_declaration_id}".format(
                                 flight_declaration_id=self.flight_declaration_id
                             )
                         )
-                        

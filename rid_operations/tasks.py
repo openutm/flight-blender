@@ -18,7 +18,6 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 from flight_blender.celery import app
-from flight_feed_operations import flight_stream_helper
 from flight_feed_operations.data_definitions import SingleRIDObservation
 from flight_feed_operations.tasks import write_incoming_air_traffic_data
 from rid_operations.data_definitions import (
@@ -39,8 +38,6 @@ from .rid_utils import (
     RIDAuthData,
     RIDFlightDetails,
     RIDHeight,
-    RIDLatLngPoint,
-    RIDOperatorDetails,
     RIDPolygon,
     RIDTestDataStorage,
     RIDTestDetailsResponse,

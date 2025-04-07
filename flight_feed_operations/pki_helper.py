@@ -81,14 +81,15 @@ class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):
             raise ValueError("Private key not found in environment variables.")
         try:
             private_key = load_pem_private_key(
-            private_key_pem.encode("utf-8"),
-            password=None,
-            backend=default_backend(),
+                private_key_pem.encode("utf-8"),
+                password=None,
+                backend=default_backend(),
             )
         except Exception as e:
             logger.error(f"Failed to load private key: {e}")
             raise
         return private_key
+
 
 class MessageVerifier:
     """
@@ -100,6 +101,7 @@ class MessageVerifier:
     verify_message(request) -> bool:
         Verifies the message using stored public keys.
     """
+
     """
     Retrieves and caches public keys from a remote source or Redis.
     Returns
@@ -135,7 +137,6 @@ class MessageVerifier:
         r = get_redis()
         s = requests.Session()
 
-        
         public_keys = {}
         all_public_keys = SignedTelmetryPublicKey.objects.filter(is_active=1)
         for current_public_key in all_public_keys:
@@ -188,8 +189,8 @@ class MessageVerifier:
 
         for key_id, jwk_detail in stored_public_keys.items():
             verifier = HTTPMessageVerifier(
-            signature_algorithm=algorithms.RSA_PSS_SHA512,
-            key_resolver=MyHTTPSignatureKeyResolver(jwk=jwk_detail),
+                signature_algorithm=algorithms.RSA_PSS_SHA512,
+                key_resolver=MyHTTPSignatureKeyResolver(jwk=jwk_detail),
             )
             try:
                 verifier.verify(r)
@@ -226,6 +227,7 @@ class ResponseSigningOperations:
     sign_http_message(json_payload, original_request: HttpRequest) -> HttpResponse:
         Signs the HTTP response message using IETF standard and returns an HttpResponse object.
     """
+
     def __init__(self):
         self.signing_url = env.get("FLIGHT_PASSPORT_SIGNING_URL", None)
         self.signing_client_id = env.get("FLIGHT_PASSPORT_SIGNING_CLIENT_ID")
@@ -260,11 +262,11 @@ class ResponseSigningOperations:
             dict: A dictionary containing the signed JWS token with the key 'signature',
                   or an empty dictionary if signing fails.
 
-                  
+
         """
         algorithm = "RS256"
         private_key_pem = env.get("SECRET_KEY", None)
-        
+
         if not private_key_pem:
             return {}
 
@@ -289,7 +291,6 @@ class ResponseSigningOperations:
         return {"signature": f"{signature['protected']}.{signature['payload']}.{signature['signature']}"}
 
     def sign_http_message(self, json_payload, original_request: HttpRequest) -> HttpResponse:
-
         """
         Sign the HTTP response message using IETF standard and return an HttpResponse object.
         This method takes a JSON payload and an original HttpRequest, creates an HttpResponse
@@ -318,10 +319,10 @@ class ResponseSigningOperations:
             response,
             key_id=self.signing_key_id,
             covered_component_ids=(
-            "@method",
-            "@authority",
-            "@target-uri",
-            "content-digest",
+                "@method",
+                "@authority",
+                "@target-uri",
+                "content-digest",
             ),
             label=self.signing_key_label,
         )

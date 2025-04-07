@@ -1,6 +1,5 @@
 import logging
 from os import environ as env
-from typing import List
 
 from dacite import from_dict
 from django.core.management.base import BaseCommand, CommandError
@@ -71,9 +70,7 @@ class Command(BaseCommand):
         flight_opint = FLIGHT_OPINT_KEY + str(flight_declaration_id)
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         if not flight_declaration:
-            raise CommandError(
-                "Flight Declaration with ID: {flight_declaration_id} does not exist".format(flight_declaration_id=flight_declaration_id)
-            )
+            raise CommandError(f"Flight Declaration with ID: {flight_declaration_id} does not exist")
         current_state = flight_declaration.state
         current_state_str = OPERATION_STATES[current_state][1]
 
@@ -107,7 +104,7 @@ class Command(BaseCommand):
             # Get the latest telemetry
 
             if not all_flights_telemetry_data:
-                logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
+                logger.error(f"No telemetry data found for operation {flight_declaration_id}")
                 return
 
             distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []
@@ -120,7 +117,7 @@ class Command(BaseCommand):
             # check if it is within declared bounds
             # TODO: This code is same as the C7check in the conformance / utils file. Need to refactor
             declared_volumes = flight_declaration.operational_intent["volumes"]
-            all_polygon_altitudes: List[PolygonAltitude] = []
+            all_polygon_altitudes: list[PolygonAltitude] = []
 
             rid_obs_within_all_volumes = []
             all_altitudes = []

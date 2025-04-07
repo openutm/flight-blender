@@ -1,5 +1,4 @@
 import json
-from typing import List
 
 from rest_framework import serializers
 
@@ -37,7 +36,7 @@ class FlightDeclarationSerializer(serializers.ModelSerializer):
         """
         o = json.loads(obj.operational_intent)
         volumes = o["volumes"]
-        volumes_list: List[Volume4D] = []
+        volumes_list: list[Volume4D] = []
         my_operational_intent_parser = OperationalIntentReferenceHelper()
         for v in volumes:
             parsed_volume = my_operational_intent_parser.parse_volume_to_volume4D(v)
