@@ -14,6 +14,7 @@ Argon server is a backend / data-processing engine to stand up standards-complia
 - a flight traffic feed aggregator that has different modules that can process and relay data around flights and airspace: geo-fence, flight declarations, air-traffic data.
 
 There are different modules that enable this:
+
 - _DSS Connectivity_: There are modules to connect and read for e.g. Remote ID data from a DSS, Strategic deconfliction / flight authorization
 - _Flight Tracking_: It takes in flight tracking feeds from various sources e.g. ADS-B, live telemetry, Broadcast Remote ID and others and outputs as a single fused JSON feed and submits it to a Display Application to be shown in real-time on a display
 - _Geofence_: A Geofence can be submitted into Flight Blender and consequently transmitted to Spotlight
@@ -23,6 +24,7 @@ There are different modules that enable this:
 - _Conformance Monitoring_ (beta): Monitory trajectory / flight path against the declared 4D Volume
 
 ## ▶️ Get started in 20 mins
+
 Follow our 5-step process to deploy Flight Blender and get started with the basic concepts of the software.
 
 Read the ⏲️ [20-minute quickstart](deployment_support/README.md) now!
