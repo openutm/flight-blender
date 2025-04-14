@@ -3,12 +3,13 @@ import json
 import logging
 from dataclasses import asdict
 from os import environ as env
-from typing import List
+from typing import List, Tuple
 
 import arrow
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from dotenv import find_dotenv, load_dotenv
+from marshmallow.exceptions import ValidationError
 from rest_framework import generics, mixins, status
 from rest_framework.decorators import api_view
 from shapely.geometry import shape
@@ -16,8 +17,11 @@ from shapely.geometry import shape
 from auth_helper.utils import requires_scopes
 from common.data_definitions import (
     ACTIVE_OPERATIONAL_STATES,
+    FLIGHT_DECLARATION_INDEX_BASEPATH,
+    FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH,
     FLIGHTBLENDER_READ_SCOPE,
     FLIGHTBLENDER_WRITE_SCOPE,
+    GEOFENCE_INDEX_BASEPATH,
     RESPONSE_CONTENT_TYPE,
 )
 from common.database_operations import (
@@ -33,8 +37,8 @@ from scd_operations.dss_scd_helper import (
 
 from .data_definitions import (
     Altitude,
+    CreateFlightDeclarationRequestSchema,
     FlightDeclarationCreateResponse,
-    
     HTTP400Response,
     HTTP404Response,
     IntersectionCheckResult,
@@ -52,17 +56,13 @@ from .tasks import (
     submit_flight_declaration_to_dss_async,
 )
 from .utils import OperationalIntentsConverter
-from .data_definitions import CreateFlightDeclarationRequestSchema
-from marshmallow.exceptions import ValidationError
-from typing import Tuple, List
+
 load_dotenv(find_dotenv())
 logger = logging.getLogger("django")
 
 
-
-class FlightDeclarationRequestValidator():
-
-    def validate_request(self,request_data):
+class FlightDeclarationRequestValidator:
+    def validate_request(self, request_data):
         schema = CreateFlightDeclarationRequestSchema()
         try:
             schema.load(request_data)
@@ -70,7 +70,7 @@ class FlightDeclarationRequestValidator():
             return {"message": "Validation error", "errors": err.messages}, 400
         return None, None
 
-    def validate_geojson(self,flight_declaration_geo_json):
+    def validate_geojson(self, flight_declaration_geo_json):
         all_features = []
         for feature in flight_declaration_geo_json["features"]:
             geometry = feature["geometry"]
@@ -89,8 +89,8 @@ class FlightDeclarationRequestValidator():
             logging.debug(min_altitude, max_altitude)
             all_features.append(s)
         return all_features, None
-    
-    def validate_dates(self,start_datetime: str, end_datetime: str) -> Tuple[dict, int]|Tuple[None, None]:
+
+    def validate_dates(self, start_datetime: str, end_datetime: str) -> Tuple[dict, int] | Tuple[None, None]:
         """
         Validates the start and end dates for the flight declaration.
 
@@ -108,8 +108,10 @@ class FlightDeclarationRequestValidator():
         if s_datetime < now or e_datetime < now or e_datetime > two_days_from_now or s_datetime > two_days_from_now:
             return {"message": "A flight declaration cannot have a start / end time in the past or after two days from current time."}, 400
         return None, None
-    
-    def check_intersections(self,start_datetime: str, end_datetime: str, view_box: List[float], ussp_network_enabled:int) -> IntersectionCheckResult:
+
+    def check_intersections(
+        self, start_datetime: str, end_datetime: str, view_box: List[float], ussp_network_enabled: int
+    ) -> IntersectionCheckResult:
         all_relevant_fences = []
         all_relevant_declarations = []
         is_approved = True
@@ -117,7 +119,7 @@ class FlightDeclarationRequestValidator():
 
         if GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime).exists():
             all_fences_within_timelimits = GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime)
-            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name="geofence_idx")
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
             my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_box)
             my_rtree_helper.clear_rtree_index()
@@ -131,7 +133,7 @@ class FlightDeclarationRequestValidator():
             all_declarations_within_timelimits = FlightDeclaration.objects.filter(
                 start_datetime__lte=end_datetime, end_datetime__gte=start_datetime, state__in=ACTIVE_OPERATIONAL_STATES
             )
-            my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name="flight_declaration_idx")
+            my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_INDEX_BASEPATH)
             my_fd_rtree_helper.generate_flight_declaration_index(all_flight_declarations=all_declarations_within_timelimits)
             all_relevant_declarations = my_fd_rtree_helper.check_flight_declaration_box_intersection(view_box=view_box)
             my_fd_rtree_helper.clear_rtree_index()
@@ -171,7 +173,6 @@ class FlightDeclarationDelete(generics.DestroyAPIView):
 @api_view(["POST"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_flight_declaration(request):
-
     request_data = request.data
     my_flight_declaration_validator = FlightDeclarationRequestValidator()
     error_response, status_code = my_flight_declaration_validator.validate_request(request_data=request_data)
@@ -197,7 +198,7 @@ def set_flight_declaration(request):
     my_database_writer = FlightBlenderDatabaseWriter()
     USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
     submitted_by = request_data.get("submitted_by")
-    
+
     type_of_operation = request_data.get("type_of_operation", 0)
     originating_party = request_data.get("originating_party", "No Flight Information")
     aircraft_id = request_data["aircraft_id"]
@@ -212,13 +213,14 @@ def set_flight_declaration(request):
     bounds = my_operational_intent_converter.get_geo_json_bounds()
     view_box = [float(i) for i in bounds.split(",")]
 
-    intersection_check_results = my_flight_declaration_validator.check_intersections(start_datetime=start_datetime,end_datetime= end_datetime,view_box= view_box, ussp_network_enabled = USSP_NETWORK_ENABLED)
+    intersection_check_results = my_flight_declaration_validator.check_intersections(
+        start_datetime=start_datetime, end_datetime=end_datetime, view_box=view_box, ussp_network_enabled=USSP_NETWORK_ENABLED
+    )
 
-    all_relevant_fences =intersection_check_results.all_relevant_fences
-    all_relevant_declarations= intersection_check_results.all_relevant_declarations
-    is_approved= intersection_check_results.is_approved
-    declaration_state =intersection_check_results.declaration_state
-
+    all_relevant_fences = intersection_check_results.all_relevant_fences
+    all_relevant_declarations = intersection_check_results.all_relevant_declarations
+    is_approved = intersection_check_results.is_approved
+    declaration_state = intersection_check_results.declaration_state
 
     flight_declaration = FlightDeclaration(
         operational_intent=json.dumps(asdict(parital_op_int_ref)),
@@ -379,7 +381,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         logger.info("Found %s flight declaration" % len(all_fd_within_timelimits))
 
         if view_port:
-            my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name="opint_idx")
+            my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH)
             my_rtree_helper.generate_flight_declaration_index(all_flight_declarations=all_fd_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_flight_declaration_box_intersection(view_box=view_port)
             relevant_id_set = [i["flight_declaration_id"] for i in all_relevant_fences]
@@ -393,20 +395,19 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         end_date = self.request.query_params.get("end_date", None)
         view = self.request.query_params.get("view", None)
         view_port = [float(i) for i in view.split(",")] if view else []
-        
+
         return self.get_relevant_flight_declaration(view_port=view_port, start_date=start_date, end_date=end_date)
 
     def get(self, request, *args, **kwargs):
-        
         return self.list(request, *args, **kwargs)
-    
+
     def post(self, request, *args, **kwargs):
         if request.headers.get("Content-Type") != RESPONSE_CONTENT_TYPE:
             return JsonResponse({"message": "Unsupported Media Type"}, status=415, content_type=RESPONSE_CONTENT_TYPE)
 
         req = request.data
         my_flight_declaration_validator = FlightDeclarationRequestValidator()
-        
+
         error_response, status_code = my_flight_declaration_validator.validate_request(request_data=req)
         if error_response:
             return JsonResponse(error_response, status=status_code)
@@ -442,10 +443,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         view_box = [float(i) for i in bounds.split(",")]
 
         intersection_check_results = my_flight_declaration_validator.check_intersections(
-            start_datetime=start_datetime,
-            end_datetime=end_datetime,
-            view_box=view_box,
-            ussp_network_enabled=USSP_NETWORK_ENABLED
+            start_datetime=start_datetime, end_datetime=end_datetime, view_box=view_box, ussp_network_enabled=USSP_NETWORK_ENABLED
         )
 
         all_relevant_fences = intersection_check_results.all_relevant_fences

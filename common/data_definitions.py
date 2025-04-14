@@ -60,3 +60,9 @@ FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (10, _("FLARM")),
     (11, _("Network Remote-ID")),
 )
+
+# Locations for Index Creation, using tmp to avoid permission issues in Docker / Kubernetes
+FLIGHT_DECLARATION_INDEX_BASEPATH = "/tmp/blender_flight_declaration_idx"
+FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH = "/tmp/blender_opint_idx"
+GEOFENCE_INDEX_BASEPATH = "/tmp/blender_geofence_idx"
+OPINT_INDEX_BASEPATH = "/tmp/blender_opint_proc_idx"
