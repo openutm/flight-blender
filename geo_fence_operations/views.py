@@ -16,6 +16,7 @@ from django.core.validators import URLValidator
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from implicitdict import ImplicitDict
+from marshmallow import ValidationError
 from rest_framework import generics, mixins, status
 from rest_framework.decorators import api_view
 from rest_framework.parsers import JSONParser
@@ -25,7 +26,11 @@ from shapely.ops import unary_union
 
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
-from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from common.data_definitions import (
+    FLIGHTBLENDER_READ_SCOPE,
+    FLIGHTBLENDER_WRITE_SCOPE,
+    GEOFENCE_INDEX_BASEPATH,
+)
 from common.utils import EnhancedJSONEncoder
 from flight_declaration_operations.pagination import StandardResultsSetPagination
 
@@ -34,22 +39,18 @@ from .buffer_helper import toFromUTM
 from .common import validate_geo_zone
 from .data_definitions import (
     GeoAwarenessTestStatus,
+    GeoFencePutSchema,
     GeoSpatialMapTestHarnessStatus,
     GeoZoneCheckRequestBody,
     GeoZoneCheckResult,
     GeoZoneChecksResponse,
     GeoZoneFilterPosition,
     GeoZoneHttpsSource,
-    GeoFencePutSchema
 )
 from .models import GeoFence
-from .serializers import (
-    
-    GeoFenceSerializer,
-    GeoSpatialMapListSerializer,
-)
+from .serializers import GeoFenceSerializer, GeoSpatialMapListSerializer
 from .tasks import download_geozone_source, write_geo_zone
-from marshmallow import ValidationError
+
 logger = logging.getLogger("django")
 
 INDEX_NAME = "geofence_proc"
@@ -69,10 +70,10 @@ def set_geo_fence(request: HttpRequest):
         )
     geofence_create_request = GeoFencePutSchema()
     geo_fence_request_data = request.data
-    
+
     try:
         geo_fence_request_data = geofence_create_request.load(geo_fence_request_data)
-    except ValidationError as err:        
+    except ValidationError as err:
         return HttpResponse(
             JSONRenderer().render(err.messages),
             status=status.HTTP_400_BAD_REQUEST,
@@ -80,8 +81,8 @@ def set_geo_fence(request: HttpRequest):
         )
 
     shp_features = []
-    
-    for feature in geo_fence_request_data['features']:
+
+    for feature in geo_fence_request_data["features"]:
         shp_features.append(shape(feature["geometry"]))
     combined_features = unary_union(shp_features)
     bnd_tuple = combined_features.bounds
@@ -171,16 +172,13 @@ class GeoFenceList(mixins.ListModelMixin, generics.GenericAPIView):
         else:
             s_date = present.shift(days=-1)
             e_date = present.shift(days=1)
-        
-        all_fences_within_timelimits = GeoFence.objects.filter(
-            start_datetime__lte=e_date.isoformat(), end_datetime__gte=s_date.isoformat()
-        )
-        
+
+        all_fences_within_timelimits = GeoFence.objects.filter(start_datetime__lte=e_date.isoformat(), end_datetime__gte=s_date.isoformat())
+
         logger.info("Found %s geofences" % len(all_fences_within_timelimits))
 
         if view_port:
-            INDEX_NAME = "geofence_idx"
-            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
             my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_port)
             relevant_id_set = []
@@ -230,8 +228,7 @@ class GeospatialMapList(mixins.ListModelMixin, generics.GenericAPIView):
         logger.info("Found %s geofences" % len(all_fences_within_timelimits))
 
         if view_port:
-            INDEX_NAME = "geofence_idx"
-            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
             my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_port)
             relevant_id_set = []
@@ -362,8 +359,7 @@ class GeoZoneCheck(generics.GenericAPIView):
                 if "position" in filter_set:
                     filter_position = ImplicitDict.parse(filter_set["position"], GeoZoneFilterPosition)
                     relevant_geo_fences = GeoFence.objects.filter(is_test_dataset=1)
-                    INDEX_NAME = "geofence_idx"
-                    my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+                    my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
                     # Buffer the point to get a small view port / bounds
                     init_point = Point(filter_position)
                     init_shape_utm = toFromUTM(init_point, proj)
