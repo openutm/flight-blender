@@ -110,11 +110,11 @@ class FlightBlenderDatabaseReader:
         """This method gets flight operation ids that are active in the system within near the time interval"""
         ts = arrow.get(timestamp)
 
-        two_minutes_before_ts = ts.shift(seconds=-120).isoformat()
-        five_hours_from_ts = ts.shift(minutes=300).isoformat()
+        one_hour_before_ts = ts.shift(seconds=-60).isoformat()
+        two_hours_from_ts = ts.shift(minutes=120).isoformat()
         relevant_ids = FlightDeclaration.objects.filter(
-            start_datetime__gte=two_minutes_before_ts,
-            end_datetime__lte=five_hours_from_ts,
+            start_datetime__gte=one_hour_before_ts,
+            end_datetime__lte=two_hours_from_ts,
         ).values_list("id", flat=True)
         return relevant_ids
 
