@@ -38,7 +38,7 @@ DEBUG = int(DEBUG) if isinstance(DEBUG, str) else DEBUG
 if DEBUG:
     ALLOWED_HOSTS = ["*"]
 else:
-    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "openskies.sh").split(",")
+    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "openutm.net").split(",")
 
 # Application definition
 INSTALLED_APPS = [
