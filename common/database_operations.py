@@ -241,10 +241,10 @@ class FlightBlenderDatabaseWriter:
 
     def create_operator_rid_notification(self, operator_rid_notification: OperatorRIDNotificationCreationPayload) -> bool:
         try:
-            operator_rid_notification = OperatorRIDNotification(
+            operator_rid_notification_obj = OperatorRIDNotification(
                 message=operator_rid_notification.message, session_id=operator_rid_notification.session_id
             )
-            operator_rid_notification.save()
+            operator_rid_notification_obj.save()
             return True
         except IntegrityError:
             return False
