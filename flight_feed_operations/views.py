@@ -351,10 +351,10 @@ def set_signed_telemetry(request):
         unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
 
         operation_id = f_details.id
-        now = arrow.now().isoformat()
-        relevant_operation_ids = [str(o) for o in my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now).all()]
+        now = arrow.now().datetime
+        flight_declaration_active = my_flight_blender_database_reader.check_flight_declaration_active(flight_declaration_id=operation_id, now=now)
 
-        if operation_id in relevant_operation_ids:
+        if flight_declaration_active:
             flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
 
             if flight_operation.state in [2, 3, 4]:  # Activated, Contingent, Non-conforming
@@ -499,10 +499,9 @@ def set_telemetry(request):
         unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
 
         operation_id = f_details.id
-        now = arrow.now().isoformat()
-        relevant_operation_ids = [str(o) for o in my_flight_blender_database_reader.get_current_flight_declaration_ids(timestamp=now).all()]
-
-        if operation_id in relevant_operation_ids:
+        now = arrow.now().datetime
+        flight_declaration_active = my_flight_blender_database_reader.check_flight_declaration_active(flight_declaration_id=operation_id, now=now)
+        if flight_declaration_active:
             flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
 
             if flight_operation.state in [2, 3, 4]:  # Activated, Contingent, Non-conforming

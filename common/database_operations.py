@@ -42,7 +42,10 @@ class FlightBlenderDatabaseReader:
 
     def get_flight_observations_by_session(self, session_id: str, after_datetime: arrow.arrow.Arrow):
         observations = (
-            FlightObeservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat()).exclude(traffic_source=11).order_by("created_at").values()
+            FlightObeservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat())
+            .exclude(traffic_source=11)
+            .order_by("created_at")
+            .values()
         )
         return observations
 
@@ -106,17 +109,12 @@ class FlightBlenderDatabaseReader:
         except FlightAuthorization.DoesNotExist:
             return None
 
-    def get_current_flight_declaration_ids(self, timestamp: str) -> Union[None, uuid4]:
-        """This method gets flight operation ids that are active in the system within near the time interval"""
-        ts = arrow.get(timestamp)
-
-        one_hour_before_ts = ts.shift(seconds=-60).isoformat()
-        two_hours_from_ts = ts.shift(minutes=120).isoformat()
-        relevant_ids = FlightDeclaration.objects.filter(
-            start_datetime__gte=one_hour_before_ts,
-            end_datetime__lte=two_hours_from_ts,
-        ).values_list("id", flat=True)
-        return relevant_ids
+    def check_flight_declaration_active(self, flight_declaration_id: str, now: datetime) -> bool:
+        return FlightDeclaration.objects.filter(
+            id=flight_declaration_id,
+            start_datetime__lte=now,
+            end_datetime__gte=now,
+        ).exists()
 
     def check_active_activated_flights_exist(self) -> bool:
         return FlightDeclaration.objects.filter().filter(state__in=[1, 2]).exists()
