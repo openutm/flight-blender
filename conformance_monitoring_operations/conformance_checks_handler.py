@@ -42,13 +42,15 @@ class FlightOperationConformanceHelper:
         logger.info("Current Operation State %s" % my_operation_state_machine.state)
 
         my_operation_state_machine.on_event(event)
-        new_state = get_status(my_operation_state_machine.state)
-        if original_state == new_state:
-            ## The event cannot trigger a change of state, flight state is not updated
+        changed_state = get_status(my_operation_state_machine.state)
+        if changed_state == new_state:
+            return True
+
+        else:
+            # The event cannot trigger a change of state, flight state is not updated
+
             logger.info("State change verification failed")
             return False
-        else:
-            return True
 
     def manage_operation_state_transition(self, original_state: int, new_state: int, event: str):
         """
@@ -138,4 +140,3 @@ class FlightOperationConformanceHelper:
                                 flight_declaration_id=self.flight_declaration_id
                             )
                         )
-                        
