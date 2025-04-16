@@ -54,89 +54,100 @@ class FlightOperationConformanceHelper:
 
     def manage_operation_state_transition(self, original_state: int, new_state: int, event: str):
         """
-        This method manages the communication with DSS once a new state has been received by the POST method
+        Handles state transitions for flight operations and performs associated actions.
         """
-        if new_state == 5:  # operation has ended
-            if event == "operator_confirms_ended":
-                if self.USSP_NETWORK_ENABLED:
-                    management.call_command(
-                        "operation_ended_clear_dss",
-                        flight_declaration_id=self.flight_declaration_id,
-                        dry_run=0,
-                    )
+        state_transition_handlers = {
+            5: self._handle_operation_ended,
+            4: self._handle_contingent_state,
+            3: self._handle_non_conforming_state,
+            2: self._handle_activated_state,
+        }
 
-                if self.ENABLE_CONFORMANCE_MONITORING:
-                    # Remove the conformance monitoring periodic job
-                    conformance_monitoring_job = self.database_reader.get_conformance_monitoring_task(flight_declaration=self.flight_declaration)
-                    if conformance_monitoring_job:
-                        self.database_writer.remove_conformance_monitoring_periodic_task(conformance_monitoring_task=conformance_monitoring_job)
+        handler = state_transition_handlers.get(new_state)
+        if handler:
+            handler(original_state, event)
+        else:
+            logger.info(f"No handler defined for new state: {new_state}")
 
-        elif new_state == 4:  # handle entry into contingent state
-            if original_state == 2 and event in [
-                "operator_initiates_contingent",
-                "flight_blender_confirms_contingent",
-            ]:
-                # Operator activates contingent state from Activated state
-                if self.USSP_NETWORK_ENABLED:
-                    management.call_command(
-                        "operator_declares_contingency",
-                        flight_declaration_id=self.flight_declaration_id,
-                        dry_run=0,
-                    )
+    def _handle_operation_ended(self, original_state: int, event: str):
+        if event != "operator_confirms_ended":
+            logger.info("Operation has ended, but no confirmation received")
+            return
 
-            elif original_state == 3 and event in [
-                "timeout",
-                "operator_confirms_contingent",
-            ]:
-                # Operator activates contingent state / timeout from Non-conforming state
-                if self.USSP_NETWORK_ENABLED:
-                    management.call_command(
-                        "operator_declares_contingency",
-                        flight_declaration_id=self.flight_declaration_id,
-                        dry_run=0,
-                    )
+        if self.USSP_NETWORK_ENABLED:
+            self._clear_operation_from_dss()
 
-        elif new_state == 3:  # handle entry in non-conforming state
-            if event == "ua_exits_coordinated_op_intent" and original_state in [1, 2]:
-                # Enters non-conforming from Accepted
-                # Command: Update / expand volumes, if DSS is present
-                if self.USSP_NETWORK_ENABLED:
-                    management.call_command(
-                        "update_operational_intent_to_non_conforming_update_expand_volumes",
-                        flight_declaration_id=self.flight_declaration_id,
-                        dry_run=0,
-                    )
+        if self.ENABLE_CONFORMANCE_MONITORING:
+            self._remove_conformance_monitoring_task()
 
-            elif event == "ua_departs_early_late" and original_state in [1, 2]:
-                # Enters non-conforming from Accepted
-                # Command: declare non-conforming, no need to update volumes
-                if self.USSP_NETWORK_ENABLED:
-                    management.call_command(
-                        "update_operational_intent_to_non_conforming",
-                        flight_declaration_id=self.flight_declaration_id,
-                        dry_run=0,
-                    )
+    def _clear_operation_from_dss(self):
+        management.call_command(
+            "operation_ended_clear_dss",
+            flight_declaration_id=self.flight_declaration_id,
+            dry_run=0,
+        )
 
-        elif new_state == 2:  # handle entry into activated state
-            if original_state == 1 and event == "operator_activates":
-                # Operator activates accepted state to Activated state
-                if self.USSP_NETWORK_ENABLED:
-                    management.call_command(
-                        "update_operational_intent_to_activated",
-                        flight_declaration_id=self.flight_declaration_id,
-                        dry_run=0,
-                    )
-                if self.ENABLE_CONFORMANCE_MONITORING:
-                    conformance_monitoring_job = self.database_writer.create_conformance_monitoring_periodic_task(
-                        flight_declaration=self.flight_declaration
-                    )
-                    if conformance_monitoring_job:
-                        logger.info(
-                            "Created conformance monitoring job for {flight_declaration_id}".format(flight_declaration_id=self.flight_declaration_id)
-                        )
-                    else:
-                        logger.info(
-                            "Error in creating conformance monitoring job for {flight_declaration_id}".format(
-                                flight_declaration_id=self.flight_declaration_id
-                            )
-                        )
+    def _remove_conformance_monitoring_task(self):
+        conformance_monitoring_job = self.database_reader.get_conformance_monitoring_task(
+            flight_declaration=self.flight_declaration
+        )
+        if conformance_monitoring_job:
+            self.database_writer.remove_conformance_monitoring_periodic_task(
+                conformance_monitoring_task=conformance_monitoring_job
+            )
+
+    def _handle_contingent_state(self, original_state: int, event: str):
+        valid_events_for_state_2 = [
+            "operator_initiates_contingent",
+            "flight_blender_confirms_contingent",
+        ]
+        valid_events_for_state_3 = ["timeout", "operator_confirms_contingent"]
+
+        if self.USSP_NETWORK_ENABLED:
+            if original_state in [2, 3] and event in (valid_events_for_state_2 if original_state == 2 else valid_events_for_state_3):
+                management.call_command(
+                    "operator_declares_contingency",
+                    flight_declaration_id=self.flight_declaration_id,
+                    dry_run=0,
+                )
+        else:
+            logger.info("USSP Network is not enabled, skipping contingency state handling with DSS")
+
+    def _handle_non_conforming_state(self, original_state: int, event: str):
+        non_conforming_events = {
+            "ua_exits_coordinated_op_intent": "update_operational_intent_to_non_conforming_update_expand_volumes",
+            "ua_departs_early_late": "update_operational_intent_to_non_conforming",
+        }
+
+        if event in non_conforming_events and original_state in [1, 2]:
+            if self.USSP_NETWORK_ENABLED:
+                management.call_command(
+                    non_conforming_events[event],
+                    flight_declaration_id=self.flight_declaration_id,
+                    dry_run=0,
+                )
+
+    def _handle_activated_state(self, original_state: int, event: str):
+        if original_state != 1 or event != "operator_activates":
+            logger.info("Invalid state or event for activation")
+            return
+
+        if self.USSP_NETWORK_ENABLED:
+            self._update_operational_intent_to_activated()
+
+        if self.ENABLE_CONFORMANCE_MONITORING:
+            self._create_conformance_monitoring_task()
+
+    def _update_operational_intent_to_activated(self):
+        management.call_command(
+            "update_operational_intent_to_activated",
+            flight_declaration_id=self.flight_declaration_id,
+            dry_run=0,
+        )
+
+    def _create_conformance_monitoring_task(self):
+        conformance_monitoring_job = self.database_writer.create_conformance_monitoring_periodic_task(flight_declaration=self.flight_declaration)
+        if conformance_monitoring_job:
+            logger.info(f"Created conformance monitoring job for {self.flight_declaration_id}")
+        else:
+            logger.info(f"Error in creating conformance monitoring job for {self.flight_declaration_id}")
