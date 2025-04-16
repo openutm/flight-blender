@@ -87,10 +87,8 @@ class FlightOperationConformanceHelper:
         changed_state = get_status(my_operation_state_machine.state)
         if changed_state == new_state:
             return True
-
         else:
             # The event cannot trigger a change of state, flight state is not updated
-
             logger.info("State change verification failed")
             return False
 
