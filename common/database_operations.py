@@ -21,6 +21,10 @@ from rid_operations.data_definitions import OperatorRIDNotificationCreationPaylo
 from rid_operations.models import ISASubscription
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
 from scd_operations.scd_data_definitions import PartialCreateOperationalIntentReference
+from constraint_operations.models import Constraint, ConstraintReference
+
+from constraint_operations.data_definitions import Constraint as ConstraintData
+
 
 logger = logging.getLogger("django")
 
@@ -35,6 +39,17 @@ class FlightBlenderDatabaseReader:
     """
     A file to unify read and write operations to the database. Eventually caching etc. can be added via this file
     """
+
+    def check_constraint_id_exists(self, constraint_id: str) -> bool:
+        return Constraint.objects.filter(id=constraint_id).exists()
+
+    def check_constraint_reference_id_exists(self, constraint_reference_id: str) -> bool:
+
+        return ConstraintReference.objects.filter(id=constraint_reference_id).exists()
+
+    def get_constraint_details(self, constraint_id: str) -> Constraint:
+
+        return Constraint.objects.get(id=constraint_id)
 
     def get_flight_observations(self, after_datetime: arrow.arrow.Arrow):
         observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
@@ -449,4 +464,27 @@ class FlightBlenderDatabaseWriter:
             ISASubscription.objects.filter(is_simulated=True).delete()
             return True
         except Exception:
+            return False
+
+    def write_constraint_details(self, constraint_id: str, constraint: ConstraintData) -> bool:
+        try:
+            constraint_obj = Constraint(
+                id=constraint_id,
+                details=json.dumps(asdict(constraint.details)),
+            )
+            constraint_obj.save()
+            return True
+        except IntegrityError:
+            return False
+
+    def write_constraint_reference_details(self, constraint: ConstraintData) -> bool:
+        try:
+            constraint_reference_obj = ConstraintReference(
+                id=constraint.reference.id,
+                ovn=constraint.reference.ovn,
+                details=json.dumps(asdict(constraint.reference)),
+            )
+            constraint_reference_obj.save()
+            return True
+        except IntegrityError:
             return False
