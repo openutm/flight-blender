@@ -226,11 +226,11 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     status=status.HTTP_200_OK,
                 )
 
-            flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration_obj(flight_declaration=flight_declaration)
+            flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
             current_state = flight_declaration.state
             current_state_str = OPERATION_STATES[current_state][1]
             # ID of the operational intent reference stored in the DSS
-            dss_operational_intent_id = flight_authorization.dss_operational_intent_id
+            dss_operational_intent_reference_id = flight_operational_intent_reference.id
             stored_operational_intent_details = my_operational_intent_parser.parse_and_load_stored_flight_opint(operation_id=operation_id_str)
             provided_volumes_off_nominal_volumes = scd_test_data.intended_flight.basic_information.area
             deconfliction_check = True
@@ -262,24 +262,24 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 # Notify the subscribers that the operational intent has been updated
 
                 # Update the OVN in the Flight Blender database
-                flight_authorization = my_database_reader.get_flight_authorization_by_operational_intent_ref_id(
+                flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(
                     stored_operational_intent_details.reference.id
                 )
-                my_database_writer.update_flight_authorization_ovn(
-                    flight_authorization=flight_authorization, ovn=operational_intent_update_job.dss_response.operational_intent_reference.ovn
+                my_database_writer.update_flight_operational_intent_reference_ovn(
+                    flight_operational_intent_reference=flight_operational_intent_reference, ovn=operational_intent_update_job.dss_response.operational_intent_reference.ovn
                 )
 
                 my_scd_dss_helper.process_peer_uss_notifications(
                     all_subscribers=operational_intent_update_job.dss_response.subscribers,
                     operational_intent_details=flight_planning_notification_payload,
                     operational_intent_reference=operational_intent_update_job.dss_response.operational_intent_reference,
-                    operational_intent_id=dss_operational_intent_id,
+                    operational_intent_id=dss_operational_intent_reference_id,
                 )
 
                 if generated_operational_intent_state == "Activated":
                     # The current state is activated and the original state was also activated
                     ready_to_fly_planning_response.notes = "Created Operational Intent ID {operational_intent_id}".format(
-                        operational_intent_id=dss_operational_intent_id
+                        operational_intent_id=dss_operational_intent_reference_id
                     )
 
                     # update the state to Activated
@@ -433,9 +433,9 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
                 my_database_writer.create_flight_declaration(flight_declaration_creation=flight_declaration_creation_payload)
                 flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
-                flight_authorization = my_database_writer.create_flight_authorization_with_submitted_operational_intent(
+                flight_operational_intent_reference = my_database_writer.create_flight_operational_intent_reference_with_submitted_operational_intent(
                     flight_declaration=flight_declaration,
-                    dss_operational_intent_id=flight_planning_submission.operational_intent_id,
+                    dss_operational_intent_reference_id=flight_planning_submission.operational_intent_id,
                     ovn=flight_planning_submission.dss_response.operational_intent_reference.ovn,
                 )
 
@@ -484,11 +484,11 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
     elif request.method == "DELETE":
         my_database_reader = FlightBlenderDatabaseReader()
-        flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=operation_id_str)
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=operation_id_str)
         op_int_details_key = FLIGHT_OPINT_KEY + operation_id_str
-        if flight_authorization:
-            ovn = flight_authorization.ovn
-            opint_id = flight_authorization.dss_operational_intent_id
+        if flight_operational_intent_reference:
+            ovn = flight_operational_intent_reference.ovn
+            opint_id = flight_operational_intent_reference.id
             ovn_opint = {"ovn_id": ovn, "opint_id": opint_id, "flight_declaration_id": operation_id_str}
             # logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
 

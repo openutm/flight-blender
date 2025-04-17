@@ -12,7 +12,7 @@ from .operator_conformance_notifications import OperationConformanceNotification
 logger = logging.getLogger("django")
 # Declare signals
 telemetry_non_conformance_signal = django.dispatch.Signal()
-flight_authorization_non_conformance_signal = django.dispatch.Signal()
+flight_operational_intent_reference_non_conformance_signal = django.dispatch.Signal()
 
 
 @receiver(telemetry_non_conformance_signal)
@@ -91,8 +91,8 @@ def process_telemetry_conformance_message(sender, **kwargs):
         my_conformance_helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)
 
 
-@receiver(flight_authorization_non_conformance_signal)
-def process_flight_authorization_non_conformance_message(sender, **kwargs):
+@receiver(flight_operational_intent_reference_non_conformance_signal)
+def process_flight_operational_intent_reference_non_conformance_message(sender, **kwargs):
     """This method checks if the flight authorization is conformant to the declared operation states, if it is not then the state of the operation is assigned as non-conforming (3) or contingent (4)"""
     non_conformance_state = kwargs["non_conformance_state"]
     flight_declaration_id = kwargs["flight_declaration_id"]
@@ -121,11 +121,11 @@ def process_flight_authorization_non_conformance_message(sender, **kwargs):
         event = "flight_blender_confirms_contingent"
         new_state = 4
     elif non_conformance_state_code == "C10":
-        flight_authorization_expired = "The authorization for operation {flight_declaration_id}, has been expired. You must stop operation ".format(
+        flight_operational_intent_reference_expired = "The authorization for operation {flight_declaration_id}, has been expired. You must stop operation ".format(
             flight_declaration_id=flight_declaration_id
         )
-        logger.error(flight_authorization_expired)
-        my_operation_notification.send_conformance_status_notification(message=flight_authorization_expired, level="error")
+        logger.error(flight_operational_intent_reference_expired)
+        my_operation_notification.send_conformance_status_notification(message=flight_operational_intent_reference_expired, level="error")
         event = "flight_blender_confirms_contingent"
         new_state = 4
     elif non_conformance_state_code == "C11":

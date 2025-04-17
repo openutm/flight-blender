@@ -331,13 +331,16 @@ class OperationalIntentReferenceHelper:
     """
     A class to parse Operational Intent References into Dataclass objects
     """
+    def __init__(self) -> None:
+        self.my_database_reader = FlightBlenderDatabaseReader()
+    def parse_stored_operational_intent_details(self, operation_id: str) -> Union[None, OperationalIntentStorage]:
 
-    def parse_stored_operational_intent_details(self, operation_id: str) -> OperationalIntentStorage:
-        r = get_redis()
-        flight_opint = FLIGHT_OPINT_KEY + str(operation_id)
+        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=operation_id)
 
-        op_int_details_raw = r.get(flight_opint)
-        existing_op_int_details_raw = json.loads(op_int_details_raw)
+        if not flight_operational_intent_reference:
+            logger.error("Flight operational intent reference not found in the database")
+            return None
+        existing_op_int_details_raw = flight_operational_intent_reference.dss_response
 
         all_subscribers = existing_op_int_details_raw["success_response"]["subscribers"]
         subscribers = []
@@ -413,65 +416,57 @@ class OperationalIntentReferenceHelper:
         """
         Given a stored flight operational intent, get the details of the operational intent
         """
-        r = get_redis()
-        flight_opint = FLIGHT_OPINT_KEY + str(operation_id)
-        if r.exists(flight_opint):
-            op_int_details_raw = r.get(flight_opint)
-            op_int_details = json.loads(op_int_details_raw)
-            reference_full = op_int_details["success_response"]["operational_intent_reference"]
-            # dss_response_subscribers = op_int_details["success_response"]["subscribers"]
-            # flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
 
-            # for subscriber in dss_response_subscribers:
-            #     subscriptions = subscriber["subscriptions"]
-            #     uss_base_url = subscriber["uss_base_url"]
-            #     if flight_blender_base_url == uss_base_url:
-            #         for s in subscriptions:
-            #             subscription_id = s["subscription_id"]
-            #             break
-            details_full = op_int_details["operational_intent_details"]
-            # Load existing opint details
+        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=operation_id)
 
-            stored_operational_intent_id = reference_full["id"]
-            stored_manager = reference_full["manager"]
-            stored_uss_availability = reference_full["uss_availability"]
-            stored_version = reference_full["version"]
-            stored_state = reference_full["state"]
-            stored_ovn = reference_full["ovn"]
-            stored_uss_base_url = reference_full["uss_base_url"]
-            stored_subscription_id = reference_full["subscription_id"]
+        if not flight_operational_intent_reference:
+            logger.error("Flight operational intent reference not found in the database")
+            return None
+        reference_full = flight_operational_intent_reference.dss_response
 
-            stored_time_start = Time(
-                format=reference_full["time_start"]["format"],
-                value=reference_full["time_start"]["value"],
-            )
-            stored_time_end = Time(
-                format=reference_full["time_end"]["format"],
-                value=reference_full["time_end"]["value"],
-            )
+        details_full = op_int_details["operational_intent_details"]
+        # Load existing opint details
 
-            stored_priority = details_full["priority"]
-            stored_off_nominal_volumes = details_full["off_nominal_volumes"]
+        stored_operational_intent_id = reference_full["id"]
+        stored_manager = reference_full["manager"]
+        stored_uss_availability = reference_full["uss_availability"]
+        stored_version = reference_full["version"]
+        stored_state = reference_full["state"]
+        stored_ovn = reference_full["ovn"]
+        stored_uss_base_url = reference_full["uss_base_url"]
+        stored_subscription_id = reference_full["subscription_id"]
 
-            details = self.parse_operational_intent_details(
-                operational_intent_details=details_full,
-                priority=stored_priority,
-                off_nominal_volumes=stored_off_nominal_volumes,
-            )
+        stored_time_start = Time(
+            format=reference_full["time_start"]["format"],
+            value=reference_full["time_start"]["value"],
+        )
+        stored_time_end = Time(
+            format=reference_full["time_end"]["format"],
+            value=reference_full["time_end"]["value"],
+        )
 
-            reference = OperationalIntentReferenceDSSResponse(
-                id=stored_operational_intent_id,
-                manager=stored_manager,
-                uss_availability=stored_uss_availability,
-                version=stored_version,
-                state=stored_state,
-                ovn=stored_ovn,
-                time_start=stored_time_start,
-                time_end=stored_time_end,
-                uss_base_url=stored_uss_base_url,
-                subscription_id=stored_subscription_id,
-            )
-            return OperationalIntentDetailsUSSResponse(details=details, reference=reference)
+        stored_priority = details_full["priority"]
+        stored_off_nominal_volumes = details_full["off_nominal_volumes"]
+
+        details = self.parse_operational_intent_details(
+            operational_intent_details=details_full,
+            priority=stored_priority,
+            off_nominal_volumes=stored_off_nominal_volumes,
+        )
+
+        reference = OperationalIntentReferenceDSSResponse(
+            id=stored_operational_intent_id,
+            manager=stored_manager,
+            uss_availability=stored_uss_availability,
+            version=stored_version,
+            state=stored_state,
+            ovn=stored_ovn,
+            time_start=stored_time_start,
+            time_end=stored_time_end,
+            uss_base_url=stored_uss_base_url,
+            subscription_id=stored_subscription_id,
+        )
+        return OperationalIntentDetailsUSSResponse(details=details, reference=reference)
 
         return None
 
@@ -651,16 +646,16 @@ class SCDOperations:
                     # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
 
-                    flight_authorization = self.database_reader.get_flight_authorization_by_operational_intent_ref_id(
+                    flight_operational_intent_reference = self.database_reader.get_flight_operational_intent_reference_by_id(
                         str(current_uss_operational_intent_detail.id)
                     )
                     # TODO: Check if this can be removed
-                    if flight_authorization:
-                        self.database_writer.update_flight_authorization_ovn(
-                            flight_authorization=flight_authorization, ovn=current_uss_operational_intent_detail.ovn
+                    if flight_operational_intent_reference:
+                        self.database_writer.update_flight_operational_intent_reference_ovn(
+                            flight_operational_intent_reference=flight_operational_intent_reference, ovn=current_uss_operational_intent_detail.ovn
                         )
 
-                    operational_intent_id = str(flight_authorization.declaration.id)
+                    operational_intent_id = str(flight_operational_intent_reference.declaration.id)
                     flight_opint = FLIGHT_OPINT_KEY + operational_intent_id
 
                     if self.r.exists(flight_opint):

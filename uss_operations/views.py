@@ -107,10 +107,10 @@ def uss_update_opint_details(request):
         operational_intent_reference = op_int_update_detail.operational_intent.reference
         ovn = operational_intent_reference.ovn
 
-        flight_authorization = database_reader.get_flight_authorization_by_operational_intent_ref_id(operational_intent_ref_id=str(operation_id_str))
+        flight_operational_intent_reference = database_reader.get_flight_operational_intent_reference_by_id(operational_intent_ref_id=str(operation_id_str))
         # update the ovn
-        database_writer.update_flight_authorization_op_int_ovn(
-            flight_authorization=flight_authorization, dss_operational_intent_id=operation_id_str, ovn=ovn
+        database_writer.update_flight_operational_intent_reference_op_int_ovn(
+            flight_operational_intent_reference=flight_operational_intent_reference, dss_operational_intent_reference_id=operation_id_str, ovn=ovn
         )
 
         operational_intent_details = op_int_update_detail.operational_intent.details
@@ -186,13 +186,13 @@ def peer_uss_report_notification(request):
 
 @api_view(["GET"])
 @requires_scopes(["utm.strategic_coordination"])
-def USSOpIntDetails(request, opint_id):
+def uss_operational_intent_details(request, opint_id):
     r = get_redis()
 
     my_database_reader = FlightBlenderDatabaseReader()
-    flight_authorization = my_database_reader.get_flight_authorization_by_operational_intent_ref_id(str(opint_id))
-    if flight_authorization:
-        operational_intent_id = str(flight_authorization.declaration.id)
+    flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(str(opint_id))
+    if flight_operational_intent_reference:
+        operational_intent_id = str(flight_operational_intent_reference.declaration.id)
         flight_opint = FLIGHT_OPINT_KEY + operational_intent_id
         if r.exists(flight_opint):
             op_int_details_raw = r.get(flight_opint)

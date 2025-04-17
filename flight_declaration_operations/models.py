@@ -123,13 +123,13 @@ class FlightDeclaration(models.Model):
         return self.originating_party + " " + str(self.id)
 
 
-class FlightAuthorization(models.Model):
+class FlightOperationalIntentDetail(models.Model):
     """
     Model representing a flight authorization.
     Attributes:
         id (UUIDField): Primary key, unique identifier for the flight authorization.
         declaration (OneToOneField): One-to-one relationship with FlightDeclaration, deleted on cascade.
-        dss_operational_intent_id (CharField): Operational intent ID shared on the DSS, optional.
+        dss_operational_intent_reference_id (CharField): Operational intent ID shared on the DSS, optional.
         created_at (DateTimeField): Timestamp when the flight authorization was created, auto-generated.
         updated_at (DateTimeField): Timestamp when the flight authorization was last updated, auto-generated.
     Methods:
@@ -138,12 +138,39 @@ class FlightAuthorization(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     declaration = models.OneToOneField(FlightDeclaration, on_delete=models.CASCADE)
-    dss_operational_intent_id = models.CharField(
-        max_length=36,
-        blank=True,
-        null=True,
-        help_text="Once the operational intent is shared on the DSS the operational intent is stored here. By default nothing is stored here.",
+
+    volumes = models.TextField(blank=True)
+    off_nominal_volumes = models.TextField(blank=True)
+    priority = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    is_live = models.BooleanField(
+        default=False,
+        help_text="Set to true if the operational intent is live",
     )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class FlightOperationalIntentReference(models.Model):
+    """
+    Model representing a flight authorization.
+    Attributes:
+        id (UUIDField): Primary key, unique identifier for the flight authorization.
+        declaration (OneToOneField): One-to-one relationship with FlightDeclaration, deleted on cascade.
+        dss_operational_intent_reference_id (CharField): Operational intent ID shared on the DSS, optional.
+        created_at (DateTimeField): Timestamp when the flight authorization was created, auto-generated.
+        updated_at (DateTimeField): Timestamp when the flight authorization was last updated, auto-generated.
+    Methods:
+        __unicode__(): Returns a string representation of the flight authorization.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    declaration = models.OneToOneField(FlightDeclaration, on_delete=models.CASCADE)
+ 
+ 
     ovn = models.CharField(
         max_length=36,
         blank=True,
@@ -151,12 +178,83 @@ class FlightAuthorization(models.Model):
         help_text="Once the operational intent is created, the OVN is stored here.",
     )
 
-
+    manager = models.CharField(
+        max_length=256,
+    )
+    uss_base_url = models.CharField(
+        max_length=256,
+        help_text="USS base URL",
+    )
+    version = models.CharField(max_length=256, help_text="USS base URL")
+    state = models.CharField()
+    time_start = models.DateTimeField(default=datetime.now)
+    time_end = models.DateTimeField(default=datetime.now)
+    subscription_id = models.CharField(max_length=256)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __unicode__(self):
-        return "Authorization for " + self.declaration
+    is_live = models.BooleanField(
+        default=False,
+        help_text="Set to true if the operational intent is live",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class CompositeOperationalIntent(models.Model):
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    bounds = models.CharField(max_length=140)
+    start_datetime = models.DateTimeField(default=datetime.now)
+    end_datetime = models.DateTimeField(default=datetime.now)
+    alt_max = models.FloatField()
+    alt_min = models.FloatField()
+    operational_intent_details = models.ForeignKey(
+        FlightOperationalIntentDetail, on_delete=models.CASCADE, related_name="composite_operational_intent"
+    )
+    operational_intent_reference = models.ForeignKey(
+        FlightOperationalIntentReference, on_delete=models.CASCADE, related_name="composite_operational_intent_reference"
+    )
+
+
+class PeerOperationalIntentDetail(models.Model):
+    "Store the details of the operational intent shared by the peer USS"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    details = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    is_live = models.BooleanField(
+        default=False,
+        help_text="Set to true if the operational intent is live",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PeerOperationalIntentReference(models.Model):
+    "Store the details of the operational intent shared by the peer USS"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    uss_base_url = models.CharField(max_length=256, help_text="USS base URL")
+    ovn = models.CharField(
+        max_length=36,
+        blank=True,
+        null=True,
+        help_text="DSS operational the OVN is stored here.",
+    )
+    reference = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    is_live = models.BooleanField(
+        default=False,
+        help_text="Set to true if the operational intent is live",
+    )
 
     class Meta:
         ordering = ["-created_at"]

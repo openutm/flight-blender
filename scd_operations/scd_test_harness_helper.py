@@ -8,7 +8,7 @@ from dacite import from_dict
 
 from auth_helper.common import get_redis
 from rid_operations import rtree_helper
-
+from common.database_operations import FlightBlenderDatabaseReader
 from .dss_scd_helper import OperationalIntentReferenceHelper, VolumesConverter
 from .flight_planning_data_definitions import (
     AdvisoryInclusion,
@@ -147,53 +147,16 @@ class SCDTestHarnessHelper:
         self.my_operational_intent_helper = OperationalIntentReferenceHelper()
         self.r = get_redis()
         self.my_volumes_converter = VolumesConverter()
+        self.my_database_reader = FlightBlenderDatabaseReader()
         self.my_operational_intent_comparator = rtree_helper.OperationalIntentComparisonFactory()
 
     def check_if_same_flight_id_exists(self, operation_id: str) -> bool:
-        r = get_redis()
-        flight_opint = "flight_opint." + operation_id
-        if r.exists(flight_opint):
+        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=operation_id)
+
+        if flight_operational_intent_reference:
             return True
         else:
             return False
-
-    def check_if_same_operational_intent_exists_in_flight_blender(self, volumes: List[Volume4D]) -> bool:
-        all_checks: List[bool] = []
-        self.my_volumes_converter.convert_volumes_to_geojson(volumes=volumes)
-        polygon_to_check = self.my_volumes_converter.get_minimum_rotated_rectangle()
-
-        # Get the volume to check
-        all_opints = self.r.keys(pattern="flight_opint.*")
-        for flight_opint in all_opints:
-            stored_opint_volumes_converter = VolumesConverter()
-            op_int_details_raw = self.r.get(flight_opint)
-            op_int_details = json.loads(op_int_details_raw)
-
-            details_full = op_int_details["operational_intent_details"]
-            # Load existing opint details
-            # reference_full = op_int_details["success_response"]["operational_intent_reference"]
-            # operational_intent_reference = self.my_operational_intent_helper.parse_operational_intent_reference_from_dss(
-            #     operational_intent_reference=reference_full
-            # )
-            stored_priority = details_full["priority"]
-            stored_off_nominal_volumes = details_full["off_nominal_volumes"]
-            operational_intent_details = self.my_operational_intent_helper.parse_operational_intent_details(
-                operational_intent_details=details_full,
-                priority=stored_priority,
-                off_nominal_volumes=stored_off_nominal_volumes,
-            )
-            stored_volumes = operational_intent_details.volumes
-            stored_opint_volumes_converter.convert_volumes_to_geojson(volumes=stored_volumes)
-            stored_volume_polygon = stored_opint_volumes_converter.get_minimum_rotated_rectangle()
-            are_polygons_same = self.my_operational_intent_comparator.check_volume_geometry_same(
-                polygon_a=polygon_to_check, polygon_b=stored_volume_polygon
-            )
-            # Check if start and end times are equal
-            # Check if altitude is equal
-            all_checks.append(are_polygons_same)
-
-        return all(all_checks)
-
 
 class FlightPlantoOperationalIntentProcessor:
     def __init__(self, flight_planning_request: FlightPlanningRequest):

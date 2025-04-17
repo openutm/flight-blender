@@ -61,7 +61,7 @@ class DSSOperationalIntentsCreator:
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
         current_state = flight_declaration.state
 
-        flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration_obj(flight_declaration=flight_declaration)
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
 
         operational_intent = json.loads(flight_declaration.operational_intent)
 
@@ -92,9 +92,9 @@ class DSSOperationalIntentsCreator:
 
             # Update flight Authorization and Flight State
             if op_int_submission.status_code == 201:
-                my_database_writer.update_flight_authorization_op_int_ovn(
-                    flight_authorization=flight_authorization,
-                    dss_operational_intent_id=op_int_submission.operational_intent_id,
+                my_database_writer.update_flight_operational_intent_reference_op_int_ovn(
+                    flight_operational_intent_reference=flight_operational_intent_reference,
+                    dss_operational_intent_reference_id=op_int_submission.operational_intent_id,
                     ovn=op_int_submission.dss_response.operational_intent_reference.ovn,
                 )
                 # Update operation state
