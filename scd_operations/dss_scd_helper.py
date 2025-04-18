@@ -19,7 +19,7 @@ from shapely.ops import unary_union
 from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
 from common.auth_token_audience_helper import generate_audience_from_base_url
-from common.data_definitions import FLIGHT_OPINT_KEY, VALID_OPERATIONAL_INTENT_STATES
+from common.data_definitions import VALID_OPERATIONAL_INTENT_STATES
 from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
@@ -331,11 +331,14 @@ class OperationalIntentReferenceHelper:
     """
     A class to parse Operational Intent References into Dataclass objects
     """
+
     def __init__(self) -> None:
         self.my_database_reader = FlightBlenderDatabaseReader()
-    def parse_stored_operational_intent_details(self, operation_id: str) -> Union[None, OperationalIntentStorage]:
 
-        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=operation_id)
+    def parse_stored_operational_intent_details(self, operation_id: str) -> Union[None, OperationalIntentStorage]:
+        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+            flight_declaration_id=operation_id
+        )
 
         if not flight_operational_intent_reference:
             logger.error("Flight operational intent reference not found in the database")
@@ -417,7 +420,9 @@ class OperationalIntentReferenceHelper:
         Given a stored flight operational intent, get the details of the operational intent
         """
 
-        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=operation_id)
+        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+            flight_declaration_id=operation_id
+        )
 
         if not flight_operational_intent_reference:
             logger.error("Flight operational intent reference not found in the database")
@@ -656,20 +661,38 @@ class SCDOperations:
                         )
 
                     operational_intent_id = str(flight_operational_intent_reference.declaration.id)
-                    flight_opint = FLIGHT_OPINT_KEY + operational_intent_id
 
-                    if self.r.exists(flight_opint):
-                        op_int_details_raw = self.r.get(flight_opint)
-                        op_int_details = json.loads(op_int_details_raw)
-                        op_int_ref = op_int_details["success_response"]["operational_intent_reference"]
-                        op_int_det = op_int_details["operational_intent_details"]
-                        # Update the ovn
-                        op_int_ref["ovn"] = current_uss_operational_intent_detail.ovn
+                    composite_operational_intent = self.database_reader.get_composite_operational_intent_by_declaration_id(
+                        flight_declaration_id=current_uss_operational_intent_detail.id
+                    )
+
+                    operation_intent_reference = composite_operational_intent.operational_intent_reference
+                    op_int_ref = OperationalIntentReferenceDSSResponse(
+                        subscription_id=operation_intent_reference.subscription_id,
+                        id=operation_intent_reference.id,
+                        uss_base_url=operation_intent_reference.uss_base_url,
+                        manager=operation_intent_reference.manager,
+                        uss_availability=operation_intent_reference.uss_availability,
+                        version=operation_intent_reference.version,
+                        state=operation_intent_reference.state,
+                        ovn=operation_intent_reference.ovn,
+                        time_start=Time(format="RFC3339", value=operation_intent_reference.time_start),
+                        time_end=Time(format="RFC3339", value=operation_intent_reference.time_end),
+                        uss_base_url=operation_intent_reference.uss_base_url,
+                    )
+
+                    # if self.r.exists(flight_opint):
+                    #     op_int_details_raw = self.r.get(flight_opint)
+                    #     op_int_details = json.loads(op_int_details_raw)
+                    #     op_int_ref = op_int_details["success_response"]["operational_intent_reference"]
+                    #     op_int_det = op_int_details["operational_intent_details"]
+                    #     # Update the ovn
+                    #     op_int_ref["ovn"] = current_uss_operational_intent_detail.ovn
 
                     op_int_details_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
-                    uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)                    
+                    uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
                     uss_auth_token = self.get_auth_token(audience=uss_audience)
                     logger.debug("Auth Token {uss_auth_token}".format(uss_auth_token=uss_auth_token))
                     uss_headers = {

@@ -5,8 +5,11 @@ from itertools import cycle
 import arrow
 
 from auth_helper.common import get_redis
-from common.data_definitions import FLIGHT_OPINT_KEY, OPINT_INDEX_BASEPATH
-from common.database_operations import FlightBlenderDatabaseWriter
+from common.data_definitions import OPINT_INDEX_BASEPATH
+from common.database_operations import (
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
+)
 from rid_operations import rtree_helper
 
 from . import dss_scd_helper
@@ -196,6 +199,8 @@ class DSSAreaClearHandler:
     def clear_area_request(self, extent_raw) -> ClearAreaResponse:
         r = get_redis()
         my_database_writer = FlightBlenderDatabaseWriter()
+        my_database_reader = FlightBlenderDatabaseReader()
+        my_scd_dss_helper = dss_scd_helper.SCDOperations()
         # Create a list of Volume4D objects
         my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
         volume4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=extent_raw)
@@ -216,15 +221,14 @@ class DSSAreaClearHandler:
                 if flight_details:
                     deletion_success = False
                     operation_id = flight_details["flight_id"]
-                    op_int_details_key = FLIGHT_OPINT_KEY + operation_id
-                    if r.exists(op_int_details_key):
-                        op_int_detail_raw = r.get(op_int_details_key)
-                        my_scd_dss_helper = dss_scd_helper.SCDOperations()
-                        # op_int_detail_raw = op_int_details.decode()
 
-                        op_int_detail = json.loads(op_int_detail_raw)
-                        ovn = op_int_detail["success_response"]["operational_intent_reference"]["ovn"]
-                        opint_id = op_int_detail["success_response"]["operational_intent_reference"]["id"]
+                    composite_operational_intent = my_database_reader.get_composite_operational_intent_by_declaration_id(
+                        flight_declaration_id=operation_id
+                    )
+
+                    if composite_operational_intent:
+                        ovn = composite_operational_intent.ovn
+                        opint_id = composite_operational_intent.id
                         ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
                         logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
 
@@ -233,7 +237,6 @@ class DSSAreaClearHandler:
                             logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             deletion_success = True
 
-                            r.delete(op_int_details_key)
                             my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id)
 
                         else:

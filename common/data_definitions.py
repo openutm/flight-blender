@@ -42,7 +42,6 @@ OPERATOR_EVENT_LOOKUP = {
 VALID_OPERATIONAL_INTENT_STATES = ["Accepted", "Activated", "Nonconforming", "Contingent"]
 
 
-FLIGHT_OPINT_KEY = "flight_opint."
 RESPONSE_CONTENT_TYPE = "application/json"
 
 

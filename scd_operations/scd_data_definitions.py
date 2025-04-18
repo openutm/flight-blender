@@ -356,6 +356,17 @@ class OperationalIntentStorage:
 
 
 @dataclass
+class CompositeOperationalIntentPayload:
+    bounds: str
+    start_datetime: str
+    start_datetime: str
+    alt_max: float
+    alt_min: float
+    operational_intent_reference_id: str
+    operational_intent_details_id: str
+
+
+@dataclass
 class OperationalIntentSubmissionError:
     result: str
     notes: str
