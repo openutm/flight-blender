@@ -108,7 +108,7 @@ class FlightBlenderDatabaseReader:
         except FlightAuthorization.DoesNotExist:
             return None
 
-    def get_current_flight_declaration_ids(self, timestamp: str) -> None | uuid4:
+    def get_current_flight_declaration_ids(self, timestamp: str) -> None | UUID:
         """This method gets flight operation ids that are active in the system within near the time interval"""
         ts = arrow.get(timestamp)
 
@@ -126,7 +126,7 @@ class FlightBlenderDatabaseReader:
     def get_active_activated_flight_declarations(self) -> QuerySet | list[FlightDeclaration]:
         return FlightDeclaration.objects.filter().filter(state__in=[1, 2])
 
-    def get_current_flight_accepted_activated_declaration_ids(self, now: str) -> None | uuid4:
+    def get_current_flight_accepted_activated_declaration_ids(self, now: str) -> None | UUID:
         """This method gets flight operation ids that are active in the system"""
         n = arrow.get(now)
 

@@ -1,29 +1,55 @@
-.git
-# .dockerignore
-
-local_settings.py
-*.sqlite3
-
-.env*
-*.env
-
-__pycache__
+# Python bytecode and cache files
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env
-pip-log.txt
-pip-delete-this-directory.txt
-.tox
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE and editor specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Log files
 *.log
+
+# Test related files
+tests/
+test*/
+pytest_cache/
+
+# Coverage files
+.coverage
+coverage/
+htmlcov/
+
+# Distribution files
+dist/
+build/
+*.egg-info
+
+# Docker specific files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Node.js and NPM/Yarn
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# System specific files
+.env
 .git
-.mypy_cache
-.pytest_cache
-.hypothesis
+.gitignore
