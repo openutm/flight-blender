@@ -1,7 +1,6 @@
 from math import atan2, cos, radians, sin, sqrt
 
 import shapely
-from pyproj import Geod
 from shapely.geometry import box as shapley_box
 
 

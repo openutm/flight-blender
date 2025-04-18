@@ -50,9 +50,7 @@ class Command(BaseCommand):
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         if not flight_declaration:
-            raise CommandError(
-                "Flight Declaration with ID {flight_declaration_id} does not exist".format(flight_declaration_id=flight_declaration_id)
-            )
+            raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
         flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration_obj(flight_declaration=flight_declaration)
         dss_operational_intent_ref_id = flight_authorization.dss_operational_intent_id
 
@@ -75,9 +73,7 @@ class Command(BaseCommand):
             my_database_reader = FlightBlenderDatabaseReader()
             flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
             if not flight_declaration:
-                raise CommandError(
-                    "Flight Declaration with ID {flight_declaration_id} does not exist".format(flight_declaration_id=flight_declaration_id)
-                )
+                raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
 
             flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=flight_declaration_id)
             if not dry_run:
@@ -95,4 +91,4 @@ class Command(BaseCommand):
                     logger.info("Error in deleting operational intent from DSS")
 
             else:
-                logger.info("Error in removing {flight_declaration_id} reference  from DSS".format(flight_declaration_id=flight_declaration_id))
+                logger.info(f"Error in removing {flight_declaration_id} reference  from DSS")

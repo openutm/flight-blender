@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal
 
 
 @dataclass
@@ -32,7 +32,7 @@ class SCDRadius:
 class SCDPolygon:
     """A class to hold the polygon object, used in the outline_polygon of the Volume3D object"""
 
-    vertices: List[SCDLatLngPoint]  # A minimum of three LatLngPoints are required
+    vertices: list[SCDLatLngPoint]  # A minimum of three LatLngPoints are required
 
 
 @dataclass
@@ -64,10 +64,10 @@ class SCDTime:
 class SCDVolume3D:
     """A class to hold Volume3D objects"""
 
-    outline_circle: Optional[SCDCircle]
-    outline_polygon: Optional[SCDPolygon]
-    altitude_lower: Optional[SCDAltitude]
-    altitude_upper: Optional[SCDAltitude]
+    outline_circle: SCDCircle | None
+    outline_polygon: SCDPolygon | None
+    altitude_lower: SCDAltitude | None
+    altitude_upper: SCDAltitude | None
 
 
 @dataclass
@@ -75,8 +75,8 @@ class SCDVolume4D:
     """A class to hold Volume4D objects"""
 
     volume: SCDVolume3D
-    time_start: Optional[SCDTime]
-    time_end: Optional[SCDTime]
+    time_start: SCDTime | None
+    time_end: SCDTime | None
 
 
 # class OperationalIntentReference(ImplicitDict):
@@ -100,8 +100,8 @@ class SCDVolume4D:
 
 @dataclass
 class FlightDeclarationOperationalIntentStorageDetails:
-    volumes: List[SCDVolume4D]
-    off_nominal_volumes: List[SCDVolume4D]
+    volumes: list[SCDVolume4D]
+    off_nominal_volumes: list[SCDVolume4D]
     priority: int
     state: str
 

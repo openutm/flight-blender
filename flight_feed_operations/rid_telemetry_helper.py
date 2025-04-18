@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import List
 
 from dacite import from_dict
 
@@ -36,7 +35,7 @@ class NestedDict(dict):
 
 def generate_rid_telemetry_objects(
     signed_telemetry_request: SignedTelemetryRequest,
-) -> List[SubmittedTelemetryFlightDetails]:
+) -> list[SubmittedTelemetryFlightDetails]:
     """
     Generate a list of RID telemetry objects from signed telemetry requests.
     Args:
@@ -57,8 +56,8 @@ def generate_rid_telemetry_objects(
 
 
 def generate_unsigned_rid_telemetry_objects(
-    telemetry_request: List[SignedUnSignedTelemetryObservations],
-) -> List[SubmittedTelemetryFlightDetails]:
+    telemetry_request: list[SignedUnSignedTelemetryObservations],
+) -> list[SubmittedTelemetryFlightDetails]:
     """
     Generate a list of unsigned RID telemetry objects from the given telemetry request.
     Args:
@@ -144,7 +143,7 @@ class FlightBlenderTelemetryValidator:
 
         return s
 
-    def parse_validate_current_states(self, current_states) -> List[RIDAircraftState]:
+    def parse_validate_current_states(self, current_states) -> list[RIDAircraftState]:
         """
         Parses and validates a list of current aircraft states.
         Args:

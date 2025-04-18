@@ -3,16 +3,14 @@ import logging
 import time
 import uuid
 from dataclasses import asdict
-from typing import List
+from enum import Enum
 from uuid import UUID
 
 import arrow
-from dacite import from_dict, Config
-from enum import Enum
+from dacite import Config, from_dict
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from rest_framework.decorators import api_view
-from shapely.geometry import Point
 
 import rid_operations.view_port_ops as view_port_ops
 from auth_helper.common import get_redis
@@ -23,6 +21,7 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 from common.utils import EnhancedJSONEncoder
+from constraint_operations.data_definitions import PutConstraintDetailsParameters
 from flight_feed_operations import flight_stream_helper
 from rid_operations.data_definitions import (
     UASID,
@@ -47,7 +46,7 @@ from scd_operations.dss_scd_helper import (
     VolumesConverter,
 )
 from scd_operations.scd_data_definitions import OperationalIntentStorage, Volume4D
-from constraint_operations.data_definitions import PutConstraintDetailsParameters
+
 from .uss_data_definitions import (
     ErrorReport,
     FlightDetailsNotFoundMessage,
@@ -116,7 +115,7 @@ def uss_update_opint_details(request):
         operational_intent_details = op_int_update_detail.operational_intent.details
         volumes = operational_intent_details.volumes
 
-        all_volumes: List[Volume4D] = []
+        all_volumes: list[Volume4D] = []
         for volume in volumes:
             volume_4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=volume)
             all_volumes.append(volume_4D)
@@ -356,7 +355,7 @@ def get_uss_flights(request):
     # Get the latest telemetry
 
     if not all_flights_telemetry_data:
-        logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
+        logger.error(f"No telemetry data found for operation {flight_declaration_id}")
         return
 
     distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []

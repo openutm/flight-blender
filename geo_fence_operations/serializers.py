@@ -1,15 +1,16 @@
 import json
 
+from marshmallow import Schema, fields
 from rest_framework import serializers
 
 from .models import GeoFence
 
-from marshmallow import Schema, fields
 
 class GeoJSONFeatureProperties(Schema):
     name = fields.Str(required=True)
     upper_limit = fields.Int(required=True)
     lower_limit = fields.Int(required=True)
+
 
 class GeoJSONFeatureGeometry(Schema):
     type = fields.Str(required=True)
@@ -25,7 +26,6 @@ class GeoJSONFeature(Schema):
 class GeoFencePutSchema(Schema):
     type = fields.Str(required=True)
     features = fields.List(fields.Nested(lambda: GeoJSONFeature()), required=True)
-    
 
 
 class GeoFenceRequest:

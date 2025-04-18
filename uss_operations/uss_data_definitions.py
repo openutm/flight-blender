@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Literal, Optional, Union
+from typing import Literal
 
 from rid_operations.rid_utils import RIDOperatorDetails
 
@@ -71,7 +71,7 @@ class Radius:
 class Polygon:
     """A class to hold the polygon object"""
 
-    vertices: List[LatLngPoint]  # A minimum of three LatLngPoints
+    vertices: list[LatLngPoint]  # A minimum of three LatLngPoints
 
 
 @dataclass
@@ -86,7 +86,7 @@ class Circle:
 class Altitude:
     """A class to hold altitude"""
 
-    value: Union[int, float]
+    value: int | float
     reference: str
     units: str
 
@@ -98,7 +98,7 @@ class Volume3D:
     outline_polygon: Polygon
     altitude_lower: Altitude
     altitude_upper: Altitude
-    outline_circle: Optional[Circle] = None
+    outline_circle: Circle | None = None
 
 
 class OperationalIntentState(str, Enum):
@@ -140,9 +140,9 @@ class OperationalIntentReferenceDSSResponse:
 
 @dataclass
 class OperationalIntentUSSDetails:
-    volumes: List[Volume4D]
+    volumes: list[Volume4D]
     priority: int
-    off_nominal_volumes: Optional[List[Volume4D]]
+    off_nominal_volumes: list[Volume4D] | None
 
 
 @dataclass
@@ -159,8 +159,8 @@ class OperationalIntentDetails:
 @dataclass
 class UpdateChangedOpIntDetailsPost:
     operational_intent_id: str
-    subscriptions: List[SubscriptionState]
-    operational_intent: Optional[OperationalIntentDetailsUSSResponse] = None
+    subscriptions: list[SubscriptionState]
+    operational_intent: OperationalIntentDetailsUSSResponse | None = None
 
 
 Latitude = float
@@ -207,12 +207,12 @@ class PositionAccuracyHorizontal(str, Enum):
 class Position:
     """Location of the vehicle (UAS) as reported for UTM. Note: 'accuracy' values are required when extrapolated field is true."""
 
-    longitude: Optional[Longitude]
-    latitude: Optional[Latitude]
-    accuracy_h: Optional[PositionAccuracyHorizontal]
-    accuracy_v: Optional[PositionAccuracyVertical]
-    altitude: Optional[Altitude]
-    extrapolated: Optional[bool] = False
+    longitude: Longitude | None
+    latitude: Latitude | None
+    accuracy_h: PositionAccuracyHorizontal | None
+    accuracy_v: PositionAccuracyVertical | None
+    altitude: Altitude | None
+    extrapolated: bool | None = False
 
 
 class VelocityUnitsSpeed(str, Enum):
@@ -224,7 +224,7 @@ class Velocity:
     speed: float
     """Ground speed in meters/second."""
     units_speed: VelocityUnitsSpeed = VelocityUnitsSpeed.MetersPerSecond
-    track: Optional[float] = 0
+    track: float | None = 0
     """Direction of flight expressed as a "True North-based" ground track angle. This value is provided in degrees East of North with a minimum resolution of 1 degree. A value of 360 indicates invalid, no value, or unknown."""
 
 
@@ -233,15 +233,15 @@ class VehicleTelemetry:
     """Vehicle position, altitude, and velocity."""
 
     time_measured: Time
-    position: Optional[Position]
-    velocity: Optional[Velocity]
+    position: Position | None
+    velocity: Velocity | None
 
 
 @dataclass
 class VehicleTelemetryResponse:
     operational_intent_id: str
-    telemetry: Optional[VehicleTelemetry]
-    next_telemetry_opportunity: Optional[Time]
+    telemetry: VehicleTelemetry | None
+    next_telemetry_opportunity: Time | None
 
 
 class ExchangeRecordRecorderRole(str, Enum):
@@ -267,22 +267,22 @@ class ExchangeRecord:
     request_time: Time
     """The time at which the request was sent/received."""
 
-    response_time: Optional[Time]
+    response_time: Time | None
     """The time at which the response was sent/received."""
 
-    problem: Optional[str]
+    problem: str | None
     """'Human-readable description of the problem with the exchange, if any.'"""
 
-    headers: Optional[list] = field(default_factory=list)
+    headers: list | None = field(default_factory=list)
     """Set of headers associated with request or response. Requires 'Authorization:' field (at a minimum)"""
 
-    request_body: Optional[str] = ""
+    request_body: str | None = ""
     """Base64-encoded body content sent/received as a request."""
 
-    response_body: Optional[str] = ""
+    response_body: str | None = ""
     """Base64-encoded body content sent/received in response to request."""
 
-    response_code: Optional[int] = 0
+    response_code: int | None = 0
     """HTTP response code sent/received in response to request."""
 
 
@@ -290,7 +290,7 @@ class ExchangeRecord:
 class ErrorReport:
     """A report informing a server of a communication problem."""
 
-    report_id: Optional[str]
+    report_id: str | None
     """ID assigned by the server receiving the report.  Not populated when submitting a report."""
 
     exchange: ExchangeRecord

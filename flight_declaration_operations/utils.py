@@ -1,6 +1,5 @@
 from dataclasses import asdict
 from os import environ as env
-from typing import List
 
 import shapely.geometry
 from dotenv import find_dotenv, load_dotenv
@@ -13,9 +12,11 @@ from scd_operations.scd_data_definitions import (
     Altitude,
     LatLngPoint,
     PartialCreateOperationalIntentReference,
+    Time,
+    Volume3D,
+    Volume4D,
 )
 from scd_operations.scd_data_definitions import Polygon as Plgn
-from scd_operations.scd_data_definitions import Time, Volume3D, Volume4D
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -91,7 +92,7 @@ class OperationalIntentsConverter:
 
             return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
 
-    def convert_operational_intent_to_geo_json(self, volumes: List[Volume4D]):
+    def convert_operational_intent_to_geo_json(self, volumes: list[Volume4D]):
         """
         Converts a list of Volume4D objects to GeoJSON format and appends the resulting features
         to the geo_json attribute.
@@ -137,7 +138,7 @@ class OperationalIntentsConverter:
 
         return op_int_ref
 
-    def convert_geo_json_to_volume_4_d(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> List[Volume4D]:
+    def convert_geo_json_to_volume_4_d(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
         """
         Converts a GeoJSON FeatureCollection to a list of Volume4D objects.
 
@@ -226,7 +227,7 @@ class OperationalIntentsConverter:
     def get_geo_json_bounds(self) -> str:
         combined_features = unary_union(self.all_features)
         bnd_tuple = combined_features.bounds
-        bounds = ",".join(["{:.7f}".format(x) for x in bnd_tuple])
+        bounds = ",".join([f"{x:.7f}" for x in bnd_tuple])
 
         return bounds
 

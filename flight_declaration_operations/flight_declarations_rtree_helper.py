@@ -1,14 +1,13 @@
 import hashlib
 from dataclasses import asdict
-from typing import List, Union
 
 import arrow
-from .data_definitions import FlightDeclarationMetadata
 from django.db.models import QuerySet
 from rtree import index
 
 from auth_helper.common import get_redis
 
+from .data_definitions import FlightDeclarationMetadata
 from .models import FlightDeclaration
 
 
@@ -33,7 +32,7 @@ class FlightDeclarationRTreeIndexFactory:
         self,
         id: int,
         flight_declaration_id: str,
-        view: List[float],
+        view: list[float],
         start_date: str,
         end_date: str,
     ) -> None:
@@ -50,7 +49,7 @@ class FlightDeclarationRTreeIndexFactory:
         metadata = FlightDeclarationMetadata(start_date=start_date, end_date=end_date, flight_declaration_id=flight_declaration_id)
         self.idx.insert(id=id, coordinates=(view[0], view[1], view[2], view[3]), obj=asdict(metadata))
 
-    def delete_from_index(self, enumerated_id: int, view: List[float]) -> None:
+    def delete_from_index(self, enumerated_id: int, view: list[float]) -> None:
         """
         Deletes a bounding box from the RTree index.
 
@@ -60,7 +59,7 @@ class FlightDeclarationRTreeIndexFactory:
         """
         self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
 
-    def generate_flight_declaration_index(self, all_flight_declarations: Union[QuerySet, List[FlightDeclaration]]) -> None:
+    def generate_flight_declaration_index(self, all_flight_declarations: QuerySet | list[FlightDeclaration]) -> None:
         """
         Generates an RTree index of currently active operational indexes.
 
@@ -93,7 +92,7 @@ class FlightDeclarationRTreeIndexFactory:
             view = [float(i) for i in declaration.bounds.split(",")]
             self.delete_from_index(enumerated_id=declaration_id, view=view)
 
-    def check_flight_declaration_box_intersection(self, view_box: List[float]) -> List[FlightDeclarationMetadata]:
+    def check_flight_declaration_box_intersection(self, view_box: list[float]) -> list[FlightDeclarationMetadata]:
         """
         Checks for intersections with a given bounding box.
 
@@ -103,6 +102,8 @@ class FlightDeclarationRTreeIndexFactory:
         Returns:
             List[FlightDeclarationMetadata]: A list of metadata for intersecting boxes.
         """
-        intersections = [FlightDeclarationMetadata(**n.object) for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)]
+        intersections = [
+            FlightDeclarationMetadata(**n.object) for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)
+        ]
 
         return intersections

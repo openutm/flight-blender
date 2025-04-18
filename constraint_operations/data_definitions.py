@@ -1,8 +1,10 @@
 from dataclasses import dataclass
-from scd_operations.scd_data_definitions import SubscriptionState,Time, Volume4D
-from typing import List, Optional, Dict, Any
-from enum import Enum
 from datetime import timedelta
+from enum import Enum
+from typing import Any
+
+from scd_operations.scd_data_definitions import SubscriptionState, Time, Volume4D
+
 UUIDv4Format = str
 CodeUSpaceClassType = str
 TextShortType = str
@@ -14,6 +16,7 @@ EntityOVN = str
 ConstraintUssBaseURL = str
 EntityVersion = int
 EntityID = UUIDv4Format
+
 
 class CodeZoneReasonType(Enum):
     AIR_TRAFFIC = "AIR_TRAFFIC"
@@ -49,32 +52,32 @@ class CodeYesNoType(Enum):
 
 @dataclass
 class Authority:
-    name: Optional[TextShortType] = None
-    service: Optional[TextShortType] = None
-    contact_name: Optional[TextShortType] = None
-    site_url: Optional[TextShortType] = None
-    email: Optional[TextShortType] = None
-    phone: Optional[TextShortType] = None
-    purpose: Optional[CodeAuthorityRole] = None
-    interval_before: Optional[timedelta] = None
+    name: TextShortType | None = None
+    service: TextShortType | None = None
+    contact_name: TextShortType | None = None
+    site_url: TextShortType | None = None
+    email: TextShortType | None = None
+    phone: TextShortType | None = None
+    purpose: CodeAuthorityRole | None = None
+    interval_before: timedelta | None = None
 
 
 @dataclass
 class GeoZone:
     identifier: CodeZoneIdentifierType
     country: CodeCountryISOType
-    zone_authority: List[Authority]
+    zone_authority: list[Authority]
     type: CodeZoneType
     restriction: CodeRestrictionType
-    name: Optional[TextShortType] = None
-    restriction_conditions: Optional[List[ConditionExpressionType]] = None
-    region: Optional[int] = None
-    reason: Optional[List[CodeZoneReasonType]] = None
-    other_reason_info: Optional[str] = None
-    regulation_exemption: Optional[CodeYesNoType] = None
-    u_space_class: Optional[CodeUSpaceClassType] = None
-    message: Optional[TextShortType] = None
-    additional_properties: Optional[Dict[str, Any]] = None
+    name: TextShortType | None = None
+    restriction_conditions: list[ConditionExpressionType] | None = None
+    region: int | None = None
+    reason: list[CodeZoneReasonType] | None = None
+    other_reason_info: str | None = None
+    regulation_exemption: CodeYesNoType | None = None
+    u_space_class: CodeUSpaceClassType | None = None
+    message: TextShortType | None = None
+    additional_properties: dict[str, Any] | None = None
 
 
 class UssAvailabilityState(Enum):
@@ -92,14 +95,14 @@ class ConstraintReference:
     time_start: Time
     time_end: Time
     uss_base_url: ConstraintUssBaseURL
-    ovn: Optional[EntityOVN] = None
+    ovn: EntityOVN | None = None
 
 
 @dataclass
 class ConstraintDetails:
-    volumes: List[Volume4D]
-    type: Optional[str] = None
-    geozone: Optional[GeoZone] = None
+    volumes: list[Volume4D]
+    type: str | None = None
+    geozone: GeoZone | None = None
 
 
 @dataclass
@@ -111,10 +114,10 @@ class Constraint:
 @dataclass
 class PutConstraintDetailsParameters:
     constraint_id: EntityID
-    subscriptions: List[SubscriptionState]
-    constraint: Optional[Constraint] = None
+    subscriptions: list[SubscriptionState]
+    constraint: Constraint | None = None
+
 
 @dataclass
 class QueryConstraintsPayload:
     area_of_interest: Volume4D
-

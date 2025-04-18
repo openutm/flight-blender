@@ -1,19 +1,22 @@
+import json
+import logging
+from dataclasses import asdict
 from os import environ as env
+from typing import Never
+
+import requests
+import urllib3
+from dacite import from_dict
+from dotenv import find_dotenv, load_dotenv
+
 from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
-from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-from .data_definitions import QueryConstraintsPayload, ConstraintReference, ConstraintDetails, Constraint
-from scd_operations.dss_scd_helper import Volume4D
-import json
-from dacite import from_dict
-import requests
-from dataclasses import asdict
-from dotenv import find_dotenv, load_dotenv
-from typing import Union, Never
-import logging
 from common.auth_token_audience_helper import generate_audience_from_base_url
-import urllib3
-import os
+from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from scd_operations.dss_scd_helper import Volume4D
+
+from .data_definitions import Constraint, ConstraintReference, QueryConstraintsPayload
+
 load_dotenv(find_dotenv())
 
 ENV_FILE = find_dotenv()
@@ -30,7 +33,7 @@ class ConstraintsOperations:
         self.database_reader = FlightBlenderDatabaseReader()
         self.database_writer = FlightBlenderDatabaseWriter()
 
-    def get_auth_token(self, audience: str = None):
+    def get_auth_token(self, audience: str | None = None):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
         if audience is None:
             audience = env.get("DSS_SELF_AUDIENCE", 0)
@@ -43,7 +46,7 @@ class ConstraintsOperations:
             auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="constraints")
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
-            logger.error("Auth server error {error}".format(error=e))
+            logger.error(f"Auth server error {e}")
             auth_token["error"] = "Error in getting access token"
         else:
             error = auth_token.get("error", None)
@@ -52,8 +55,7 @@ class ConstraintsOperations:
 
         return auth_token
 
-    def query_constraint_references(self, volume: Volume4D) -> Union[list[ConstraintReference], list[Never]]:
-
+    def query_constraint_references(self, volume: Volume4D) -> list[ConstraintReference] | list[Never]:
         auth_token = self.get_auth_token()
 
         query_constraint_references_url = self.dss_base_url + "dss/v1/constraint_references/query"
@@ -65,7 +67,7 @@ class ConstraintsOperations:
         constraint_references: list[ConstraintReference] = []
         area_of_interest = QueryConstraintsPayload(area_of_interest=volume)
         logger.info("Querying DSS for constraints in the area..")
-        logger.debug("Area of interest {area_of_interest}".format(area_of_interest=area_of_interest))
+        logger.debug(f"Area of interest {area_of_interest}")
         try:
             constraints_query_response = requests.post(
                 query_constraint_references_url,
@@ -77,7 +79,7 @@ class ConstraintsOperations:
         else:
             # The DSS returned operational intent references as a list
             dss_constraint_references = constraints_query_response.json()
-            logger.debug("DSS Response {dss_constraint_references}".format(dss_constraint_references=dss_constraint_references))
+            logger.debug(f"DSS Response {dss_constraint_references}")
             _dss_constraint_references = dss_constraint_references["constraint_references"]
             if _dss_constraint_references:
                 for _constraint_reference in _dss_constraint_references:
@@ -90,20 +92,20 @@ class ConstraintsOperations:
                 logger.info("No constraints found in the area of interest")
         return constraint_references
 
-    def get_constraint_details_from_uss(self, constraint_reference: ConstraintReference) -> Union[Constraint, None]:
+    def get_constraint_details_from_uss(self, constraint_reference: ConstraintReference) -> Constraint | None:
         current_uss_base_url = constraint_reference.uss_base_url
 
         uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
 
         uss_auth_token = self.get_auth_token(audience=uss_audience)
-        logger.debug("Auth Token {uss_auth_token}".format(uss_auth_token=uss_auth_token))
+        logger.debug(f"Auth Token {uss_auth_token}")
         uss_headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + uss_auth_token["access_token"],
         }
         uss_constraint_details_url = current_uss_base_url + "/uss/v1/constraints/" + constraint_reference.id
 
-        logger.debug("Querying USS: {current_uss_base_url}".format(current_uss_base_url=current_uss_base_url))
+        logger.debug(f"Querying USS: {current_uss_base_url}")
 
         constraint_details_retrived = False
         try:
@@ -153,5 +155,5 @@ class ConstraintsOperations:
         constraint = None
         if constraint_details_retrived:
             constraint = from_dict(data_class=Constraint, data=uss_constraint_details_json)
-            logger.debug("Constraint details {constraint}".format(constraint=constraint))
+            logger.debug(f"Constraint details {constraint}")
         return constraint

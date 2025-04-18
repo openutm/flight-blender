@@ -1,21 +1,22 @@
 import enum
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Union
+from typing import Literal
 
 from implicitdict import ImplicitDict
-
 from marshmallow import Schema, fields
 
+
 class GeoJSONFeatureProperties(Schema):
-    name= fields.Str(required=True)
+    name = fields.Str(required=True)
     upper_limit = fields.Int(required=True)
     lower_limit = fields.Int(required=True)
     start_time = fields.Str(required=False)
     end_time = fields.Str(required=False)
 
+
 class GeoJSONFeatureGeometry(Schema):
     type = fields.Str(required=True)
-    coordinates = fields.List((fields.List(fields.List(fields.Float()), required=True)))
+    coordinates = fields.List(fields.List(fields.List(fields.Float()), required=True))
 
 
 class GeoJSONFeature(Schema):
@@ -27,7 +28,6 @@ class GeoJSONFeature(Schema):
 class GeoFencePutSchema(Schema):
     type = fields.Str(required=True)
     features = fields.List(fields.Nested(lambda: GeoJSONFeature()), required=True)
-    
 
 
 class GeoAwarenessStatusResponseEnum(str, enum.Enum):
@@ -43,8 +43,8 @@ class GeoSpatialMapTestHarnessStatus:
         GeoAwarenessStatusResponseEnum.Starting,
         GeoAwarenessStatusResponseEnum.Ready,
     ]
-    api_version: Optional[str]
-    api_name: Optional[str] = "Geospatial Map Provider Automated Testing Interface"
+    api_version: str | None
+    api_name: str | None = "Geospatial Map Provider Automated Testing Interface"
 
 
 class HTTPSSource(ImplicitDict):
@@ -95,7 +95,7 @@ class GeoAwarenessTestStatus:
         GeoAwarenessImportResponseEnum.Rejected,
         GeoAwarenessImportResponseEnum.Error,
     ]
-    message: Optional[str]
+    message: str | None
 
 
 class ZoneAuthority(ImplicitDict):
@@ -111,7 +111,7 @@ class ZoneAuthority(ImplicitDict):
 
 class HorizontalProjection(ImplicitDict):
     type: str
-    coordinates: List[list]
+    coordinates: list[list]
 
 
 class ED269Geometry(ImplicitDict):
@@ -131,26 +131,26 @@ class GeoZoneFeature(ImplicitDict):
     restriction: str
     restrictionConditions: str
     region: int
-    reason: List[str]
+    reason: list[str]
     otherReasonInfo: str
     regulationExemption: str
     uSpaceClass: str
     message: str
-    applicability: List[Dict[str, str]]
-    zoneAuthority: List[ZoneAuthority]
-    geometry: List[ED269Geometry]
+    applicability: list[dict[str, str]]
+    zoneAuthority: list[ZoneAuthority]
+    geometry: list[ED269Geometry]
 
 
 @dataclass
 class ParseValidateResponse:
-    all_zones: List[bool]
-    feature_list: Union[None, List[GeoZoneFeature]]
+    all_zones: list[bool]
+    feature_list: None | list[GeoZoneFeature]
 
 
 class GeoZone(ImplicitDict):
     title: str
     description: str
-    features: List[GeoZoneFeature]
+    features: list[GeoZoneFeature]
 
 
 class GeoZoneFilterPosition(ImplicitDict):
@@ -181,20 +181,20 @@ class ResultingOperationalImpactEnum(str, enum.Enum):
 
 class GeoZoneFilterSet(ImplicitDict):
     resulting_operational_impact: str
-    position: Optional[GeoZoneFilterPosition]
-    after: Optional[str]
-    before: Optional[str]
-    operation_rule_set: Optional[str]
-    restriction_source: Optional[str]
-    ed269: Optional[ED269Filter]
+    position: GeoZoneFilterPosition | None
+    after: str | None
+    before: str | None
+    operation_rule_set: str | None
+    restriction_source: str | None
+    ed269: ED269Filter | None
 
 
 class GeozonesCheck(ImplicitDict):
-    filter_sets: List[GeoZoneFilterSet]
+    filter_sets: list[GeoZoneFilterSet]
 
 
 class GeoZoneCheckRequestBody(ImplicitDict):
-    checks: List[GeozonesCheck]
+    checks: list[GeozonesCheck]
 
 
 @dataclass
@@ -209,8 +209,8 @@ class GeoZoneCheckResult:
 
 @dataclass
 class GeoZoneChecksResponse:
-    applicableGeozone: List[GeoZoneCheckResult]
-    message: Optional[str]
+    applicableGeozone: list[GeoZoneCheckResult]
+    message: str | None
 
 
 @dataclass
@@ -218,4 +218,3 @@ class GeoFenceMetadata:
     start_date: str
     end_date: str
     geo_fence_id: str
-

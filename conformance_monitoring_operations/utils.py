@@ -1,7 +1,6 @@
 ## This file checks the conformance of a operation per the AMC stated in the EU Conformance monitoring service
 import json
 import logging
-from typing import List
 
 import arrow
 from dotenv import find_dotenv, load_dotenv
@@ -110,7 +109,7 @@ class FlightBlenderConformanceEngine:
         lng = float(telemetry_location.lng)
         lat = float(telemetry_location.lat)
         rid_location = Point(lng, lat)
-        all_polygon_altitudes: List[PolygonAltitude] = []
+        all_polygon_altitudes: list[PolygonAltitude] = []
         for v in all_volumes:
             v4d = cast_to_volume4d(v)
             altitude_lower = v4d.volume.altitude_lower.value

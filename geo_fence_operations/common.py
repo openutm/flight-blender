@@ -1,7 +1,6 @@
 import json
 import logging
 from functools import partial
-from typing import List
 
 import pyproj
 from shapely.geometry import Point, mapping
@@ -27,8 +26,8 @@ class GeoZoneParser:
     def parse_validate_geozone(
         self,
     ) -> ParseValidateResponse:
-        processed_geo_zone_features: List[GeoZoneFeature] = []
-        all_zones_valid: List[bool] = []
+        processed_geo_zone_features: list[GeoZoneFeature] = []
+        all_zones_valid: list[bool] = []
         for _geo_zone_feature in self.geo_zone["features"]:
             zone_authorities = _geo_zone_feature["zoneAuthority"]
             all_zone_authorities = []
