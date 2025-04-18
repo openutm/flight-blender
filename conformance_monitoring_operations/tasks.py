@@ -39,7 +39,7 @@ def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_ru
             flight_declaration_id=flight_declaration_id,
         )
         # Flight Declaration is not conformant
-        logger.info("Operation with {flight_operation_id} is not conformant...".format(flight_operation_id=flight_declaration_id))
+        logger.info(f"Operation with {flight_declaration_id} is not conformant...")
 
 
 # This method conducts flight telemetry checks
@@ -54,7 +54,7 @@ def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: s
     # Get the latest telemetry
 
     if not all_flights_rid_data:
-        logger.error("No telemetry data found for operation {flight_operation_id}".format(flight_operation_id=flight_declaration_id))
+        logger.error(f"No telemetry data found for operation {flight_declaration_id}")
         return
 
     distinct_messages = all_flights_rid_data if all_flights_rid_data else []

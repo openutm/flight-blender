@@ -1,6 +1,5 @@
 import logging
 from os import environ as env
-from typing import Optional
 
 import redis
 from dotenv import find_dotenv, load_dotenv
@@ -18,7 +17,7 @@ def get_redis() -> redis.Redis:
     """
     redis_host: str = env.get("REDIS_HOST", "redis")
     redis_port: int = int(env.get("REDIS_PORT", 6379))
-    redis_password: Optional[str] = env.get("REDIS_PASSWORD", None)
+    redis_password: str | None = env.get("REDIS_PASSWORD", None)
 
     if redis_password:
         return redis.Redis(
@@ -44,7 +43,7 @@ class RedisHelper:
         """
         self.redis_host: str = env.get("REDIS_HOST", "redis")
         self.redis_port: int = int(env.get("REDIS_PORT", 6379))
-        self.redis_password: Optional[str] = env.get("REDIS_PASSWORD", None)
+        self.redis_password: str | None = env.get("REDIS_PASSWORD", None)
 
     def _get_redis_instance(self) -> redis.Redis:
         """

@@ -1,4 +1,4 @@
-from typing import List, Never, Tuple, Union
+from typing import Never
 
 import arrow
 
@@ -17,7 +17,7 @@ class FlightTelemetryRIDEngine:
     def __init__(self, session_id: str):
         self.session_id = session_id
 
-    def check_rid_stream_ok(self) -> Tuple[bool, Union[List[Never], List[RIDStreamErrorDetail]]]:
+    def check_rid_stream_ok(self) -> tuple[bool, list[Never] | list[RIDStreamErrorDetail]]:
         my_database_reader = FlightBlenderDatabaseReader()
         # This method processes the stored RID stream for any errors
         # Get all telemetry observations for the session that are active since last observation

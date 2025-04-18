@@ -1,14 +1,13 @@
 import hashlib
 from dataclasses import asdict
-from typing import List, Union
 
 import arrow
-from .data_definitions import GeoFenceMetadata
 from django.db.models import QuerySet
 from rtree import index
 
 from auth_helper.common import get_redis
 
+from .data_definitions import GeoFenceMetadata
 from .models import GeoFence
 
 
@@ -21,7 +20,7 @@ class GeoFenceRTreeIndexFactory:
         self,
         id: int,
         geo_fence_id: str,
-        view: List[float],
+        view: list[float],
         start_date: str,
         end_date: str,
     ):
@@ -43,7 +42,7 @@ class GeoFenceRTreeIndexFactory:
         )
         self.idx.insert(id=id, coordinates=(view[0], view[1], view[2], view[3]), obj=asdict(metadata))
 
-    def delete_from_index(self, enumerated_id: int, view: List[float]):
+    def delete_from_index(self, enumerated_id: int, view: list[float]):
         """
         Delete a box from the RTree index.
 
@@ -53,7 +52,7 @@ class GeoFenceRTreeIndexFactory:
         """
         self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
 
-    def generate_geo_fence_index(self, all_fences: Union[QuerySet, List[GeoFence]]) -> None:
+    def generate_geo_fence_index(self, all_fences: QuerySet | list[GeoFence]) -> None:
         """
         This method generates an RTree index of currently active operational geo-fences.
 
@@ -92,7 +91,7 @@ class GeoFenceRTreeIndexFactory:
             view = [float(coord) for coord in fence.bounds.split(",")]
             self.delete_from_index(enumerated_id=fence_id, view=view)
 
-    def check_box_intersection(self, view_box: List[float]):
+    def check_box_intersection(self, view_box: list[float]):
         """
         Check for intersections with the given view box.
 

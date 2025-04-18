@@ -30,6 +30,8 @@ urlpatterns = [
         uss_operations_views.USSOpIntDetailTelemetry,
     ),
     path("v1/operational_intents", uss_operations_views.uss_update_opint_details),
+    path("v1/constraints/<uuid:constraint_id>", uss_operations_views.uss_constraint_details),
+    path("v1/constraints", uss_operations_views.uss_update_constraint_details),
     # end points for remote id
     path("flights/<str:flight_id>/details", uss_operations_views.get_uss_flight_details),
     path("flights", uss_operations_views.get_uss_flights),

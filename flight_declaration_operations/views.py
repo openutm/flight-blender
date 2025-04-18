@@ -3,7 +3,6 @@ import json
 import logging
 from dataclasses import asdict
 from os import environ as env
-from typing import List, Tuple
 
 import arrow
 from django.http import Http404, HttpResponse, JsonResponse
@@ -90,7 +89,7 @@ class FlightDeclarationRequestValidator:
             all_features.append(s)
         return all_features, None
 
-    def validate_dates(self, start_datetime: str, end_datetime: str) -> Tuple[dict, int] | Tuple[None, None]:
+    def validate_dates(self, start_datetime: str, end_datetime: str) -> tuple[dict, int] | tuple[None, None]:
         """
         Validates the start and end dates for the flight declaration.
 
@@ -110,7 +109,7 @@ class FlightDeclarationRequestValidator:
         return None, None
 
     def check_intersections(
-        self, start_datetime: str, end_datetime: str, view_box: List[float], ussp_network_enabled: int
+        self, start_datetime: str, end_datetime: str, view_box: list[float], ussp_network_enabled: int
     ) -> IntersectionCheckResult:
         all_relevant_fences = []
         all_relevant_declarations = []
@@ -372,7 +371,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
     serializer_class = FlightDeclarationSerializer
     pagination_class = StandardResultsSetPagination
 
-    def get_relevant_flight_declaration(self, start_date, end_date, view_port: List[float]):
+    def get_relevant_flight_declaration(self, start_date, end_date, view_port: list[float]):
         present = arrow.now()
         s_date = arrow.get(start_date, "YYYY-MM-DD") if start_date else present.shift(days=-1)
         e_date = arrow.get(end_date, "YYYY-MM-DD") if end_date else present.shift(days=1)

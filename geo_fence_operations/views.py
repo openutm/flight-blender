@@ -1,5 +1,4 @@
 # Create your views here.
-import io
 
 # Create your views here.
 import json
@@ -7,7 +6,6 @@ import logging
 import uuid
 from dataclasses import asdict
 from decimal import Decimal
-from typing import List
 
 import arrow
 import pyproj
@@ -19,7 +17,6 @@ from implicitdict import ImplicitDict
 from marshmallow import ValidationError
 from rest_framework import generics, mixins, status
 from rest_framework.decorators import api_view
-from rest_framework.parsers import JSONParser
 from rest_framework.renderers import JSONRenderer
 from shapely.geometry import Point, shape
 from shapely.ops import unary_union
@@ -86,7 +83,7 @@ def set_geo_fence(request: HttpRequest):
         shp_features.append(shape(feature["geometry"]))
     combined_features = unary_union(shp_features)
     bnd_tuple = combined_features.bounds
-    bounds = ",".join(["{:.7f}".format(x) for x in bnd_tuple])
+    bounds = ",".join([f"{x:.7f}" for x in bnd_tuple])
 
     start_time = arrow.now().isoformat() if "start_time" not in feature["properties"] else arrow.get(feature["properties"]["start_time"]).isoformat()
     end_time = (
@@ -163,7 +160,7 @@ class GeoFenceList(mixins.ListModelMixin, generics.GenericAPIView):
     serializer_class = GeoFenceSerializer
     pagination_class = StandardResultsSetPagination
 
-    def get_relevant_geo_fence(self, start_date, end_date, view_port: List[float]):
+    def get_relevant_geo_fence(self, start_date, end_date, view_port: list[float]):
         present = arrow.now()
         if start_date and end_date:
             s_date = arrow.get(start_date, "YYYY-MM-DD")
@@ -214,7 +211,7 @@ class GeospatialMapList(mixins.ListModelMixin, generics.GenericAPIView):
     queryset = GeoFence.objects.filter(is_test_dataset=False).order_by("created_at")
     serializer_class = GeoSpatialMapListSerializer
 
-    def get_relevant_geo_fence(self, start_date, end_date, view_port: List[float]):
+    def get_relevant_geo_fence(self, start_date, end_date, view_port: list[float]):
         present = arrow.now()
         if start_date and end_date:
             s_date = arrow.get(start_date, "YYYY-MM-DD")

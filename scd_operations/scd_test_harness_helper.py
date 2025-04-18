@@ -1,7 +1,6 @@
 import json
 import logging
 from enum import Enum
-from typing import List
 
 import dacite
 from dacite import from_dict

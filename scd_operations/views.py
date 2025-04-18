@@ -120,7 +120,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
     my_database_reader = FlightBlenderDatabaseReader()
 
     operation_id_str = str(flight_plan_id)
-    logger.info("Processing -> {operation_id_str}".format(operation_id_str=operation_id_str))
+    logger.info(f"Processing -> {operation_id_str}")
 
     if request.method == "PUT":
         scd_test_data = request.data

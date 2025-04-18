@@ -2,7 +2,7 @@
     "recommendations": [
         "charliermarsh.ruff",
         "sonarsource.sonarlint-vscode",
-        "ms-python.black-formatter",
-        "nwgh.bandit"
+        "nwgh.bandit",
+        "streetsidesoftware.code-spell-checker"
     ]
 }

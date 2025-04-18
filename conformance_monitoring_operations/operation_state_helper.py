@@ -1,4 +1,4 @@
-class State(object):
+class State:
     """
     A object to hold state transitions as defined in the ASTM F3548-21 standard
     Source: https://dev.to/karn/building-a-simple-state-machine-in-python
@@ -95,7 +95,7 @@ class RejectedState(State):
 # End states.
 
 
-class FlightOperationStateMachine(object):
+class FlightOperationStateMachine:
     def __init__(self, state: int = 1):
         s = match_state(state)
         self.state = s

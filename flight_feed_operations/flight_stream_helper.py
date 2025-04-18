@@ -1,5 +1,4 @@
 import json
-from dataclasses import asdict
 from itertools import zip_longest
 
 import arrow
@@ -8,7 +7,7 @@ from dotenv import find_dotenv, load_dotenv
 from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
 
-from .data_definitions import FlightObeservationSchema, Observation
+from .data_definitions import FlightObeservationSchema
 
 load_dotenv(find_dotenv())
 
@@ -59,7 +58,7 @@ class ObservationReadOperations:
         my_database_reader = FlightBlenderDatabaseReader()
 
         r = get_redis()
-        key = "last_reading_for_{session_id}".format(session_id=session_id)
+        key = f"last_reading_for_{session_id}"
         if r.exists(key):
             last_reading_time = r.get(key)
             after_datetime = arrow.get(last_reading_time)

@@ -42,7 +42,13 @@ if ENV_FILE:
             self.now = datetime.now()
 
         def get_cached_credentials(self, audience: str, token_type: str):
-            token_suffix = "_auth_rid_token" if token_type == "rid" else "_auth_scd_token"
+            if token_type == "rid":
+                token_suffix = "_auth_rid_token"
+            elif token_type == "scd":
+                token_suffix = "_auth_scd_token"
+            elif token_type == "cmsa":
+                token_suffix = "_auth_constraints_token"
+
             cache_key = audience + token_suffix
             token_details = self.redis.get(cache_key)
 
@@ -62,8 +68,8 @@ if ENV_FILE:
                 return self._get_rid_credentials(audience)
             elif token_type == "scd":
                 return self._get_scd_credentials(audience)
-            elif token_type == "cmsa":
-                return self._get_cmsa_credentials(audience)
+            elif token_type == "constraints":
+                return self._get_constraints_credentials(audience)
             else:
                 raise ValueError("Invalid token type")
 
@@ -80,8 +86,8 @@ if ENV_FILE:
         def _get_scd_credentials(self, audience: str):
             return self._request_credentials(audience, ["utm.strategic_coordination", "utm.conformance_monitoring_sa"])
 
-        def _get_cmsa_credentials(self, audience: str):
-            return self._request_credentials(audience, ["utm.conformance_monitoring_sa"])
+        def _get_constraints_credentials(self, audience: str):
+            return self._request_credentials(audience, ["utm.constraint_processing", "utm.constraint_management"])
 
         def _request_credentials(self, audience: str, scopes: list[str]):
             issuer = audience if audience == "localhost" else None

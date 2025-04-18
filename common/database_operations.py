@@ -4,9 +4,8 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, List, Union
-from uuid import UUID, uuid4
-
+from uuid import UUID
+from typing import Union
 import arrow
 from django.db.models import QuerySet
 from django.db.utils import IntegrityError
@@ -22,6 +21,9 @@ from flight_declaration_operations.models import (
     PeerOperationalIntentDetail,
     PeerOperationalIntentReference,
 )
+from constraint_operations.data_definitions import Constraint as ConstraintData
+from constraint_operations.models import Constraint, ConstraintReference
+from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
 from notification_operations.models import OperatorRIDNotification
@@ -62,6 +64,14 @@ class FlightBlenderDatabaseReader:
             return peer_operational_intent_reference
         except PeerOperationalIntentReference.DoesNotExist:
             return None
+    def check_constraint_id_exists(self, constraint_id: str) -> bool:
+        return Constraint.objects.filter(id=constraint_id).exists()
+
+    def check_constraint_reference_id_exists(self, constraint_reference_id: str) -> bool:
+        return ConstraintReference.objects.filter(id=constraint_reference_id).exists()
+
+    def get_constraint_details(self, constraint_id: str) -> Constraint:
+        return Constraint.objects.get(id=constraint_id)
 
     def get_flight_observations(self, after_datetime: arrow.arrow.Arrow):
         observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
@@ -76,14 +86,14 @@ class FlightBlenderDatabaseReader:
         )
         return observations
 
-    def get_all_flight_declarations(self) -> Union[None, List[FlightDeclaration]]:
+    def get_all_flight_declarations(self) -> None | list[FlightDeclaration]:
         flight_declarations = FlightDeclaration.objects.all()
         return flight_declarations
 
     def check_flight_declaration_exists(self, flight_declaration_id: str) -> bool:
         return FlightDeclaration.objects.filter(id=flight_declaration_id).exists()
 
-    def get_flight_declaration_by_id(self, flight_declaration_id: str) -> Union[None, FlightDeclaration]:
+    def get_flight_declaration_by_id(self, flight_declaration_id: str) -> None | FlightDeclaration:
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
             return flight_declaration
@@ -95,6 +105,7 @@ class FlightBlenderDatabaseReader:
         return composite_operational_intent_exists
 
     def get_composite_operational_intent_by_declaration_id(self, flight_declaration_id: str) -> Union[None, CompositeOperationalIntent]:
+        
         try:
             return CompositeOperationalIntent.objects.get(declaration__id=flight_declaration_id)
 
@@ -104,6 +115,17 @@ class FlightBlenderDatabaseReader:
     def get_flight_operational_intent_reference_by_flight_declaration_id(
         self, flight_declaration_id: str
     ) -> Union[None, FlightOperationalIntentReference]:
+        """
+        Retrieves a FlightAuthorization object based on the given flight declaration ID.
+        Args:
+            flight_declaration_id (str): The ID of the flight declaration.
+        Returns:
+            Union[None, FlightAuthorization]: The FlightAuthorization object if found, otherwise None.
+        Raises:
+            FlightDeclaration.DoesNotExist: If the flight declaration with the given ID does not exist.
+            FlightAuthorization.DoesNotExist: If the flight authorization for the given flight declaration does not exist.
+        """
+
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
             flight_operational_intent_reference = FlightOperationalIntentReference.objects.get(declaration=flight_declaration)
@@ -125,6 +147,7 @@ class FlightBlenderDatabaseReader:
             return None
 
     def get_flight_operational_intent_reference_by_id(self, operational_intent_ref_id: str) -> Union[None, FlightOperationalIntentReference]:
+    def get_flight_authorization_by_operational_intent_ref_id(self, operational_intent_ref_id: str) -> None | FlightAuthorization:
         """
         Retrieves a FlightOperationalIntentReference object based on the given flight declaration ID.
         Args:
@@ -186,10 +209,10 @@ class FlightBlenderDatabaseReader:
     def check_active_activated_flights_exist(self) -> bool:
         return FlightDeclaration.objects.filter().filter(state__in=[1, 2]).exists()
 
-    def get_active_activated_flight_declarations(self) -> Union[QuerySet, List[FlightDeclaration]]:
+    def get_active_activated_flight_declarations(self) -> QuerySet | list[FlightDeclaration]:
         return FlightDeclaration.objects.filter().filter(state__in=[1, 2])
 
-    def get_current_flight_accepted_activated_declaration_ids(self, now: str) -> Union[None, uuid4]:
+    def get_current_flight_accepted_activated_declaration_ids(self, now: str) -> None | UUID:
         """This method gets flight operation ids that are active in the system"""
         n = arrow.get(now)
 
@@ -205,21 +228,19 @@ class FlightBlenderDatabaseReader:
         )
         return relevant_ids
 
-    def get_conformance_monitoring_task(self, flight_declaration: FlightDeclaration) -> Union[None, TaskScheduler]:
+    def get_conformance_monitoring_task(self, flight_declaration: FlightDeclaration) -> None | TaskScheduler:
         try:
             return TaskScheduler.objects.get(flight_declaration=flight_declaration)
         except TaskScheduler.DoesNotExist:
             return None
 
-    def get_rid_monitoring_task(self, session_id: UUID) -> Union[None, TaskScheduler]:
+    def get_rid_monitoring_task(self, session_id: UUID) -> None | TaskScheduler:
         try:
             return TaskScheduler.objects.get(session_id=session_id)
         except TaskScheduler.DoesNotExist:
             return None
 
-    def get_active_rid_observations_for_view(
-        self, start_time: datetime, end_time: datetime
-    ) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
+    def get_active_rid_observations_for_view(self, start_time: datetime, end_time: datetime) -> None | QuerySet | list[FlightObeservation]:
         try:
             observations = FlightObeservation.objects.filter(created_at__gte=start_time, created_at__lte=end_time, traffic_source=11).order_by(
                 "-created_at"
@@ -228,7 +249,7 @@ class FlightBlenderDatabaseReader:
         except FlightObeservation.DoesNotExist:
             return None
 
-    def get_active_rid_observations_for_session(self, session_id: str) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
+    def get_active_rid_observations_for_session(self, session_id: str) -> None | QuerySet | list[FlightObeservation]:
         try:
             observations = FlightObeservation.objects.filter(session_id=session_id, traffic_source=11).order_by("-created_at")
             return observations
@@ -237,7 +258,7 @@ class FlightBlenderDatabaseReader:
 
     def get_active_rid_observations_for_session_between_interval(
         self, start_time: datetime, end_time: datetime, session_id: str
-    ) -> Union[None, Union[QuerySet, List[FlightObeservation]]]:
+    ) -> None | QuerySet | list[FlightObeservation]:
         try:
             observations = FlightObeservation.objects.filter(
                 session_id=session_id, created_at__gte=start_time, created_at__lte=end_time, traffic_source=11
@@ -248,7 +269,7 @@ class FlightBlenderDatabaseReader:
 
     def get_active_user_notifications_between_interval(
         self, start_time: datetime, end_time: datetime
-    ) -> Union[None, Union[QuerySet, List[OperatorRIDNotification]]]:
+    ) -> None | QuerySet | list[OperatorRIDNotification]:
         try:
             notifications = OperatorRIDNotification.objects.filter(created_at__gte=start_time, created_at__lte=end_time, is_active=True)
             return notifications
@@ -663,9 +684,28 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def clear_stored_operational_intents(self):
+        PeerOperationalIntentReference.objects.filter(is_live=False).delete()
+        PeerOperationalIntentDetail.objects.filter(is_live=False).delete()
+                                        
+    def write_constraint_details(self, constraint_id: str, constraint: ConstraintData) -> bool:
         try:
-            PeerOperationalIntentReference.objects.filter(is_live=False).delete()
-            PeerOperationalIntentDetail.objects.filter(is_live=False).delete()
+            constraint_obj = Constraint(
+                id=constraint_id,
+                details=json.dumps(asdict(constraint.details)),
+            )
+            constraint_obj.save()
             return True
-        except Exception:
+        except IntegrityError:
+            return False
+
+    def write_constraint_reference_details(self, constraint: ConstraintData) -> bool:
+        try:
+            constraint_reference_obj = ConstraintReference(
+                id=constraint.reference.id,
+                ovn=constraint.reference.ovn,
+                details=json.dumps(asdict(constraint.reference)),
+            )
+            constraint_reference_obj.save()
+            return True
+        except IntegrityError:
             return False

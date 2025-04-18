@@ -51,7 +51,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
 
             request = args[0]
             auth = request.META.get("HTTP_AUTHORIZATION", None)
-            if not auth or len((parts := auth.split())) <= 1:
+            if not auth or len(parts := auth.split()) <= 1:
                 return JsonResponse({"detail": "Authentication credentials were not provided"}, status=401)
 
             token = parts[1]

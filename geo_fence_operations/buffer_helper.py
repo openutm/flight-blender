@@ -11,8 +11,8 @@ def toFromUTM(shp, proj, inv=False):
     How to use?
     >>> import shapely.wkt
     >>> import shapely.geometry
-    >>> proj = PROJECTION_IN # constant declared above the function definition
-    >>> shp_obj = shapely.wkt.loads('LINESTRING(76.46019279956818 15.335048625850606,76.46207302808762 15.334717526558398)')
+    >>> proj = PROJECTION_IN  # constant declared above the function definition
+    >>> shp_obj = shapely.wkt.loads("LINESTRING(76.46019279956818 15.335048625850606,76.46207302808762 15.334717526558398)")
     >>> meters = 10
     >>> init_shape_utm = toFromUTM(shp_obj, proj)
     >>> buffer_shape_utm = init_shape_utm.buffer(meters)

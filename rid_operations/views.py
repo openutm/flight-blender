@@ -5,7 +5,6 @@ import time
 import uuid
 from dataclasses import asdict
 from datetime import timedelta
-from os import environ as env
 from typing import Any
 from uuid import UUID
 
@@ -42,7 +41,7 @@ from uss_operations.uss_data_definitions import (
 )
 
 from . import dss_rid_helper, view_port_ops
-from .data_definitions import LatLngPoint, ServiceProviderUserNotifications
+from .data_definitions import ServiceProviderUserNotifications
 from .rid_utils import (
     CreateSubscriptionResponse,
     CreateTestResponse,
@@ -54,7 +53,6 @@ from .rid_utils import (
     RIDFlight,
     RIDFlightDetails,
     RIDFlightsRecord,
-    RIDOperatorDetails,
     RIDPositions,
     RIDSubscription,
     RIDVolume4D,
@@ -64,7 +62,6 @@ from .rid_utils import (
 from .tasks import (
     run_ussp_polling_for_rid,
     stream_rid_test_data,
-    write_operator_rid_notification,
 )
 
 load_dotenv(find_dotenv())
@@ -228,7 +225,7 @@ def get_rid_data(request, subscription_id):
         # Get the latest telemetry
 
         if not all_flights_telemetry_data:
-            logger.error("No telemetry data found for session_id {subscription_id}".format(subscription_id=subscription_id))
+            logger.error(f"No telemetry data found for session_id {subscription_id}")
             return
         return HttpResponse(
             json.dumps(all_flights_telemetry_data),

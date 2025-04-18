@@ -1,7 +1,0 @@
-pylint_django
-black
-isort
-ruff
-bandit
-pre-commit
-codespell

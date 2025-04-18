@@ -1,7 +1,6 @@
 import itertools
 import uuid
 from datetime import datetime
-from typing import List
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -99,7 +98,7 @@ class FlightDeclaration(models.Model):
 
         entry.save()
 
-    def get_state_history(self) -> List[int]:
+    def get_state_history(self) -> list[int]:
         """
         This method gets the state history of a flight declaration and then parses it to build a transition
         """

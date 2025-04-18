@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "rest_framework",
     "flight_declaration_operations",
+    "constraint_operations",
     "geo_fence_operations",
     "scd_operations",
     "uss_operations",
@@ -98,7 +99,7 @@ WSGI_APPLICATION = "flight_blender.wsgi.application"
 
 DATABASES = {}
 USE_LOCAL_SQLITE_DATABASE = os.getenv("USE_LOCAL_SQLITE_DATABASE", 0)
-if USE_LOCAL_SQLITE_DATABASE:    
+if USE_LOCAL_SQLITE_DATABASE:
     DATABASES = {
         "default": {
             "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
