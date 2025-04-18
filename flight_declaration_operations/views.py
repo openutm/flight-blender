@@ -3,7 +3,6 @@ import json
 import logging
 from dataclasses import asdict
 from os import environ as env
-from typing import Tuple
 
 import arrow
 from django.http import Http404, HttpResponse, JsonResponse
@@ -90,7 +89,7 @@ class FlightDeclarationRequestValidator:
             all_features.append(s)
         return all_features, None
 
-    def validate_dates(self, start_datetime: str, end_datetime: str) -> Tuple[dict, int] | Tuple[None, None]:
+    def validate_dates(self, start_datetime: str, end_datetime: str) -> tuple[dict, int] | tuple[None, None]:
         """
         Validates the start and end dates for the flight declaration.
 

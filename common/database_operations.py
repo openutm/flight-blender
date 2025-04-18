@@ -4,7 +4,7 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import arrow
 from django.db.models import QuerySet
