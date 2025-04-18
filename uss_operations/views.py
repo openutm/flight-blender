@@ -21,6 +21,7 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 from common.utils import EnhancedJSONEncoder
+from constraint_operations.data_definitions import PutConstraintDetailsParameters
 from flight_feed_operations import flight_stream_helper
 from rid_operations.data_definitions import (
     UASID,
@@ -183,10 +184,50 @@ def peer_uss_report_notification(request):
 
 
 @api_view(["GET"])
-@requires_scopes(["utm.strategic_coordination"])
-def USSOpIntDetails(request, opint_id):
-    r = get_redis()
+@requires_scopes(["utm.constraint_processing"])
+def uss_constraint_details(request, constraint_id):
+    my_database_reader = FlightBlenderDatabaseReader()
+    constraint_id_exists = my_database_reader.check_constraint_id_exists(constraint_id=constraint_id)
+    if constraint_id_exists:
+        constraint_details = my_database_reader.get_constraint_details(constraint_id=constraint_id)
+        if constraint_details:
+            return JsonResponse(json.loads(json.dumps(constraint_details, cls=EnhancedJSONEncoder)), status=200)
+        else:
+            not_found_response = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % str(constraint_id))
+            return JsonResponse(json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)), status=404)
+    else:
+        not_found_response = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % str(constraint_id))
+        return JsonResponse(json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)), status=404)
 
+
+@api_view(["POST"])
+@requires_scopes(["utm.constraint_processing"])
+def uss_update_constraint_details(request):
+    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_writer = FlightBlenderDatabaseWriter()
+    constraint_update_details = request.data
+    constraint_update_detail = from_dict(data_class=PutConstraintDetailsParameters, data=constraint_update_details)
+
+    constraint_id = constraint_update_detail.constraint_id
+    constraint_id_exists = my_database_reader.check_constraint_id_exists(constraint_id=constraint_id)
+    if constraint_id_exists and constraint_update_detail.constraint:
+        my_database_writer.write_constraint_details(constraint_id=constraint_id, constraint=constraint_update_detail.constraint)
+    else:
+        logger.error("Constraint ID %s does not exist" % constraint_id)
+
+    constraint_reference_id = constraint_update_detail.constraint_id
+    constraint_reference_exists = my_database_reader.check_constraint_reference_id_exists(constraint_reference_id=constraint_reference_id)
+    if constraint_reference_exists and constraint_update_detail.constraint:
+        my_database_writer.write_constraint_reference_details(constraint=constraint_update_detail.constraint)
+    else:
+        logger.error("Constraint reference ID %s does not exist" % constraint_reference_id)
+    return JsonResponse({}, status=204)
+
+
+@api_view(["GET"])
+@requires_scopes(["utm.strategic_coordination"])
+def operational_intent_details(request, opint_id):
+    r = get_redis()
     my_database_reader = FlightBlenderDatabaseReader()
     flight_authorization = my_database_reader.get_flight_authorization_by_operational_intent_ref_id(str(opint_id))
     if flight_authorization:

@@ -3,6 +3,7 @@ import json
 import logging
 from dataclasses import asdict
 from os import environ as env
+from typing import Tuple
 
 import arrow
 from django.http import Http404, HttpResponse, JsonResponse
@@ -16,8 +17,11 @@ from shapely.geometry import shape
 from auth_helper.utils import requires_scopes
 from common.data_definitions import (
     ACTIVE_OPERATIONAL_STATES,
+    FLIGHT_DECLARATION_INDEX_BASEPATH,
+    FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH,
     FLIGHTBLENDER_READ_SCOPE,
     FLIGHTBLENDER_WRITE_SCOPE,
+    GEOFENCE_INDEX_BASEPATH,
     RESPONSE_CONTENT_TYPE,
 )
 from common.database_operations import (
@@ -86,7 +90,7 @@ class FlightDeclarationRequestValidator:
             all_features.append(s)
         return all_features, None
 
-    def validate_dates(self, start_datetime: str, end_datetime: str) -> tuple[dict, int] | tuple[None, None]:
+    def validate_dates(self, start_datetime: str, end_datetime: str) -> Tuple[dict, int] | Tuple[None, None]:
         """
         Validates the start and end dates for the flight declaration.
 
@@ -115,7 +119,7 @@ class FlightDeclarationRequestValidator:
 
         if GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime).exists():
             all_fences_within_timelimits = GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime)
-            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name="geofence_idx")
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
             my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_box)
             my_rtree_helper.clear_rtree_index()
@@ -129,7 +133,7 @@ class FlightDeclarationRequestValidator:
             all_declarations_within_timelimits = FlightDeclaration.objects.filter(
                 start_datetime__lte=end_datetime, end_datetime__gte=start_datetime, state__in=ACTIVE_OPERATIONAL_STATES
             )
-            my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name="flight_declaration_idx")
+            my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_INDEX_BASEPATH)
             my_fd_rtree_helper.generate_flight_declaration_index(all_flight_declarations=all_declarations_within_timelimits)
             all_relevant_declarations = my_fd_rtree_helper.check_flight_declaration_box_intersection(view_box=view_box)
             my_fd_rtree_helper.clear_rtree_index()
@@ -377,7 +381,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         logger.info("Found %s flight declaration" % len(all_fd_within_timelimits))
 
         if view_port:
-            my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name="opint_idx")
+            my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH)
             my_rtree_helper.generate_flight_declaration_index(all_flight_declarations=all_fd_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_flight_declaration_box_intersection(view_box=view_port)
             relevant_id_set = [i["flight_declaration_id"] for i in all_relevant_fences]

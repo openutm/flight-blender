@@ -12,6 +12,8 @@ from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
 
 from conformance_monitoring_operations.models import TaskScheduler
+from constraint_operations.data_definitions import Constraint as ConstraintData
+from constraint_operations.models import Constraint, ConstraintReference
 from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
@@ -34,6 +36,15 @@ class FlightBlenderDatabaseReader:
     """
     A file to unify read and write operations to the database. Eventually caching etc. can be added via this file
     """
+
+    def check_constraint_id_exists(self, constraint_id: str) -> bool:
+        return Constraint.objects.filter(id=constraint_id).exists()
+
+    def check_constraint_reference_id_exists(self, constraint_reference_id: str) -> bool:
+        return ConstraintReference.objects.filter(id=constraint_reference_id).exists()
+
+    def get_constraint_details(self, constraint_id: str) -> Constraint:
+        return Constraint.objects.get(id=constraint_id)
 
     def get_flight_observations(self, after_datetime: arrow.arrow.Arrow):
         observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
@@ -108,17 +119,12 @@ class FlightBlenderDatabaseReader:
         except FlightAuthorization.DoesNotExist:
             return None
 
-    def get_current_flight_declaration_ids(self, timestamp: str) -> None | UUID:
-        """This method gets flight operation ids that are active in the system within near the time interval"""
-        ts = arrow.get(timestamp)
-
-        two_minutes_before_ts = ts.shift(seconds=-120).isoformat()
-        five_hours_from_ts = ts.shift(minutes=300).isoformat()
-        relevant_ids = FlightDeclaration.objects.filter(
-            start_datetime__gte=two_minutes_before_ts,
-            end_datetime__lte=five_hours_from_ts,
-        ).values_list("id", flat=True)
-        return relevant_ids
+    def check_flight_declaration_active(self, flight_declaration_id: str, now: datetime) -> bool:
+        return FlightDeclaration.objects.filter(
+            id=flight_declaration_id,
+            start_datetime__lte=now,
+            end_datetime__gte=now,
+        ).exists()
 
     def check_active_activated_flights_exist(self) -> bool:
         return FlightDeclaration.objects.filter().filter(state__in=[1, 2]).exists()
@@ -241,10 +247,10 @@ class FlightBlenderDatabaseWriter:
 
     def create_operator_rid_notification(self, operator_rid_notification: OperatorRIDNotificationCreationPayload) -> bool:
         try:
-            operator_rid_notification = OperatorRIDNotification(
+            operator_rid_notification_obj = OperatorRIDNotification(
                 message=operator_rid_notification.message, session_id=operator_rid_notification.session_id
             )
-            operator_rid_notification.save()
+            operator_rid_notification_obj.save()
             return True
         except IntegrityError:
             return False
@@ -451,4 +457,27 @@ class FlightBlenderDatabaseWriter:
             ISASubscription.objects.filter(is_simulated=True).delete()
             return True
         except Exception:
+            return False
+
+    def write_constraint_details(self, constraint_id: str, constraint: ConstraintData) -> bool:
+        try:
+            constraint_obj = Constraint(
+                id=constraint_id,
+                details=json.dumps(asdict(constraint.details)),
+            )
+            constraint_obj.save()
+            return True
+        except IntegrityError:
+            return False
+
+    def write_constraint_reference_details(self, constraint: ConstraintData) -> bool:
+        try:
+            constraint_reference_obj = ConstraintReference(
+                id=constraint.reference.id,
+                ovn=constraint.reference.ovn,
+                details=json.dumps(asdict(constraint.reference)),
+            )
+            constraint_reference_obj.save()
+            return True
+        except IntegrityError:
             return False

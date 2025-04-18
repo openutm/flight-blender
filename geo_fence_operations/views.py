@@ -23,7 +23,11 @@ from shapely.ops import unary_union
 
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
-from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from common.data_definitions import (
+    FLIGHTBLENDER_READ_SCOPE,
+    FLIGHTBLENDER_WRITE_SCOPE,
+    GEOFENCE_INDEX_BASEPATH,
+)
 from common.utils import EnhancedJSONEncoder
 from flight_declaration_operations.pagination import StandardResultsSetPagination
 
@@ -41,10 +45,7 @@ from .data_definitions import (
     GeoZoneHttpsSource,
 )
 from .models import GeoFence
-from .serializers import (
-    GeoFenceSerializer,
-    GeoSpatialMapListSerializer,
-)
+from .serializers import GeoFenceSerializer, GeoSpatialMapListSerializer
 from .tasks import download_geozone_source, write_geo_zone
 
 logger = logging.getLogger("django")
@@ -174,8 +175,7 @@ class GeoFenceList(mixins.ListModelMixin, generics.GenericAPIView):
         logger.info("Found %s geofences" % len(all_fences_within_timelimits))
 
         if view_port:
-            INDEX_NAME = "geofence_idx"
-            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
             my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_port)
             relevant_id_set = []
@@ -225,8 +225,7 @@ class GeospatialMapList(mixins.ListModelMixin, generics.GenericAPIView):
         logger.info("Found %s geofences" % len(all_fences_within_timelimits))
 
         if view_port:
-            INDEX_NAME = "geofence_idx"
-            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
             my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
             all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_port)
             relevant_id_set = []
@@ -357,8 +356,7 @@ class GeoZoneCheck(generics.GenericAPIView):
                 if "position" in filter_set:
                     filter_position = ImplicitDict.parse(filter_set["position"], GeoZoneFilterPosition)
                     relevant_geo_fences = GeoFence.objects.filter(is_test_dataset=1)
-                    INDEX_NAME = "geofence_idx"
-                    my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=INDEX_NAME)
+                    my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
                     # Buffer the point to get a small view port / bounds
                     init_point = Point(filter_position)
                     init_shape_utm = toFromUTM(init_point, proj)

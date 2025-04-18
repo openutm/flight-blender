@@ -33,11 +33,12 @@ SECRET_KEY = os.getenv("SECRET_KEY", "DJANGO_SECRET")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("IS_DEBUG", False)
+DEBUG = int(DEBUG) if isinstance(DEBUG, str) else DEBUG
 
 if DEBUG:
     ALLOWED_HOSTS = ["*"]
 else:
-    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "openskies.sh").split(",")
+    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "openutm.net").split(",")
 
 # Application definition
 INSTALLED_APPS = [
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "rest_framework",
     "flight_declaration_operations",
+    "constraint_operations",
     "geo_fence_operations",
     "scd_operations",
     "uss_operations",

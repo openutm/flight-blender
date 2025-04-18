@@ -104,47 +104,23 @@ class FlightOperationStateMachine:
         self.state = self.state.on_event(event)
 
 
+state_mapping = {
+    0: ProcessingNotSubmittedToDss,
+    1: AcceptedState,
+    2: ActivatedState,
+    3: NonconformingState,
+    4: ContingentState,
+    5: EndedState,
+    6: WithdrawnState,
+    7: CancelledState,
+    8: RejectedState,
+}
+
+
 def match_state(status: int):
-    if status == 0:
-        return ProcessingNotSubmittedToDss()
-    elif status == 1:
-        return AcceptedState()
-    elif status == 2:
-        return ActivatedState()
-    elif status == 3:
-        return NonconformingState()
-    elif status == 4:
-        return ContingentState()
-    elif status == 5:
-        return EndedState()
-    elif status == 6:
-        return WithdrawnState()
-    elif status == 7:
-        return CancelledState()
-    elif status == 8:
-        return RejectedState()
-    else:
-        return False
+    return state_mapping.get(status, lambda: False)()
 
 
 def get_status(state: State):
-    if isinstance(state, ProcessingNotSubmittedToDss):
-        return 0
-    if isinstance(state, AcceptedState):
-        return 1
-    elif isinstance(state, ActivatedState):
-        return 2
-    elif isinstance(state, NonconformingState):
-        return 3
-    elif isinstance(state, ContingentState):
-        return 4
-    elif isinstance(state, EndedState):
-        return 5
-    elif isinstance(state, WithdrawnState):
-        return 6
-    elif isinstance(state, CancelledState):
-        return 7
-    elif isinstance(state, RejectedState):
-        return 8
-    else:
-        return False
+    reverse_mapping = {v: k for k, v in state_mapping.items()}
+    return reverse_mapping.get(type(state), False)

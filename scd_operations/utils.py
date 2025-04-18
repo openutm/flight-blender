@@ -5,7 +5,7 @@ from itertools import cycle
 import arrow
 
 from auth_helper.common import get_redis
-from common.data_definitions import FLIGHT_OPINT_KEY
+from common.data_definitions import FLIGHT_OPINT_KEY, OPINT_INDEX_BASEPATH
 from common.database_operations import FlightBlenderDatabaseWriter
 from rid_operations import rtree_helper
 
@@ -13,8 +13,6 @@ from . import dss_scd_helper
 from .scd_data_definitions import ClearAreaResponse, ClearAreaResponseOutcome
 
 logger = logging.getLogger("django")
-
-INDEX_NAME = "opint_proc"
 
 
 class UAVSerialNumberValidator:
@@ -205,7 +203,7 @@ class DSSAreaClearHandler:
 
         my_geo_json_converter.convert_volumes_to_geojson(volumes=[volume4D])
         view_rect_bounds = my_geo_json_converter.get_bounds()
-        my_rtree_helper = rtree_helper.OperationalIntentsIndexFactory(index_name=INDEX_NAME)
+        my_rtree_helper = rtree_helper.OperationalIntentsIndexFactory(index_name=OPINT_INDEX_BASEPATH)
         my_rtree_helper.generate_active_flights_operational_intents_index()
         op_ints_exist = my_rtree_helper.check_op_ints_exist()
         all_existing_op_ints_in_area = []
