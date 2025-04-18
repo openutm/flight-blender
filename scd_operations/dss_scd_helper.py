@@ -1060,7 +1060,7 @@ class SCDOperations:
         ovn: str,
         deconfliction_check=False,
         priority: int = 0,
-    ) -> Union[None, OperationalIntentUpdateResponse]:
+    ) -> OperationalIntentUpdateResponse | None:
         """
         Update a specified operational intent reference in the DSS.
         Args:

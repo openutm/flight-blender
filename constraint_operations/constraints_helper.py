@@ -33,7 +33,7 @@ class ConstraintsOperations:
         self.database_reader = FlightBlenderDatabaseReader()
         self.database_writer = FlightBlenderDatabaseWriter()
 
-    def get_auth_token(self, audience: str = None):
+    def get_auth_token(self, audience: str | None = None):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
         if audience is None:
             audience = env.get("DSS_SELF_AUDIENCE", 0)
