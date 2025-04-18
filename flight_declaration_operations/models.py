@@ -186,7 +186,7 @@ class FlightOperationalIntentReference(models.Model):
         help_text="USS base URL",
     )
     version = models.CharField(max_length=256, help_text="USS base URL")
-    state = models.CharField()
+    state = models.CharField(max_length=40)
     time_start = models.DateTimeField(default=datetime.now)
     time_end = models.DateTimeField(default=datetime.now)
     subscription_id = models.CharField(max_length=256)
@@ -260,7 +260,7 @@ class PeerOperationalIntentReference(models.Model):
         help_text="USS base URL",
     )
     version = models.CharField(max_length=256, help_text="USS base URL")
-    state = models.CharField()
+    state = models.CharField(max_length=40)
     time_start = models.DateTimeField(default=datetime.now)
     time_end = models.DateTimeField(default=datetime.now)
     subscription_id = models.CharField(max_length=256)
@@ -274,6 +274,22 @@ class PeerOperationalIntentReference(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class PeerCompositeOperationalIntent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    bounds = models.CharField(max_length=140)
+    start_datetime = models.DateTimeField(default=datetime.now)
+    end_datetime = models.DateTimeField(default=datetime.now)
+    alt_max = models.FloatField()
+    alt_min = models.FloatField()
+    operational_intent_details = models.ForeignKey(
+        PeerOperationalIntentDetail, on_delete=models.CASCADE, related_name="peer_composite_operational_intent"
+    )
+    operational_intent_reference = models.ForeignKey(
+        PeerOperationalIntentReference, on_delete=models.CASCADE, related_name="peer_composite_operational_intent_reference"
+    )
 
 
 class FlightOperationTracking(models.Model):

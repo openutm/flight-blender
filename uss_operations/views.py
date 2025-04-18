@@ -45,7 +45,7 @@ from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
     VolumesConverter,
 )
-from scd_operations.scd_data_definitions import OperationalIntentStorage, Volume4D
+from scd_operations.scd_data_definitions import CompositeOperationalIntentPayload
 
 from .uss_data_definitions import (
     ErrorReport,
@@ -87,9 +87,9 @@ def uss_update_opint_details(request):
     database_writer = FlightBlenderDatabaseWriter()
     my_geo_json_converter = VolumesConverter()
     op_int_update_details_data = request.data
-    r = get_redis()
-    op_int_update_detail = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
 
+    op_int_update_detail = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
+    print(op_int_update_detail)
     my_operational_intent_parser = OperationalIntentReferenceHelper()
     # Write the operational Intent
     operation_id_str = op_int_update_detail.operational_intent_id
@@ -100,43 +100,36 @@ def uss_update_opint_details(request):
     update_operational_intent_details = op_int_update_detail.operational_intent.details
 
     database_writer.create_or_update_peer_operational_intent_details(
-        operational_intent_reference_id=operation_id_str,
+        peer_operational_intent_id=operation_id_str,
         operational_intent_details=update_operational_intent_details,
     )
 
     database_writer.create_or_update_peer_operational_intent_reference(
-        operational_intent_reference_id=operation_id_str,
-        operational_intent_reference=updated_operational_intent_reference,
+        peer_operational_intent_reference_id=operation_id_str,
+        peer_operational_intent_reference=updated_operational_intent_reference,
     )
 
     logger.info("incoming...")
     # logger.info(op_int_update_detail)
-    operational_intent_reference = op_int_update_detail.operational_intent.reference
-    ovn = operational_intent_reference.ovn
 
     operational_intent_details = op_int_update_detail.operational_intent.details
-    volumes = operational_intent_details.volumes
-
-    all_volumes: List[Volume4D] = []
-    for volume in volumes:
-        volume_4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=volume)
-        all_volumes.append(volume_4D)
+    all_volumes = operational_intent_details.volumes
 
     my_geo_json_converter.convert_volumes_to_geojson(volumes=all_volumes)
     view_rect_bounds = my_geo_json_converter.get_bounds()
-    # success_response = OpenS
+
     operational_intent_full_details = CompositeOperationalIntentPayload(
         bounds=view_rect_bounds,
-        start_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_start)),
-        end_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_end)),
+        start_datetime=update_operational_intent_details.volumes[0].time_start.value,
+        end_datetime=update_operational_intent_details.volumes[0].time_end.value,
         alt_max=50,
         alt_min=25,
-        operational_intent_reference_id=peer_operational_itent_reference.id,
-        operational_intent_details_id=peer_operational_itent_details.id,
+        operational_intent_reference_id=operation_id_str,
+        operational_intent_details_id=operation_id_str,
     )
 
-    database_writer.create_or_update_composite_operational_intent(
-        flight_declaration_id=operation_id_str, operational_intent=operational_intent_full_details
+    database_writer.create_or_update_peer_composite_operational_intent(
+        operation_id=operation_id_str, composite_operational_intent=operational_intent_full_details
     )
 
     # Read the new operational intent
@@ -189,8 +182,6 @@ def peer_uss_report_notification(request):
 @api_view(["GET"])
 @requires_scopes(["utm.strategic_coordination"])
 def uss_operational_intent_details(request, opint_id):
-    r = get_redis()
-
     my_database_reader = FlightBlenderDatabaseReader()
     flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(str(opint_id))
     if flight_operational_intent_reference:
@@ -218,28 +209,30 @@ def uss_operational_intent_details(request, opint_id):
             format="RFC3339",
             value=reference_full.time_end,
         )
-        stored_volumes = details_full["volumes"]
+
+        stored_volumes = json.loads(details_full.volumes)
+
         for v in stored_volumes:
             if "outline_circle" in v["volume"].keys():
                 if not v["volume"]["outline_circle"]:
                     v["volume"].pop("outline_circle")
 
-        stored_priority = details_full["priority"]
-        stored_off_nominal_volumes = details_full["off_nominal_volumes"]
+        stored_priority = details_full.priority
+        stored_off_nominal_volumes = json.loads(details_full.off_nominal_volumes)
         for v in stored_off_nominal_volumes:
             if "outline_circle" in v["volume"].keys():
                 if not v["volume"]["outline_circle"]:
                     v["volume"].pop("outline_circle")
 
         reference = OperationalIntentReferenceDSSResponse(
-            id=stored_operational_intent_id,
+            id=str(stored_operational_intent_id),
             manager=stored_manager,
             uss_availability=stored_uss_availability,
-            version=stored_version,
+            version=int(stored_version),
             state=stored_state,
             ovn=stored_ovn,
-            time_start=stored_time_start,
-            time_end=stored_time_end,
+            time_start=Time(format="RFC3339", value=stored_time_start.value),
+            time_end=Time(format="RFC3339", value=stored_time_end.value),
             uss_base_url=stored_uss_base_url,
             subscription_id=stored_subscription_id,
         )
@@ -251,7 +244,7 @@ def uss_operational_intent_details(request, opint_id):
 
         operational_intent = OperationalIntentDetailsUSSResponse(reference=reference, details=details)
         operational_intent_response = OperationalIntentDetails(operational_intent=operational_intent)
-
+        print(operational_intent_response)
         return JsonResponse(
             json.loads(json.dumps(operational_intent_response, cls=EnhancedJSONEncoder)),
             status=200,

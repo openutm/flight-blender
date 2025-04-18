@@ -227,7 +227,7 @@ class DSSAreaClearHandler:
                     )
 
                     if composite_operational_intent:
-                        ovn = composite_operational_intent.ovn
+                        ovn = composite_operational_intent.operational_intent_reference.ovn
                         opint_id = composite_operational_intent.id
                         ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
                         logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))

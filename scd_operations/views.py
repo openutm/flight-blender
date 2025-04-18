@@ -110,7 +110,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
     # Parse the incoming flight planning data
     # view_name = request.resolver_match.view_name
     # uspace_test = True if "u-space" in view_name else False
-    r = get_redis()
+
     # flight_details_storage = "flight_details:" + str(flight_plan_id)
     my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
     my_scd_dss_helper = dss_scd_helper.SCDOperations()
@@ -395,6 +395,17 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     status=status.HTTP_200_OK,
                 )
         else:
+            flight_declaration_creation = FlightDeclarationCreationPayload(
+                id=operation_id_str,
+                operational_intent=asdict(flight_planning_data),
+                flight_declaration_raw_geojson=my_geo_json_converter.geo_json,
+                bounds=view_rect_bounds_storage,
+                aircraft_id="0000",
+                state=1,
+            )
+
+            flight_declaration = my_database_writer.create_flight_declaration(flight_declaration_creation=flight_declaration_creation)
+
             pre_creation_checks_passed = my_volumes_validator.pre_operational_intent_creation_checks(
                 volumes=scd_test_data.intended_flight.basic_information.area
             )
@@ -414,57 +425,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 priority=flight_planning_priority,
             )
             if flight_planning_submission.status == "success":
-                # Successfully submitted to the DSS, save the operational intent in Redis
-                # Notify the subscribers that the operational intent has been updated
-                flight_planning_data.state = generated_operational_intent_state
-                my_scd_dss_helper.process_peer_uss_notifications(
-                    all_subscribers=flight_planning_submission.dss_response.subscribers,
-                    operational_intent_details=flight_planning_notification_payload,
-                    operational_intent_reference=flight_planning_submission.dss_response.operational_intent_reference,
-                    operational_intent_id=flight_planning_submission.operational_intent_id,
-                )
-
-                operational_intent_full_details = OperationalIntentStorage(
-                    bounds=view_r_bounds,
-                    start_time=scd_test_data.intended_flight.basic_information.area[0].time_start.value,
-                    end_time=scd_test_data.intended_flight.basic_information.area[0].time_end.value,
-                    alt_max=50,
-                    alt_min=25,
-                    success_response=flight_planning_submission.dss_response,
-                    operational_intent_details=flight_planning_data,
-                )
-                # Store flight DSS response and operational intent reference
-
-                logger.info("Flight with operational intent id {flight_opint} created".format(flight_opint=operation_id_str))
-                # r.set(flight_opint, json.dumps(asdict(operational_intent_full_details)))
-                # r.expire(name=flight_opint, time=opint_subscription_end_time)
-
-                flight_operational_intent_detail = my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
-                    flight_declaration=flight_declaration, operational_intent_details_payload=flight_planning_submission.dss_response
-                )
-
-                flight_operational_intent_reference = my_database_writer.create_flight_operational_intent_reference_with_submitted_operational_intent(
-                    flight_declaration=flight_declaration,
-                    operational_intent_reference_payload=flight_planning_submission.dss_response.operational_intent_reference,
-                )
-
-                operational_intent_full_details = CompositeOperationalIntentPayload(
-                    bounds=view_r_bounds,
-                    start_datetime=scd_test_data.intended_flight.basic_information.area[0].time_start.value,
-                    end_datetime=scd_test_data.intended_flight.basic_information.area[0].time_end.value,
-                    alt_max=50,
-                    alt_min=25,
-                    operational_intent_reference_id=flight_operational_intent_reference.id,
-                    operational_intent_details_id=flight_operational_intent_detail.id,
-                )
-                composite_operational_intent = my_database_writer.create_or_update_composite_operational_intent(
-                    flight_declaration=flight_declaration,
-                    operational_intent_full_details=operational_intent_full_details,
-                )
-
-                # End store flight DSS
-                planned_test_injection_response.operational_intent_id = flight_planning_submission.operational_intent_id
-                # Create a flight declaration with operation id
+                # Successfully submitted to the DSS, save the operational intent in DB
                 volumes_to_store = OperationalIntentStorageVolumes(volumes=scd_test_data.intended_flight.basic_information.area)
 
                 flight_declaration_creation_payload = FlightDeclarationCreationPayload(
@@ -477,13 +438,48 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 )
 
                 my_database_writer.create_flight_declaration(flight_declaration_creation=flight_declaration_creation_payload)
+
+                logger.info("Flight with operational intent id {flight_opint} created".format(flight_opint=operation_id_str))
                 flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
-                flight_operational_intent_reference = my_database_writer.create_flight_operational_intent_reference_with_submitted_operational_intent(
-                    flight_declaration=flight_declaration,
-                    dss_operational_intent_reference_id=flight_planning_submission.operational_intent_id,
-                    ovn=flight_planning_submission.dss_response.operational_intent_reference.ovn,
+
+                flight_planning_data.state = generated_operational_intent_state
+                # Notify the subscribers that the operational intent has been created
+                my_scd_dss_helper.process_peer_uss_notifications(
+                    all_subscribers=flight_planning_submission.dss_response.subscribers,
+                    operational_intent_details=flight_planning_notification_payload,
+                    operational_intent_reference=flight_planning_submission.dss_response.operational_intent_reference,
+                    operational_intent_id=flight_planning_submission.operational_intent_id,
                 )
 
+                # Store flight DSS response and operational intent reference
+
+                flight_operational_intent_detail = my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
+                    flight_declaration=flight_declaration, operational_intent_details_payload=flight_planning_notification_payload
+                )
+
+                flight_operational_intent_reference = my_database_writer.create_flight_operational_intent_reference_with_submitted_operational_intent(
+                    flight_declaration=flight_declaration,
+                    operational_intent_reference_payload=flight_planning_submission.dss_response.operational_intent_reference,
+                )
+
+                composite_operational_intent_payload = CompositeOperationalIntentPayload(
+                    bounds=view_r_bounds,
+                    start_datetime=scd_test_data.intended_flight.basic_information.area[0].time_start.value,
+                    end_datetime=scd_test_data.intended_flight.basic_information.area[0].time_end.value,
+                    alt_max=50,
+                    alt_min=25,
+                    operational_intent_reference_id=str(flight_operational_intent_reference.id),
+                    operational_intent_details_id=str(flight_operational_intent_detail.id),
+                )
+
+                my_database_writer.create_or_update_composite_operational_intent(
+                    flight_declaration=flight_declaration,
+                    composite_operational_intent=composite_operational_intent_payload,
+                )
+
+                # End store flight DSS
+                planned_test_injection_response.operational_intent_id = flight_planning_submission.operational_intent_id
+                # Create a flight declaration with operation id
                 # End create operational intent
 
             elif flight_planning_submission.status == "conflict_with_flight":
@@ -539,7 +535,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
             ovn_opint = {"ovn_id": ovn, "opint_id": opint_id, "flight_declaration_id": operation_id_str}
             # logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
 
-            deletion_response = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)
+            deletion_response = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=str(opint_id), ovn=ovn)
             if deletion_response.status == 200:
                 logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
 

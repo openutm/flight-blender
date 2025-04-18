@@ -359,7 +359,7 @@ class OperationalIntentStorage:
 class CompositeOperationalIntentPayload:
     bounds: str
     start_datetime: str
-    start_datetime: str
+    end_datetime: str
     alt_max: float
     alt_min: float
     operational_intent_reference_id: str

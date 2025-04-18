@@ -651,43 +651,34 @@ class SCDOperations:
                     # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
 
-                    flight_operational_intent_reference = self.database_reader.get_flight_operational_intent_reference_by_id(
+                    flight_operational_intent_reference = self.database_reader.get_peer_operational_intent_reference_by_id(
                         str(current_uss_operational_intent_detail.id)
                     )
-                    # TODO: Check if this can be removed
-                    if flight_operational_intent_reference:
-                        self.database_writer.update_flight_operational_intent_reference_ovn(
-                            flight_operational_intent_reference=flight_operational_intent_reference, ovn=current_uss_operational_intent_detail.ovn
-                        )
-
-                    operational_intent_id = str(flight_operational_intent_reference.declaration.id)
-
-                    composite_operational_intent = self.database_reader.get_composite_operational_intent_by_declaration_id(
-                        flight_declaration_id=current_uss_operational_intent_detail.id
+                    self.database_writer.update_flight_operational_intent_reference_ovn(
+                        flight_operational_intent_reference=flight_operational_intent_reference, ovn=current_uss_operational_intent_detail.ovn
                     )
 
-                    operation_intent_reference = composite_operational_intent.operational_intent_reference
+                    flight_operational_intent_detail = self.database_reader.get_peer_operational_intent_details_by_id(
+                        str(current_uss_operational_intent_detail.id)
+                    )
+
                     op_int_ref = OperationalIntentReferenceDSSResponse(
-                        subscription_id=operation_intent_reference.subscription_id,
-                        id=operation_intent_reference.id,
-                        uss_base_url=operation_intent_reference.uss_base_url,
-                        manager=operation_intent_reference.manager,
-                        uss_availability=operation_intent_reference.uss_availability,
-                        version=operation_intent_reference.version,
-                        state=operation_intent_reference.state,
-                        ovn=operation_intent_reference.ovn,
-                        time_start=Time(format="RFC3339", value=operation_intent_reference.time_start),
-                        time_end=Time(format="RFC3339", value=operation_intent_reference.time_end),
-                        uss_base_url=operation_intent_reference.uss_base_url,
+                        subscription_id=flight_operational_intent_reference.subscription_id,
+                        id=str(flight_operational_intent_reference.id),
+                        uss_base_url=flight_operational_intent_reference.uss_base_url,
+                        manager=flight_operational_intent_reference.manager,
+                        uss_availability=flight_operational_intent_reference.uss_availability,
+                        version=flight_operational_intent_reference.version,
+                        state=flight_operational_intent_reference.state,
+                        ovn=flight_operational_intent_reference.ovn,
+                        time_start=Time(format="RFC3339", value=flight_operational_intent_reference.time_start),
+                        time_end=Time(format="RFC3339", value=flight_operational_intent_reference.time_end),
                     )
-
-                    # if self.r.exists(flight_opint):
-                    #     op_int_details_raw = self.r.get(flight_opint)
-                    #     op_int_details = json.loads(op_int_details_raw)
-                    #     op_int_ref = op_int_details["success_response"]["operational_intent_reference"]
-                    #     op_int_det = op_int_details["operational_intent_details"]
-                    #     # Update the ovn
-                    #     op_int_ref["ovn"] = current_uss_operational_intent_detail.ovn
+                    op_int_det = {
+                        "volumes": json.loads(flight_operational_intent_detail.volumes),
+                        "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
+                        "priority": flight_operational_intent_detail.priority,
+                    }
 
                     op_int_details_retrieved = True
 
@@ -1270,7 +1261,11 @@ class SCDOperations:
 
         try:
             all_existing_operational_intent_details = self.get_latest_airspace_volumes(volumes=volumes)
-        except ValueError:
+        except ValueError as ve:
+            print("___")
+            print(ve)
+            print("___")
+
             logger.info("Error in processing peer USS data, cannot create a new operational intent..")
             d_r = OperationalIntentSubmissionStatus(
                 status="peer_uss_data_sharing_issue",
