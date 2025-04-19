@@ -4,12 +4,14 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime
 from os import environ as env
+from typing import Union
 
 import arrow
 import requests
 import shapely.geometry
 import tldextract
 import urllib3
+from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Proj
 from shapely.geometry import Point, Polygon
@@ -640,40 +642,54 @@ class SCDOperations:
                     all_uss_operational_intent_details.append(o_i_r_formatted)
 
             for current_uss_operational_intent_detail in all_uss_operational_intent_details:
+                logging.info("All Operational intents in the area..")
+
                 # check the USS for flight volume by using the URL to see if this is stored in Flight Blender, DSS will return all intent details including our own
                 current_uss_base_url = current_uss_operational_intent_detail.uss_base_url
                 if current_uss_base_url == flight_blender_base_url:
                     # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
 
-                    flight_operational_intent_reference = self.database_reader.get_peer_operational_intent_reference_by_id(
-                        str(current_uss_operational_intent_detail.id)
+                    # Check if the flight operational intent reference exists
+                    flight_operational_intent_reference_exists = self.database_reader.check_flight_operational_intent_reference_by_id_exists(
+                        operational_intent_ref_id=str(current_uss_operational_intent_detail.id)
                     )
-                    self.database_writer.update_flight_operational_intent_reference_ovn(
-                        flight_operational_intent_reference=flight_operational_intent_reference, ovn=current_uss_operational_intent_detail.ovn
-                    )
+                    if flight_operational_intent_reference_exists:
+                        # Get the declaration
+                        flight_operational_intent_reference = self.database_reader.get_operational_intent_reference_by_id(
+                            operational_intent_ref_id=str(current_uss_operational_intent_detail.id)
+                        )
+                        flight_declaration = flight_operational_intent_reference.declaration
 
-                    flight_operational_intent_detail = self.database_reader.get_peer_operational_intent_details_by_id(
-                        str(current_uss_operational_intent_detail.id)
-                    )
+                        flight_operational_intent_detail = self.database_reader.get_operational_intent_details_by_flight_declaration_id(
+                            declaration_id=str(flight_declaration.id)
+                        )
+                        logger.info("_____")
+                        logger.info(flight_operational_intent_reference)
+                        logger.info(flight_operational_intent_detail)
+                        logger.info("_____")
+                        self.database_writer.update_flight_operational_intent_reference_ovn(
+                            flight_operational_intent_reference=flight_operational_intent_reference, ovn=current_uss_operational_intent_detail.ovn
+                        )
 
-                    op_int_ref = OperationalIntentReferenceDSSResponse(
-                        subscription_id=flight_operational_intent_reference.subscription_id,
-                        id=str(flight_operational_intent_reference.id),
-                        uss_base_url=flight_operational_intent_reference.uss_base_url,
-                        manager=flight_operational_intent_reference.manager,
-                        uss_availability=flight_operational_intent_reference.uss_availability,
-                        version=flight_operational_intent_reference.version,
-                        state=flight_operational_intent_reference.state,
-                        ovn=flight_operational_intent_reference.ovn,
-                        time_start=Time(format="RFC3339", value=flight_operational_intent_reference.time_start),
-                        time_end=Time(format="RFC3339", value=flight_operational_intent_reference.time_end),
-                    )
-                    op_int_det = {
-                        "volumes": json.loads(flight_operational_intent_detail.volumes),
-                        "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
-                        "priority": flight_operational_intent_detail.priority,
-                    }
+                        _op_int_ref = OperationalIntentReferenceDSSResponse(
+                            subscription_id=current_uss_operational_intent_detail.subscription_id,
+                            id=str(flight_operational_intent_reference.id),
+                            uss_base_url=flight_operational_intent_reference.uss_base_url,
+                            manager=flight_operational_intent_reference.manager,
+                            uss_availability=flight_operational_intent_reference.uss_availability,
+                            version=flight_operational_intent_reference.version,
+                            state=flight_operational_intent_reference.state,
+                            ovn=flight_operational_intent_reference.ovn,
+                            time_start=Time(format="RFC3339", value=flight_operational_intent_reference.time_start),
+                            time_end=Time(format="RFC3339", value=flight_operational_intent_reference.time_end),
+                        )
+                        op_int_ref = asdict(_op_int_ref)
+                        op_int_det = {
+                            "volumes": json.loads(flight_operational_intent_detail.volumes),
+                            "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
+                            "priority": flight_operational_intent_detail.priority,
+                        }
 
                     op_int_details_retrieved = True
 

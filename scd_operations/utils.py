@@ -197,7 +197,6 @@ class DSSAreaClearHandler:
         self.request_id = request_id
 
     def clear_area_request(self, extent_raw) -> ClearAreaResponse:
-        r = get_redis()
         my_database_writer = FlightBlenderDatabaseWriter()
         my_database_reader = FlightBlenderDatabaseReader()
         my_scd_dss_helper = dss_scd_helper.SCDOperations()

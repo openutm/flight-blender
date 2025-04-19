@@ -4,14 +4,17 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from uuid import UUID
 from typing import Union
+from uuid import UUID
+
 import arrow
 from django.db.models import QuerySet
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
 
 from conformance_monitoring_operations.models import TaskScheduler
+from constraint_operations.data_definitions import Constraint as ConstraintData
+from constraint_operations.models import Constraint, ConstraintReference
 from flight_declaration_operations.models import (
     CompositeOperationalIntent,
     FlightDeclaration,
@@ -21,9 +24,6 @@ from flight_declaration_operations.models import (
     PeerOperationalIntentDetail,
     PeerOperationalIntentReference,
 )
-from constraint_operations.data_definitions import Constraint as ConstraintData
-from constraint_operations.models import Constraint, ConstraintReference
-from flight_declaration_operations.models import FlightAuthorization, FlightDeclaration
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
 from notification_operations.models import OperatorRIDNotification
@@ -64,6 +64,7 @@ class FlightBlenderDatabaseReader:
             return peer_operational_intent_reference
         except PeerOperationalIntentReference.DoesNotExist:
             return None
+
     def check_constraint_id_exists(self, constraint_id: str) -> bool:
         return Constraint.objects.filter(id=constraint_id).exists()
 
@@ -105,7 +106,6 @@ class FlightBlenderDatabaseReader:
         return composite_operational_intent_exists
 
     def get_composite_operational_intent_by_declaration_id(self, flight_declaration_id: str) -> Union[None, CompositeOperationalIntent]:
-        
         try:
             return CompositeOperationalIntent.objects.get(declaration__id=flight_declaration_id)
 
@@ -146,8 +146,13 @@ class FlightBlenderDatabaseReader:
         except FlightOperationalIntentReference.DoesNotExist:
             return None
 
+    def check_flight_operational_intent_reference_by_id_exists(self, operational_intent_ref_id: str) -> bool:
+        return FlightOperationalIntentReference.objects.filter(id=operational_intent_ref_id).exists()
+
+    def get_operational_intent_reference_by_id(self, operational_intent_ref_id: str) -> FlightOperationalIntentReference:
+        return FlightOperationalIntentReference.objects.get(id=operational_intent_ref_id)
+
     def get_flight_operational_intent_reference_by_id(self, operational_intent_ref_id: str) -> Union[None, FlightOperationalIntentReference]:
-    def get_flight_authorization_by_operational_intent_ref_id(self, operational_intent_ref_id: str) -> None | FlightAuthorization:
         """
         Retrieves a FlightOperationalIntentReference object based on the given flight declaration ID.
         Args:
@@ -165,7 +170,11 @@ class FlightBlenderDatabaseReader:
         except FlightOperationalIntentReference.DoesNotExist:
             return None
 
-    def update_flight_operational_intent_reference_ovn(self, flight_operational_intent_referecne: FlightOperationalIntentReference, ovn: str) -> bool:
+    def update_flight_operational_intent_reference_ovn(
+        self,
+        flight_operational_intent_referecne: FlightOperationalIntentReference,
+        ovn: str,
+    ) -> bool:
         try:
             flight_operational_intent_referecne.ovn = ovn
             flight_operational_intent_referecne.save()
@@ -174,14 +183,17 @@ class FlightBlenderDatabaseReader:
         except IntegrityError:
             return False
 
-    def get_flight_operational_intent_details_by_id(self, operational_intent_details_id: str) -> Union[None, FlightOperationalIntentDetail]:
+    def check_flight_operational_intent_details_by_id_exists(self, operational_intent_ref_id: str) -> bool:
+        return FlightOperationalIntentDetail.objects.filter(id=operational_intent_ref_id).exists()
+
+    def get_flight_operational_intent_details_by_flight_declaration_id(self, declaration: str) -> Union[None, FlightOperationalIntentDetail]:
         try:
             flight_operational_intent_detail = FlightOperationalIntentDetail.objects.get(id=operational_intent_details_id)
             return flight_operational_intent_detail
         except FlightOperationalIntentDetail.DoesNotExist:
             return None
 
-    def get_flight_operational_intent_details_by_declaration_id(self, declaration_id: str) -> Union[None, FlightOperationalIntentDetail]:
+    def get_operational_intent_details_by_flight_declaration_id(self, declaration_id: str) -> Union[None, FlightOperationalIntentDetail]:
         """
         Retrieves a FlightOperationalIntentReference object based on the given flight declaration ID.
         Args:
@@ -209,7 +221,9 @@ class FlightBlenderDatabaseReader:
     def check_active_activated_flights_exist(self) -> bool:
         return FlightDeclaration.objects.filter().filter(state__in=[1, 2]).exists()
 
-    def get_active_activated_flight_declarations(self) -> QuerySet | list[FlightDeclaration]:
+    def get_active_activated_flight_declarations(
+        self,
+    ) -> QuerySet | list[FlightDeclaration]:
         return FlightDeclaration.objects.filter().filter(state__in=[1, 2])
 
     def get_current_flight_accepted_activated_declaration_ids(self, now: str) -> None | UUID:
@@ -261,7 +275,10 @@ class FlightBlenderDatabaseReader:
     ) -> None | QuerySet | list[FlightObeservation]:
         try:
             observations = FlightObeservation.objects.filter(
-                session_id=session_id, created_at__gte=start_time, created_at__lte=end_time, traffic_source=11
+                session_id=session_id,
+                created_at__gte=start_time,
+                created_at__lte=end_time,
+                traffic_source=11,
             )
             return observations
         except FlightObeservation.DoesNotExist:
@@ -298,7 +315,9 @@ class FlightBlenderDatabaseReader:
 
 class FlightBlenderDatabaseWriter:
     def create_or_update_peer_operational_intent_details(
-        self, peer_operational_intent_id: str, operational_intent_details: OperationalIntentUSSDetails
+        self,
+        peer_operational_intent_id: str,
+        operational_intent_details: OperationalIntentUSSDetails,
     ) -> Union[None, PeerOperationalIntentDetail]:
         try:
             _operational_intent_details = asdict(operational_intent_details)
@@ -314,7 +333,9 @@ class FlightBlenderDatabaseWriter:
             return None
 
     def create_or_update_peer_operational_intent_reference(
-        self, peer_operational_intent_reference_id: str, peer_operational_intent_reference: OperationalIntentReferenceDSSResponse
+        self,
+        peer_operational_intent_reference_id: str,
+        peer_operational_intent_reference: OperationalIntentReferenceDSSResponse,
     ) -> Union[None, PeerOperationalIntentReference]:
         try:
             peer_operational_intent_reference_obj = PeerOperationalIntentReference(
@@ -371,7 +392,8 @@ class FlightBlenderDatabaseWriter:
     def create_operator_rid_notification(self, operator_rid_notification: OperatorRIDNotificationCreationPayload) -> bool:
         try:
             operator_rid_notification_obj = OperatorRIDNotification(
-                message=operator_rid_notification.message, session_id=operator_rid_notification.session_id
+                message=operator_rid_notification.message,
+                session_id=operator_rid_notification.session_id,
             )
             operator_rid_notification_obj.save()
             return True
@@ -401,11 +423,14 @@ class FlightBlenderDatabaseWriter:
     def create_flight_operational_intent_reference_with_submitted_operational_intent(
         self,
         flight_declaration: FlightDeclaration,
-        operational_intent_reference_payload: Union[OperationalIntentReferenceDSSResponse, PartialCreateOperationalIntentReference],
+        operational_intent_reference_payload: Union[
+            OperationalIntentReferenceDSSResponse,
+            PartialCreateOperationalIntentReference,
+        ],
     ) -> Union[None, FlightOperationalIntentReference]:
         try:
             flight_operational_intent_reference = FlightOperationalIntentReference(
-                id=operational_intent_reference_payload.id,
+                id=operational_intent_reference_payload.id,  # assigned by the DSS
                 declaration=flight_declaration,
                 ovn=operational_intent_reference_payload.ovn,
                 state=operational_intent_reference_payload.state,
@@ -418,6 +443,7 @@ class FlightBlenderDatabaseWriter:
                 subscription_id=operational_intent_reference_payload.subscription_id,
             )
             flight_operational_intent_reference.save()
+
             return flight_operational_intent_reference
 
         except IntegrityError:
@@ -437,13 +463,16 @@ class FlightBlenderDatabaseWriter:
                 priority=operational_intent_details_payload.priority,
             )
             flight_operational_intent_detail_obj.save()
+
             return flight_operational_intent_detail_obj
 
         except IntegrityError:
             return None
 
     def create_or_update_peer_composite_operational_intent(
-        self, operation_id: str, composite_operational_intent: CompositeOperationalIntentPayload
+        self,
+        operation_id: str,
+        composite_operational_intent: CompositeOperationalIntentPayload,
     ) -> bool:
         try:
             peer_operational_intent_details = PeerOperationalIntentDetail.objects.get(id=operation_id)
@@ -465,7 +494,9 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def create_or_update_composite_operational_intent(
-        self, flight_declaration: FlightDeclaration, composite_operational_intent: CompositeOperationalIntentPayload
+        self,
+        flight_declaration: FlightDeclaration,
+        composite_operational_intent: CompositeOperationalIntentPayload,
     ) -> bool:
         try:
             operational_intent_details = FlightOperationalIntentDetail.objects.get(declaration=flight_declaration)
@@ -485,6 +516,7 @@ class FlightBlenderDatabaseWriter:
                 operational_intent_reference=operational_intent_reference,
             )
             composite_operational_intent_obj.save()
+
             return True
         except IntegrityError:
             return False
@@ -498,7 +530,10 @@ class FlightBlenderDatabaseWriter:
     ) -> bool:
         try:
             flight_operational_intent_reference = FlightOperationalIntentReference(
-                declaration=flight_declaration, id=dss_operational_intent_reference_id, ovn=ovn, dss_response=json.dumps(asdict(dss_response))
+                declaration=flight_declaration,
+                id=dss_operational_intent_reference_id,
+                ovn=ovn,
+                dss_response=json.dumps(asdict(dss_response)),
             )
             flight_operational_intent_reference.save()
             return True
@@ -538,7 +573,9 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def update_flight_operational_intent_reference_op_int(
-        self, flight_operational_intent_reference: FlightOperationalIntentReference, dss_operational_intent_reference_id
+        self,
+        flight_operational_intent_reference: FlightOperationalIntentReference,
+        dss_operational_intent_reference_id,
     ) -> bool:
         try:
             flight_operational_intent_reference.id = dss_operational_intent_reference_id
@@ -547,7 +584,11 @@ class FlightBlenderDatabaseWriter:
         except Exception:
             return False
 
-    def update_flight_operational_intent_reference_ovn(self, flight_operational_intent_reference: FlightOperationalIntentReference, ovn: str) -> bool:
+    def update_flight_operational_intent_reference_ovn(
+        self,
+        flight_operational_intent_reference: FlightOperationalIntentReference,
+        ovn: str,
+    ) -> bool:
         try:
             flight_operational_intent_reference.ovn = ovn
             flight_operational_intent_reference.save()
@@ -556,7 +597,10 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def update_flight_operational_intent_reference_op_int_ovn(
-        self, flight_operational_intent_reference: FlightOperationalIntentReference, dss_operational_intent_reference_id: str, ovn: str
+        self,
+        flight_operational_intent_reference: FlightOperationalIntentReference,
+        dss_operational_intent_reference_id: str,
+        ovn: str,
     ) -> bool:
         try:
             flight_operational_intent_reference.id = dss_operational_intent_reference_id
@@ -651,7 +695,14 @@ class FlightBlenderDatabaseWriter:
         rid_stream_monitoring_task.terminate()
 
     def create_rid_subscription_record(
-        self, subscription_id: str, record_id: str, view: str, view_hash: int, end_datetime: str, flights_dict: str, is_simulated: bool
+        self,
+        subscription_id: str,
+        record_id: str,
+        view: str,
+        view_hash: int,
+        end_datetime: str,
+        flights_dict: str,
+        is_simulated: bool,
     ) -> bool:
         try:
             rid_subscription = ISASubscription(
@@ -686,7 +737,7 @@ class FlightBlenderDatabaseWriter:
     def clear_stored_operational_intents(self):
         PeerOperationalIntentReference.objects.filter(is_live=False).delete()
         PeerOperationalIntentDetail.objects.filter(is_live=False).delete()
-                                        
+
     def write_constraint_details(self, constraint_id: str, constraint: ConstraintData) -> bool:
         try:
             constraint_obj = Constraint(

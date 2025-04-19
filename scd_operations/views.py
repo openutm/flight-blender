@@ -36,8 +36,8 @@ from .scd_data_definitions import (
     CompositeOperationalIntentPayload,
     OperationalIntentState,
     OperationalIntentStorage,
-    OperationalIntentStorageVolumes,
     OperationalIntentSubmissionStatus,
+    OperationalIntentUSSDetails,
     SCDTestStatusResponse,
     USSCapabilitiesResponseEnum,
 )
@@ -216,6 +216,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
         # Flight plan exists in Flight Blender and the new state is off nominal or contingent
         if flight_plan_exists_in_flight_blender and generated_operational_intent_state in ["Activated", "Nonconforming"]:
             # Operational intent exists, update the operational intent based on SCD rules. Get the detail of the existing / stored operational intent
+
             existing_op_int_details = my_operational_intent_parser.parse_stored_operational_intent_details(operation_id=operation_id_str)
             flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
             if not flight_declaration:
@@ -401,7 +402,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 flight_declaration_raw_geojson=my_geo_json_converter.geo_json,
                 bounds=view_rect_bounds_storage,
                 aircraft_id="0000",
-                state=1,
+                state=OPERATION_STATES_LOOKUP[generated_operational_intent_state],
             )
 
             flight_declaration = my_database_writer.create_flight_declaration(flight_declaration_creation=flight_declaration_creation)
@@ -424,39 +425,27 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 off_nominal_volumes=off_nominal_volumes,
                 priority=flight_planning_priority,
             )
+
             if flight_planning_submission.status == "success":
                 # Successfully submitted to the DSS, save the operational intent in DB
-                volumes_to_store = OperationalIntentStorageVolumes(volumes=scd_test_data.intended_flight.basic_information.area)
 
-                flight_declaration_creation_payload = FlightDeclarationCreationPayload(
-                    id=operation_id_str,
-                    operational_intent=json.dumps(asdict(volumes_to_store)),
-                    flight_declaration_raw_geojson=json.dumps(my_geo_json_converter.geo_json),
-                    bounds=view_rect_bounds_storage,
-                    state=OPERATION_STATES_LOOKUP[generated_operational_intent_state],
-                    aircraft_id="0000",
-                )
-
-                my_database_writer.create_flight_declaration(flight_declaration_creation=flight_declaration_creation_payload)
-
-                logger.info("Flight with operational intent id {flight_opint} created".format(flight_opint=operation_id_str))
+                logger.info("Flight with declaration id {flight_declaration_id} created".format(flight_declaration_id=operation_id_str))
                 flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
 
                 flight_planning_data.state = generated_operational_intent_state
-                # Notify the subscribers that the operational intent has been created
-                my_scd_dss_helper.process_peer_uss_notifications(
-                    all_subscribers=flight_planning_submission.dss_response.subscribers,
-                    operational_intent_details=flight_planning_notification_payload,
-                    operational_intent_reference=flight_planning_submission.dss_response.operational_intent_reference,
-                    operational_intent_id=flight_planning_submission.operational_intent_id,
-                )
 
                 # Store flight DSS response and operational intent reference
+                logger.info("Creating operational details in DB...")
 
-                flight_operational_intent_detail = my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
-                    flight_declaration=flight_declaration, operational_intent_details_payload=flight_planning_notification_payload
+                _operational_intent_details = OperationalIntentUSSDetails(
+                    volumes=flight_planning_notification_payload.volumes,
+                    off_nominal_volumes=flight_planning_notification_payload.off_nominal_volumes,
+                    priority=flight_planning_notification_payload.priority,
                 )
-
+                flight_operational_intent_detail = my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
+                    flight_declaration=flight_declaration, operational_intent_details_payload=_operational_intent_details
+                )
+                logger.info("Creating operational reference in DB...")
                 flight_operational_intent_reference = my_database_writer.create_flight_operational_intent_reference_with_submitted_operational_intent(
                     flight_declaration=flight_declaration,
                     operational_intent_reference_payload=flight_planning_submission.dss_response.operational_intent_reference,
@@ -475,6 +464,13 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 my_database_writer.create_or_update_composite_operational_intent(
                     flight_declaration=flight_declaration,
                     composite_operational_intent=composite_operational_intent_payload,
+                )
+                # Notify the subscribers that the operational intent has been created
+                my_scd_dss_helper.process_peer_uss_notifications(
+                    all_subscribers=flight_planning_submission.dss_response.subscribers,
+                    operational_intent_details=flight_planning_notification_payload,
+                    operational_intent_reference=flight_planning_submission.dss_response.operational_intent_reference,
+                    operational_intent_id=flight_planning_submission.operational_intent_id,
                 )
 
                 # End store flight DSS
