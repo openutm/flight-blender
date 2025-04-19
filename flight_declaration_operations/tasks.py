@@ -123,19 +123,20 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             view_r_bounds = flight_declaration.bounds
             operational_intent_full_details = OperationalIntentStorage(
                 bounds=view_r_bounds,
-                start_time=flight_declaration.start_datetime.isoformat(),
-                end_time=flight_declaration.end_datetime.isoformat(),
+                start_datetime=flight_declaration.start_datetime.isoformat(),
+                end_datetime=flight_declaration.end_datetime.isoformat(),
                 alt_max=50,
                 alt_min=25,
                 success_response=opint_submission_result.dss_response,
                 operational_intent_details=json.loads(flight_declaration.operational_intent),
             )
-            
 
-            my_database_writer.update_flight_operational_intent_reference_with_dss_response(flight_declaration=flight_declaration, 
-            dss_operational_intent_reference_id=                  str(created_opint),          dss_response=opint_submission_result.dss_response, ovn =opint_submission_result.dss_response.operational_intent_reference.ovn
+            my_database_writer.update_flight_operational_intent_reference_with_dss_response(
+                flight_declaration=flight_declaration,
+                dss_operational_intent_reference_id=str(created_opint),
+                dss_response=opint_submission_result.dss_response,
+                ovn=opint_submission_result.dss_response.operational_intent_reference.ovn,
             )
-
 
             logger.info("Changing operation state..")
             original_state = flight_declaration.state

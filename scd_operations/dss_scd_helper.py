@@ -409,8 +409,8 @@ class OperationalIntentReferenceHelper:
 
         stored = OperationalIntentStorage(
             bounds=composite_operational_intent_details.bounds,
-            start_time=composite_operational_intent_details.start_datetime,
-            end_time=composite_operational_intent_details.end_datetime,
+            start_datetime=composite_operational_intent_details.start_datetime,
+            end_datetime=composite_operational_intent_details.end_datetime,
             alt_max=composite_operational_intent_details.alt_max,
             alt_min=composite_operational_intent_details.alt_min,
             success_response=OperationalIntentSubmissionSuccess(
@@ -1002,13 +1002,13 @@ class SCDOperations:
     ) -> list[OpInttoCheckDetails]:
         """The DSS returns all the volumes including ours, We dont need to check deconflicton for operation ID that we are updating, we therefore remove this from our deconfliction check and also update stored OVN"""
 
-        all_existing_operational_intent_details = list(
+        operational_intent_details_to_check = list(
             filter(
                 lambda op_int_to_check: op_int_to_check.id != operational_intent_ref_id,
                 current_network_opint_details_full,
             )
         )
-        return all_existing_operational_intent_details
+        return operational_intent_details_to_check
 
     def get_updated_ovn(
         self,
@@ -1042,6 +1042,7 @@ class SCDOperations:
         my_ind_volumes_converter = VolumesConverter()
         my_ind_volumes_converter.convert_volumes_to_geojson(volumes=extents)
         ind_volumes_polygon = my_ind_volumes_converter.get_minimum_rotated_rectangle()
+
         is_conflicted = rtree_helper.check_polygon_intersection(
             op_int_details=all_existing_operational_intent_details,
             polygon_to_check=ind_volumes_polygon,
@@ -1061,6 +1062,7 @@ class SCDOperations:
             check_id=OpIntUpdateCheckResultCodes.Z,
             tentative_flight_plan_processing_response=FlightPlanCurrentStatus.Processing,
         )
+
         if current_state == "Activated" and new_state == "Activated" and extents_conflict_with_dss_volumes:
             logger.debug("Case B")
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 0
@@ -1152,11 +1154,11 @@ class SCDOperations:
             message = "Error in updating operational intent in the DSS, peer USS shared invalid data"
             opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=408, message=message)
             return opint_update_result
-
         all_existing_operational_intent_details = self.process_retrieved_airspace_volumes(
             current_network_opint_details_full=current_network_opint_details_full,
             operational_intent_ref_id=operational_intent_ref_id,
         )
+
         latest_ovn = self.get_updated_ovn(
             current_network_opint_details_full=current_network_opint_details_full,
             operational_intent_ref_id=operational_intent_ref_id,

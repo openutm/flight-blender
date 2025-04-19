@@ -34,6 +34,7 @@ from scd_operations.data_definitions import FlightDeclarationCreationPayload
 from scd_operations.scd_data_definitions import (
     CompositeOperationalIntentPayload,
     OperationalIntentReferenceDSSResponse,
+    OperationalIntentStorage,
     OperationalIntentUSSDetails,
     PartialCreateOperationalIntentReference,
     SubscriberToNotify,
@@ -527,7 +528,7 @@ class FlightBlenderDatabaseWriter:
     def create_or_update_composite_operational_intent(
         self,
         flight_declaration: FlightDeclaration,
-        composite_operational_intent: CompositeOperationalIntentPayload,
+        composite_operational_intent: Union[CompositeOperationalIntentPayload, OperationalIntentStorage],
     ) -> bool:
         try:
             operational_intent_details = FlightOperationalIntentDetail.objects.get(declaration=flight_declaration)
@@ -625,6 +626,54 @@ class FlightBlenderDatabaseWriter:
             flight_operational_intent_reference.save()
             return True
         except Exception:
+            return False
+
+    def update_flight_operational_intent_reference(
+        self,
+        flight_operational_intent_reference: FlightOperationalIntentReference,
+        update_operational_intent_reference: OperationalIntentReferenceDSSResponse,
+    ) -> bool:
+        try:
+            flight_operational_intent_reference.ovn = FlightBlenderDatabaseWriter.update_flight_operational_intent_details.ovn
+            flight_operational_intent_reference.state = update_operational_intent_reference.state
+            flight_operational_intent_reference.uss_availability = update_operational_intent_reference.uss_availability
+            flight_operational_intent_reference.uss_base_url = update_operational_intent_reference.uss_base_url
+            flight_operational_intent_reference.version = update_operational_intent_reference.version
+            flight_operational_intent_reference.time_start = update_operational_intent_reference.time_start.value
+            flight_operational_intent_reference.time_end = update_operational_intent_reference.time_end.value
+            flight_operational_intent_reference.subscription_id = update_operational_intent_reference.subscription_id
+            flight_operational_intent_reference.manager = update_operational_intent_reference.manager
+
+            print(update_operational_intent_reference)
+
+            flight_operational_intent_reference.save()
+            return True
+        except Exception:
+            return False
+
+    def update_flight_operational_intent_details(
+        self,
+        flight_operational_intent_detail: FlightOperationalIntentDetail,
+        operational_intent_details: OperationalIntentUSSDetails,
+    ) -> bool:
+        _volumes = []
+        _off_nominal_volumes = operational_intent_details.off_nominal_volumes
+        for volume in operational_intent_details.volumes:
+            _volumes.append(asdict(volume))
+        _off_nominal_volumes = []
+        for volume in operational_intent_details.off_nominal_volumes:
+            _off_nominal_volumes.append(asdict(volume))
+
+        try:
+            flight_operational_intent_detail.volumes = json.dumps(_volumes)
+            flight_operational_intent_detail.off_nominal_volumes = json.dumps(_off_nominal_volumes)
+            flight_operational_intent_detail.priority = operational_intent_details.priority
+            flight_operational_intent_detail.save()
+            return True
+        except Exception as e:
+            print("---------")
+            print(e)
+            print("---------")
             return False
 
     def update_flight_operational_intent_reference_op_int_ovn(

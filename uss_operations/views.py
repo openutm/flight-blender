@@ -96,7 +96,7 @@ def uss_update_opint_details(request):
     logger.info("incoming...")
     logger.info("Operation ID %s" % operation_id_str)
 
-    logger.debug(op_int_update_detail)
+    logger.info(op_int_update_detail)
     updated_operational_intent_reference = op_int_update_detail.operational_intent.reference
 
     update_operational_intent_details = op_int_update_detail.operational_intent.details
@@ -250,7 +250,6 @@ def uss_operational_intent_details(request, opint_id):
         stored_details = my_database_reader.get_composite_operational_intent_by_declaration_id(flight_declaration_id=operational_intent_id)
         details_full = stored_details.operational_intent_details
         reference_full = stored_details.operational_intent_reference
-
         # Load existing opint details
         stored_operational_intent_id = reference_full.id
         stored_manager = reference_full.manager
@@ -260,15 +259,6 @@ def uss_operational_intent_details(request, opint_id):
         stored_ovn = reference_full.ovn
         stored_uss_base_url = reference_full.uss_base_url
         stored_subscription_id = reference_full.subscription_id
-
-        stored_time_start = Time(
-            format="RFC3339",
-            value=reference_full.time_start,
-        )
-        stored_time_end = Time(
-            format="RFC3339",
-            value=reference_full.time_end,
-        )
 
         stored_volumes = json.loads(details_full.volumes)
 
@@ -291,8 +281,8 @@ def uss_operational_intent_details(request, opint_id):
             version=int(stored_version),
             state=stored_state,
             ovn=stored_ovn,
-            time_start=Time(format="RFC3339", value=stored_time_start.value),
-            time_end=Time(format="RFC3339", value=stored_time_end.value),
+            time_start=Time(format="RFC3339", value=reference_full.time_start.isoformat()),
+            time_end=Time(format="RFC3339", value=reference_full.time_end.isoformat()),
             uss_base_url=stored_uss_base_url,
             subscription_id=stored_subscription_id,
         )
