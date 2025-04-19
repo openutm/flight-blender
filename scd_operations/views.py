@@ -11,7 +11,6 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
 from common.data_definitions import (
     FLIGHTBLENDER_READ_SCOPE,
@@ -64,8 +63,6 @@ from .utils import (
 )
 
 load_dotenv(find_dotenv())
-INDEX_NAME = "opint_proc"
-
 logger = logging.getLogger("django")
 
 
@@ -234,7 +231,9 @@ def upsert_close_flight_plan(request, flight_plan_id):
             current_state_str = OPERATION_STATES[current_state][1]
             # ID of the operational intent reference stored in the DSS
             dss_operational_intent_reference_id = flight_operational_intent_reference.id
-            stored_operational_intent_details = my_operational_intent_parser.parse_and_load_stored_flight_opint(operation_id=operation_id_str)
+            stored_operational_intent_details = my_operational_intent_parser.parse_and_load_stored_flight_operational_intent_reference(
+                operation_id=operation_id_str
+            )
             provided_volumes_off_nominal_volumes = scd_test_data.intended_flight.basic_information.area
             deconfliction_check = True
 
@@ -292,7 +291,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     #     flight_declaration=flight_declaration,
                     #     operational_intent_details_payload=operational_intent_update_job.dss_response,)
 
-         
                     my_database_writer.create_flight_operational_intent_reference_subscribers(
                         flight_declaration=flight_declaration,
                         operational_intent_reference_payload=operational_intent_update_job.dss_response.operational_intent_reference,
@@ -449,7 +447,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     flight_declaration=flight_declaration,
                     operational_intent_reference_payload=flight_planning_submission.dss_response.operational_intent_reference,
                 )
-           # Write Operational Intent Reference
+                # Write Operational Intent Reference
                 my_database_writer.create_flight_operational_intent_reference_subscribers(
                     flight_declaration=flight_declaration,
                     subscribers=flight_planning_submission.dss_response.subscribers,

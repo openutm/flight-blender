@@ -342,49 +342,53 @@ class OperationalIntentReferenceHelper:
         if not flight_operational_intent_reference:
             logger.error("Flight operational intent reference not found in the database")
             return None
-        existing_op_int_details_raw = flight_operational_intent_reference.dss_response
 
-        all_subscribers = existing_op_int_details_raw["success_response"]["subscribers"]
+        flight_operational_intent_details = self.my_database_reader.get_operational_intent_details_by_flight_declaration_id(
+            declaration_id=operation_id
+        )
+        operational_intent_subscribers = self.my_database_reader.get_subscribers_of_operational_intent_reference(
+            flight_operational_intent_reference=flight_operational_intent_reference
+        )
+
         subscribers = []
-        for s in all_subscribers:
-            all_s = s["subscriptions"]
+        for s in operational_intent_subscribers:
+            all_s = json.loads(s.subscriptions)
             for cur_s in all_s:
                 sub = SubscriptionState(
                     subscription_id=cur_s["subscription_id"],
                     notification_index=cur_s["notification_index"],
                 )
                 subscribers.append(sub)
-            s_n = SubscriberToNotify(subscriptions=all_s, uss_base_url=s["uss_base_url"])
+            s_n = SubscriberToNotify(subscriptions=all_s, uss_base_url=s.uss_base_url)
             subscribers.append(s_n)
 
-        operational_intent_respose_raw = existing_op_int_details_raw["success_response"]["operational_intent_reference"]
-        operational_intent_details_raw = existing_op_int_details_raw["operational_intent_details"]
-        volumes = operational_intent_details_raw["volumes"]
-        off_nominal_volumes = operational_intent_details_raw["off_nominal_volumes"]
-        priority = operational_intent_details_raw["priority"]
-        state = operational_intent_details_raw["state"]
+        volumes = json.loads(flight_operational_intent_details.volumes)
+        off_nominal_volumes = json.loads(flight_operational_intent_details.off_nominal_volumes)
+        priority = flight_operational_intent_details.priority
+        state = flight_operational_intent_reference.state
 
         operational_intent_reference_dss_repsonse = OperationalIntentReferenceDSSResponse(
-            id=operational_intent_respose_raw["id"],
-            manager=operational_intent_respose_raw["manager"],
-            uss_availability=operational_intent_respose_raw["uss_availability"],
-            version=operational_intent_respose_raw["version"],
-            state=operational_intent_respose_raw["state"],
-            ovn=operational_intent_respose_raw["ovn"],
+            id=flight_operational_intent_reference.id,
+            manager=flight_operational_intent_reference.manager,
+            uss_availability=flight_operational_intent_reference.uss_availability,
+            version=flight_operational_intent_reference.version,
+            state=flight_operational_intent_reference.state,
+            ovn=flight_operational_intent_reference.ovn,
             time_start=Time(
-                format=operational_intent_respose_raw["time_start"]["format"],
-                value=operational_intent_respose_raw["time_start"]["value"],
+                format="RFC3339",
+                value=flight_operational_intent_reference.time_start,
             ),
             time_end=Time(
-                format=operational_intent_respose_raw["time_start"]["format"],
-                value=operational_intent_respose_raw["time_start"]["value"],
+                format="RFC3339",
+                value=flight_operational_intent_reference.time_end,
             ),
-            uss_base_url=operational_intent_respose_raw["uss_base_url"],
-            subscription_id=operational_intent_respose_raw["subscription_id"],
+            uss_base_url=flight_operational_intent_reference.uss_base_url,
+            subscription_id=flight_operational_intent_reference.subscription_id,
         )
 
         all_volumes: list[Volume4D] = []
         all_off_nominal_volumes: list[Volume4D] = []
+
         for volume in volumes:
             volume4D = self.parse_volume_to_volume4D(volume=volume)
             all_volumes.append(volume4D)
@@ -399,13 +403,16 @@ class OperationalIntentReferenceHelper:
             off_nominal_volumes=all_off_nominal_volumes,
             state=state,
         )
+        composite_operational_intent_details = self.my_database_reader.get_composite_operational_intent_by_declaration_id(
+            flight_declaration_id=operation_id
+        )
 
         stored = OperationalIntentStorage(
-            bounds=existing_op_int_details_raw["bounds"],
-            start_time=existing_op_int_details_raw["start_time"],
-            end_time=existing_op_int_details_raw["end_time"],
-            alt_max=existing_op_int_details_raw["alt_max"],
-            alt_min=existing_op_int_details_raw["alt_min"],
+            bounds=composite_operational_intent_details.bounds,
+            start_time=composite_operational_intent_details.start_datetime,
+            end_time=composite_operational_intent_details.end_datetime,
+            alt_max=composite_operational_intent_details.alt_max,
+            alt_min=composite_operational_intent_details.alt_min,
             success_response=OperationalIntentSubmissionSuccess(
                 subscribers=subscribers,
                 operational_intent_reference=operational_intent_reference_dss_repsonse,
@@ -414,7 +421,7 @@ class OperationalIntentReferenceHelper:
         )
         return stored
 
-    def parse_and_load_stored_flight_opint(self, operation_id: str) -> OperationalIntentDetailsUSSResponse | None:
+    def parse_and_load_stored_flight_operational_intent_reference(self, operation_id: str) -> OperationalIntentDetailsUSSResponse | None:
         """
         Given a stored flight operational intent, get the details of the operational intent
         """
@@ -426,34 +433,35 @@ class OperationalIntentReferenceHelper:
         if not flight_operational_intent_reference:
             logger.error("Flight operational intent reference not found in the database")
             return None
-        reference_full = flight_operational_intent_reference.dss_response
-
-        details_full = op_int_details["operational_intent_details"]
+        flight_operational_intent_details = self.my_database_reader.get_operational_intent_details_by_flight_declaration_id(
+            declaration_id=operation_id
+        )
         # Load existing opint details
 
-        stored_operational_intent_id = reference_full["id"]
-        stored_manager = reference_full["manager"]
-        stored_uss_availability = reference_full["uss_availability"]
-        stored_version = reference_full["version"]
-        stored_state = reference_full["state"]
-        stored_ovn = reference_full["ovn"]
-        stored_uss_base_url = reference_full["uss_base_url"]
-        stored_subscription_id = reference_full["subscription_id"]
+        stored_operational_intent_id = flight_operational_intent_reference.id
+        stored_manager = flight_operational_intent_reference.manager
+        stored_uss_availability = flight_operational_intent_reference.uss_availability
+        stored_version = flight_operational_intent_reference.version
+        stored_state = flight_operational_intent_reference.state
+        stored_ovn = flight_operational_intent_reference.ovn
+        stored_uss_base_url = flight_operational_intent_reference.uss_base_url
+        stored_subscription_id = flight_operational_intent_reference.subscription_id
 
         stored_time_start = Time(
-            format=reference_full["time_start"]["format"],
-            value=reference_full["time_start"]["value"],
+            format="RFC3339",
+            value=flight_operational_intent_reference.time_start,
         )
         stored_time_end = Time(
-            format=reference_full["time_end"]["format"],
-            value=reference_full["time_end"]["value"],
+            format="RFC3339",
+            value=flight_operational_intent_reference.time_end,
         )
 
-        stored_priority = details_full["priority"]
-        stored_off_nominal_volumes = details_full["off_nominal_volumes"]
+        stored_priority = flight_operational_intent_details.priority
+        stored_off_nominal_volumes = json.loads(flight_operational_intent_details.off_nominal_volumes)
+        stored_volumes = json.loads(flight_operational_intent_details.volumes)
 
         details = self.parse_operational_intent_details(
-            operational_intent_details=details_full,
+            volumes=stored_volumes,
             priority=stored_priority,
             off_nominal_volumes=stored_off_nominal_volumes,
         )
@@ -471,8 +479,6 @@ class OperationalIntentReferenceHelper:
             subscription_id=stored_subscription_id,
         )
         return OperationalIntentDetailsUSSResponse(details=details, reference=reference)
-
-        return None
 
     def parse_volume_to_volume4D(self, volume) -> Volume4D:
         outline_polygon = None
@@ -522,8 +528,7 @@ class OperationalIntentReferenceHelper:
         volume4D = Volume4D(volume=volume3D, time_start=time_start, time_end=time_end)
         return volume4D
 
-    def parse_operational_intent_details(self, operational_intent_details, priority: int, off_nominal_volumes=None) -> OperationalIntentUSSDetails:
-        volumes = operational_intent_details["volumes"]
+    def parse_operational_intent_details(self, volumes, priority: int, off_nominal_volumes=None) -> OperationalIntentUSSDetails:
         all_volumes: list[Volume4D] = []
         all_off_nominal_volumes: list[Volume4D] = []
         for volume in volumes:
@@ -664,12 +669,10 @@ class SCDOperations:
                         flight_operational_intent_detail = self.database_reader.get_operational_intent_details_by_flight_declaration_id(
                             declaration_id=str(flight_declaration.id)
                         )
-                        logger.info("_____")
-                        logger.info(flight_operational_intent_reference)
-                        logger.info(flight_operational_intent_detail)
-                        logger.info("_____")
+
                         self.database_writer.update_flight_operational_intent_reference_ovn(
-                            flight_operational_intent_reference=flight_operational_intent_reference, ovn=current_uss_operational_intent_detail.ovn
+                            flight_operational_intent_reference=flight_operational_intent_reference,
+                            ovn=current_uss_operational_intent_detail.ovn,
                         )
 
                         _op_int_ref = OperationalIntentReferenceDSSResponse(
@@ -681,8 +684,14 @@ class SCDOperations:
                             version=flight_operational_intent_reference.version,
                             state=flight_operational_intent_reference.state,
                             ovn=flight_operational_intent_reference.ovn,
-                            time_start=Time(format="RFC3339", value=flight_operational_intent_reference.time_start),
-                            time_end=Time(format="RFC3339", value=flight_operational_intent_reference.time_end),
+                            time_start=Time(
+                                format="RFC3339",
+                                value=flight_operational_intent_reference.time_start,
+                            ),
+                            time_end=Time(
+                                format="RFC3339",
+                                value=flight_operational_intent_reference.time_end,
+                            ),
                         )
                         op_int_ref = asdict(_op_int_ref)
                         op_int_det = {
@@ -967,16 +976,23 @@ class SCDOperations:
         for subscriber in all_subscribers:
             domain_to_check = tldextract.extract(subscriber.uss_base_url)
             if domain_to_check.subdomain != "dummy" and domain_to_check.domain != "uss":
-                operational_intent = OperationalIntentDetailsUSSResponse(reference=operational_intent_reference, details=operational_intent_details)
+                operational_intent = OperationalIntentDetailsUSSResponse(
+                    reference=operational_intent_reference,
+                    details=operational_intent_details,
+                )
 
                 notification_payload = NotifyPeerUSSPostPayload(
-                    operational_intent_id=operational_intent_id, operational_intent=operational_intent, subscriptions=subscriber.subscriptions
+                    operational_intent_id=operational_intent_id,
+                    operational_intent=operational_intent,
+                    subscriptions=subscriber.subscriptions,
                 )
                 audience = generate_audience_from_base_url(base_url=subscriber.uss_base_url)
 
                 if audience != "host.docker.internal":
                     self.notify_peer_uss_of_created_updated_operational_intent(
-                        uss_base_url=subscriber.uss_base_url, notification_payload=notification_payload, audience=audience
+                        uss_base_url=subscriber.uss_base_url,
+                        notification_payload=notification_payload,
+                        audience=audience,
                     )
 
     def process_retrieved_airspace_volumes(
@@ -1034,7 +1050,11 @@ class SCDOperations:
         return is_conflicted
 
     def check_if_update_payload_should_be_submitted_to_dss(
-        self, current_state: str, new_state: str, extents_conflict_with_dss_volumes: bool, priority: int
+        self,
+        current_state: str,
+        new_state: str,
+        extents_conflict_with_dss_volumes: bool,
+        priority: int,
     ) -> ShouldSendtoDSSProcessingResponse:
         should_opint_be_sent_to_dss = ShouldSendtoDSSProcessingResponse(
             should_submit_update_payload_to_dss=0,
@@ -1047,7 +1067,10 @@ class SCDOperations:
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.B
             should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OkToFly
 
-        elif current_state == "Activated" or new_state in ["Nonconforming", "Contingent"]:
+        elif current_state == "Activated" or new_state in [
+            "Nonconforming",
+            "Contingent",
+        ]:
             logger.debug("Case A")
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.A
@@ -1161,7 +1184,10 @@ class SCDOperations:
             dss_r_status_code = 999
             message = "Update to flight will not be processed, will not be submitting to DSS"
             opint_update_result = OperationalIntentUpdateResponse(
-                dss_response=d_r, status=dss_r_status_code, message=message, additional_information=pre_submission_checks
+                dss_response=d_r,
+                status=dss_r_status_code,
+                message=message,
+                additional_information=pre_submission_checks,
             )
             return opint_update_result
 
@@ -1272,11 +1298,7 @@ class SCDOperations:
 
         try:
             all_existing_operational_intent_details = self.get_latest_airspace_volumes(volumes=volumes)
-        except ValueError as ve:
-            print("___")
-            print(ve)
-            print("___")
-
+        except ValueError:
             logger.info("Error in processing peer USS data, cannot create a new operational intent..")
             d_r = OperationalIntentSubmissionStatus(
                 status="peer_uss_data_sharing_issue",

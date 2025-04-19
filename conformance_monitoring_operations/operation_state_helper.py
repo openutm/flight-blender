@@ -1,3 +1,11 @@
+import logging
+
+from dotenv import find_dotenv, load_dotenv
+
+load_dotenv(find_dotenv())
+logger = logging.getLogger("django")
+
+
 class State:
     """
     A object to hold state transitions as defined in the ASTM F3548-21 standard
@@ -5,7 +13,7 @@ class State:
     """
 
     def __init__(self):
-        print("Processing current state:%s" % str(self))
+        logger.info("Processing current state:%s" % str(self))
 
     def get_value(self):
         return self._value

@@ -100,7 +100,6 @@ def uss_update_opint_details(request):
     updated_operational_intent_reference = op_int_update_detail.operational_intent.reference
 
     update_operational_intent_details = op_int_update_detail.operational_intent.details
-
     database_writer.create_or_update_peer_operational_intent_details(
         peer_operational_intent_id=operation_id_str,
         operational_intent_details=update_operational_intent_details,
@@ -305,7 +304,7 @@ def uss_operational_intent_details(request, opint_id):
 
         operational_intent = OperationalIntentDetailsUSSResponse(reference=reference, details=details)
         operational_intent_response = OperationalIntentDetails(operational_intent=operational_intent)
-        print(operational_intent_response)
+
         return JsonResponse(
             json.loads(json.dumps(operational_intent_response, cls=EnhancedJSONEncoder)),
             status=200,
