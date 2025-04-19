@@ -141,6 +141,7 @@ class FlightOperationalIntentDetail(models.Model):
     volumes = models.TextField(blank=True)
     off_nominal_volumes = models.TextField(blank=True)
     priority = models.IntegerField()
+    subscribers = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -200,6 +201,23 @@ class FlightOperationalIntentReference(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+class Subscriber(models.Model):  
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    operational_intent_reference = models.ForeignKey(
+        FlightOperationalIntentReference, on_delete=models.CASCADE, related_name="subscribers")
+    subscriptions = models.TextField(blank=True)
+    uss_base_url = models.CharField(
+        max_length=256,
+        help_text="USS base URL",
+    )
+
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["-created_at"]
+
 
 class CompositeOperationalIntent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -225,6 +243,7 @@ class PeerOperationalIntentDetail(models.Model):
     volumes = models.TextField(blank=True)
     off_nominal_volumes = models.TextField(blank=True)
     priority = models.IntegerField()
+    subscribers = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

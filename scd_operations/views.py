@@ -292,12 +292,11 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     #     flight_declaration=flight_declaration,
                     #     operational_intent_details_payload=operational_intent_update_job.dss_response,)
 
-                    # Write Operational Intent Reference
-                    my_database_writer.create_flight_operational_intent_reference_with_submitted_operational_intent(
+         
+                    my_database_writer.create_flight_operational_intent_reference_subscribers(
                         flight_declaration=flight_declaration,
                         operational_intent_reference_payload=operational_intent_update_job.dss_response.operational_intent_reference,
                     )
-
                     new_updated_operational_intent_full_details = OperationalIntentStorage(
                         bounds=view_r_bounds,
                         start_time=scd_test_data.intended_flight.basic_information.area[0].time_start.value,
@@ -449,6 +448,11 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 flight_operational_intent_reference = my_database_writer.create_flight_operational_intent_reference_with_submitted_operational_intent(
                     flight_declaration=flight_declaration,
                     operational_intent_reference_payload=flight_planning_submission.dss_response.operational_intent_reference,
+                )
+           # Write Operational Intent Reference
+                my_database_writer.create_flight_operational_intent_reference_subscribers(
+                    flight_declaration=flight_declaration,
+                    subscribers=flight_planning_submission.dss_response.subscribers,
                 )
 
                 composite_operational_intent_payload = CompositeOperationalIntentPayload(

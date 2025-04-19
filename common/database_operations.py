@@ -4,7 +4,7 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from typing import Union
+from typing import Union, Never
 from uuid import UUID
 
 import arrow
@@ -23,6 +23,7 @@ from flight_declaration_operations.models import (
     PeerCompositeOperationalIntent,
     PeerOperationalIntentDetail,
     PeerOperationalIntentReference,
+    Subscriber
 )
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
@@ -35,6 +36,7 @@ from scd_operations.scd_data_definitions import (
     OperationalIntentReferenceDSSResponse,
     OperationalIntentUSSDetails,
     PartialCreateOperationalIntentReference,
+    SubscriberToNotify
 )
 
 logger = logging.getLogger("django")
@@ -183,6 +185,14 @@ class FlightBlenderDatabaseReader:
         except IntegrityError:
             return False
 
+    def get_subscribers_of_operational_intent_reference(self, operational_intent_ref_id: str) -> Union[Never, list[Subscriber]]:
+        try:
+            flight_operational_intent_reference = FlightOperationalIntentReference.objects.get(id=operational_intent_ref_id)
+            subscribers = Subscriber.objects.filter(operational_intent_reference=flight_operational_intent_reference)
+            return subscribers
+        except Subscriber.DoesNotExist:
+            return None
+
     def check_flight_operational_intent_details_by_id_exists(self, operational_intent_ref_id: str) -> bool:
         return FlightOperationalIntentDetail.objects.filter(id=operational_intent_ref_id).exists()
 
@@ -326,6 +336,7 @@ class FlightBlenderDatabaseWriter:
                 volumes=_operational_intent_details["volumes"],
                 off_nominal_volumes=_operational_intent_details["off_nominal_volumes"],
                 priority=operational_intent_details.priority,
+                subcribers = json.dumps(_operational_intent_details["subscribers"])
             )
             peer_operational_intent_detail_obj.save()
             return peer_operational_intent_detail_obj
@@ -449,6 +460,24 @@ class FlightBlenderDatabaseWriter:
         except IntegrityError:
             return None
 
+    def create_flight_operational_intent_reference_subscribers(
+        self,
+        flight_declaration: FlightDeclaration,
+        subscribers: list[SubscriberToNotify],
+    ) -> bool:
+        try:
+            flight_operational_intent_reference = FlightOperationalIntentReference.objects.get(declaration=flight_declaration)
+            if flight_operational_intent_reference is None:
+                return False
+            else:
+
+                for subscriber in subscribers:
+                    subscriber = Subscriber(operational_intent_reference = flight_operational_intent_reference, uss_base_url=subscriber.uss_base_url, subscriptions = json.dumps(asdict(subscriber)))
+                    subscriber.save()
+
+            return True
+        except IntegrityError:
+            return False
     def create_flight_operational_intent_details_with_submitted_operational_intent(
         self,
         flight_declaration: FlightDeclaration,
