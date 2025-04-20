@@ -651,14 +651,18 @@ class SCDOperations:
 
                 # check the USS for flight volume by using the URL to see if this is stored in Flight Blender, DSS will return all intent details including our own
                 current_uss_base_url = current_uss_operational_intent_detail.uss_base_url
+                op_int_det = {}
+                op_int_ref = {}
                 if current_uss_base_url == flight_blender_base_url:
                     # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
 
                     # Check if the flight operational intent reference exists
+
                     flight_operational_intent_reference_exists = self.database_reader.check_flight_operational_intent_reference_by_id_exists(
                         operational_intent_ref_id=str(current_uss_operational_intent_detail.id)
                     )
+
                     if flight_operational_intent_reference_exists:
                         # Get the declaration
                         flight_operational_intent_reference = self.database_reader.get_operational_intent_reference_by_id(
@@ -699,7 +703,12 @@ class SCDOperations:
                             "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
                             "priority": flight_operational_intent_detail.priority,
                         }
-
+                    else:
+                        logger.warning(
+                            "Flight operational intent reference not found in the database, this is a new operational intent with id: {uss_op_int_id}".format(
+                                uss_op_int_id=current_uss_operational_intent_detail.id
+                            )
+                        )
                     op_int_details_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS

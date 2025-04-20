@@ -209,6 +209,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
         # Create a payload for notification
         flight_planning_notification_payload = flight_planning_data
         generated_operational_intent_state = my_flight_plan_op_intent_bridge.generate_operational_intent_state_from_planning_information()
+
         # Flight plan exists in Flight Blender and the new state is off nominal or contingent
         if flight_plan_exists_in_flight_blender and generated_operational_intent_state in ["Activated", "Nonconforming"]:
             # Operational intent exists, update the operational intent based on SCD rules. Get the detail of the existing / stored operational intent
@@ -417,7 +418,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
             off_nominal_volumes = (
                 scd_test_data.intended_flight.basic_information.area if flight_planning_uas_state in ["OffNominal", "Contingent"] else []
             )
-
             flight_planning_submission: OperationalIntentSubmissionStatus = my_scd_dss_helper.create_and_submit_operational_intent_reference(
                 state=generated_operational_intent_state,
                 volumes=scd_test_data.intended_flight.basic_information.area,
