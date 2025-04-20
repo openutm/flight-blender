@@ -634,7 +634,7 @@ class FlightBlenderDatabaseWriter:
         update_operational_intent_reference: OperationalIntentReferenceDSSResponse,
     ) -> bool:
         try:
-            flight_operational_intent_reference.ovn = FlightBlenderDatabaseWriter.update_flight_operational_intent_details.ovn
+            flight_operational_intent_reference.ovn = update_operational_intent_reference.ovn
             flight_operational_intent_reference.state = update_operational_intent_reference.state
             flight_operational_intent_reference.uss_availability = update_operational_intent_reference.uss_availability
             flight_operational_intent_reference.uss_base_url = update_operational_intent_reference.uss_base_url
