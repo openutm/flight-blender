@@ -201,20 +201,19 @@ class FlightOperationalIntentReference(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-class Subscriber(models.Model):  
-    
+
+class Subscriber(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    operational_intent_reference = models.ForeignKey(
-        FlightOperationalIntentReference, on_delete=models.CASCADE, related_name="subscribers")
+    operational_intent_reference = models.ForeignKey(FlightOperationalIntentReference, on_delete=models.CASCADE, related_name="subscribers")
     subscriptions = models.TextField(blank=True)
     uss_base_url = models.CharField(
         max_length=256,
         help_text="USS base URL",
     )
 
-    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ["-created_at"]
 
@@ -308,6 +307,9 @@ class PeerCompositeOperationalIntent(models.Model):
     operational_intent_reference = models.ForeignKey(
         PeerOperationalIntentReference, on_delete=models.CASCADE, related_name="peer_composite_operational_intent_reference"
     )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class FlightOperationTracking(models.Model):

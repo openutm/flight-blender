@@ -88,52 +88,60 @@ def uss_update_opint_details(request):
     my_geo_json_converter = VolumesConverter()
     op_int_update_details_data = request.data
 
-    op_int_update_detail = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
-    my_operational_intent_parser = OperationalIntentReferenceHelper()
+    incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
     # Write the operational Intent
-    operation_id_str = op_int_update_detail.operational_intent_id
+    operation_id_str = incoming_update_payload.operational_intent_id
 
-    logger.info("incoming...")
-    logger.info("Operation ID %s" % operation_id_str)
+    logger.info("Incoming data for operation ID %s" % operation_id_str)
 
-    logger.info(op_int_update_detail)
-    updated_operational_intent_reference = op_int_update_detail.operational_intent.reference
+    logger.info(incoming_update_payload)
 
-    update_operational_intent_details = op_int_update_detail.operational_intent.details
-    database_writer.create_or_update_peer_operational_intent_details(
-        peer_operational_intent_id=operation_id_str,
-        operational_intent_details=update_operational_intent_details,
-    )
+    subscriptions = incoming_update_payload.subscriptions
 
-    database_writer.create_or_update_peer_operational_intent_reference(
-        peer_operational_intent_reference_id=operation_id_str,
-        peer_operational_intent_reference=updated_operational_intent_reference,
-    )
+    # Update the subscription state
 
-    # logger.info(op_int_update_detail)
+    if incoming_update_payload.operational_intent:
+        updated_operational_intent_reference = incoming_update_payload.operational_intent.reference
 
-    operational_intent_details = op_int_update_detail.operational_intent.details
-    all_volumes = operational_intent_details.volumes
+        update_operational_intent_details = incoming_update_payload.operational_intent.details
 
-    my_geo_json_converter.convert_volumes_to_geojson(volumes=all_volumes)
-    view_rect_bounds = my_geo_json_converter.get_bounds()
+        database_writer.create_or_update_peer_operational_intent_details(
+            peer_operational_intent_id=operation_id_str,
+            operational_intent_details=update_operational_intent_details,
+        )
 
-    operational_intent_full_details = CompositeOperationalIntentPayload(
-        bounds=view_rect_bounds,
-        start_datetime=update_operational_intent_details.volumes[0].time_start.value,
-        end_datetime=update_operational_intent_details.volumes[0].time_end.value,
-        alt_max=50,
-        alt_min=25,
-        operational_intent_reference_id=operation_id_str,
-        operational_intent_details_id=operation_id_str,
-    )
+        database_writer.create_or_update_peer_operational_intent_reference(
+            peer_operational_intent_reference_id=operation_id_str,
+            peer_operational_intent_reference=updated_operational_intent_reference,
+        )
+        if update_operational_intent_details.volumes:
+            all_volumes = update_operational_intent_details.volumes
 
-    database_writer.create_or_update_peer_composite_operational_intent(
-        operation_id=operation_id_str,
-        composite_operational_intent=operational_intent_full_details,
-    )
+        elif update_operational_intent_details.off_nominal_volumes:
+            all_volumes = update_operational_intent_details.off_nominal_volumes
 
-    # Read the new operational intent
+        start_datetime = all_volumes[0].time_start.value
+        end_datetime = all_volumes[0].time_end.value
+
+        my_geo_json_converter.convert_volumes_to_geojson(volumes=all_volumes)
+        view_rect_bounds = my_geo_json_converter.get_bounds()
+
+        operational_intent_full_details = CompositeOperationalIntentPayload(
+            bounds=view_rect_bounds,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            alt_max=50,
+            alt_min=25,
+            operational_intent_reference_id=operation_id_str,
+            operational_intent_details_id=operation_id_str,
+        )
+
+        database_writer.create_or_update_peer_composite_operational_intent(
+            operation_id=operation_id_str,
+            composite_operational_intent=operational_intent_full_details,
+        )
+
+        # Read the new operational intent
     # Store the opint, see what other operations conflict the opint
 
     updated_success = UpdateOperationalIntent(message="New or updated full operational intent information received successfully ")
