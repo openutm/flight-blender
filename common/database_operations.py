@@ -27,6 +27,7 @@ from flight_declaration_operations.models import (
 )
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
+from geo_fence_operations.models import GeoFence
 from notification_operations.models import OperatorRIDNotification
 from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
 from rid_operations.models import ISASubscription
@@ -138,6 +139,10 @@ class FlightBlenderDatabaseReader:
         except FlightOperationalIntentReference.DoesNotExist:
             return None
 
+    def get_active_geofences(self) -> None | list[GeoFence]:
+        now = arrow.now()
+        return GeoFence.objects.filter(start_datetime__lte=now, end_datetime__gte=now)
+
     def get_flight_operational_intent_reference_by_flight_declaration_obj(
         self, flight_declaration: FlightDeclaration
     ) -> Union[None, FlightOperationalIntentReference]:
@@ -171,6 +176,15 @@ class FlightBlenderDatabaseReader:
             flight_operational_intent_reference = FlightOperationalIntentReference.objects.get(id=operational_intent_ref_id)
             return flight_operational_intent_reference
         except FlightOperationalIntentReference.DoesNotExist:
+            return None
+
+    def get_operational_intent_details_by_flight_declaration(
+        self, flight_declaration: FlightDeclaration
+    ) -> Union[None, FlightOperationalIntentDetail]:
+        try:
+            flight_operational_intent_detail = FlightOperationalIntentDetail.objects.get(declaration=flight_declaration)
+            return flight_operational_intent_detail
+        except FlightOperationalIntentDetail.DoesNotExist:
             return None
 
     def update_flight_operational_intent_reference_ovn(

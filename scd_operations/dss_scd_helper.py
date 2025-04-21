@@ -335,6 +335,30 @@ class OperationalIntentReferenceHelper:
         self.my_database_reader = FlightBlenderDatabaseReader()
 
     def parse_stored_operational_intent_details(self, operation_id: str) -> Union[None, OperationalIntentStorage]:
+        """
+        Parses and retrieves stored operational intent details for a given operation ID.
+        This method interacts with the database to fetch operational intent details,
+        including references, volumes, subscribers, and composite operational intent data.
+        It processes the retrieved data into structured objects for further use.
+        Args:
+            operation_id (str): The unique identifier of the operation for which
+                                the operational intent details are to be retrieved.
+        Returns:
+            Union[None, OperationalIntentStorage]:
+                - An instance of `OperationalIntentStorage` containing the parsed operational intent details
+                  if the operation ID exists in the database.
+                - `None` if no operational intent reference is found for the given operation ID.
+        Raises:
+            This method does not explicitly raise exceptions but relies on the database reader
+            and JSON parsing to handle errors internally.
+        Notes:
+            - The method fetches data from multiple database tables, including operational intent references,
+              details, and subscribers.
+            - The retrieved volumes and off-nominal volumes are parsed into `Volume4D` objects.
+            - The method constructs a composite operational intent storage object containing bounds,
+              time intervals, altitude limits, and success response details.
+        """
+
         flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
             flight_declaration_id=operation_id
         )
@@ -824,6 +848,22 @@ class SCDOperations:
         return auth_token
 
     def delete_operational_intent(self, dss_operational_intent_ref_id: str, ovn: str) -> DeleteOperationalIntentResponse:
+        """
+        Deletes an operational intent from the DSS (Discovery and Synchronization Service).
+        Args:
+            dss_operational_intent_ref_id (str): The unique identifier of the operational intent to be deleted.
+            ovn (str): The current version number (OVN) of the operational intent.
+        Returns:
+            DeleteOperationalIntentResponse: A response object containing the status, message, and any relevant data
+            from the DSS regarding the deletion operation.
+        Raises:
+            HTTPError: If the HTTP request to the DSS fails or returns an unexpected status code.
+        Notes:
+            - The function sends a DELETE request to the DSS endpoint with the provided operational intent ID and OVN.
+            - Handles various HTTP response codes (200, 404, 409, 412, etc.) and formats the response accordingly.
+            - Requires a valid authentication token to interact with the DSS.
+        """
+
         auth_token = self.get_auth_token()
 
         dss_opint_delete_url = self.dss_base_url + "dss/v1/operational_intent_references/" + dss_operational_intent_ref_id + "/" + ovn

@@ -61,7 +61,6 @@ class Command(BaseCommand):
         my_operational_intent_parser = OperationalIntentReferenceHelper()
 
         obs_helper = flight_stream_helper.ObservationReadOperations()
-        r = get_redis()
 
         flight_declaration_id = options["flight_declaration_id"]
         if not flight_declaration_id:
