@@ -51,10 +51,10 @@ class FlightBlenderConformanceEngine:
         now = arrow.now()
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-        flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=flight_declaration_id)
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
         # # C2 Check
         try:
-            assert flight_authorization is not None
+            assert flight_operational_intent_reference is not None
             assert flight_declaration is not None
         except AssertionError:
             logger.error(
@@ -154,7 +154,7 @@ class FlightBlenderConformanceEngine:
         # TODO
         return True
 
-    def check_flight_authorization_conformance(self, flight_declaration_id: str) -> bool:
+    def check_flight_operational_intent_reference_conformance(self, flight_declaration_id: str) -> bool:
         """This method checks the conformance of a flight authorization independent of telemetry observations being sent:
         C9 a/b Check if telemetry is being sent
         C10 Check operation state that it not ended and the time limit of the flight authorization has passed
@@ -165,9 +165,9 @@ class FlightBlenderConformanceEngine:
         my_database_reader = FlightBlenderDatabaseReader()
         now = arrow.now()
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-        flight_authorization_exists = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=flight_declaration_id)
+        flight_operational_intent_reference_exists = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
         # C11 Check
-        if not flight_authorization_exists:
+        if not flight_operational_intent_reference_exists:
             # if flight state is accepted, then change it to ended and delete from dss
             return ConformanceChecksList.C11
         # The time the most recent telemetry was sent

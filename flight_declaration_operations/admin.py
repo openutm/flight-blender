@@ -1,8 +1,8 @@
 from django.contrib import admin
 
-from .models import FlightAuthorization, FlightDeclaration
+from .models import FlightOperationalIntentReference, FlightDeclaration
 
 # Register your models here.
 
 admin.site.register(FlightDeclaration)
-admin.site.register(FlightAuthorization)
+admin.site.register(FlightOperationalIntentReference)

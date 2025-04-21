@@ -27,15 +27,15 @@ def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_ru
     d_run = "1" if dry_run else "0"
     my_conformance_ops = FlightBlenderConformanceEngine()
 
-    flight_authorization_conformant = my_conformance_ops.check_flight_authorization_conformance(flight_declaration_id=flight_declaration_id)
-    if flight_authorization_conformant:
-        logger.info(f"Operation with {flight_declaration_id} is conformant...")
+    flight_operational_intent_reference_conformant = my_conformance_ops.check_flight_operational_intent_reference_conformance(flight_declaration_id=flight_declaration_id)
+    if flight_operational_intent_reference_conformant:
+        logger.info("Operation with {flight_operation_id} is conformant...".format(flight_operation_id=flight_declaration_id))
         # Basic conformance checks passed, check telemetry conformance
         check_operation_telemetry_conformance(flight_declaration_id=flight_declaration_id, dry_run=d_run)
     else:
-        custom_signals.flight_authorization_non_conformance_signal.send(
+        custom_signals.flight_operational_intent_reference_non_conformance_signal.send(
             sender="check_flight_conformance",
-            non_conformance_state=flight_authorization_conformant,
+            non_conformance_state=flight_operational_intent_reference_conformant,
             flight_declaration_id=flight_declaration_id,
         )
         # Flight Declaration is not conformant

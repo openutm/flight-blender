@@ -75,11 +75,4 @@ class RedisHelper:
         r = self._get_redis_instance()
         r.flushdb()
 
-    def delete_all_opints(self) -> None:
-        """
-        Delete all keys in Redis that match the pattern 'flight_opint.*'.
-        """
-        r = self._get_redis_instance()
-        all_opints = r.keys(pattern="flight_opint.*")
-        for opint in all_opints:
-            r.delete(opint)
+

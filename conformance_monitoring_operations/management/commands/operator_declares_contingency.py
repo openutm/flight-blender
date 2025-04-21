@@ -7,7 +7,7 @@ from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import Point
 
 from auth_helper.common import get_redis
-from common.data_definitions import FLIGHT_OPINT_KEY, OPERATION_STATES
+from common.data_definitions import OPERATION_STATES
 from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from flight_declaration_operations.utils import OperationalIntentsConverter
@@ -67,20 +67,12 @@ class Command(BaseCommand):
         if not flight_declaration_id:
             raise CommandError("Incomplete command, Flight Declaration ID not provided")
 
-        flight_opint = FLIGHT_OPINT_KEY + str(flight_declaration_id)
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         if not flight_declaration:
             raise CommandError(f"Flight Declaration with ID: {flight_declaration_id} does not exist")
         current_state = flight_declaration.state
         current_state_str = OPERATION_STATES[current_state][1]
 
-        # Update the volume to create a new off-nominal volume
-        if not r.exists(flight_opint):
-            raise CommandError(
-                "Flight Declaration with ID {flight_declaration_id} does not exist in the cached database".format(
-                    flight_declaration_id=flight_declaration_id
-                )
-            )
         existing_op_int_details = my_operational_intent_parser.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
         reference_full = existing_op_int_details.success_response.operational_intent_reference
         details_full = existing_op_int_details.operational_intent_details

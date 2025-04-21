@@ -63,10 +63,10 @@ class Command(BaseCommand):
             raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
 
         my_scd_dss_helper = SCDOperations()
-        flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=flight_declaration_id)
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
 
         opint_subscription_end_time = timedelta(seconds=180)
-        operational_intent_id = flight_authorization.dss_operational_intent_id
+        operational_intent_id = flight_operational_intent_reference.id
         r = get_redis()
         flight_opint = "flight_opint." + flight_declaration_id
         if r.exists(flight_opint):

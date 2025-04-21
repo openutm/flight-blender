@@ -4,6 +4,7 @@ import time
 import uuid
 from dataclasses import asdict
 from enum import Enum
+from typing import List
 from uuid import UUID
 
 import arrow
@@ -15,7 +16,6 @@ from rest_framework.decorators import api_view
 import rid_operations.view_port_ops as view_port_ops
 from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
-from common.data_definitions import FLIGHT_OPINT_KEY
 from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
@@ -45,7 +45,7 @@ from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
     VolumesConverter,
 )
-from scd_operations.scd_data_definitions import OperationalIntentStorage, Volume4D
+from scd_operations.scd_data_definitions import CompositeOperationalIntentPayload
 
 from .uss_data_definitions import (
     ErrorReport,
@@ -87,56 +87,61 @@ def uss_update_opint_details(request):
     database_writer = FlightBlenderDatabaseWriter()
     my_geo_json_converter = VolumesConverter()
     op_int_update_details_data = request.data
-    r = get_redis()
-    op_int_update_detail = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
 
-    my_operational_intent_parser = OperationalIntentReferenceHelper()
+    incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
     # Write the operational Intent
-    operation_id_str = op_int_update_detail.operational_intent_id
-    logger.info("Operation ID %s" % operation_id_str)
+    operation_id_str = incoming_update_payload.operational_intent_id
 
-    op_int_details_key = FLIGHT_OPINT_KEY + operation_id_str
-    if r.exists(op_int_details_key):
-        stored_opint_details_str = r.get(op_int_details_key)
-        stored_opint_details = json.loads(stored_opint_details_str)
+    logger.info("Incoming data for operation ID %s" % operation_id_str)
 
-        original_dss_success_response = stored_opint_details["success_response"]
-        logger.info("incoming...")
-        # logger.info(op_int_update_detail)
-        operational_intent_reference = op_int_update_detail.operational_intent.reference
-        ovn = operational_intent_reference.ovn
+    logger.info(incoming_update_payload)
 
-        flight_authorization = database_reader.get_flight_authorization_by_operational_intent_ref_id(operational_intent_ref_id=str(operation_id_str))
-        # update the ovn
-        database_writer.update_flight_authorization_op_int_ovn(
-            flight_authorization=flight_authorization, dss_operational_intent_id=operation_id_str, ovn=ovn
+    subscriptions = incoming_update_payload.subscriptions
+
+    # Update the subscription state
+
+    if incoming_update_payload.operational_intent:
+        updated_operational_intent_reference = incoming_update_payload.operational_intent.reference
+
+        update_operational_intent_details = incoming_update_payload.operational_intent.details
+
+        database_writer.create_or_update_peer_operational_intent_details(
+            peer_operational_intent_id=operation_id_str,
+            operational_intent_details=update_operational_intent_details,
         )
 
-        operational_intent_details = op_int_update_detail.operational_intent.details
-        volumes = operational_intent_details.volumes
+        database_writer.create_or_update_peer_operational_intent_reference(
+            peer_operational_intent_reference_id=operation_id_str,
+            peer_operational_intent_reference=updated_operational_intent_reference,
+        )
+        if update_operational_intent_details.volumes:
+            all_volumes = update_operational_intent_details.volumes
 
-        all_volumes: list[Volume4D] = []
-        for volume in volumes:
-            volume_4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=volume)
-            all_volumes.append(volume_4D)
+        elif update_operational_intent_details.off_nominal_volumes:
+            all_volumes = update_operational_intent_details.off_nominal_volumes
+
+        start_datetime = all_volumes[0].time_start.value
+        end_datetime = all_volumes[0].time_end.value
 
         my_geo_json_converter.convert_volumes_to_geojson(volumes=all_volumes)
         view_rect_bounds = my_geo_json_converter.get_bounds()
-        # success_response = OpenS
-        operational_intent_full_details = OperationalIntentStorage(
+
+        operational_intent_full_details = CompositeOperationalIntentPayload(
             bounds=view_rect_bounds,
-            start_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_start)),
-            end_time=json.dumps(asdict(test_injection_data.operational_intent.volumes[0].time_end)),
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
             alt_max=50,
             alt_min=25,
-            success_response=original_dss_success_response,
-            operational_intent_details=op_int_update_detail.operational_intent,
+            operational_intent_reference_id=operation_id_str,
+            operational_intent_details_id=operation_id_str,
         )
 
-        r.set(op_int_details_key, json.dumps(asdict(operational_intent_full_details)))
-        r.expire(name=op_int_details_key, time=opint_subscription_end_time)
+        database_writer.create_or_update_peer_composite_operational_intent(
+            operation_id=operation_id_str,
+            composite_operational_intent=operational_intent_full_details,
+        )
 
-    # Read the new operational intent
+        # Read the new operational intent
     # Store the opint, see what other operations conflict the opint
 
     updated_success = UpdateOperationalIntent(message="New or updated full operational intent information received successfully ")
@@ -157,10 +162,17 @@ def USSOpIntDetailTelemetry(request, opint_id):
     five_seconds_from_now = now.shift(seconds=5)
     telemetry_response = VehicleTelemetryResponse(
         operational_intent_id=str(opint_id),
-        telemetry=VehicleTelemetry(time_measured=Time(format="RFC3339", value=arrow.now().isoformat()), position=None, velocity=None),
+        telemetry=VehicleTelemetry(
+            time_measured=Time(format="RFC3339", value=arrow.now().isoformat()),
+            position=None,
+            velocity=None,
+        ),
         next_telemetry_opportunity=Time(format="RFC3339", value=five_seconds_from_now.isoformat()),
     )
-    return JsonResponse(json.loads(json.dumps(asdict(telemetry_response), cls=EnhancedJSONEncoder)), status=200)
+    return JsonResponse(
+        json.loads(json.dumps(asdict(telemetry_response), cls=EnhancedJSONEncoder)),
+        status=200,
+    )
 
 
 @api_view(["POST"])
@@ -180,10 +192,12 @@ def peer_uss_report_notification(request):
     report_id = str(uuid.uuid4())
     error_report.report_id = report_id
 
-    return JsonResponse(json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)), status=201)
+    return JsonResponse(
+        json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)),
+        status=201,
+    )
 
 
-@api_view(["GET"])
 @requires_scopes(["utm.constraint_processing"])
 def uss_constraint_details(request, constraint_id):
     my_database_reader = FlightBlenderDatabaseReader()
@@ -191,13 +205,22 @@ def uss_constraint_details(request, constraint_id):
     if constraint_id_exists:
         constraint_details = my_database_reader.get_constraint_details(constraint_id=constraint_id)
         if constraint_details:
-            return JsonResponse(json.loads(json.dumps(constraint_details, cls=EnhancedJSONEncoder)), status=200)
+            return JsonResponse(
+                json.loads(json.dumps(constraint_details, cls=EnhancedJSONEncoder)),
+                status=200,
+            )
         else:
             not_found_response = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % str(constraint_id))
-            return JsonResponse(json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)), status=404)
+            return JsonResponse(
+                json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)),
+                status=404,
+            )
     else:
         not_found_response = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % str(constraint_id))
-        return JsonResponse(json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)), status=404)
+        return JsonResponse(
+            json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)),
+            status=404,
+        )
 
 
 @api_view(["POST"])
@@ -226,83 +249,64 @@ def uss_update_constraint_details(request):
 
 @api_view(["GET"])
 @requires_scopes(["utm.strategic_coordination"])
-def operational_intent_details(request, opint_id):
-    r = get_redis()
+def uss_operational_intent_details(request, opint_id):
     my_database_reader = FlightBlenderDatabaseReader()
-    flight_authorization = my_database_reader.get_flight_authorization_by_operational_intent_ref_id(str(opint_id))
-    if flight_authorization:
-        operational_intent_id = str(flight_authorization.declaration.id)
-        flight_opint = FLIGHT_OPINT_KEY + operational_intent_id
-        if r.exists(flight_opint):
-            op_int_details_raw = r.get(flight_opint)
-            op_int_details = json.loads(op_int_details_raw)
+    flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(str(opint_id))
+    if flight_operational_intent_reference:
+        operational_intent_id = str(flight_operational_intent_reference.declaration.id)
 
-            reference_full = op_int_details["success_response"]["operational_intent_reference"]
-            details_full = op_int_details["operational_intent_details"]
-            # Load existing opint details
-            stored_operational_intent_id = reference_full["id"]
-            stored_manager = reference_full["manager"]
-            stored_uss_availability = reference_full["uss_availability"]
-            stored_version = reference_full["version"]
-            stored_state = reference_full["state"]
-            stored_ovn = reference_full["ovn"]
-            stored_uss_base_url = reference_full["uss_base_url"]
-            stored_subscription_id = reference_full["subscription_id"]
+        stored_details = my_database_reader.get_composite_operational_intent_by_declaration_id(flight_declaration_id=operational_intent_id)
+        details_full = stored_details.operational_intent_details
+        reference_full = stored_details.operational_intent_reference
+        # Load existing opint details
+        stored_operational_intent_id = reference_full.id
+        stored_manager = reference_full.manager
+        stored_uss_availability = reference_full.uss_availability
+        stored_version = reference_full.version
+        stored_state = reference_full.state
+        stored_ovn = reference_full.ovn
+        stored_uss_base_url = reference_full.uss_base_url
+        stored_subscription_id = reference_full.subscription_id
 
-            stored_time_start = Time(
-                format=reference_full["time_start"]["format"],
-                value=reference_full["time_start"]["value"],
-            )
-            stored_time_end = Time(
-                format=reference_full["time_end"]["format"],
-                value=reference_full["time_end"]["value"],
-            )
-            stored_volumes = details_full["volumes"]
-            for v in stored_volumes:
-                if "outline_circle" in v["volume"].keys():
-                    if not v["volume"]["outline_circle"]:
-                        v["volume"].pop("outline_circle")
+        stored_volumes = json.loads(details_full.volumes)
 
-            stored_priority = details_full["priority"]
-            stored_off_nominal_volumes = details_full["off_nominal_volumes"]
-            for v in stored_off_nominal_volumes:
-                if "outline_circle" in v["volume"].keys():
-                    if not v["volume"]["outline_circle"]:
-                        v["volume"].pop("outline_circle")
+        for v in stored_volumes:
+            if "outline_circle" in v["volume"].keys():
+                if not v["volume"]["outline_circle"]:
+                    v["volume"].pop("outline_circle")
 
-            reference = OperationalIntentReferenceDSSResponse(
-                id=stored_operational_intent_id,
-                manager=stored_manager,
-                uss_availability=stored_uss_availability,
-                version=stored_version,
-                state=stored_state,
-                ovn=stored_ovn,
-                time_start=stored_time_start,
-                time_end=stored_time_end,
-                uss_base_url=stored_uss_base_url,
-                subscription_id=stored_subscription_id,
-            )
-            details = OperationalIntentUSSDetails(
-                volumes=stored_volumes,
-                priority=stored_priority,
-                off_nominal_volumes=stored_off_nominal_volumes,
-            )
+        stored_priority = details_full.priority
+        stored_off_nominal_volumes = json.loads(details_full.off_nominal_volumes)
+        for v in stored_off_nominal_volumes:
+            if "outline_circle" in v["volume"].keys():
+                if not v["volume"]["outline_circle"]:
+                    v["volume"].pop("outline_circle")
 
-            operational_intent = OperationalIntentDetailsUSSResponse(reference=reference, details=details)
-            operational_intent_response = OperationalIntentDetails(operational_intent=operational_intent)
+        reference = OperationalIntentReferenceDSSResponse(
+            id=str(stored_operational_intent_id),
+            manager=stored_manager,
+            uss_availability=stored_uss_availability,
+            version=int(stored_version),
+            state=stored_state,
+            ovn=stored_ovn,
+            time_start=Time(format="RFC3339", value=reference_full.time_start.isoformat()),
+            time_end=Time(format="RFC3339", value=reference_full.time_end.isoformat()),
+            uss_base_url=stored_uss_base_url,
+            subscription_id=stored_subscription_id,
+        )
+        details = OperationalIntentUSSDetails(
+            volumes=stored_volumes,
+            priority=stored_priority,
+            off_nominal_volumes=stored_off_nominal_volumes,
+        )
 
-            return JsonResponse(
-                json.loads(json.dumps(operational_intent_response, cls=EnhancedJSONEncoder)),
-                status=200,
-            )
+        operational_intent = OperationalIntentDetailsUSSResponse(reference=reference, details=details)
+        operational_intent_response = OperationalIntentDetails(operational_intent=operational_intent)
 
-        else:
-            not_found_response = OperationalIntentNotFoundResponse(message="Requested Operational intent with id %s not found" % str(opint_id))
-
-            return JsonResponse(
-                json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)),
-                status=404,
-            )
+        return JsonResponse(
+            json.loads(json.dumps(operational_intent_response, cls=EnhancedJSONEncoder)),
+            status=200,
+        )
 
     else:
         not_found_response = OperationalIntentNotFoundResponse(message="Requested Operational intent with id %s not found" % str(opint_id))
@@ -507,7 +511,15 @@ def get_uss_flight_details(request, flight_id):
         flight_details_full = OperatorDetailsSuccessResponse(details=f_detail)
 
         return JsonResponse(
-            json.loads(json.dumps(asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}))), status=200
+            json.loads(
+                json.dumps(
+                    asdict(
+                        flight_details_full,
+                        dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)},
+                    )
+                )
+            ),
+            status=200,
         )
     else:
         fd = FlightDetailsNotFoundMessage(message="The requested flight could not be found")

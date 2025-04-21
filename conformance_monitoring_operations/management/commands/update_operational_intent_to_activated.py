@@ -64,9 +64,9 @@ class Command(BaseCommand):
         current_state = flight_declaration.state
         current_state_str = OPERATION_STATES[current_state][1]
         my_scd_dss_helper = SCDOperations()
-        flight_authorization = my_database_reader.get_flight_authorization_by_flight_declaration(flight_declaration_id=flight_declaration_id)
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
 
-        operational_intent_id = flight_authorization.dss_operational_intent_id
+        operational_intent_id = flight_operational_intent_reference.id
 
         r = get_redis()
 

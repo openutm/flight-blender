@@ -24,7 +24,7 @@ urlpatterns = [
     # This end point is used when op-intent details is used by the USS: https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/astm-utm/Protocol/cb7cf962d3a0c01b5ab12502f5f54789624977bf/utm.yaml#section/Authentication
     # path('v1/operational_intents', uss_operations_views.uss_update_opint_details),
     path("v1/reports", uss_operations_views.peer_uss_report_notification),
-    path("v1/operational_intents/<uuid:opint_id>", uss_operations_views.operational_intent_details),
+    path("v1/operational_intents/<uuid:opint_id>", uss_operations_views.uss_operational_intent_details),
     path(
         "v1/operational_intents/<uuid:opint_id>/telemetry",
         uss_operations_views.USSOpIntDetailTelemetry,

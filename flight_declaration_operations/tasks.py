@@ -116,25 +116,27 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
 
             flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
 
-            fa = my_database_reader.get_flight_authorization_by_flight_declaration_obj(flight_declaration=flight_declaration)
+            fa = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
 
             logger.info("Saving created operational intent details..")
-            created_opint = fa.dss_operational_intent_id
+            created_opint = fa.id
             view_r_bounds = flight_declaration.bounds
             operational_intent_full_details = OperationalIntentStorage(
                 bounds=view_r_bounds,
-                start_time=flight_declaration.start_datetime.isoformat(),
-                end_time=flight_declaration.end_datetime.isoformat(),
+                start_datetime=flight_declaration.start_datetime.isoformat(),
+                end_datetime=flight_declaration.end_datetime.isoformat(),
                 alt_max=50,
                 alt_min=25,
                 success_response=opint_submission_result.dss_response,
                 operational_intent_details=json.loads(flight_declaration.operational_intent),
             )
-            # Store flight ID
-            delta = timedelta(seconds=10800)
-            flight_opint = "flight_opint." + str(flight_declaration_id)
-            r.set(flight_opint, json.dumps(asdict(operational_intent_full_details)))
-            r.expire(name=flight_opint, time=delta)
+
+            my_database_writer.update_flight_operational_intent_reference_with_dss_response(
+                flight_declaration=flight_declaration,
+                dss_operational_intent_reference_id=str(created_opint),
+                dss_response=opint_submission_result.dss_response,
+                ovn=opint_submission_result.dss_response.operational_intent_reference.ovn,
+            )
 
             logger.info("Changing operation state..")
             original_state = flight_declaration.state

@@ -108,6 +108,7 @@ class OperationalIntentsIndexFactory:
 
 def check_polygon_intersection(op_int_details: list[OpInttoCheckDetails], polygon_to_check: Polygon) -> bool:
     idx = index.Index()
+
     for pos, op_int_detail in enumerate(op_int_details):
         idx.insert(pos, op_int_detail.shape.bounds)
 

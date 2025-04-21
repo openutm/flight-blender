@@ -347,12 +347,23 @@ class LatLng:
 @dataclass
 class OperationalIntentStorage:
     bounds: str
-    start_time: str
-    end_time: str
+    start_datetime: str
+    end_datetime: str
     alt_max: float
     alt_min: float
     success_response: OperationalIntentSubmissionSuccess
     operational_intent_details: OperationalIntentTestInjection
+
+
+@dataclass
+class CompositeOperationalIntentPayload:
+    bounds: str
+    start_datetime: str
+    end_datetime: str
+    alt_max: float
+    alt_min: float
+    operational_intent_reference_id: str
+    operational_intent_details_id: str
 
 
 @dataclass

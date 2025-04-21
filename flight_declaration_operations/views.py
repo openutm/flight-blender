@@ -236,7 +236,7 @@ def set_flight_declaration(request):
     )
     flight_declaration.save()
 
-    my_database_writer.create_flight_authorization_from_flight_declaration_obj(flight_declaration=flight_declaration)
+    my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(flight_declaration=flight_declaration)
     flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
     if declaration_state == 8:
         flight_declaration.add_state_history_entry(
@@ -466,7 +466,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         flight_declaration.save()
 
         my_database_writer = FlightBlenderDatabaseWriter()
-        my_database_writer.create_flight_authorization_from_flight_declaration_obj(flight_declaration=flight_declaration)
+        my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(flight_declaration=flight_declaration)
         flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
         if declaration_state == 8:
             flight_declaration.add_state_history_entry(
