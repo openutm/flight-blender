@@ -53,10 +53,11 @@ class Command(BaseCommand):
             raise CommandError(
                 "Flight Declaration with ID {flight_declaration_id} does not exist".format(flight_declaration_id=flight_declaration_id)
             )
-        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
-        dss_operational_intent_ref_id = flight_operational_intent_reference.id
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(
+            flight_declaration=flight_declaration
+        )
+        dss_operational_intent_ref_id = str(flight_operational_intent_reference.id)
         stored_ovn = flight_operational_intent_reference.ovn
-
 
         if not dry_run:
             operation_removal_status = my_scd_dss_helper.delete_operational_intent(
@@ -71,5 +72,3 @@ class Command(BaseCommand):
                 )
             else:
                 logger.info("Error in deleting operational intent from DSS")
-
-

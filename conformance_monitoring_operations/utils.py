@@ -39,7 +39,7 @@ class FlightBlenderConformanceEngine:
         """This method performs the conformance sequence per AMC1 Article 13(1) as specified in the EU AMC / GM on U-Space regulation.
         This method is called every time a telemetry has been sent into Flight Blender. Specifically, it checks this once a telemetry has been sent:
          - C2 Check if flight authorization is granted
-         - C3 Match telmetry from aircraft with the flight authorization
+         - C3 Match telemetry from aircraft with the flight authorization
          - C4 Determine whether the aircraft is subject to an accepted and activated flight authorization
          - C5 Check if flight operation is activated
          - C6 Check if telemetry is within start / end time of the operation
@@ -51,74 +51,57 @@ class FlightBlenderConformanceEngine:
         now = arrow.now()
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
-        # # C2 Check
-        try:
-            assert flight_operational_intent_reference is not None
-            assert flight_declaration is not None
-        except AssertionError:
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+            flight_declaration_id=flight_declaration_id
+        )
+        operational_intent_details = my_database_reader.get_operational_intent_details_by_flight_declaration(flight_declaration=flight_declaration)
+
+        # C2 Check
+        if not flight_operational_intent_reference or not flight_declaration:
             logger.error(
-                "Error in getting flight authorization and declaration for {flight_declaration_id}, cannot continue with conformance checks, C2 Check failed.".format(
-                    flight_declaration_id=flight_declaration_id
-                )
+                f"Error in getting flight authorization and declaration for {flight_declaration_id}, cannot continue with conformance checks, C2 Check failed."
             )
             return ConformanceChecksList.C2
-
-        # Flight Operation and Flight Authorization exists, create a notifications helper
 
         operation_start_time = arrow.get(flight_declaration.start_datetime)
         operation_end_time = arrow.get(flight_declaration.end_datetime)
 
-        # C3 check
-        try:
-            assert flight_declaration.aircraft_id == aircraft_id
-        except AssertionError:
+        # C3 Check
+        if flight_declaration.aircraft_id != aircraft_id:
+            logger.error(f"Aircraft ID mismatch for {flight_declaration_id}, C3 Check failed.")
             return ConformanceChecksList.C3
 
-        # C4, C5 check
-        try:
-            # Check flight is not processing, ended, withdrawn, cancelled, rejected
-            assert flight_declaration.state not in [0, 5, 6, 7, 8]
-        except AssertionError:
+        # C4, C5 Check
+        if flight_declaration.state in [0, 5, 6, 7, 8]:
+            logger.error(f"Flight state is invalid for {flight_declaration_id}, C4 Check failed.")
             return ConformanceChecksList.C4
 
-        try:
-            # Check flight is activated, nonconforming contingent
-            assert flight_declaration.state in [2, 3, 4]
-        except AssertionError:
+        if flight_declaration.state not in [2, 3, 4]:
+            logger.error(f"Flight state is not activated for {flight_declaration_id}, C5 Check failed.")
             return ConformanceChecksList.C5
 
-        # C6 check
-        try:
-            assert is_time_between(
-                begin_time=operation_start_time,
-                end_time=operation_end_time,
-                check_time=now,
-            )
-        except AssertionError:
+        # C6 Check
+        if not is_time_between(
+            begin_time=operation_start_time,
+            end_time=operation_end_time,
+            check_time=now,
+        ):
+            logger.error(f"Telemetry is not within operation time for {flight_declaration_id}, C6 Check failed.")
             return ConformanceChecksList.C6
 
-        # C7 check : Check if the aircraft is within the 4D volume
-
-        # Construct the boundary of the current operation by getting the operational intent
-
-        # TODO: Cache this so that it need not be done every time
-        operational_intent = json.loads(flight_declaration.operational_intent)
-        all_volumes = operational_intent["volumes"]
-        # The provided telemetry location cast as a Shapely Point
+        # C7 Check: Check if the aircraft is within the 4D volume
+        all_volumes = json.loads(operational_intent_details.volumes)
         lng = float(telemetry_location.lng)
         lat = float(telemetry_location.lat)
         rid_location = Point(lng, lat)
         all_polygon_altitudes: list[PolygonAltitude] = []
+
         for v in all_volumes:
             v4d = cast_to_volume4d(v)
             altitude_lower = v4d.volume.altitude_lower.value
             altitude_upper = v4d.volume.altitude_upper.value
             outline_polygon = v4d.volume.outline_polygon
-            point_list = []
-            for vertex in outline_polygon.vertices:
-                p = Point(vertex.lng, vertex.lat)
-                point_list.append(p)
+            point_list = [Point(vertex.lng, vertex.lat) for vertex in outline_polygon.vertices]
             outline_polygon = Plgn([[p.x, p.y] for p in point_list])
 
             pa = PolygonAltitude(
@@ -130,29 +113,51 @@ class FlightBlenderConformanceEngine:
 
         rid_obs_within_all_volumes = []
         rid_obs_within_altitudes = []
+
         for p in all_polygon_altitudes:
             is_within = rid_location.within(p.polygon)
-            # If the aircraft RID is within the the polygon, check the altitude
-            altitude_conformant = True if altitude_lower <= altitude_m_wgs_84 <= altitude_upper else False
-
+            altitude_conformant = p.altitude_lower <= altitude_m_wgs_84 <= p.altitude_upper
             rid_obs_within_all_volumes.append(is_within)
             rid_obs_within_altitudes.append(altitude_conformant)
 
         aircraft_bounds_conformant = any(rid_obs_within_all_volumes)
         aircraft_altitude_conformant = any(rid_obs_within_altitudes)
 
-        try:
-            assert aircraft_altitude_conformant
-        except AssertionError:
+        if not aircraft_altitude_conformant:
+            logger.error(f"Aircraft altitude is not conformant for {flight_declaration_id}, C7b Check failed.")
             return ConformanceChecksList.C7b
-        try:
-            assert aircraft_bounds_conformant
-        except AssertionError:
+
+        if not aircraft_bounds_conformant:
+            logger.error(f"Aircraft bounds are not conformant for {flight_declaration_id}, C7a Check failed.")
             return ConformanceChecksList.C7a
 
-        # C8 check Check if aircraft is not breaching any active Geofences
-        # TODO
+        # C8 Check: Check if aircraft is not breaching any active Geofences
+        geofences = my_database_reader.get_active_geofences()
+        for geofence in geofences:
+            geofence_geojson = json.loads(geofence.raw_geo_fence)
+            features = geofence_geojson.get("features", [])
+            for feature in features:
+                geometry = feature.get("geometry", {})
+                geofence_type = geometry.get("type")
+                coordinates = geometry.get("coordinates", [])
+
+                if geofence_type == "Polygon":
+                    if self._is_within_geofence(rid_location, coordinates[0]):
+                        logger.error(f"Aircraft is breaching an active GeoFence for {flight_declaration_id}, C8 Check failed.")
+                        return ConformanceChecksList.C8
+
+                elif geofence_type == "MultiPolygon":
+                    for polygon_coords in coordinates:
+                        if self._is_within_geofence(rid_location, polygon_coords[0]):
+                            logger.error(f"Aircraft is breaching an active GeoFence for {flight_declaration_id}, C8 Check failed.")
+                            return ConformanceChecksList.C8
+
         return True
+
+    def _is_within_geofence(self, rid_location: Point, coordinates: list) -> bool:
+        """Helper method to check if a location is within a geofence."""
+        geofence_polygon = Plgn(coordinates)
+        return rid_location.within(geofence_polygon)
 
     def check_flight_operational_intent_reference_conformance(self, flight_declaration_id: str) -> bool:
         """This method checks the conformance of a flight authorization independent of telemetry observations being sent:
@@ -165,7 +170,9 @@ class FlightBlenderConformanceEngine:
         my_database_reader = FlightBlenderDatabaseReader()
         now = arrow.now()
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-        flight_operational_intent_reference_exists = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
+        flight_operational_intent_reference_exists = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+            flight_declaration_id=flight_declaration_id
+        )
         # C11 Check
         if not flight_operational_intent_reference_exists:
             # if flight state is accepted, then change it to ended and delete from dss
