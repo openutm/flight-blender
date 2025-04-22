@@ -3,7 +3,7 @@ services:
   redis-blender:
     platform: linux/amd64
     command: ["redis-server", "/redis.conf", "--requirepass", "$REDIS_PASSWORD"]
-    image: "valkey/valkey:latest"
+    image: "redis:latest"
     expose:
       - "6379"
     volumes:
