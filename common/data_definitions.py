@@ -31,6 +31,11 @@ OPERATION_TYPES = (
     (3, _("CREWED")),
 )
 
+USS_AVAILABILITY = (
+    (0, _("Unknown")),
+    (1, _("Normal")),
+    (2, _("Down")),
+)
 
 # When an operator changes a state, he / she puts a new state (via the API), this object specifies the event when a operator takes action
 OPERATOR_EVENT_LOOKUP = {

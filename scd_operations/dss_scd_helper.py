@@ -241,6 +241,11 @@ class VolumesConverter:
         self.geo_json = {"type": "FeatureCollection", "features": []}
         self.utm_zone = env.get("UTM_ZONE", "54N")
         self.all_volume_features = []
+        self.upper_altitude = 0
+        self.lower_altitude = 0
+        self.altitude_ref = "W84"
+        self.time_start = arrow.now().isoformat()
+        self.time_end = arrow.now().isoformat()
 
     def utm_converter(self, shapely_shape: shapely.geometry, inverse: bool = False) -> shapely.geometry.shape:
         """A helper function to convert from lat / lon to UTM coordinates for buffering. tracks. This is the UTM projection (https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system), we use Zone 54N which encompasses Japan, this zone has to be set for each locale / city. Adapted from https://gis.stackexchange.com/questions/325926/buffering-geometry-with-points-in-wgs84-using-shapely"""
@@ -260,9 +265,24 @@ class VolumesConverter:
         return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
 
     def convert_volumes_to_geojson(self, volumes: list[Volume4D]) -> None:
+        all_upper_altitudes = []
+        all_lower_altitudes = []
+        volume_time_starts = []
+        volume_time_ends = []
         for volume in volumes:
+            all_upper_altitudes.append(volume.volume.altitude_upper.value)
+            all_lower_altitudes.append(volume.volume.altitude_lower.value)
+
+            volume_time_starts.append(arrow.get(volume.time_start.value))
+            volume_time_ends.append(arrow.get(volume.time_end.value))
+
             geo_json_features = self._convert_volume_to_geojson_feature(volume)
             self.geo_json["features"] += geo_json_features
+
+        self.time_start = min(volume_time_starts).isoformat()
+        self.time_end = max(volume_time_ends).isoformat()
+        self.upper_altitude = max(all_upper_altitudes)
+        self.lower_altitude = min(all_lower_altitudes)
 
     def get_volume_bounds(self) -> list[LatLng]:
         union = unary_union(self.all_volume_features)

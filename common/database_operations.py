@@ -14,7 +14,9 @@ from dotenv import find_dotenv, load_dotenv
 
 from conformance_monitoring_operations.models import TaskScheduler
 from constraint_operations.data_definitions import Constraint as ConstraintData
-from constraint_operations.models import Constraint, ConstraintReference
+from constraint_operations.data_definitions import ConstraintDetails
+from constraint_operations.data_definitions import ConstraintReference as ConstraintReferencePayload
+from constraint_operations.models import ConstraintDetail, ConstraintReference
 from flight_declaration_operations.models import (
     CompositeOperationalIntent,
     FlightDeclaration,
@@ -27,6 +29,7 @@ from flight_declaration_operations.models import (
 )
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from flight_feed_operations.models import FlightObeservation
+from geo_fence_operations.data_definitions import GeofencePayload
 from geo_fence_operations.models import GeoFence
 from notification_operations.models import OperatorRIDNotification
 from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
@@ -70,13 +73,19 @@ class FlightBlenderDatabaseReader:
             return None
 
     def check_constraint_id_exists(self, constraint_id: str) -> bool:
-        return Constraint.objects.filter(id=constraint_id).exists()
+        return ConstraintDetail.objects.filter(id=constraint_id).exists()
+
+    def get_constraint_by_geofence(self, geofence: GeoFence) -> ConstraintDetail:
+        return ConstraintDetail.objects.filter(geofence=geofence)
 
     def check_constraint_reference_id_exists(self, constraint_reference_id: str) -> bool:
         return ConstraintReference.objects.filter(id=constraint_reference_id).exists()
 
-    def get_constraint_details(self, constraint_id: str) -> Constraint:
-        return Constraint.objects.get(id=constraint_id)
+    def get_constraint_reference_by_id(self, constraint_reference_id: str) -> ConstraintReference:
+        return ConstraintReference.objects.get(id=constraint_reference_id)
+
+    def get_constraint_details(self, constraint_id: str) -> ConstraintDetail:
+        return ConstraintDetail.objects.get(id=constraint_id)
 
     def get_flight_observations(self, after_datetime: arrow.arrow.Arrow):
         observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
@@ -228,6 +237,16 @@ class FlightBlenderDatabaseReader:
             flight_operational_intent_detail = FlightOperationalIntentDetail.objects.get(declaration__id=declaration_id)
             return flight_operational_intent_detail
         except FlightOperationalIntentDetail.DoesNotExist:
+            return None
+
+    def get_geofence_by_constraint_reference_id(self, constraint_reference_id: str) -> None | GeoFence:
+        try:
+            constraint_reference = ConstraintReference.objects.get(id=constraint_reference_id)
+            geofence = GeoFence.objects.get(id=constraint_reference.geofence.id)
+            return geofence
+        except ConstraintReference.DoesNotExist:
+            return None
+        except GeoFence.DoesNotExist:
             return None
 
     def check_flight_declaration_active(self, flight_declaration_id: str, now: datetime) -> bool:
@@ -834,7 +853,7 @@ class FlightBlenderDatabaseWriter:
 
     def write_constraint_details(self, constraint_id: str, constraint: ConstraintData) -> bool:
         try:
-            constraint_obj = Constraint(
+            constraint_obj = ConstraintDetail(
                 id=constraint_id,
                 details=json.dumps(asdict(constraint.details)),
             )
@@ -851,6 +870,68 @@ class FlightBlenderDatabaseWriter:
                 details=json.dumps(asdict(constraint.reference)),
             )
             constraint_reference_obj.save()
+            return True
+        except IntegrityError:
+            return False
+
+    def update_constraint_reference_ovn(
+        self,
+        constraint_reference: ConstraintReference,
+        ovn: str,
+    ) -> bool:
+        try:
+            constraint_reference.ovn = ovn
+            constraint_reference.save()
+            return True
+
+        except IntegrityError:
+            return False
+
+    def create_or_update_geofence(self, geofence_payload: GeofencePayload) -> Union[None, GeoFence]:
+        try:
+            geofence = GeoFence(
+                raw_geo_fence=json.dumps(asdict(geofence_payload)),
+                id=geofence_payload.id,
+                upper_limit=geofence_payload.upper_limit,
+                lower_limit=geofence_payload.lower_limit,
+                altitude_ref=geofence_payload.altitude_ref,
+                bounds=geofence_payload.bounds,
+                status=geofence_payload.status,
+                message=geofence_payload.message,
+                is_test_dataset=geofence_payload.is_test_dataset,
+                start_datetime=geofence_payload.start_datetime.value,
+                end_datetime=geofence_payload.end_datetime.value,
+                geozone=json.dumps(geofence_payload.geozone),
+            )
+            geofence.save()
+            return geofence
+        except IntegrityError:
+            return None
+
+    def create_or_update_constraint_detail(self, constraint: ConstraintDetails, geofence: GeoFence) -> bool:
+        try:
+            _constraint_volumes = []
+            for _volume in constraint.volumes:
+                _constraint_volumes.append(asdict(_volume))
+            constraint_obj = ConstraintDetail(volumes=json.dumps(_constraint_volumes), _type=constraint.type, geofence=geofence)
+            constraint_obj.save()
+            return True
+        except IntegrityError:
+            return False
+
+    def create_or_update_constraint_reference(self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence) -> bool:
+        try:
+            constraint_obj = ConstraintReference(
+                id=constraint_reference.id,
+                ovn=constraint_reference.ovn,
+                uss_base_url=constraint_reference.uss_base_url,
+                uss_availability=constraint_reference.uss_availability,
+                version=constraint_reference.version,
+                time_start=constraint_reference.time_start.value,
+                time_end=constraint_reference.time_end.value,
+                geofence=geofence,
+            )
+            constraint_obj.save()
             return True
         except IntegrityError:
             return False

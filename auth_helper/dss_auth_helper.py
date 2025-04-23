@@ -46,7 +46,7 @@ if ENV_FILE:
                 token_suffix = "_auth_rid_token"
             elif token_type == "scd":
                 token_suffix = "_auth_scd_token"
-            elif token_type == "cmsa":
+            elif token_type == "constraints":
                 token_suffix = "_auth_constraints_token"
 
             cache_key = audience + token_suffix
