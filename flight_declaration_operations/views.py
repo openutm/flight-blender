@@ -426,7 +426,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
             return JsonResponse(error_response, status=status_code)
 
         USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
-        submitted_by = req.get("submitted_by")
+        submitted_by = req.get("submitted_by", "No User Information")
         type_of_operation = req.get("type_of_operation", 0)
         originating_party = req.get("originating_party", "No Flight Information")
         aircraft_id = req["aircraft_id"]
