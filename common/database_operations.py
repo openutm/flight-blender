@@ -239,6 +239,16 @@ class FlightBlenderDatabaseReader:
         except FlightOperationalIntentDetail.DoesNotExist:
             return None
 
+    def get_geofence_by_constraint_reference_id(self, constraint_reference_id: str) -> None | GeoFence:
+        try:
+            constraint_reference = ConstraintReference.objects.get(id=constraint_reference_id)
+            geofence = GeoFence.objects.get(id=constraint_reference.geofence.id)
+            return geofence
+        except ConstraintReference.DoesNotExist:
+            return None
+        except GeoFence.DoesNotExist:
+            return None
+
     def check_flight_declaration_active(self, flight_declaration_id: str, now: datetime) -> bool:
         return FlightDeclaration.objects.filter(
             id=flight_declaration_id,
@@ -877,7 +887,7 @@ class FlightBlenderDatabaseWriter:
         except IntegrityError:
             return False
 
-    def create_geofence(self, geofence_payload: GeofencePayload) -> Union[None, GeoFence]:
+    def create_or_update_geofence(self, geofence_payload: GeofencePayload) -> Union[None, GeoFence]:
         try:
             geofence = GeoFence(
                 raw_geo_fence=json.dumps(asdict(geofence_payload)),
@@ -898,15 +908,18 @@ class FlightBlenderDatabaseWriter:
         except IntegrityError:
             return None
 
-    def write_constraint_detail(self, constraint: ConstraintDetails, geofence: GeoFence) -> bool:
+    def create_or_update_constraint_detail(self, constraint: ConstraintDetails, geofence: GeoFence) -> bool:
         try:
-            constraint_obj = ConstraintDetail(volumes=json.dumps(asdict(constraint.volumes)), _type=constraint.type, geofence=geofence)
+            _constraint_volumes = []
+            for _volume in constraint.volumes:
+                _constraint_volumes.append(asdict(_volume))
+            constraint_obj = ConstraintDetail(volumes=json.dumps(_constraint_volumes), _type=constraint.type, geofence=geofence)
             constraint_obj.save()
             return True
         except IntegrityError:
             return False
 
-    def write_constraint_reference(self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence) -> bool:
+    def create_or_update_constraint_reference(self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence) -> bool:
         try:
             constraint_obj = ConstraintReference(
                 id=constraint_reference.id,

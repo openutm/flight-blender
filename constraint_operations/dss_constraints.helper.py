@@ -1,5 +1,13 @@
+import uuid
 from os import environ as env
 
+import json
+import logging
+from dataclasses import asdict
+
+import requests
+
+from auth_helper import dss_auth_helper
 import urllib3
 from dacite import from_dict
 
@@ -9,18 +17,12 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 from geo_fence_operations.data_definitions import GeofencePayload
+from scd_operations.dss_scd_helper import VolumesConverter
 from scd_operations.scd_data_definitions import Time, Volume4D
 
 from .data_definitions import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 
 load_dotenv(find_dotenv())
-import json
-import logging
-from dataclasses import asdict
-
-import requests
-
-from auth_helper import dss_auth_helper
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -42,38 +44,50 @@ class ConstraintsHelper:
 
     def write_nearby_constraints(self, constraints: list[Constraint]):
         # This method writes the constraint reference and constraint details to the database
+        my_volumes_converter = VolumesConverter()
         for constraint in constraints:
             constraint_reference = constraint.reference
             constraint_details = constraint.details
-
             # Check if the constraint reference already exists in the database
             constraint_reference_exists = self.my_database_reader.check_constraint_reference_id_exists(
                 constraint_reference_id=str(constraint_reference.id)
             )
+            geofence_id = str(uuid.uuid4())
 
-            if not constraint_reference_exists:
-                geofence_payload = GeofencePayload()
-                # Create a new ConstraintReference object
+            if constraint_reference_exists:
+                geo_fence = self.my_database_reader.get_geofence_by_constraint_reference_id(constraint_reference_id=str(constraint_reference.id))
+                geofence_id = geo_fence.id
 
-                new_constraint_reference = self.my_database_writer.write_constraint_reference(
-                    id=str(constraint_reference.id),
-                    uss_base_url=constraint_reference.uss_base_url,
-                    ovn=constraint_reference.ovn,
-                    time_start=constraint_reference.time_start,
-                    time_end=constraint_reference.time_end,
-                    version=constraint_reference.version,
-                    uss_availability=constraint_reference.uss_availability,
-                    manager=constraint_reference.manager,
-                )
+            my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
 
-                # Write the constraint details to the database
-                self.my_database_writer.write_constraint_detail(
-                    geofence=new_constraint_reference.geofence,
-                    volumes=json.dumps(constraint_details.volumes),
-                    _type=json.dumps(constraint_details.type),
-                )
-            else:
-                logger.warning("Constraint reference already exists in the database.")
+            geofence_payload = GeofencePayload(
+                id=geofence_id,
+                raw_geo_fence=my_volumes_converter.geojson,
+                upper_limit=my_volumes_converter.upper_altitude,
+                lower_limit=my_volumes_converter.upper_altitude,
+                altitude_ref=my_volumes_converter.altitude_ref,
+                name=constraint_details.volumes[0].name,
+                bounds=my_volumes_converter.get_bounds(),
+                status=1,
+                message="Constraint from peer USS",
+                is_test_dataset=False,
+                start_datetime=constraint_reference.time_start,
+                end_datetime=constraint_reference.time_end,
+            )
+
+            geo_fence = self.my_database_writer.create_or_update_geofence(geofence_payload=geofence_payload)
+            # Create a new ConstraintReference object
+
+            self.my_database_writer.create_or_update_constraint_reference(
+                constraint_reference=constraint_reference,
+                geofence=geo_fence,
+            )
+
+            # Write the constraint details to the database
+            self.my_database_writer.create_or_update_constraint_detail(
+                constraint=constraint_details,
+                geofence=geo_fence,
+            )
 
 
 class ConstraintOperations:
