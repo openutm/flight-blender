@@ -69,8 +69,9 @@ class ConstraintReference(models.Model):
     uss_base_url = models.CharField(
         max_length=256,
         help_text="USS base URL",
+        blank=True,
     )
-    version = models.CharField(max_length=256, help_text="USS base URL")
+    version = models.CharField(max_length=256, help_text="Constraint version", blank=True)
     time_start = models.DateTimeField(default=datetime.now)
     time_end = models.DateTimeField(default=datetime.now)
     created_at = models.DateTimeField(auto_now_add=True)

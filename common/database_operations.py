@@ -28,7 +28,7 @@ from flight_declaration_operations.models import (
     Subscriber,
 )
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
-from flight_feed_operations.models import FlightObeservation
+from flight_feed_operations.models import FlightObservation
 from geo_fence_operations.data_definitions import GeofencePayload
 from geo_fence_operations.models import GeoFence
 from notification_operations.models import OperatorRIDNotification
@@ -88,12 +88,12 @@ class FlightBlenderDatabaseReader:
         return ConstraintDetail.objects.get(id=constraint_id)
 
     def get_flight_observations(self, after_datetime: arrow.arrow.Arrow):
-        observations = FlightObeservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
+        observations = FlightObservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
         return observations
 
     def get_flight_observations_by_session(self, session_id: str, after_datetime: arrow.arrow.Arrow):
         observations = (
-            FlightObeservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat())
+            FlightObservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat())
             .exclude(traffic_source=11)
             .order_by("created_at")
             .values()
@@ -292,34 +292,34 @@ class FlightBlenderDatabaseReader:
         except TaskScheduler.DoesNotExist:
             return None
 
-    def get_active_rid_observations_for_view(self, start_time: datetime, end_time: datetime) -> None | QuerySet | list[FlightObeservation]:
+    def get_active_rid_observations_for_view(self, start_time: datetime, end_time: datetime) -> None | QuerySet | list[FlightObservation]:
         try:
-            observations = FlightObeservation.objects.filter(created_at__gte=start_time, created_at__lte=end_time, traffic_source=11).order_by(
+            observations = FlightObservation.objects.filter(created_at__gte=start_time, created_at__lte=end_time, traffic_source=11).order_by(
                 "-created_at"
             )
             return observations
-        except FlightObeservation.DoesNotExist:
+        except FlightObservation.DoesNotExist:
             return None
 
-    def get_active_rid_observations_for_session(self, session_id: str) -> None | QuerySet | list[FlightObeservation]:
+    def get_active_rid_observations_for_session(self, session_id: str) -> None | QuerySet | list[FlightObservation]:
         try:
-            observations = FlightObeservation.objects.filter(session_id=session_id, traffic_source=11).order_by("-created_at")
+            observations = FlightObservation.objects.filter(session_id=session_id, traffic_source=11).order_by("-created_at")
             return observations
-        except FlightObeservation.DoesNotExist:
+        except FlightObservation.DoesNotExist:
             return None
 
     def get_active_rid_observations_for_session_between_interval(
         self, start_time: datetime, end_time: datetime, session_id: str
-    ) -> None | QuerySet | list[FlightObeservation]:
+    ) -> None | QuerySet | list[FlightObservation]:
         try:
-            observations = FlightObeservation.objects.filter(
+            observations = FlightObservation.objects.filter(
                 session_id=session_id,
                 created_at__gte=start_time,
                 created_at__lte=end_time,
                 traffic_source=11,
             )
             return observations
-        except FlightObeservation.DoesNotExist:
+        except FlightObservation.DoesNotExist:
             return None
 
     def get_active_user_notifications_between_interval(
@@ -403,7 +403,7 @@ class FlightBlenderDatabaseWriter:
     def write_flight_observation(self, single_observation: SingleAirtrafficObservation) -> bool:
         session_id = single_observation.session_id if single_observation.session_id else "00000000-0000-0000-0000-000000000000"
         try:
-            flight_observation = FlightObeservation(
+            flight_observation = FlightObservation(
                 session_id=session_id,
                 traffic_source=single_observation.traffic_source,
                 latitude_dd=single_observation.lat_dd,

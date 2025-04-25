@@ -7,7 +7,7 @@ from dotenv import find_dotenv, load_dotenv
 from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
 
-from .data_definitions import FlightObeservationSchema
+from .data_definitions import FlightObservationSchema
 
 load_dotenv(find_dotenv())
 
@@ -22,11 +22,11 @@ class ObservationReadOperations:
     """
     A class to handle operations related to reading flight observations.
     Methods:
-        get_flight_observations(session_id: str) -> list[FlightObeservationSchema]:
+        get_flight_observations(session_id: str) -> list[FlightObservationSchema]:
             Retrieves and processes flight observations for a given session ID.
         Retrieves and processes observations from the given session ID.
             session_id (str): The session ID for which to retrieve flight observations.
-            list[FlightObeservationSchema]: A list of FlightObeservationSchema objects, each containing the following attributes:
+            list[FlightObservationSchema]: A list of FlightObservationSchema objects, each containing the following attributes:
                 - id: The unique identifier of the observation.
                 - session_id: The session ID associated with the observation.
                 - latitude_dd: The latitude in decimal degrees.
@@ -41,7 +41,7 @@ class ObservationReadOperations:
 
     """
 
-    def get_flight_observations(self, session_id: str) -> list[FlightObeservationSchema]:
+    def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
         """
         Retrieves and processes observations from the given consumer group.
         Args:
@@ -72,7 +72,7 @@ class ObservationReadOperations:
         pending_messages = []
         all_flight_observations = my_database_reader.get_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
         for message in all_flight_observations:
-            observation = FlightObeservationSchema(
+            observation = FlightObservationSchema(
                 id=message["id"],
                 session_id=message["session_id"],
                 latitude_dd=message["latitude_dd"],

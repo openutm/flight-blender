@@ -23,7 +23,7 @@ class SignedTelmetryPublicKey(models.Model):
         return "Key : " + self.url
 
 
-class FlightObeservation(models.Model):
+class FlightObservation(models.Model):
     """
     Model representing a flight stream observation.
     Attributes:

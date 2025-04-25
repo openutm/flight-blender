@@ -22,7 +22,7 @@ class SingleObservationMetadata:
 
 
 @dataclass
-class FlightObeservationSchema:
+class FlightObservationSchema:
     id: str
     session_id: str
     latitude_dd: float
