@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from marshmallow import Schema, fields
 
@@ -66,7 +66,7 @@ class SingleRIDObservation:
     traffic_source: int
     source_type: int
     icao_address: str
-    metadata: dict | None
+    metadata: dict = field(default_factory=dict)
     session_id: str | None = ""
 
 
@@ -80,7 +80,7 @@ class SingleAirtrafficObservation:
     traffic_source: int
     source_type: int
     icao_address: str
-    metadata: dict | None
+    metadata: dict = field(default_factory=dict)
     session_id: str | None = ""
 
 

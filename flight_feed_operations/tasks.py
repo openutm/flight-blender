@@ -8,6 +8,7 @@ import arrow
 import pandas as pd
 import requests
 from dacite import from_dict
+from dacite.exceptions import DaciteError, WrongTypeError
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Transformer
 
@@ -42,9 +43,18 @@ def write_incoming_air_traffic_data(observation: str):
     my_database_writer = FlightBlenderDatabaseWriter()
 
     obs = json.loads(observation)
-    obs["metadata"] = json.loads(obs["metadata"])
-    single_air_traffic_observation = from_dict(data=obs, data_class=SingleAirtrafficObservation)
-    logger.debug("Writing observation..")
+
+    try:
+        single_air_traffic_observation = from_dict(data=obs, data_class=SingleAirtrafficObservation)
+    except (
+        DaciteError,
+        WrongTypeError,
+    ) as e:
+        logger.error(f"Error parsing observation: {e}")
+        return
+    logger.info("Parsed observation: %s", single_air_traffic_observation)
+
+    logger.info("Writing observation..")
     # TODO: Write this observation to the Database
     my_database_writer.write_flight_observation(single_air_traffic_observation)
 
@@ -96,10 +106,9 @@ def start_opensky_network_stream(view_port: str, session_id: str):
         url_data = f"https://opensky-network.org/api/states/all?lamin={lat_min}&lomin={lng_min}&lamax={lat_max}&lomax={lng_max}"
         response = requests.get(
             url_data,
-            auth=(env.get("OPENSKY_NETWORK_USERNAME"), env.get("OPENSKY_NETWORK_PASSWORD")),
+            auth=(env.get("OPENSKY_NETWORK_USERNAME", "opensky"), env.get("OPENSKY_NETWORK_PASSWORD", "opensky")),
         )
         logger.info(url_data)
-
         if response.status_code == 200:
             response_data = response.json()
             logger.debug(response_data)
@@ -125,17 +134,20 @@ def start_opensky_network_stream(view_port: str, session_id: str):
                     "position_source",
                 ]
                 flight_df = pd.DataFrame(response_data["states"], columns=col_names).fillna("No Data")
+                flight_df["lat"] = flight_df["lat"].astype(float)
+                flight_df["long"] = flight_df["long"].astype(float)
+                flight_df["baro_altitude"] = flight_df["baro_altitude"].astype(float)
 
                 for _, row in flight_df.iterrows():
                     so = SingleAirtrafficObservation(
-                        session_id=sesion_id,
+                        session_id=session_id,
                         lat_dd=row["lat"],
                         lon_dd=row["long"],
                         altitude_mm=row["baro_altitude"],
                         traffic_source=2,
                         source_type=1,
-                        icao_address=row["icao24"],
-                        metadata=json.dumps({"velocity": row["velocity"]}),
+                        icao_address=str(row["icao24"]),
+                        metadata={"velocity": row["velocity"]},
                     )
                     write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
 

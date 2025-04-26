@@ -170,7 +170,7 @@ def set_air_traffic(request, session_id):
             traffic_source=traffic_source,
             source_type=source_type,
             icao_address=icao_address,
-            metadata=json.dumps(metadata),
+            metadata=metadata,
         )
 
         write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
@@ -227,7 +227,7 @@ def get_air_traffic(request, session_id):
         # Log error if ICAO address is not defined in any message
         logger.error("Error in sorting distinct messages, ICAO name not defined %s" % ke)
 
-    all_traffic_observations: list[SingleAirtrafficObservation] = []
+    all_traffic_observations = []
     for icao_address in latest_observations:
         observation = latest_observations[icao_address]
         observation_metadata = json.loads(observation["metadata"])
