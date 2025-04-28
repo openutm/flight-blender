@@ -158,58 +158,28 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_BROKER_URL = BROKER_URL
 CELERY_RESULT_BACKEND = BROKER_URL
 CELERY_TIMEZONE = "UTC"
-
 # DataFlair #Logging Information
-LOG_PATH = os.path.join(BASE_DIR, "logs/")
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': True,
-    'formatters': {
-        'standard': {
-            'format': '%(asctime)s [%(levelname)s]- %(message)s'}
-
+    "version": 1,
+    # Version of logging
+    "disable_existing_loggers": False,
+    # disable logging
+    # Handlers #############################################################
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
     },
-    'handlers': {
-        'django_error': {
-            'level': 'DEBUG',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': LOG_PATH + 'django.log',
-            'formatter': 'standard'
+    # Loggers ####################################################################
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "propagate": True,
+            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
         },
-        'info': {
-            'level': 'DEBUG',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': LOG_PATH + 'info.log',
-            'formatter': 'standard'
-        },
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'standard'
-        }
-    },
-    'loggers': {
-        'info': {
-            'handlers': ['info', "console"],
-            'level': 'DEBUG',
-            'propagate': True
-        },
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'django.request': {
-            'handlers': ['django_error', 'console'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'ERROR',
-            'propagate': True,
-        }
     },
 }
+
+
 # Weather service
 WEATHER_API_BASE_URL = "https://api.open-meteo.com/v1/forecast"
