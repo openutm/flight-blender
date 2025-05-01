@@ -428,7 +428,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
             if flight_planning_submission.status == "success":
                 # Successfully submitted to the DSS, save the operational intent in DB
 
-                logger.info("Flight with declaration id {flight_declaration_id} created".format(flight_declaration_id=operation_id_str))
+                logger.info(f"Flight with declaration id {operation_id_str} created")
                 flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
 
                 flight_planning_data.state = generated_operational_intent_state

@@ -121,8 +121,10 @@ def process_flight_operational_intent_reference_non_conformance_message(sender, 
         event = "flight_blender_confirms_contingent"
         new_state = 4
     elif non_conformance_state_code == "C10":
-        flight_operational_intent_reference_expired = "The authorization for operation {flight_declaration_id}, has been expired. You must stop operation ".format(
-            flight_declaration_id=flight_declaration_id
+        flight_operational_intent_reference_expired = (
+            "The authorization for operation {flight_declaration_id}, has been expired. You must stop operation ".format(
+                flight_declaration_id=flight_declaration_id
+            )
         )
         logger.error(flight_operational_intent_reference_expired)
         my_operation_notification.send_conformance_status_notification(message=flight_operational_intent_reference_expired, level="error")

@@ -6,8 +6,9 @@ import dacite
 from dacite import from_dict
 
 from auth_helper.common import get_redis
-from rid_operations import rtree_helper
 from common.database_operations import FlightBlenderDatabaseReader
+from rid_operations import rtree_helper
+
 from .dss_scd_helper import OperationalIntentReferenceHelper, VolumesConverter
 from .flight_planning_data_definitions import (
     AdvisoryInclusion,
@@ -150,12 +151,15 @@ class SCDTestHarnessHelper:
         self.my_operational_intent_comparator = rtree_helper.OperationalIntentComparisonFactory()
 
     def check_if_same_flight_id_exists(self, operation_id: str) -> bool:
-        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(flight_declaration_id=operation_id)
+        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+            flight_declaration_id=operation_id
+        )
 
         if flight_operational_intent_reference:
             return True
         else:
             return False
+
 
 class FlightPlantoOperationalIntentProcessor:
     def __init__(self, flight_planning_request: FlightPlanningRequest):

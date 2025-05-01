@@ -354,7 +354,7 @@ class OperationalIntentReferenceHelper:
     def __init__(self) -> None:
         self.my_database_reader = FlightBlenderDatabaseReader()
 
-    def parse_stored_operational_intent_details(self, operation_id: str) -> Union[None, OperationalIntentStorage]:
+    def parse_stored_operational_intent_details(self, operation_id: str) -> None | OperationalIntentStorage:
         """
         Parses and retrieves stored operational intent details for a given operation ID.
         This method interacts with the database to fetch operational intent details,

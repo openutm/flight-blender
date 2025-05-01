@@ -50,9 +50,7 @@ class Command(BaseCommand):
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         if not flight_declaration:
-            raise CommandError(
-                "Flight Declaration with ID {flight_declaration_id} does not exist".format(flight_declaration_id=flight_declaration_id)
-            )
+            raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
         flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(
             flight_declaration=flight_declaration
         )

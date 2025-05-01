@@ -63,8 +63,8 @@ class Command(BaseCommand):
                 if clear_dss and f_a:
                     dss_op_int_id = f_a.dss_operational_intent_reference_id
                     stored_ovn = f_a.ovn
-                    logger.info("Clearing operational intent id %s in the DSS...", dss_op_int_id)                    
-                    
+                    logger.info("Clearing operational intent id %s in the DSS...", dss_op_int_id)
+
                     my_scd_dss_helper.delete_operational_intent(ovn=ovn, dss_operational_intent_ref_id=dss_op_int_id)
 
                     # Remove the conformance monitoring periodic job
@@ -76,4 +76,4 @@ class Command(BaseCommand):
 
         # Clear out Redis database
         logger.info("Clearing stored operational intents...")
-        my_database_writer.clear_stored_operational_intents()       
+        my_database_writer.clear_stored_operational_intents()

@@ -74,5 +74,3 @@ class RedisHelper:
         """
         r = self._get_redis_instance()
         r.flushdb()
-
-

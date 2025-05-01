@@ -61,7 +61,9 @@ class DSSOperationalIntentsCreator:
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
         current_state = flight_declaration.state
 
-        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
+        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(
+            flight_declaration=flight_declaration
+        )
 
         operational_intent = json.loads(flight_declaration.operational_intent)
 
