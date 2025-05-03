@@ -1,16 +1,14 @@
-import uuid
-from os import environ as env
-
 import json
 import logging
+import uuid
 from dataclasses import asdict
+from os import environ as env
 
 import requests
-
-from auth_helper import dss_auth_helper
 import urllib3
 from dacite import from_dict
 
+from auth_helper import dss_auth_helper
 from common.auth_token_audience_helper import generate_audience_from_base_url
 from common.database_operations import (
     FlightBlenderDatabaseReader,
@@ -191,9 +189,7 @@ class ConstraintOperations:
                             "geozone": constraint_detail.priority,
                         }
                     else:
-                        logger.warning(
-                            "Constraint reference not found in the database, : {constraint_id}".format(constraint_id=_constraint_reference.id)
-                        )
+                        logger.warning(f"Constraint reference not found in the database, : {_constraint_reference.id}")
                     constraints_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS

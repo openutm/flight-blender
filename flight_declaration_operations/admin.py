@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FlightOperationalIntentReference, FlightDeclaration
+from .models import FlightDeclaration, FlightOperationalIntentReference
 
 # Register your models here.
 
