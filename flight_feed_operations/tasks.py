@@ -41,8 +41,8 @@ def write_incoming_air_traffic_data(observation: str):
         str: The message ID of the added observation.
     """
     my_database_writer = FlightBlenderDatabaseWriter()
-
     obs = json.loads(observation)
+    obs["metadata"] = json.loads(obs["metadata"])
 
     try:
         single_air_traffic_observation = from_dict(data=obs, data_class=SingleAirtrafficObservation)
