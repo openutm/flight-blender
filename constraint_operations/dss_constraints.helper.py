@@ -114,7 +114,7 @@ class ConstraintOperations:
             constraints_retrieved = False
             constraint_references = []
             area_of_interest = QueryConstraintsPayload(area_of_interest=volume)
-            logger.info("Querying DSS for operational intents in the area..")
+            logger.info("Querying DSS for constraints in the area..")
             logger.debug(f"Area of interest {area_of_interest}")
             try:
                 query_constraints_request = requests.post(
@@ -123,7 +123,7 @@ class ConstraintOperations:
                     headers=headers,
                 )
             except Exception as re:
-                logger.error("Error in getting operational intent for the volume %s " % re)
+                logger.error("Error in getting constraint for the volume %s " % re)
             else:
                 # The DSS returned operational intent references as a list
                 _dss_constraint_references = query_constraints_request.json()
@@ -185,7 +185,7 @@ class ConstraintOperations:
                         _constraint_details_to_process = {
                             "volumes": json.loads(constraint_detail.volumes),
                             "type": json.loads(constraint_detail._type),
-                            "geozone": constraint_detail.priority,
+                            "geozone": constraint_detail.geozone,
                         }
                     else:
                         logger.warning(f"Constraint reference not found in the database, : {_constraint_reference.id}")
