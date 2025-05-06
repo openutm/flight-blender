@@ -450,7 +450,7 @@ def stream_rid_test_data(requested_flights, test_id):
                 traffic_source=traffic_source,
                 source_type=source_type,
                 icao_address=icao_address,
-                metadata=json.dumps(asdict(observation_metadata)),
+                metadata=asdict(observation_metadata),
             )
             # TODO: Write to database
             write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
