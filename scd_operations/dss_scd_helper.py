@@ -630,7 +630,7 @@ class SCDOperations:
     def get_nearby_operational_intents(self, volumes: list[Volume4D]) -> list[OperationalIntentDetailsUSSResponse]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
 
-        all_uss_op_int_details = []
+        nearby_operational_intents = []
         auth_token = self.get_auth_token()
         # Query the DSS for operational intentns
         query_op_int_url = self.dss_base_url + "dss/v1/operational_intent_references/query"
@@ -841,9 +841,9 @@ class SCDOperations:
                     )
 
                     uss_op_int_details = OperationalIntentDetailsUSSResponse(reference=op_int_reference, details=op_int_detail)
-                    all_uss_op_int_details.append(uss_op_int_details)
+                    nearby_operational_intents.append(uss_op_int_details)
 
-        return all_uss_op_int_details
+        return nearby_operational_intents
 
     def get_auth_token(self, audience: str = None):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
@@ -937,12 +937,14 @@ class SCDOperations:
         """This method processes the downloaded operational intents in to a GeoJSON object"""
         feat_collection = {"type": "FeatureCollection", "features": []}
         try:
-            all_uss_op_int_details = self.get_nearby_operational_intents(volumes=volumes)
+            nearby_operational_intents = self.get_nearby_operational_intents(volumes=volumes)
         except ConnectionError:
             raise ConnectionError("Could not reach peer USS for querying operational intent data")
 
         my_peer_uss_data_validator = PeerOperationalIntentValidator()
-        all_received_intents_valid = my_peer_uss_data_validator.validate_nearby_operational_intents(nearby_operational_intents=all_uss_op_int_details)
+        all_received_intents_valid = my_peer_uss_data_validator.validate_nearby_operational_intents(
+            nearby_operational_intents=nearby_operational_intents
+        )
         logger.info(
             "Validation processing completed for all received operational intents, result: {validation_status}".format(
                 validation_status=all_received_intents_valid
@@ -951,7 +953,7 @@ class SCDOperations:
         if not all_received_intents_valid:
             raise ValueError("Error in validating received data, cannot progress with processing")
 
-        for uss_op_int_detail in all_uss_op_int_details:
+        for uss_op_int_detail in nearby_operational_intents:
             operational_intent_volumes = uss_op_int_detail.details.volumes
             my_volume_converter = VolumesConverter()
             my_volume_converter.convert_volumes_to_geojson(volumes=operational_intent_volumes)
@@ -964,13 +966,15 @@ class SCDOperations:
         # This method checks if a flight volume has conflicts with any other volume in the airspace
         all_opints_to_check = []
         try:
-            all_uss_op_int_details = self.get_nearby_operational_intents(volumes=volumes)
+            nearby_operational_intents = self.get_nearby_operational_intents(volumes=volumes)
         except ConnectionError:
             logger.info("Raising Connection Error 2")
             raise ConnectionError("Could not reach peer USS for querying operational intent data")
 
         my_peer_uss_data_validator = PeerOperationalIntentValidator()
-        all_received_intents_valid = my_peer_uss_data_validator.validate_nearby_operational_intents(nearby_operational_intents=all_uss_op_int_details)
+        all_received_intents_valid = my_peer_uss_data_validator.validate_nearby_operational_intents(
+            nearby_operational_intents=nearby_operational_intents
+        )
         logger.info(
             "Validation processing completed for all received operational intents (SCD), result: {validation_status}".format(
                 validation_status=all_received_intents_valid
@@ -979,7 +983,7 @@ class SCDOperations:
         if not all_received_intents_valid:
             raise ValueError("Error in validating received data, cannot progress with processing")
 
-        for uss_op_int_detail in all_uss_op_int_details:
+        for uss_op_int_detail in nearby_operational_intents:
             if uss_op_int_detail.details.off_nominal_volumes:
                 operational_intent_volumes = uss_op_int_detail.details.off_nominal_volumes
             else:
