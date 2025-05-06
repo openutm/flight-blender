@@ -6,6 +6,7 @@ from dataclasses import asdict
 from os import environ as env
 
 import arrow
+import dacite
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
@@ -490,6 +491,12 @@ def set_telemetry(request):
         except KeyError as ke:
             return JsonResponse(
                 {"message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"},
+                status=400,
+                content_type="application/json",
+            )
+        except dacite.exceptions.WrongTypeError as wte:
+            return JsonResponse(
+                {"message": f"The parsing of telemetry object raised the following errors {wte}"},
                 status=400,
                 content_type="application/json",
             )

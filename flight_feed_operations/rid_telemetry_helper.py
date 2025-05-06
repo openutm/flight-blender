@@ -1,5 +1,6 @@
 from enum import Enum
 
+import dacite
 from dacite import from_dict
 
 from rid_operations.data_definitions import (
@@ -49,6 +50,7 @@ def generate_rid_telemetry_objects(
         s = from_dict(
             data_class=SubmittedTelemetryFlightDetails,
             data=current_signed_telemetry_request,
+            config=dacite.Config(cast=[Enum]),
         )
         all_rid_data.append(s)
 
@@ -74,6 +76,7 @@ def generate_unsigned_rid_telemetry_objects(
         s = from_dict(
             data_class=SubmittedTelemetryFlightDetails,
             data=current_unsigned_telemetry_request,
+            config=dacite.Config(cast=[Enum]),
         )
         all_rid_data.append(s)
 
@@ -85,8 +88,6 @@ class FlightBlenderTelemetryValidator:
     A class to validate and parse telemetry data for Flight Blender.
     Methods
     -------
-    parse_validate_current_state(current_state) -> RIDAircraftState:
-        Parses and validates a single current state object and returns an RIDAircraftState dataclass.
     parse_validate_current_states(current_states) -> List[RIDAircraftState]:
         Parses and validates a list of current state objects and returns a list of RIDAircraftState dataclasses.
     parse_validate_rid_details(rid_flight_details) -> RIDFlightDetails:
@@ -96,52 +97,6 @@ class FlightBlenderTelemetryValidator:
     validate_observation_key_exists(raw_request_data) -> bool:
         Validates that the 'observations' key exists in the raw request data.
     """
-
-    def parse_validate_current_state(self, current_state) -> RIDAircraftState:
-        def get_value(data, key, default=None):
-            return data[key] if key in data else default
-
-        timestamp = Time(
-            value=get_value(current_state["timestamp"], "value"),
-            format=get_value(current_state["timestamp"], "format"),
-        )
-        operational_status = RIDOperationalStatus(current_state["operational_status"])
-        _state_position = current_state["position"]
-
-        pressure_altitude = get_value(_state_position, "pressure_altitude", 0.0)
-        extrapolated = get_value(_state_position, "extrapolated", 0)
-
-        accuracy_h = HorizontalAccuracy(value=_state_position["accuracy_h"])
-        accuracy_v = VerticalAccuracy(value=_state_position["accuracy_v"])
-        height = RIDHeight(
-            reference=get_value(current_state["height"], "reference"),
-            distance=get_value(current_state["height"], "distance"),
-        )
-
-        position = RIDAircraftPosition(
-            pressure_altitude=pressure_altitude,
-            lat=_state_position["lat"],
-            alt=_state_position["alt"],
-            lng=_state_position["lng"],
-            accuracy_h=accuracy_h,
-            accuracy_v=accuracy_v,
-            extrapolated=extrapolated,
-            height=height,
-        )
-        speed_accuracy = SpeedAccuracy("SA3mps")
-
-        s = RIDAircraftState(
-            timestamp=timestamp,
-            operational_status=operational_status,
-            position=position,
-            track=current_state["track"],
-            speed=current_state["speed"],
-            timestamp_accuracy=current_state["timestamp_accuracy"],
-            speed_accuracy=speed_accuracy,
-            vertical_speed=current_state["vertical_speed"],
-        )
-
-        return s
 
     def parse_validate_current_states(self, current_states) -> list[RIDAircraftState]:
         """
@@ -155,90 +110,22 @@ class FlightBlenderTelemetryValidator:
         all_states = []
 
         for state in current_states:
-            s = self.parse_validate_current_state(current_state=state)
-            all_states.append(s)
+            aircraft_state = from_dict(
+                data_class=RIDAircraftState,
+                data=state,
+                config=dacite.Config(cast=[Enum]),
+            )
+            all_states.append(aircraft_state)
         return all_states
 
     def parse_validate_rid_details(self, rid_flight_details) -> RIDFlightDetails:
-        """
-        Parses and validates the RID flight details from the provided dictionary.
-        Args:
-            rid_flight_details (dict): A dictionary containing the RID flight details.
-        Returns:
-            RIDFlightDetails: An instance of RIDFlightDetails containing the parsed and validated details.
-        The expected structure of rid_flight_details dictionary:
-        {
-            "id": str,
-            "eu_classification": {
-                "category": str,
-                "class_": str
-            },
-            "uas_id": {
-                "serial_number": str,
-                "registration_id": str,
-                "utm_id": str
-            },
-            "operator_location": {
-                "position": {
-                    "lat": float,
-                    "lng": float
-                }
-            },
-            "operator_id": str,
-            "operation_description": str,
-            "auth_data": {
-                "format": str,
-                "data": str
-            }
-        }
-        """
-        eu_classification = None
-        if "eu_classification" in rid_flight_details.keys():
-            eu_classification_details = rid_flight_details["eu_classification"]
-            if eu_classification_details is not None:
-                eu_classification = UAClassificationEU(
-                    category=eu_classification_details["category"],
-                    class_=eu_classification_details["class_"],
-                )
-
-        if "uas_id" in rid_flight_details.keys():
-            uas_id_details = rid_flight_details["uas_id"]
-            uas_id = UASID(
-                serial_number=uas_id_details["serial_number"],
-                registration_id=uas_id_details["registration_id"],
-                utm_id=uas_id_details["utm_id"],
-            )
-        else:
-            uas_id = UASID(serial_number="", registration_id="", utm_id="")
-        if "operator_location" in rid_flight_details.keys():
-            if "position" in rid_flight_details["operator_location"]:
-                o_location_position = rid_flight_details["operator_location"]["position"]
-                operator_position = LatLngPoint(lat=o_location_position["lat"], lng=o_location_position["lng"])
-                operator_location = OperatorLocation(position=operator_position)
-            else:
-                operator_location = OperatorLocation(position=LatLngPoint(lat="", lng=""))
-        else:
-            operator_location = OperatorLocation(position=LatLngPoint(lat="", lng=""))
-
-        auth_data = RIDAuthData(format="", data="")
-        if "auth_data" in rid_flight_details.keys():
-            if rid_flight_details["auth_data"] is not None:
-                auth_data = RIDAuthData(
-                    format=rid_flight_details["auth_data"]["format"],
-                    data=rid_flight_details["auth_data"]["data"],
-                )
-
-        f_details = RIDFlightDetails(
-            id=rid_flight_details["id"],
-            eu_classification=eu_classification,
-            uas_id=uas_id,
-            operator_location=operator_location,
-            operator_id=rid_flight_details["operator_id"],
-            operation_description=rid_flight_details["operation_description"],
-            auth_data=auth_data,
+        flight_details = from_dict(
+            data_class=RIDFlightDetails,
+            data=rid_flight_details,
+            config=dacite.Config(cast=[Enum]),
         )
 
-        return f_details
+        return flight_details
 
     def validate_flight_details_current_states_exist(self, flight) -> bool:
         """

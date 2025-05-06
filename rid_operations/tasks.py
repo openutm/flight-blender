@@ -264,11 +264,10 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
                 traffic_source=traffic_source,
                 source_type=source_type,
                 icao_address=icao_address,
-                metadata=json.dumps(asdict(observation_and_metadata)),
+                metadata=asdict(observation_and_metadata),
             )
             write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
             logger.debug("Submitted observation..")
-            logger.debug("...")
 
 
 @app.task(name="stream_rid_test_data")

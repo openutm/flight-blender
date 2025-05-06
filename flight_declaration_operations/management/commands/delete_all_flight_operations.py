@@ -1,18 +1,18 @@
-import json
 import logging
 
 from django.core.management.base import BaseCommand
 
-from auth_helper.common import RedisHelper, get_redis
+# Configure logging
+from dotenv import find_dotenv, load_dotenv
+
 from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
 from scd_operations import dss_scd_helper
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("django")
+load_dotenv(find_dotenv())
 
 
 class Command(BaseCommand):
@@ -48,31 +48,30 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         clear_dss = options["dss"]
 
-        r = get_redis()
         dry_run = 1 if dry_run == "1" else 0
         my_database_reader = FlightBlenderDatabaseReader()
         my_database_writer = FlightBlenderDatabaseWriter()
         all_operations = my_database_reader.get_all_flight_declarations()
         my_scd_dss_helper = dss_scd_helper.SCDOperations()
-        for o in all_operations:
-            f_a = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=o)
+        for flight_declaration in all_operations:
+            f_a = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
             if dry_run:
                 logger.info("Dry Run : Deleting operation %s", o.id)
             else:
                 logger.info("Deleting operation %s...", o.id)
                 if clear_dss and f_a:
-                    dss_op_int_id = f_a.dss_operational_intent_reference_id
+                    operational_intent_id = str(f_a.id)
                     stored_ovn = f_a.ovn
                     logger.info("Clearing operational intent id %s in the DSS...", dss_op_int_id)
 
-                    my_scd_dss_helper.delete_operational_intent(ovn=ovn, dss_operational_intent_ref_id=dss_op_int_id)
+                    my_scd_dss_helper.delete_operational_intent(ovn=stored_ovn, dss_operational_intent_ref_id=operational_intent_id)
 
                     # Remove the conformance monitoring periodic job
-                    conformance_monitoring_job = my_database_reader.get_conformance_monitoring_task(flight_declaration=o)
+                    conformance_monitoring_job = my_database_reader.get_conformance_monitoring_task(flight_declaration=flight_declaration)
                     if conformance_monitoring_job:
                         my_database_writer.remove_conformance_monitoring_periodic_task(conformance_monitoring_task=conformance_monitoring_job)
 
-                o.delete()
+                flight_declaration.delete()
 
         # Clear out Redis database
         logger.info("Clearing stored operational intents...")

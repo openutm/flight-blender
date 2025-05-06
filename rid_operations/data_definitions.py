@@ -221,7 +221,7 @@ class RIDFlightDetails:
     id: str
     eu_classification: UAClassificationEU | None = None
     uas_id: UASID | None = None
-    operator_location: LatLngPoint | None = None
+    operator_location: OperatorLocation | None = None
     auth_data: RIDAuthData | None = None
     operator_id: str | None = ""
     operation_description: str | None = ""
