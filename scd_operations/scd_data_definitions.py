@@ -371,10 +371,14 @@ class OperationalIntentSubmissionError:
     result: str
     notes: str
 
+@dataclass
+class OtherError:
+    notes: str
+
 
 @dataclass
 class OperationalIntentSubmissionStatus:
-    dss_response: OperationalIntentSubmissionSuccess | OperationalIntentSubmissionError
+    dss_response: OperationalIntentSubmissionSuccess | OperationalIntentSubmissionError | OtherError
     status: str
     status_code: int
     message: str

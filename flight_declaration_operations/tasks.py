@@ -68,7 +68,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
         message_text=validation_ok_msg,
         level="info",
     )
-    logger.info("Submitting to DSS..")
+    logger.info("Submitting flight declaration to DSS..")
 
     opint_submission_result = my_dss_opint_creator.submit_flight_declaration_to_dss()
 

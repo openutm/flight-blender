@@ -21,4 +21,5 @@
     ],
     "sonarlint.disableTelemetry": true,
     "python.analysis.typeCheckingMode": "basic",
+    "editor.wordWrap": "on",
 }
