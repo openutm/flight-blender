@@ -83,8 +83,13 @@ class FlightDeclarationRequestValidator:
                 return {
                     "message": "Error in processing the submitted GeoJSON every Feature in a GeoJSON FeatureCollection must have a min_altitude and max_altitude data structure"
                 }, 400
-            min_altitude = Altitude(meters=props["min_altitude"]["meters"], datum=props["min_altitude"]["datum"])
-            max_altitude = Altitude(meters=props["max_altitude"]["meters"], datum=props["max_altitude"]["datum"])
+            try:
+                min_altitude = Altitude(meters=props["min_altitude"]["meters"], datum=props["min_altitude"]["datum"])
+                max_altitude = Altitude(meters=props["max_altitude"]["meters"], datum=props["max_altitude"]["datum"])
+            except TypeError:
+                return {
+                    "message": "Error in processing the submitted GeoJSON: every Feature in a GeoJSON FeatureCollection must have a min_altitude and max_altitude data structure"
+                }, 400
             logging.debug(min_altitude, max_altitude)
             all_features.append(s)
         return all_features, None
@@ -184,9 +189,9 @@ def set_flight_declaration(request):
     if not flight_declaration_geo_json:
         return JsonResponse({"message": "Flight declaration GeoJSON is required."}, status=400)
 
-    validated_features, error_response = my_flight_declaration_validator.validate_geojson(flight_declaration_geo_json)
+    validated_features_or_error, error_response = my_flight_declaration_validator.validate_geojson(flight_declaration_geo_json)
     if error_response:
-        return JsonResponse(error_response, status=400)
+        return JsonResponse(validated_features_or_error, status=400)
 
     start_datetime = request_data.get("start_datetime", arrow.now().isoformat())
     end_datetime = request_data.get("end_datetime", arrow.now().isoformat())

@@ -1,4 +1,5 @@
 import logging
+from os import environ as env
 
 from django.core.management.base import BaseCommand
 
@@ -48,6 +49,8 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         clear_dss = options["dss"]
 
+        USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
+
         dry_run = 1 if dry_run == "1" else 0
         my_database_reader = FlightBlenderDatabaseReader()
         my_database_writer = FlightBlenderDatabaseWriter()
@@ -56,15 +59,15 @@ class Command(BaseCommand):
         for flight_declaration in all_operations:
             f_a = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
             if dry_run:
-                logger.info("Dry Run : Deleting operation %s", o.id)
+                logger.info("Dry Run : Deleting operation %s", flight_declaration.id)
             else:
-                logger.info("Deleting operation %s...", o.id)
+                logger.info("Deleting operation %s...", flight_declaration.id)
                 if clear_dss and f_a:
                     operational_intent_id = str(f_a.id)
                     stored_ovn = f_a.ovn
-                    logger.info("Clearing operational intent id %s in the DSS...", dss_op_int_id)
-
-                    my_scd_dss_helper.delete_operational_intent(ovn=stored_ovn, dss_operational_intent_ref_id=operational_intent_id)
+                    logger.info("Clearing operational intent id %s in the DSS...", operational_intent_id)
+                    if stored_ovn and USSP_NETWORK_ENABLED:
+                        my_scd_dss_helper.delete_operational_intent(ovn=stored_ovn, dss_operational_intent_ref_id=operational_intent_id)
 
                     # Remove the conformance monitoring periodic job
                     conformance_monitoring_job = my_database_reader.get_conformance_monitoring_task(flight_declaration=flight_declaration)
