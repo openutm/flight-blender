@@ -26,17 +26,17 @@ if ENV_FILE:
 logger = logging.getLogger("django")
 
 
-class ConstraintsOperations:
+class USSConstraintsOperations:
     def __init__(self):
         self.dss_base_url = env.get("DSS_BASE_URL", "0")
         self.r = get_redis()
         self.database_reader = FlightBlenderDatabaseReader()
         self.database_writer = FlightBlenderDatabaseWriter()
 
-    def get_auth_token(self, audience: str | None = None):
+    def get_auth_token(self, audience: str = ""):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
-        if audience is None:
-            audience = env.get("DSS_SELF_AUDIENCE", 0)
+        if not audience:
+            audience = env.get("DSS_SELF_AUDIENCE", "")
         try:
             assert audience
         except AssertionError:

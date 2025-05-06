@@ -371,14 +371,22 @@ class OperationalIntentSubmissionError:
     result: str
     notes: str
 
+
 @dataclass
 class OtherError:
     notes: str
 
 
 @dataclass
+class EmtptyResponse:
+    """This method holds details of the data the DSS provides once a operational intent is deleted"""
+
+    message: str
+
+
+@dataclass
 class OperationalIntentSubmissionStatus:
-    dss_response: OperationalIntentSubmissionSuccess | OperationalIntentSubmissionError | OtherError
+    dss_response: OperationalIntentSubmissionSuccess | OperationalIntentSubmissionError | OtherError | EmtptyResponse
     status: str
     status_code: int
     message: str

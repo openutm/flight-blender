@@ -25,6 +25,7 @@ from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
+from constraint_operations.dss_constraints_helper import ConstraintOperations, ConstraintsHelper
 from rid_operations import rtree_helper
 
 from .flight_planning_data_definitions import FlightPlanningInjectionData
@@ -37,6 +38,7 @@ from .scd_data_definitions import (
     DeleteOperationalIntentConstuctor,
     DeleteOperationalIntentResponse,
     DeleteOperationalIntentResponseSuccess,
+    EmtptyResponse,
     FlightPlanCurrentStatus,
     ImplicitSubscriptionParameters,
     LatLng,
@@ -57,6 +59,7 @@ from .scd_data_definitions import (
     OperationalIntentUSSDetails,
     OpInttoCheckDetails,
     OpIntUpdateCheckResultCodes,
+    OtherError,
     QueryOperationalIntentPayload,
     Radius,
     ShouldSendtoDSSProcessingResponse,
@@ -626,6 +629,8 @@ class SCDOperations:
         self.r = get_redis()
         self.database_reader = FlightBlenderDatabaseReader()
         self.database_writer = FlightBlenderDatabaseWriter()
+        self.constraints_helper = ConstraintOperations()
+        self.constraints_writer = ConstraintsHelper()
 
     def get_nearby_operational_intents(self, volumes: list[Volume4D]) -> list[OperationalIntentDetailsUSSResponse]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
@@ -845,14 +850,15 @@ class SCDOperations:
 
         return nearby_operational_intents
 
-    def get_auth_token(self, audience: str = None):
+    def get_auth_token(self, audience: str = ""):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
-        if audience is None:
-            audience = env.get("DSS_SELF_AUDIENCE", 0)
+        if not audience:
+            audience = env.get("DSS_SELF_AUDIENCE", "")
         try:
             assert audience
         except AssertionError:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
+            return
         auth_token = {}
         try:
             auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="scd")
@@ -902,9 +908,9 @@ class SCDOperations:
         )
 
         dss_response = dss_r.json()
-        dss_r_status_code = dss_r.status_code
+        dss_request_status_code = dss_r.status_code
 
-        if dss_r_status_code == 200:
+        if dss_request_status_code == 200:
             common_200_response = CommonDSS2xxResponse(message="Successfully deleted operational intent id %s" % dss_operational_intent_ref_id)
             dss_response_formatted = DeleteOperationalIntentResponseSuccess(
                 subscribers=dss_response["subscribers"],
@@ -915,15 +921,15 @@ class SCDOperations:
                 status=200,
                 message=common_200_response,
             )
-        elif dss_r_status_code == 404:
+        elif dss_request_status_code == 404:
             common_400_response = CommonDSS4xxResponse(message="URL endpoint not found")
             delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=404, message=common_400_response)
 
-        elif dss_r_status_code == 409:
+        elif dss_request_status_code == 409:
             common_400_response = CommonDSS4xxResponse(message="The provided ovn does not match the current version of existing operational intent")
             delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=409, message=common_400_response)
 
-        elif dss_r_status_code == 412:
+        elif dss_request_status_code == 412:
             common_400_response = CommonDSS4xxResponse(
                 message="The client attempted to delete the operational intent while marked as Down in the DSS"
             )
@@ -1256,11 +1262,11 @@ class SCDOperations:
 
         if not pre_submission_checks.should_submit_update_payload_to_dss:
             d_r = None
-            dss_r_status_code = 999
+            dss_request_status_code = 999
             message = "Update to flight will not be processed, will not be submitting to DSS"
             opint_update_result = OperationalIntentUpdateResponse(
                 dss_response=d_r,
-                status=dss_r_status_code,
+                status=dss_request_status_code,
                 message=message,
                 additional_information=pre_submission_checks,
             )
@@ -1279,9 +1285,9 @@ class SCDOperations:
             headers=headers,
         )
         dss_response = dss_r.json()
-        dss_r_status_code = dss_r.status_code
+        dss_request_status_code = dss_r.status_code
 
-        if dss_r_status_code == 200:
+        if dss_request_status_code == 200:
             # Update request was successful, notify the subscribers
             subscribers = dss_response["subscribers"]
             all_subscribers: list[SubscriberToNotify] = []
@@ -1309,14 +1315,14 @@ class SCDOperations:
             logger.info("Updated Operational Intent in the DSS successfully...")
 
             message = CommonDSS4xxResponse(message="Successfully updated operational intent")
-            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_r_status_code, message=message)
+            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_request_status_code, message=message)
             return opint_update_result
 
-        elif dss_r_status_code in [400, 401, 403, 409, 412, 413, 429]:
+        elif dss_request_status_code in [400, 401, 403, 409, 412, 413, 429]:
             # Update unsuccessful
             d_r = OperationalIntentUpdateErrorResponse(message=dss_response["message"])
             message = CommonDSS4xxResponse(message="Error in updating operational intent in the DSS")
-            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_r_status_code, message=message)
+            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_request_status_code, message=message)
             return opint_update_result
 
     def create_and_submit_operational_intent_reference(
@@ -1339,16 +1345,16 @@ class SCDOperations:
             OperationalIntentSubmissionStatus: The status of the operational intent submission, including success or failure details.
         """
         auth_token = self.get_auth_token()
-        logger.info("Creating new operational intent...")
 
         # A token from authority was received, we can now submit the operational intent
+        logger.info("Creating new operational intent...")
         new_entity_id = str(uuid.uuid4())
+        management_key = str(uuid.uuid4())
         new_operational_intent_ref_creation_url = self.dss_base_url + "dss/v1/operational_intent_references/" + new_entity_id
         headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + auth_token["access_token"],
         }
-        management_key = str(uuid.uuid4())
         airspace_keys = []
         flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
         implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=flight_blender_base_url)
@@ -1363,7 +1369,7 @@ class SCDOperations:
             status="not started",
             status_code=503,
             message="Service is not available / connection not established",
-            dss_response={},
+            dss_response=OtherError(notes="Service is not available / connection not established"),
             operational_intent_id=new_entity_id,
         )
         # Query other USSes for operational intent
@@ -1374,12 +1380,14 @@ class SCDOperations:
         try:
             all_existing_operational_intent_details = self.get_latest_airspace_volumes(volumes=volumes)
         except ValueError:
-            logger.info("Error in processing peer USS data, cannot create a new operational intent..")
+            logger.info("Cannot create a new operational intent, get latest airspace volumes from DSS failed..")
             d_r = OperationalIntentSubmissionStatus(
                 status="peer_uss_data_sharing_issue",
                 status_code=900,
-                message="Error in processing peer USS data, cannot create a new operational intent",
-                dss_response={},
+                message="Cannot create a new operational intent, get latest airspace volumes from DSS failed, peer querying failed",
+                dss_response=OtherError(
+                    notes="Cannot create a new operational intent, get latest airspace volumes from DSS failed, peer querying failed"
+                ),
                 operational_intent_id="",
             )
             return d_r
@@ -1391,7 +1399,7 @@ class SCDOperations:
                 status="peer_uss_data_sharing_issue",
                 status_code=408,
                 message="Error in processing peer USS data, cannot create a new operational intent",
-                dss_response={},
+                dss_response=OtherError(notes="Error in processing peer USS data, cannot create a new operational intent"),
                 operational_intent_id="",
             )
             return d_r
@@ -1404,6 +1412,11 @@ class SCDOperations:
             )
         else:
             logger.info("No operational intent references found in the DSS")
+
+        # Get all the constraints from DSS
+        all_nearby_constraints = self.constraints_helper.get_nearby_constraints(volumes=volumes)
+        self.constraints_writer.write_nearby_constraints(constraints=all_nearby_constraints)
+        # TODO: Check intersection
 
         if all_existing_operational_intent_details:
             if isinstance(all_existing_operational_intent_details, list):
@@ -1433,92 +1446,90 @@ class SCDOperations:
         else:
             deconflicted = True
             logger.info("No existing operational intent references in the DSS, deconfliction status: %s" % deconflicted)
-        # logger.info("Airspace keys: %s" % airspace_keys)
-        operational_intent_reference.keys = airspace_keys
-        # logger.info("Deconfliction status: %s" % deconflicted)
-        # logger.info("Flight deconfliction status checked")
-        opint_creation_payload = json.loads(json.dumps(asdict(operational_intent_reference)))
-        dss_response = {}
 
-        if deconflicted:
-            try:
-                dss_r = requests.put(
-                    new_operational_intent_ref_creation_url,
-                    json=opint_creation_payload,
-                    headers=headers,
-                )
-            except Exception as re:
-                logger.error("Error in putting operational intent in the DSS %s " % re)
-                d_r = OperationalIntentSubmissionStatus(
-                    status="failure",
-                    status_code=500,
-                    message=re,
-                    dss_response={},
-                    operational_intent_id=new_entity_id,
-                )
-                dss_r_status_code = d_r.status_code
-                dss_response = {"error": re}
-            else:
-                dss_response = dss_r.json()
-                dss_r_status_code = dss_r.status_code
-
-            if dss_r_status_code == 201:
-                subscribers = dss_response["subscribers"]
-                all_subscribers_to_notify = []
-                for s in subscribers:
-                    subs = s["subscriptions"]
-                    all_subs = []
-                    for subscription in subs:
-                        s_s = SubscriptionState(
-                            subscription_id=subscription["subscription_id"],
-                            notification_index=subscription["notification_index"],
-                        )
-                        all_subs.append(s_s)
-                    subscriber_to_notify = SubscriberToNotify(subscriptions=all_subs, uss_base_url=s["uss_base_url"])
-                    all_subscribers_to_notify.append(subscriber_to_notify)
-
-                o_i_r = dss_response["operational_intent_reference"]
-                my_op_int_ref_helper = OperationalIntentReferenceHelper()
-                operational_intent_r: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
-                    operational_intent_reference=o_i_r
-                )
-                dss_creation_response = OperationalIntentSubmissionSuccess(
-                    operational_intent_reference=operational_intent_r,
-                    subscribers=all_subscribers_to_notify,
-                )
-                logger.info("Successfully created operational intent in the DSS")
-                logger.debug("Response details from the DSS %s" % dss_r.text)
-                d_r = OperationalIntentSubmissionStatus(
-                    status="success",
-                    status_code=201,
-                    message="Successfully created operational intent in the DSS",
-                    dss_response=dss_creation_response,
-                    operational_intent_id=new_entity_id,
-                )
-            elif dss_r_status_code in [400, 401, 403, 409, 43, 429]:
-                dss_creation_response_error = OperationalIntentSubmissionError(result=dss_response, notes=dss_r.text)
-                logger.error("DSS operational intent reference creation error %s" % dss_r.text)
-                d_r = OperationalIntentSubmissionStatus(
-                    status="failure",
-                    status_code=dss_r_status_code,
-                    message=dss_r.text,
-                    dss_response=dss_creation_response_error,
-                    operational_intent_id=new_entity_id,
-                )
-
-            else:
-                d_r.status_code = dss_r_status_code
-                d_r.dss_response = dss_response
-                logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
-        else:
+        if not deconflicted:
             # When flight is not deconflicted, Flight Blender assigns a error code of 500
             logger.info("Flight not deconflicted, there are other flights in the area..")
             d_r = OperationalIntentSubmissionStatus(
                 status="conflict_with_flight",
                 status_code=500,
                 message="Flight not deconflicted, there are other flights in the area",
-                dss_response={},
+                dss_response=OtherError(notes="Flight not deconflicted, there are other flights in the area"),
                 operational_intent_id="",
             )
+            return d_r
+
+        operational_intent_reference.key = airspace_keys
+
+        opint_creation_payload = json.loads(json.dumps(asdict(operational_intent_reference)))
+
+        try:
+            dss_request = requests.put(
+                new_operational_intent_ref_creation_url,
+                json=opint_creation_payload,
+                headers=headers,
+            )
+        except Exception as re:
+            logger.error("Error in putting operational intent in the DSS %s " % re)
+            d_r = OperationalIntentSubmissionStatus(
+                status="failure",
+                status_code=500,
+                message=re.__str__(),
+                dss_response=OtherError(notes=re.__str__()),
+                operational_intent_id=new_entity_id,
+            )
+            dss_request_status_code = d_r.status_code
+
+        else:
+            dss_response = dss_request.json()
+            dss_request_status_code = dss_request.status_code
+
+        if dss_request_status_code == 201:
+            subscribers = dss_response["subscribers"]
+            all_subscribers_to_notify = []
+            for s in subscribers:
+                subs = s["subscriptions"]
+                all_subs = []
+                for subscription in subs:
+                    s_s = SubscriptionState(
+                        subscription_id=subscription["subscription_id"],
+                        notification_index=subscription["notification_index"],
+                    )
+                    all_subs.append(s_s)
+                subscriber_to_notify = SubscriberToNotify(subscriptions=all_subs, uss_base_url=s["uss_base_url"])
+                all_subscribers_to_notify.append(subscriber_to_notify)
+
+            o_i_r = dss_response["operational_intent_reference"]
+            my_op_int_ref_helper = OperationalIntentReferenceHelper()
+            operational_intent_r: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
+                operational_intent_reference=o_i_r
+            )
+            dss_creation_response = OperationalIntentSubmissionSuccess(
+                operational_intent_reference=operational_intent_r,
+                subscribers=all_subscribers_to_notify,
+            )
+            logger.info("Successfully created operational intent in the DSS")
+            logger.debug("Response details from the DSS %s" % dss_response.text)
+            d_r = OperationalIntentSubmissionStatus(
+                status="success",
+                status_code=201,
+                message="Successfully created operational intent in the DSS",
+                dss_response=dss_creation_response,
+                operational_intent_id=new_entity_id,
+            )
+        elif dss_request_status_code in [400, 401, 403, 409, 43, 429]:
+            logger.error("DSS operational intent reference creation error %s" % dss_request.text)
+            d_r = OperationalIntentSubmissionStatus(
+                status="failure",
+                status_code=dss_request_status_code,
+                message=dss_request.text,
+                dss_response=OperationalIntentSubmissionError(result=dss_response.text, notes=dss_request.text),
+                operational_intent_id=new_entity_id,
+            )
+
+        else:
+            d_r.status_code = dss_request_status_code
+            d_r.dss_response = dss_response
+            logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
 
         return d_r

@@ -18,7 +18,12 @@ from geo_fence_operations.data_definitions import GeofencePayload
 from scd_operations.dss_scd_helper import VolumesConverter
 from scd_operations.scd_data_definitions import Time, Volume4D
 
-from .data_definitions import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
+from .data_definitions import (
+    Constraint,
+    ConstraintDetails,
+    ConstraintReference,
+    QueryConstraintsPayload,
+)
 
 load_dotenv(find_dotenv())
 
@@ -258,15 +263,18 @@ class ConstraintOperations:
                         data_class=ConstraintDetails,
                         data=_constraint_details_to_process,
                     )
-                    _constraint = Constraint(reference=_constraint_reference_processed, details=_constraint_details_processed)
+                    _constraint = Constraint(
+                        reference=_constraint_reference_processed,
+                        details=_constraint_details_processed,
+                    )
                     all_constraints_in_aoi.append(_constraint)
 
         return all_constraints_in_aoi
 
     def get_auth_token(self, audience: str = ""):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
-        if audience is None:
-            audience = env.get("DSS_SELF_AUDIENCE", 0)
+        if not audience:
+            audience = env.get("DSS_SELF_AUDIENCE", "")
         try:
             assert audience
         except AssertionError:
