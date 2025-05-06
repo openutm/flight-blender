@@ -98,7 +98,6 @@ class ConstraintOperations:
     def get_nearby_constraints(self, volumes: list[Volume4D]) -> list[Constraint]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
 
-        all_uss_op_int_details = []
         auth_token = self.get_auth_token()
         # Query the DSS for operational intentns
         query_constraints_url = self.dss_base_url + "dss/v1/constraint_references/query"
@@ -108,8 +107,8 @@ class ConstraintOperations:
         }
 
         flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
-        constraints_helper = ConstraintsHelper()
-        all_constraint_details: list[Constraint] = []
+
+        all_constraints_in_aoi: list[Constraint] = []
 
         for volume in volumes:
             constraints_retrieved = False
@@ -260,9 +259,9 @@ class ConstraintOperations:
                         data=_constraint_details_to_process,
                     )
                     _constraint = Constraint(reference=_constraint_reference_processed, details=_constraint_details_processed)
-                    all_constraint_details.append(_constraint)
+                    all_constraints_in_aoi.append(_constraint)
 
-        return all_constraint_details
+        return all_constraints_in_aoi
 
     def get_auth_token(self, audience: str = ""):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
