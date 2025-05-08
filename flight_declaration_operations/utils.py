@@ -63,7 +63,11 @@ class OperationalIntentsConverter:
 
         self.all_features = []
 
-        def utm_converter(self, shapely_shape: shapely.geometry.base.BaseGeometry, inverse: bool = False) -> shapely.geometry.base.BaseGeometry:
+    def utm_converter(
+            self,
+            shapely_shape: shapely.geometry.base.BaseGeometry,
+            inverse: bool = False,
+        ) -> shapely.geometry.base.BaseGeometry:
             """
             Converts coordinates between latitude/longitude and UTM.
 
@@ -84,13 +88,18 @@ class OperationalIntentsConverter:
             coordinates = geo_interface["coordinates"]
 
             if point_or_polygon == "Polygon":
-                new_coordinates = [[proj(*point, inverse=inverse) for point in linring] for linring in coordinates]
+                new_coordinates = [
+                    [proj(*point, inverse=inverse) for point in linring]
+                    for linring in coordinates
+                ]
             elif point_or_polygon == "Point":
                 new_coordinates = proj(*coordinates, inverse=inverse)
             else:
                 raise RuntimeError(f"Unexpected geo_interface type: {point_or_polygon}")
 
-            return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
+            return shapely.geometry.shape(
+                {"type": point_or_polygon, "coordinates": tuple(new_coordinates)}
+            )
 
     def convert_operational_intent_to_geo_json(self, volumes: list[Volume4D]):
         """
@@ -104,7 +113,9 @@ class OperationalIntentsConverter:
             None
         """
         for volume in volumes:
-            geo_json_features = self._convert_operational_intent_to_geojson_feature(volume)
+            geo_json_features = self._convert_operational_intent_to_geojson_feature(
+                volume
+            )
             self.geo_json["features"] += geo_json_features
 
     def create_partial_operational_intent_ref(
@@ -134,11 +145,15 @@ class OperationalIntentsConverter:
             end_datetime=end_datetime,
         )
 
-        op_int_ref = PartialCreateOperationalIntentReference(volumes=all_v4d, state=state, priority=priority, off_nominal_volumes=[])
+        op_int_ref = PartialCreateOperationalIntentReference(
+            volumes=all_v4d, state=state, priority=priority, off_nominal_volumes=[]
+        )
 
         return op_int_ref
 
-    def convert_geo_json_to_volume_4_d(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
+    def convert_geo_json_to_volume_4_d(
+        self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str
+    ) -> list[Volume4D]:
         """
         Converts a GeoJSON FeatureCollection to a list of Volume4D objects.
 
@@ -160,7 +175,9 @@ class OperationalIntentsConverter:
             self.all_features.append(buffered_geom)
 
             coordinates = list(zip(*buffered_geom.exterior.coords.xy))
-            polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+            polygon_vertices = [
+                LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]
+            ]
 
             volume_3d = Volume3D(
                 outline_polygon=Plgn(vertices=polygon_vertices),
@@ -208,7 +225,9 @@ class OperationalIntentsConverter:
         buffered_shape = point.buffer(0.0001)
 
         coordinates = list(zip(*buffered_shape.exterior.coords.xy))
-        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+        polygon_vertices = [
+            LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]
+        ]
 
         volume_3d = Volume3D(
             outline_polygon=Plgn(vertices=polygon_vertices),
@@ -246,9 +265,15 @@ class OperationalIntentsConverter:
         time_start = volume.time_start.value
         time_end = volume.time_end.value
 
-        if "outline_polygon" in volume_dict and volume_dict["outline_polygon"] is not None:
+        if (
+            "outline_polygon" in volume_dict
+            and volume_dict["outline_polygon"] is not None
+        ):
             outline_polygon = volume_dict["outline_polygon"]
-            point_list = [Point(vertex["lng"], vertex["lat"]) for vertex in outline_polygon["vertices"]]
+            point_list = [
+                Point(vertex["lng"], vertex["lat"])
+                for vertex in outline_polygon["vertices"]
+            ]
             outline_polygon = Polygon([[p.x, p.y] for p in point_list])
             self.all_features.append(outline_polygon)
 
@@ -262,10 +287,15 @@ class OperationalIntentsConverter:
             }
             geo_json_features.append(polygon_feature)
 
-        if "outline_circle" in volume_dict and volume_dict["outline_circle"] is not None:
+        if (
+            "outline_circle" in volume_dict
+            and volume_dict["outline_circle"] is not None
+        ):
             outline_circle = volume_dict["outline_circle"]
             circle_radius = outline_circle["radius"]["value"]
-            center_point = Point(outline_circle["center"]["lng"], outline_circle["center"]["lat"])
+            center_point = Point(
+                outline_circle["center"]["lng"], outline_circle["center"]["lat"]
+            )
             utm_center = self.utm_converter(shapely_shape=center_point)
             buffered_circle = utm_center.buffer(circle_radius)
             converted_circle = self.utm_converter(buffered_circle, inverse=True)
