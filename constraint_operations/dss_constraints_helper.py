@@ -34,7 +34,7 @@ if ENV_FILE:
 logger = logging.getLogger("django")
 
 
-class ConstraintsHelper:
+class ConstraintsWriter:
     def __init__(self) -> None:
         self.my_database_reader = FlightBlenderDatabaseReader()
         self.my_database_writer = FlightBlenderDatabaseWriter()

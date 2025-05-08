@@ -25,7 +25,7 @@ from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
-from constraint_operations.dss_constraints_helper import ConstraintOperations, ConstraintsHelper
+from constraint_operations.dss_constraints_helper import ConstraintOperations, ConstraintsWriter
 from rid_operations import rtree_helper
 
 from .flight_planning_data_definitions import FlightPlanningInjectionData
@@ -630,7 +630,7 @@ class SCDOperations:
         self.database_reader = FlightBlenderDatabaseReader()
         self.database_writer = FlightBlenderDatabaseWriter()
         self.constraints_helper = ConstraintOperations()
-        self.constraints_writer = ConstraintsHelper()
+        self.constraints_writer = ConstraintsWriter()
 
     def get_nearby_operational_intents(self, volumes: list[Volume4D]) -> list[OperationalIntentDetailsUSSResponse]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
