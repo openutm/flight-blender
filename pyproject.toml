@@ -50,7 +50,7 @@ dependencies = [
     "shapely==2.0.6",
     "tldextract==5.1.3",
     "uas-standards==3.4.0",
-    "wait-for-it==2.3.0",
+    "wait-for-it==2.3.0"
 ]
 
 [dependency-groups]
