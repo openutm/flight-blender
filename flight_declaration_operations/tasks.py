@@ -116,11 +116,14 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
 
+        if not flight_declaration:
+            logger.error("Flight Declaration with ID %s not found in the database" % flight_declaration_id)
+            return
+
         fa = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
 
         logger.info("Saving created operational intent details..")
         created_opint = fa.id
-        view_r_bounds = flight_declaration.bounds
 
         my_database_writer.update_flight_operational_intent_reference_with_dss_response(
             flight_declaration=flight_declaration,
@@ -194,7 +197,7 @@ def send_operational_update_message(
     flight_declaration_id: str,
     message_text: str,
     level: str = "info",
-    timestamp: str = None,
+    timestamp: str = arrow.now().isoformat(),
 ) -> None:
     """
     Sends an operational update message for a flight declaration.
@@ -208,9 +211,6 @@ def send_operational_update_message(
     Returns:
         None
     """
-    if not timestamp:
-        now = arrow.now()
-        timestamp = now.isoformat()
 
     update_message = FlightDeclarationUpdateMessage(body=message_text, level=level, timestamp=timestamp)
     amqp_connection_url = env.get("AMQP_URL", "")

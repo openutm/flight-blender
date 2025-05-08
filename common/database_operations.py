@@ -100,7 +100,7 @@ class FlightBlenderDatabaseReader:
         )
         return observations
 
-    def get_all_flight_declarations(self) -> None | list[FlightDeclaration]:
+    def get_all_flight_declarations(self) -> list[FlightDeclaration]:
         flight_declarations = FlightDeclaration.objects.all()
         return flight_declarations
 
