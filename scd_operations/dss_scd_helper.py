@@ -4,28 +4,30 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime
 from os import environ as env
-from typing import Union
 
 import arrow
 import requests
 import shapely.geometry
 import tldextract
 import urllib3
-from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Proj
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
-from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
+from auth_helper.dss_auth_helper import AuthorityCredentialsGetter
 from common.auth_token_audience_helper import generate_audience_from_base_url
 from common.data_definitions import VALID_OPERATIONAL_INTENT_STATES
 from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
-from constraint_operations.dss_constraints_helper import ConstraintOperations, ConstraintsHelper
+from constraint_operations.data_definitions import (
+    Constraint,
+)
+from constraint_operations.dss_constraints_helper import ConstraintOperations
+from geo_fence_operations.data_definitions import GeofencePayload
 from rid_operations import rtree_helper
 
 from .flight_planning_data_definitions import FlightPlanningInjectionData
@@ -349,6 +351,65 @@ class VolumesConverter:
         return geo_json_features
 
 
+class ConstraintsWriter:
+    def __init__(self) -> None:
+        self.my_database_reader = FlightBlenderDatabaseReader()
+        self.my_database_writer = FlightBlenderDatabaseWriter()
+
+    # def parse_stored_constraint_details(self, geozone_id: str) -> ConstraintDetails | None:
+    #     pass
+
+    # def parse_and_load_stored_constraint_reference(self, geozone_id: str) -> ConstraintReference | None:
+    #     pass
+
+    def write_nearby_constraints(self, constraints: list[Constraint]):
+        # This method writes the constraint reference and constraint details to the database
+        my_volumes_converter = VolumesConverter()
+        for constraint in constraints:
+            constraint_reference = constraint.reference
+            constraint_details = constraint.details
+            # Check if the constraint reference already exists in the database
+            constraint_reference_exists = self.my_database_reader.check_constraint_reference_id_exists(
+                constraint_reference_id=str(constraint_reference.id)
+            )
+            geofence_id = str(uuid.uuid4())
+
+            if constraint_reference_exists:
+                geo_fence = self.my_database_reader.get_geofence_by_constraint_reference_id(constraint_reference_id=str(constraint_reference.id))
+                geofence_id = geo_fence.id
+
+            my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
+
+            geofence_payload = GeofencePayload(
+                id=geofence_id,
+                raw_geo_fence=my_volumes_converter.geojson,
+                upper_limit=my_volumes_converter.upper_altitude,
+                lower_limit=my_volumes_converter.upper_altitude,
+                altitude_ref=my_volumes_converter.altitude_ref,
+                name=constraint_details.volumes[0].name,
+                bounds=my_volumes_converter.get_bounds(),
+                status=1,
+                message="Constraint from peer USS",
+                is_test_dataset=False,
+                start_datetime=constraint_reference.time_start,
+                end_datetime=constraint_reference.time_end,
+            )
+
+            geo_fence = self.my_database_writer.create_or_update_geofence(geofence_payload=geofence_payload)
+            # Create a new ConstraintReference object
+
+            self.my_database_writer.create_or_update_constraint_reference(
+                constraint_reference=constraint_reference,
+                geofence=geo_fence,
+            )
+
+            # Write the constraint details to the database
+            self.my_database_writer.create_or_update_constraint_detail(
+                constraint=constraint_details,
+                geofence=geo_fence,
+            )
+
+
 class OperationalIntentReferenceHelper:
     """
     A class to parse Operational Intent References into Dataclass objects
@@ -630,7 +691,7 @@ class SCDOperations:
         self.database_reader = FlightBlenderDatabaseReader()
         self.database_writer = FlightBlenderDatabaseWriter()
         self.constraints_helper = ConstraintOperations()
-        self.constraints_writer = ConstraintsHelper()
+        self.constraints_writer = ConstraintsWriter()
 
     def get_nearby_operational_intents(self, volumes: list[Volume4D]) -> list[OperationalIntentDetailsUSSResponse]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
@@ -851,9 +912,9 @@ class SCDOperations:
         return nearby_operational_intents
 
     def get_auth_token(self, audience: str = ""):
-        my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
+        my_authorization_helper = AuthorityCredentialsGetter()
         if not audience:
-            audience = env.get("DSS_SELF_AUDIENCE", "")
+            audience = env.get("DSS_SELF_AUDIENCE", "localhost")
         try:
             assert audience
         except AssertionError:
@@ -1509,7 +1570,7 @@ class SCDOperations:
                 subscribers=all_subscribers_to_notify,
             )
             logger.info("Successfully created operational intent in the DSS")
-            logger.debug("Response details from the DSS %s" % dss_response.text)
+            logger.debug("Response details from the DSS %s" % dss_response)
             d_r = OperationalIntentSubmissionStatus(
                 status="success",
                 status_code=201,
