@@ -609,15 +609,34 @@ class FlightBlenderDatabaseWriter:
         except IntegrityError:
             return False
 
-    def create_flight_operational_intent_reference(self, flight_declaration_id: str) -> bool:
+    def create_flight_operational_intent_reference(
+        self,
+        flight_declaration: FlightDeclaration,
+        created_operational_intent_reference: OperationalIntentReferenceDSSResponse,
+    ) -> bool:
         try:
-            flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
-            flight_operational_intent_reference = FlightOperationalIntentReference(declaration=flight_declaration)
+            flight_operational_intent_reference = FlightOperationalIntentReference(
+                id=created_operational_intent_reference.id,
+                declaration=flight_declaration,
+                uss_availability=created_operational_intent_reference.uss_availability,
+                ovn=created_operational_intent_reference.ovn,
+                manager=created_operational_intent_reference.manager,
+                state=created_operational_intent_reference.state,
+                uss_base_url=created_operational_intent_reference.uss_base_url,
+                version=created_operational_intent_reference.version,
+                time_start=created_operational_intent_reference.time_start.value,
+                time_end=created_operational_intent_reference.time_end.value,
+                subscription_id=created_operational_intent_reference.subscription_id,
+            )
             flight_operational_intent_reference.save()
             return True
         except FlightDeclaration.DoesNotExist:
             return False
-        except IntegrityError:
+        except IntegrityError as ie:
+            logger.error("IntegrityError while creating operational intent reference: %s" % ie)
+            return False
+        except Exception as e:
+            logger.error("Error while creating operational intent reference: %s" % e)
             return False
 
     def update_telemetry_timestamp(self, flight_declaration_id: str) -> bool:
@@ -670,8 +689,6 @@ class FlightBlenderDatabaseWriter:
             flight_operational_intent_reference.subscription_id = update_operational_intent_reference.subscription_id
             flight_operational_intent_reference.manager = update_operational_intent_reference.manager
 
-            print(update_operational_intent_reference)
-
             flight_operational_intent_reference.save()
             return True
         except Exception:
@@ -696,10 +713,7 @@ class FlightBlenderDatabaseWriter:
             flight_operational_intent_detail.priority = operational_intent_details.priority
             flight_operational_intent_detail.save()
             return True
-        except Exception as e:
-            print("---------")
-            print(e)
-            print("---------")
+        except Exception:
             return False
 
     def update_flight_operational_intent_reference_op_int_ovn(

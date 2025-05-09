@@ -36,7 +36,7 @@ load_dotenv(find_dotenv())
 
 @app.task(name="submit_flight_declaration_to_dss_async")
 def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
-    my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id)
+    my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=flight_declaration_id)
     my_database_reader = FlightBlenderDatabaseReader()
     my_database_writer = FlightBlenderDatabaseWriter()
 
@@ -122,15 +122,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
 
         fa = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
 
-        logger.info("Saving created operational intent details..")
         created_opint = fa.id
-
-        my_database_writer.update_flight_operational_intent_reference_with_dss_response(
-            flight_declaration=flight_declaration,
-            dss_operational_intent_reference_id=str(created_opint),
-            dss_response=opint_submission_result.dss_response,
-            ovn=opint_submission_result.dss_response.operational_intent_reference.ovn,
-        )
 
         logger.info("Changing operation state..")
         original_state = flight_declaration.state
@@ -164,8 +156,8 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
         subscribers = opint_submission_result.dss_response.subscribers
         if subscribers:
             for subscriber in subscribers:
-                subscriptions_raw = subscriber["subscriptions"]
-                uss_base_url = subscriber["uss_base_url"]
+                subscriptions_raw = subscriber.subscriptions
+                uss_base_url = subscriber.uss_base_url
                 flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
 
                 if uss_base_url != flight_blender_base_url:  # There are others who are subscribesd, not just ourselves

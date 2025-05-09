@@ -100,9 +100,7 @@ class FlightDeclarationRequestValidator:
             all_features.append(s)
         return all_features, None
 
-    def validate_dates(
-        self, start_datetime: str, end_datetime: str
-    ) -> tuple[dict, int] | tuple[None, None]:
+    def validate_dates(self, start_datetime: str, end_datetime: str) -> tuple[dict, int] | tuple[None, None]:
         """
         Validates the start and end dates for the flight declaration.
 
@@ -117,15 +115,8 @@ class FlightDeclarationRequestValidator:
         s_datetime = arrow.get(start_datetime)
         e_datetime = arrow.get(end_datetime)
         two_days_from_now = now.shift(days=2)
-        if (
-            s_datetime < now
-            or e_datetime < now
-            or e_datetime > two_days_from_now
-            or s_datetime > two_days_from_now
-        ):
-            return {
-                "message": "A flight declaration cannot have a start / end time in the past or after two days from current time."
-            }, 400
+        if s_datetime < now or e_datetime < now or e_datetime > two_days_from_now or s_datetime > two_days_from_now:
+            return {"message": "A flight declaration cannot have a start / end time in the past or after two days from current time."}, 400
         return None, None
 
     def check_intersections(
@@ -140,21 +131,11 @@ class FlightDeclarationRequestValidator:
         is_approved = True
         declaration_state = 0 if ussp_network_enabled else 1
 
-        if GeoFence.objects.filter(
-            start_datetime__lte=start_datetime, end_datetime__gte=end_datetime
-        ).exists():
-            all_fences_within_timelimits = GeoFence.objects.filter(
-                start_datetime__lte=start_datetime, end_datetime__gte=end_datetime
-            )
-            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(
-                index_name=GEOFENCE_INDEX_BASEPATH
-            )
-            my_rtree_helper.generate_geo_fence_index(
-                all_fences=all_fences_within_timelimits
-            )
-            all_relevant_fences = my_rtree_helper.check_box_intersection(
-                view_box=view_box
-            )
+        if GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime).exists():
+            all_fences_within_timelimits = GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime)
+            my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
+            my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
+            all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_box)
             my_rtree_helper.clear_rtree_index()
             if all_relevant_fences:
                 is_approved = False
@@ -170,17 +151,9 @@ class FlightDeclarationRequestValidator:
                 end_datetime__gte=start_datetime,
                 state__in=ACTIVE_OPERATIONAL_STATES,
             )
-            my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(
-                index_name=FLIGHT_DECLARATION_INDEX_BASEPATH
-            )
-            my_fd_rtree_helper.generate_flight_declaration_index(
-                all_flight_declarations=all_declarations_within_timelimits
-            )
-            all_relevant_declarations = (
-                my_fd_rtree_helper.check_flight_declaration_box_intersection(
-                    view_box=view_box
-                )
-            )
+            my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_INDEX_BASEPATH)
+            my_fd_rtree_helper.generate_flight_declaration_index(all_flight_declarations=all_declarations_within_timelimits)
+            all_relevant_declarations = my_fd_rtree_helper.check_flight_declaration_box_intersection(view_box=view_box)
             my_fd_rtree_helper.clear_rtree_index()
             if all_relevant_declarations:
                 is_approved = False
@@ -220,9 +193,7 @@ class FlightDeclarationDelete(generics.DestroyAPIView):
 def set_flight_declaration(request):
     request_data = request.data
     my_flight_declaration_validator = FlightDeclarationRequestValidator()
-    error_response, status_code = my_flight_declaration_validator.validate_request(
-        request_data=request_data
-    )
+    error_response, status_code = my_flight_declaration_validator.validate_request(request_data=request_data)
     if error_response:
         return JsonResponse(error_response, status=status_code)
 
@@ -230,21 +201,15 @@ def set_flight_declaration(request):
         return {"message": "Unsupported Media Type"}, 415
     flight_declaration_geo_json = request_data.get("flight_declaration_geo_json")
     if not flight_declaration_geo_json:
-        return JsonResponse(
-            {"message": "Flight declaration GeoJSON is required."}, status=400
-        )
+        return JsonResponse({"message": "Flight declaration GeoJSON is required."}, status=400)
 
-    validated_features_or_error, error_response = (
-        my_flight_declaration_validator.validate_geojson(flight_declaration_geo_json)
-    )
+    validated_features_or_error, error_response = my_flight_declaration_validator.validate_geojson(flight_declaration_geo_json)
     if error_response:
         return JsonResponse(validated_features_or_error, status=400)
 
     start_datetime = request_data.get("start_datetime", arrow.now().isoformat())
     end_datetime = request_data.get("end_datetime", arrow.now().isoformat())
-    error_response, status_code = my_flight_declaration_validator.validate_dates(
-        start_datetime, end_datetime
-    )
+    error_response, status_code = my_flight_declaration_validator.validate_dates(start_datetime, end_datetime)
     if error_response:
         return JsonResponse(error_response, status=status_code)
 
@@ -257,13 +222,11 @@ def set_flight_declaration(request):
     aircraft_id = request_data["aircraft_id"]
 
     my_operational_intent_converter = OperationalIntentsConverter()
-    parital_op_int_ref = (
-        my_operational_intent_converter.create_partial_operational_intent_ref(
-            geo_json_fc=flight_declaration_geo_json,
-            start_datetime=start_datetime,
-            end_datetime=end_datetime,
-            priority=0,
-        )
+    parital_op_int_ref = my_operational_intent_converter.create_partial_operational_intent_ref(
+        geo_json_fc=flight_declaration_geo_json,
+        start_datetime=start_datetime,
+        end_datetime=end_datetime,
+        priority=0,
     )
     bounds = my_operational_intent_converter.get_geo_json_bounds()
     view_box = [float(i) for i in bounds.split(",")]
@@ -294,13 +257,7 @@ def set_flight_declaration(request):
         state=declaration_state,
     )
     flight_declaration.save()
-
-    my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(
-        flight_declaration=flight_declaration
-    )
-    flight_declaration.add_state_history_entry(
-        new_state=0, original_state=0, notes="Created Declaration"
-    )
+    flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
     if declaration_state == 8:
         flight_declaration.add_state_history_entry(
             new_state=declaration_state,
@@ -309,6 +266,7 @@ def set_flight_declaration(request):
         )
 
     flight_declaration_id = str(flight_declaration.id)
+
     send_operational_update_message.delay(
         flight_declaration_id=flight_declaration_id,
         message_text="Flight Declaration created..",
@@ -324,9 +282,7 @@ def set_flight_declaration(request):
         )
     else:
         if declaration_state == 0 and USSP_NETWORK_ENABLED:
-            submit_flight_declaration_to_dss_async.delay(
-                flight_declaration_id=flight_declaration_id
-            )
+            submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
 
     creation_response = FlightDeclarationCreateResponse(
         id=flight_declaration_id,
@@ -376,39 +332,23 @@ def network_flight_declaration_details(request, flight_declaration_id):
 
     if not USSP_NETWORK_ENABLED:
         return JsonResponse(
-            asdict(
-                HTTP400Response(
-                    message="USSP network cannot be queried since it is not enabled in Flight Blender"
-                )
-            ),
+            asdict(HTTP400Response(message="USSP network cannot be queried since it is not enabled in Flight Blender")),
             status=400,
             content_type="application/json",
         )
 
-    if not my_database_reader.check_flight_declaration_exists(
-        flight_declaration_id=flight_declaration_id
-    ):
+    if not my_database_reader.check_flight_declaration_exists(flight_declaration_id=flight_declaration_id):
         return JsonResponse(
-            asdict(
-                HTTP404Response(
-                    message=f"Flight Declaration with ID {flight_declaration_id} not found"
-                )
-            ),
+            asdict(HTTP404Response(message=f"Flight Declaration with ID {flight_declaration_id} not found")),
             status=404,
             content_type="application/json",
         )
 
-    flight_declaration = my_database_reader.get_flight_declaration_by_id(
-        flight_declaration_id=flight_declaration_id
-    )
+    flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
 
     if flight_declaration.state not in [0, 1, 2, 3, 4]:
         return JsonResponse(
-            asdict(
-                HTTP400Response(
-                    message="USSP network can only be queried for operational intents that are active"
-                )
-            ),
+            asdict(HTTP400Response(message="USSP network can only be queried for operational intents that are active")),
             status=400,
             content_type="application/json",
         )
@@ -417,27 +357,16 @@ def network_flight_declaration_details(request, flight_declaration_id):
     operational_intent_volumes = operational_intent_volumes_raw["volumes"]
 
     my_operational_intent_parser = OperationalIntentReferenceHelper()
-    all_volumes = [
-        my_operational_intent_parser.parse_volume_to_volume4D(volume=volume)
-        for volume in operational_intent_volumes
-    ]
+    all_volumes = [my_operational_intent_parser.parse_volume_to_volume4D(volume=volume) for volume in operational_intent_volumes]
 
     my_scd_helper = SCDOperations()
     try:
-        operational_intent_geojson = (
-            my_scd_helper.get_and_process_nearby_operational_intents(
-                volumes=all_volumes
-            )
-        )
+        operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=all_volumes)
     except (ValueError, ConnectionError):
-        logger.info(
-            "The received data from peer USS had errors and failed validation checks.."
-        )
+        logger.info("The received data from peer USS had errors and failed validation checks..")
         operational_intent_geojson = []
 
-    return JsonResponse(
-        operational_intent_geojson, status=200, content_type="application/json"
-    )
+    return JsonResponse(operational_intent_geojson, status=200, content_type="application/json")
 
 
 @method_decorator(requires_scopes([FLIGHTBLENDER_READ_SCOPE]), name="dispatch")
@@ -467,36 +396,18 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
     serializer_class = FlightDeclarationSerializer
     pagination_class = StandardResultsSetPagination
 
-    def get_relevant_flight_declaration(
-        self, start_date, end_date, view_port: list[float]
-    ):
+    def get_relevant_flight_declaration(self, start_date, end_date, view_port: list[float]):
         present = arrow.now()
-        s_date = (
-            arrow.get(start_date, "YYYY-MM-DD")
-            if start_date
-            else present.shift(days=-1)
-        )
-        e_date = (
-            arrow.get(end_date, "YYYY-MM-DD") if end_date else present.shift(days=1)
-        )
+        s_date = arrow.get(start_date, "YYYY-MM-DD") if start_date else present.shift(days=-1)
+        e_date = arrow.get(end_date, "YYYY-MM-DD") if end_date else present.shift(days=1)
 
-        all_fd_within_timelimits = FlightDeclaration.objects.filter(
-            start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat()
-        )
+        all_fd_within_timelimits = FlightDeclaration.objects.filter(start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat())
         logger.info("Found %s flight declaration" % len(all_fd_within_timelimits))
 
         if view_port:
-            my_rtree_helper = FlightDeclarationRTreeIndexFactory(
-                index_name=FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH
-            )
-            my_rtree_helper.generate_flight_declaration_index(
-                all_flight_declarations=all_fd_within_timelimits
-            )
-            all_relevant_fences = (
-                my_rtree_helper.check_flight_declaration_box_intersection(
-                    view_box=view_port
-                )
-            )
+            my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH)
+            my_rtree_helper.generate_flight_declaration_index(all_flight_declarations=all_fd_within_timelimits)
+            all_relevant_fences = my_rtree_helper.check_flight_declaration_box_intersection(view_box=view_port)
             relevant_id_set = [i["flight_declaration_id"] for i in all_relevant_fences]
             my_rtree_helper.clear_rtree_index()
             return FlightDeclaration.objects.filter(id__in=relevant_id_set)
@@ -509,9 +420,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         view = self.request.query_params.get("view", None)
         view_port = [float(i) for i in view.split(",")] if view else []
 
-        return self.get_relevant_flight_declaration(
-            view_port=view_port, start_date=start_date, end_date=end_date
-        )
+        return self.get_relevant_flight_declaration(view_port=view_port, start_date=start_date, end_date=end_date)
 
     def get(self, request, *args, **kwargs):
         return self.list(request, *args, **kwargs)
@@ -527,31 +436,21 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         req = request.data
         my_flight_declaration_validator = FlightDeclarationRequestValidator()
 
-        error_response, status_code = my_flight_declaration_validator.validate_request(
-            request_data=req
-        )
+        error_response, status_code = my_flight_declaration_validator.validate_request(request_data=req)
         if error_response:
             return JsonResponse(error_response, status=status_code)
 
         flight_declaration_geo_json = req.get("flight_declaration_geo_json")
         if not flight_declaration_geo_json:
-            return JsonResponse(
-                {"message": "Flight declaration GeoJSON is required."}, status=400
-            )
+            return JsonResponse({"message": "Flight declaration GeoJSON is required."}, status=400)
 
-        validated_features, error_response = (
-            my_flight_declaration_validator.validate_geojson(
-                flight_declaration_geo_json
-            )
-        )
+        validated_features, error_response = my_flight_declaration_validator.validate_geojson(flight_declaration_geo_json)
         if error_response:
             return JsonResponse(error_response, status=400)
 
         start_datetime = req.get("start_datetime", arrow.now().isoformat())
         end_datetime = req.get("end_datetime", arrow.now().isoformat())
-        error_response, status_code = my_flight_declaration_validator.validate_dates(
-            start_datetime, end_datetime
-        )
+        error_response, status_code = my_flight_declaration_validator.validate_dates(start_datetime, end_datetime)
         if error_response:
             return JsonResponse(error_response, status=status_code)
 
@@ -562,24 +461,20 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         aircraft_id = req["aircraft_id"]
 
         my_operational_intent_converter = OperationalIntentsConverter()
-        parital_op_int_ref = (
-            my_operational_intent_converter.create_partial_operational_intent_ref(
-                geo_json_fc=flight_declaration_geo_json,
-                start_datetime=start_datetime,
-                end_datetime=end_datetime,
-                priority=0,
-            )
+        parital_op_int_ref = my_operational_intent_converter.create_partial_operational_intent_ref(
+            geo_json_fc=flight_declaration_geo_json,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            priority=0,
         )
         bounds = my_operational_intent_converter.get_geo_json_bounds()
         view_box = [float(i) for i in bounds.split(",")]
 
-        intersection_check_results = (
-            my_flight_declaration_validator.check_intersections(
-                start_datetime=start_datetime,
-                end_datetime=end_datetime,
-                view_box=view_box,
-                ussp_network_enabled=USSP_NETWORK_ENABLED,
-            )
+        intersection_check_results = my_flight_declaration_validator.check_intersections(
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            view_box=view_box,
+            ussp_network_enabled=USSP_NETWORK_ENABLED,
         )
 
         all_relevant_fences = intersection_check_results.all_relevant_fences
@@ -603,12 +498,8 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         flight_declaration.save()
 
         my_database_writer = FlightBlenderDatabaseWriter()
-        my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(
-            flight_declaration=flight_declaration
-        )
-        flight_declaration.add_state_history_entry(
-            new_state=0, original_state=0, notes="Created Declaration"
-        )
+        my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(flight_declaration=flight_declaration)
+        flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
         if declaration_state == 8:
             flight_declaration.add_state_history_entry(
                 new_state=declaration_state,
@@ -632,9 +523,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
             )
         else:
             if declaration_state == 0 and USSP_NETWORK_ENABLED:
-                submit_flight_declaration_to_dss_async.delay(
-                    flight_declaration_id=flight_declaration_id
-                )
+                submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
 
         creation_response = FlightDeclarationCreateResponse(
             id=flight_declaration_id,

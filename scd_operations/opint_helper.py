@@ -13,11 +13,7 @@ from common.database_operations import (
 
 from . import dss_scd_helper
 from .data_definitions import FlightDeclarationOperationalIntentStorageDetails
-from .scd_data_definitions import (
-    NotifyPeerUSSPostPayload,
-    OperationalIntentSubmissionStatus,
-    OtherError,
-)
+from .scd_data_definitions import NotifyPeerUSSPostPayload, OperationalIntentSubmissionStatus, OperationalIntentUSSDetails, OtherError
 
 logger = logging.getLogger("django")
 
@@ -35,8 +31,7 @@ class DSSOperationalIntentsCreator:
         self.my_database_writer = FlightBlenderDatabaseWriter()
 
     def validate_flight_declaration_start_end_time(self) -> bool:
-        my_database_reader = FlightBlenderDatabaseReader()
-        flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
+        flight_declaration = self.my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
         # check that flight declaration start and end time is in the next two hours
         now = arrow.now()
         two_hours_from_now = now.shift(hours=2)
@@ -55,7 +50,6 @@ class DSSOperationalIntentsCreator:
 
     def submit_flight_declaration_to_dss(self) -> OperationalIntentSubmissionStatus:
         """This method submits a flight declaration as a operational intent to the DSS"""
-
         new_entity_id = str(uuid.uuid4())
 
         flight_declaration = self.my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
@@ -68,12 +62,8 @@ class DSSOperationalIntentsCreator:
                 dss_response=OtherError(notes="Flight Declaration with ID %s not found in the database" % self.flight_declaration_id),
                 operational_intent_id=new_entity_id,
             )
-        flight_operational_intent_reference = self.my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(
-            flight_declaration=flight_declaration
-        )
 
         current_state = flight_declaration.state
-
         operational_intent = json.loads(flight_declaration.operational_intent)
         operational_intent_data = from_dict(
             data_class=FlightDeclarationOperationalIntentStorageDetails,
@@ -86,7 +76,7 @@ class DSSOperationalIntentsCreator:
             logger.error("Error in retrieving auth_token, check if the auth server is running properly, error details displayed above")
             notes = "Error in getting a token from the Auth server, flight not submitted to the DSS, check if the auth server is running properly"
             logger.error(auth_token["error"])
-            op_int_submission = OperationalIntentSubmissionStatus(
+            op_int_submission_result = OperationalIntentSubmissionStatus(
                 status="auth_server_error",
                 status_code=500,
                 message="Error in getting a token from the Auth server",
@@ -101,22 +91,30 @@ class DSSOperationalIntentsCreator:
                 notes=notes,
             )
         else:
-            op_int_submission = self.my_scd_dss_helper.create_and_submit_operational_intent_reference(
+            op_int_submission_result = self.my_scd_dss_helper.create_and_submit_operational_intent_reference(
                 state=operational_intent_data.state,
                 volumes=operational_intent_data.volumes,
                 off_nominal_volumes=operational_intent_data.off_nominal_volumes,
                 priority=operational_intent_data.priority,
             )
 
-            if op_int_submission.status_code == 201:
+            if op_int_submission_result.status_code == 201:
                 # Operational intent successfully created in the DSS
                 # Write the flight_operatinal_intent_reference to the database
                 logger.info("Successfully created operational intent in the DSS, updating database..")
-                self.my_database_writer.update_flight_operational_intent_reference(
-                    flight_operational_intent_reference=flight_operational_intent_reference,
-                    update_operational_intent_reference=op_int_submission.dss_response.operational_intent_reference,
-                )
 
+                self.my_database_writer.create_flight_operational_intent_reference(
+                    flight_declaration=flight_declaration,
+                    created_operational_intent_reference=op_int_submission_result.dss_response.operational_intent_reference,
+                )
+                self.my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
+                    flight_declaration=flight_declaration,
+                    operational_intent_details_payload=OperationalIntentUSSDetails(
+                        volumes=operational_intent_data.volumes,
+                        off_nominal_volumes=operational_intent_data.off_nominal_volumes,
+                        priority=operational_intent_data.priority,
+                    ),
+                )
                 # Update operation state
                 logger.info("Updating state from Processing to Accepted...")
                 self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=1)
@@ -125,23 +123,23 @@ class DSSOperationalIntentsCreator:
                     original_state=current_state,
                     notes="Operational Intent successfully submitted to DSS and is Accepted",
                 )
-            elif op_int_submission.status_code in [400, 409, 401, 403, 412, 413, 429]:
-                if op_int_submission.status_code == 400:
+            elif op_int_submission_result.status_code in [400, 409, 401, 403, 412, 413, 429]:
+                if op_int_submission_result.status_code == 400:
                     notes = "Error during submission of operational intent, the DSS rejected because one or more parameters was missing"
-                elif op_int_submission.status_code == 409:
+                elif op_int_submission_result.status_code == 409:
                     notes = "Error during submission of operational intent, the DSS rejected it with because the latest airspace keys was not present"
-                elif op_int_submission.status_code == 401:
+                elif op_int_submission_result.status_code == 401:
                     notes = "There was a error in submitting the operational intent to the DSS, the token was invalid"
-                elif op_int_submission.status_code == 403:
+                elif op_int_submission_result.status_code == 403:
                     notes = "There was a error in submitting the operational intent to the DSS, the appropriate scope was not present"
-                elif op_int_submission.status_code == 413:
+                elif op_int_submission_result.status_code == 413:
                     notes = "There was a error in submitting the operational intent to the DSS, the operational intent was too large"
-                elif op_int_submission.status_code == 429:
+                elif op_int_submission_result.status_code == 429:
                     notes = "There was a error in submitting the operational intent to the DSS, too many requests were submitted to the DSS"
                 # Update operation state, the DSS rejected our data
                 logger.info(
                     "There was a error in submitting the operational intent to the DSS, the DSS rejected our submission with a {status_code} response code".format(
-                        status_code=op_int_submission.status_code
+                        status_code=op_int_submission_result.status_code
                     )
                 )
                 self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
@@ -150,7 +148,7 @@ class DSSOperationalIntentsCreator:
                     original_state=current_state,
                     notes=notes,
                 )
-            elif op_int_submission.status_code == 500 and op_int_submission.message == "conflict_with_flight":
+            elif op_int_submission_result.status_code == 500 and op_int_submission_result.message == "conflict_with_flight":
                 # Update operation state, DSS responded with a error
                 logger.info("Flight is not deconflicted, updating state from Processing to Rejected ..")
                 self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
@@ -160,7 +158,7 @@ class DSSOperationalIntentsCreator:
                     notes="Flight was not deconflicted correctly",
                 )
 
-        return op_int_submission
+        return op_int_submission_result
 
     def notify_peer_uss(self, uss_base_url: str, notification_payload: NotifyPeerUSSPostPayload):
         """This method submits a flight declaration as a operational intent to the DSS"""
