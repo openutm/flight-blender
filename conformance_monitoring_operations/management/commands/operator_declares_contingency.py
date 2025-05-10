@@ -17,9 +17,10 @@ from scd_operations.dss_scd_helper import (
     SCDOperations,
 )
 from scd_operations.scd_data_definitions import Polygon
-from scd_operations.data_definitions import  FlightDeclarationOperationalIntentStorageDetails
-import json 
+from scd_operations.data_definitions import FlightDeclarationOperationalIntentStorageDetails
+import json
 from dacite import from_dict
+
 load_dotenv(find_dotenv())
 
 ENV_FILE = find_dotenv()
@@ -122,7 +123,6 @@ class Command(BaseCommand):
             rid_obs_within_all_volumes = []
             all_altitudes = []
             for v in declared_volumes:
-                
                 altitude_lower = v.altitude_lower.value
                 altitude_upper = v.altitude_upper.value
                 all_altitudes.append(altitude_lower)
