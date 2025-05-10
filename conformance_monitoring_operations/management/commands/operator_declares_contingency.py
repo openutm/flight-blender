@@ -16,8 +16,10 @@ from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
     SCDOperations,
 )
-from scd_operations.scd_data_definitions import Polygon, Volume4D
-
+from scd_operations.scd_data_definitions import Polygon
+from scd_operations.data_definitions import  FlightDeclarationOperationalIntentStorageDetails
+import json 
+from dacite import from_dict
 load_dotenv(find_dotenv())
 
 ENV_FILE = find_dotenv()
@@ -107,21 +109,28 @@ class Command(BaseCommand):
             rid_location = Point(lon_dd, lat_dd)
             # check if it is within declared bounds
             # TODO: This code is same as the C7check in the conformance / utils file. Need to refactor
-            declared_volumes = flight_declaration.operational_intent["volumes"]
+
+            operational_intent = json.loads(flight_declaration.operational_intent)
+            operational_intent_data = from_dict(
+                data_class=FlightDeclarationOperationalIntentStorageDetails,
+                data=operational_intent,
+            )
+            declared_volumes = operational_intent_data.volumes
+
             all_polygon_altitudes: list[PolygonAltitude] = []
 
             rid_obs_within_all_volumes = []
             all_altitudes = []
             for v in declared_volumes:
-                v4d = from_dict(data_class=Volume4D, data=v)
-                altitude_lower = v4d.altitude_lower.value
-                altitude_upper = v4d.altitude_upper.value
+                
+                altitude_lower = v.altitude_lower.value
+                altitude_upper = v.altitude_upper.value
                 all_altitudes.append(altitude_lower)
                 all_altitudes.append(altitude_upper)
-                outline_polygon = v4d.volume.outline_polygon
+                outline_polygon = v.volume.outline_polygon
                 point_list = []
-                for vertex in outline_polygon["vertices"]:
-                    p = Point(vertex["lng"], vertex["lat"])
+                for vertex in outline_polygon.vertices:
+                    p = Point(vertex.lng, vertex.lat)
                     point_list.append(p)
                 outline_polygon = Polygon([[p.x, p.y] for p in point_list])
                 pa = PolygonAltitude(
@@ -147,8 +156,8 @@ class Command(BaseCommand):
                 nominal_or_off_nominal_volumes = my_op_int_converter.buffer_point_to_volume4d(
                     lat=lat_dd,
                     lng=lon_dd,
-                    start_datetime=flight_declaration.start_datetime,
-                    end_datetime=flight_declaration.end_datetime,
+                    start_datetime=flight_declaration.start_datetime.isoformat(),
+                    end_datetime=flight_declaration.end_datetime.isoformat(),
                     min_altitude=min_altitude,
                     max_altitude=max_altitude,
                 )

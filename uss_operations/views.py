@@ -88,7 +88,9 @@ def uss_update_opint_details(request):
     my_geo_json_converter = VolumesConverter()
     op_int_update_details_data = request.data
 
-    incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data)
+    incoming_update_payload = from_dict(
+        data_class=UpdateChangedOpIntDetailsPost, data=op_int_update_details_data
+    )
     # Write the operational Intent
     operation_id_str = incoming_update_payload.operational_intent_id
 
@@ -101,9 +103,13 @@ def uss_update_opint_details(request):
     # Update the subscription state
 
     if incoming_update_payload.operational_intent:
-        updated_operational_intent_reference = incoming_update_payload.operational_intent.reference
+        updated_operational_intent_reference = (
+            incoming_update_payload.operational_intent.reference
+        )
 
-        update_operational_intent_details = incoming_update_payload.operational_intent.details
+        update_operational_intent_details = (
+            incoming_update_payload.operational_intent.details
+        )
 
         database_writer.create_or_update_peer_operational_intent_details(
             peer_operational_intent_id=operation_id_str,
@@ -144,8 +150,12 @@ def uss_update_opint_details(request):
         # Read the new operational intent
     # Store the opint, see what other operations conflict the opint
 
-    updated_success = UpdateOperationalIntent(message="New or updated full operational intent information received successfully ")
-    return JsonResponse(json.loads(json.dumps(updated_success, cls=EnhancedJSONEncoder)), status=204)
+    updated_success = UpdateOperationalIntent(
+        message="New or updated full operational intent information received successfully "
+    )
+    return JsonResponse(
+        json.loads(json.dumps(updated_success, cls=EnhancedJSONEncoder)), status=204
+    )
 
 
 @api_view(["GET"])
@@ -167,7 +177,9 @@ def USSOpIntDetailTelemetry(request, opint_id):
             position=None,
             velocity=None,
         ),
-        next_telemetry_opportunity=Time(format="RFC3339", value=five_seconds_from_now.isoformat()),
+        next_telemetry_opportunity=Time(
+            format="RFC3339", value=five_seconds_from_now.isoformat()
+        ),
     )
     return JsonResponse(
         json.loads(json.dumps(asdict(telemetry_response), cls=EnhancedJSONEncoder)),
@@ -187,7 +199,9 @@ def USSOpIntDetailTelemetry(request, opint_id):
     allow_any=True,
 )
 def peer_uss_report_notification(request):
-    error_report = from_dict(data_class=ErrorReport, data=request.data, config=Config(cast=[Enum]))
+    error_report = from_dict(
+        data_class=ErrorReport, data=request.data, config=Config(cast=[Enum])
+    )
     logger.info("Error report received: %s" % error_report)
     report_id = str(uuid.uuid4())
     error_report.report_id = report_id
@@ -201,22 +215,30 @@ def peer_uss_report_notification(request):
 @requires_scopes(["utm.constraint_processing"])
 def uss_constraint_details(request, constraint_id):
     my_database_reader = FlightBlenderDatabaseReader()
-    constraint_id_exists = my_database_reader.check_constraint_id_exists(constraint_id=constraint_id)
+    constraint_id_exists = my_database_reader.check_constraint_id_exists(
+        constraint_id=constraint_id
+    )
     if constraint_id_exists:
-        constraint_details = my_database_reader.get_constraint_details(constraint_id=constraint_id)
+        constraint_details = my_database_reader.get_constraint_details(
+            constraint_id=constraint_id
+        )
         if constraint_details:
             return JsonResponse(
                 json.loads(json.dumps(constraint_details, cls=EnhancedJSONEncoder)),
                 status=200,
             )
         else:
-            not_found_response = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % str(constraint_id))
+            not_found_response = GenericErrorResponseMessage(
+                message="Requested Constraint with id %s not found" % str(constraint_id)
+            )
             return JsonResponse(
                 json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)),
                 status=404,
             )
     else:
-        not_found_response = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % str(constraint_id))
+        not_found_response = GenericErrorResponseMessage(
+            message="Requested Constraint with id %s not found" % str(constraint_id)
+        )
         return JsonResponse(
             json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)),
             status=404,
@@ -229,21 +251,35 @@ def uss_update_constraint_details(request):
     my_database_reader = FlightBlenderDatabaseReader()
     my_database_writer = FlightBlenderDatabaseWriter()
     constraint_update_details = request.data
-    constraint_update_detail = from_dict(data_class=PutConstraintDetailsParameters, data=constraint_update_details)
+    constraint_update_detail = from_dict(
+        data_class=PutConstraintDetailsParameters, data=constraint_update_details
+    )
 
     constraint_id = constraint_update_detail.constraint_id
-    constraint_id_exists = my_database_reader.check_constraint_id_exists(constraint_id=constraint_id)
+    constraint_id_exists = my_database_reader.check_constraint_id_exists(
+        constraint_id=constraint_id
+    )
     if constraint_id_exists and constraint_update_detail.constraint:
-        my_database_writer.write_constraint_details(constraint_id=constraint_id, constraint=constraint_update_detail.constraint)
+        my_database_writer.write_constraint_details(
+            constraint_id=constraint_id, constraint=constraint_update_detail.constraint
+        )
     else:
         logger.error("Constraint ID %s does not exist" % constraint_id)
 
     constraint_reference_id = constraint_update_detail.constraint_id
-    constraint_reference_exists = my_database_reader.check_constraint_reference_id_exists(constraint_reference_id=constraint_reference_id)
+    constraint_reference_exists = (
+        my_database_reader.check_constraint_reference_id_exists(
+            constraint_reference_id=constraint_reference_id
+        )
+    )
     if constraint_reference_exists and constraint_update_detail.constraint:
-        my_database_writer.write_constraint_reference_details(constraint=constraint_update_detail.constraint)
+        my_database_writer.write_constraint_reference_details(
+            constraint=constraint_update_detail.constraint
+        )
     else:
-        logger.error("Constraint reference ID %s does not exist" % constraint_reference_id)
+        logger.error(
+            "Constraint reference ID %s does not exist" % constraint_reference_id
+        )
     return JsonResponse({}, status=204)
 
 
@@ -251,11 +287,17 @@ def uss_update_constraint_details(request):
 @requires_scopes(["utm.strategic_coordination"])
 def uss_operational_intent_details(request, opint_id):
     my_database_reader = FlightBlenderDatabaseReader()
-    flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(str(opint_id))
+    flight_operational_intent_reference = (
+        my_database_reader.get_flight_operational_intent_reference_by_id(str(opint_id))
+    )
     if flight_operational_intent_reference:
         operational_intent_id = str(flight_operational_intent_reference.declaration.id)
 
-        stored_details = my_database_reader.get_composite_operational_intent_by_declaration_id(flight_declaration_id=operational_intent_id)
+        stored_details = (
+            my_database_reader.get_composite_operational_intent_by_declaration_id(
+                flight_declaration_id=operational_intent_id
+            )
+        )
         details_full = stored_details.operational_intent_details
         reference_full = stored_details.operational_intent_reference
         # Load existing opint details
@@ -289,7 +331,9 @@ def uss_operational_intent_details(request, opint_id):
             version=int(stored_version),
             state=stored_state,
             ovn=stored_ovn,
-            time_start=Time(format="RFC3339", value=reference_full.time_start.isoformat()),
+            time_start=Time(
+                format="RFC3339", value=reference_full.time_start.isoformat()
+            ),
             time_end=Time(format="RFC3339", value=reference_full.time_end.isoformat()),
             uss_base_url=stored_uss_base_url,
             subscription_id=stored_subscription_id,
@@ -300,16 +344,24 @@ def uss_operational_intent_details(request, opint_id):
             off_nominal_volumes=stored_off_nominal_volumes,
         )
 
-        operational_intent = OperationalIntentDetailsUSSResponse(reference=reference, details=details)
-        operational_intent_response = OperationalIntentDetails(operational_intent=operational_intent)
+        operational_intent = OperationalIntentDetailsUSSResponse(
+            reference=reference, details=details
+        )
+        operational_intent_response = OperationalIntentDetails(
+            operational_intent=operational_intent
+        )
 
         return JsonResponse(
-            json.loads(json.dumps(operational_intent_response, cls=EnhancedJSONEncoder)),
+            json.loads(
+                json.dumps(operational_intent_response, cls=EnhancedJSONEncoder)
+            ),
             status=200,
         )
 
     else:
-        not_found_response = OperationalIntentNotFoundResponse(message="Requested Operational intent with id %s not found" % str(opint_id))
+        not_found_response = OperationalIntentNotFoundResponse(
+            message="Requested Operational intent with id %s not found" % str(opint_id)
+        )
 
         return JsonResponse(
             json.loads(json.dumps(not_found_response, cls=EnhancedJSONEncoder)),
@@ -330,21 +382,34 @@ def get_uss_flights(request):
         view = request.query_params["view"]
         view_port = [float(i) for i in view.split(",")]
     except Exception:
-        incorrect_parameters = {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}
+        incorrect_parameters = {
+            "message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"
+        }
         return JsonResponse(json.loads(json.dumps(incorrect_parameters)), status=400)
     view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
 
     if not view_port_valid:
-        view_port_not_ok = GenericErrorResponseMessage(message="The requested view %s rectangle is not valid format: lat1,lng1,lat2,lng2" % view)
-        return JsonResponse(json.loads(json.dumps(asdict(view_port_not_ok))), status=400)
+        view_port_not_ok = GenericErrorResponseMessage(
+            message="The requested view %s rectangle is not valid format: lat1,lng1,lat2,lng2"
+            % view
+        )
+        return JsonResponse(
+            json.loads(json.dumps(asdict(view_port_not_ok))), status=400
+        )
     view_box = view_port_ops.build_view_port_box(view_port_coords=view_port)
 
-    view_port_diagonal = view_port_ops.get_view_port_diagonal_length_kms(view_port_coords=view_port)
+    view_port_diagonal = view_port_ops.get_view_port_diagonal_length_kms(
+        view_port_coords=view_port
+    )
 
     # logger.info("View port diagonal %s" % view_port_diagonal)
     if (view_port_diagonal) > 7:
-        view_port_too_large_msg = GenericErrorResponseMessage(message="The requested view %s rectangle is too large" % view)
-        return JsonResponse(json.loads(json.dumps(asdict(view_port_too_large_msg))), status=413)
+        view_port_too_large_msg = GenericErrorResponseMessage(
+            message="The requested view %s rectangle is too large" % view
+        )
+        return JsonResponse(
+            json.loads(json.dumps(asdict(view_port_too_large_msg))), status=413
+        )
 
     time.sleep(0.5)
 
@@ -355,7 +420,9 @@ def get_uss_flights(request):
 
     # Get the last observation of the flight telemetry
     obs_helper = flight_stream_helper.ObservationReadOperations()
-    all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
+    all_flights_telemetry_data = obs_helper.get_flight_observations(
+        session_id=flight_declaration_id
+    )
     # Get the latest telemetry
 
     if not all_flights_telemetry_data:
@@ -385,7 +452,9 @@ def get_uss_flights(request):
                     logger.error("Error in metadata data in the stream %s" % ke)
 
                 telemetry_data_dict = observation_data_dict["telemetry"]
-                details_response_dict = observation_data_dict["details_response"]["details"]
+                details_response_dict = observation_data_dict["details_response"][
+                    "details"
+                ]
 
                 height = RIDHeight(
                     distance=telemetry_data_dict["height"]["distance"],
@@ -398,7 +467,9 @@ def get_uss_flights(request):
                     accuracy_h=telemetry_data_dict["position"]["accuracy_h"],
                     accuracy_v=telemetry_data_dict["position"]["accuracy_v"],
                     extrapolated=telemetry_data_dict["position"]["extrapolated"],
-                    pressure_altitude=telemetry_data_dict["position"]["pressure_altitude"],
+                    pressure_altitude=telemetry_data_dict["position"][
+                        "pressure_altitude"
+                    ],
                     height=height,
                 )
                 current_state = RIDAircraftState(
@@ -423,7 +494,9 @@ def get_uss_flights(request):
                         lng=details_response_dict["operator_location"]["lng"],
                     ),
                     operator_id=details_response_dict["operator_id"],
-                    operation_description=details_response_dict["operation_description"],
+                    operation_description=details_response_dict[
+                        "operation_description"
+                    ],
                     serial_number=details_response_dict["serial_number"],
                     registration_number=details_response_dict["registration_number"],
                     auth_data=RIDAuthData(
@@ -444,10 +517,14 @@ def get_uss_flights(request):
 
                 rid_flights.append(current_flight)
 
-        _rid_response = RIDFlightResponse(timestamp=RIDTime(value=now, format="RFC3339"), flights=rid_flights)
+        _rid_response = RIDFlightResponse(
+            timestamp=RIDTime(value=now, format="RFC3339"), flights=rid_flights
+        )
         all_flights = []
         for flight in _rid_response.flights:
-            flight_dict = asdict(flight, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)})
+            flight_dict = asdict(
+                flight, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}
+            )
             all_flights.append(flight_dict)
 
         timestamp = asdict(_rid_response.timestamp)
@@ -458,7 +535,9 @@ def get_uss_flights(request):
 
     else:
         # show / add metadata it if it does
-        rid_response = RIDFlightResponse(timestamp=RIDTime(value=now, format="RFC3339"), flights=[])
+        rid_response = RIDFlightResponse(
+            timestamp=RIDTime(value=now, format="RFC3339"), flights=[]
+        )
 
         return JsonResponse(json.loads(json.dumps(asdict(rid_response))), status=200)
 
@@ -515,12 +594,16 @@ def get_uss_flight_details(request, flight_id):
                 json.dumps(
                     asdict(
                         flight_details_full,
-                        dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)},
+                        dict_factory=lambda x: {
+                            k: v for (k, v) in x if (v is not None)
+                        },
                     )
                 )
             ),
             status=200,
         )
     else:
-        fd = FlightDetailsNotFoundMessage(message="The requested flight could not be found")
+        fd = FlightDetailsNotFoundMessage(
+            message="The requested flight could not be found"
+        )
         return JsonResponse(json.loads(json.dumps(asdict(fd))), status=404)

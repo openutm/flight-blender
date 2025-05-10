@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from os import environ as env
 
+import arrow
 import shapely.geometry
 from dotenv import find_dotenv, load_dotenv
 from geojson import FeatureCollection
@@ -11,6 +12,8 @@ from shapely.ops import unary_union
 from scd_operations.scd_data_definitions import (
     Altitude,
     LatLngPoint,
+    OperationalIntentBoundsTimeAltitude,
+    OperationalIntentUSSDetails,
     PartialCreateOperationalIntentReference,
     Time,
     Volume3D,
@@ -63,34 +66,71 @@ class OperationalIntentsConverter:
 
         self.all_features = []
 
-        def utm_converter(self, shapely_shape: shapely.geometry.base.BaseGeometry, inverse: bool = False) -> shapely.geometry.base.BaseGeometry:
-            """
-            Converts coordinates between latitude/longitude and UTM.
+    def generate_bounds_altitude_time_for_volumes(
+        self,
+        operational_intent_details_payload: OperationalIntentUSSDetails,
+        flight_declaration_id: str,
+    ) -> OperationalIntentBoundsTimeAltitude:
+        all_volumes = operational_intent_details_payload.volumes
+        min_altitude = float("inf")
+        max_altitude = float("-inf")
+        start_time = None
+        end_time = None
 
-            Args:
-                shapely_shape (shapely.geometry.base.BaseGeometry): The shapely geometry object to convert.
-                inverse (bool): If True, converts from UTM to lat/lon. If False, converts from lat/lon to UTM.
+        for volume in all_volumes:
+            # convert volume to shapely shape
+            if volume.volume.altitude_lower.value < min_altitude:
+                min_altitude = volume.volume.altitude_lower.value
+            if volume.volume.altitude_upper.value > max_altitude:
+                max_altitude = volume.volume.altitude_upper.value
+            start_time = min(start_time or arrow.get(volume.time_start.value), arrow.get(volume.time_start.value))
+            end_time = max(end_time or arrow.get(volume.time_end.value), arrow.get(volume.time_end.value))
 
-            Returns:
-                shapely.geometry.base.BaseGeometry: The converted shapely geometry object.
+        self.convert_operational_intent_to_geo_json(all_volumes)
+        bounds = self.get_geo_json_bounds()
+
+        operational_intent_bounds_time_altitude = OperationalIntentBoundsTimeAltitude(
+            bounds=bounds,
+            alt_min=min_altitude,
+            alt_max=max_altitude,
+            start_datetime=start_time.isoformat(),
+            end_datetime=end_time.isoformat(),
+            flight_declaration_id=flight_declaration_id,
+        )
+        return operational_intent_bounds_time_altitude
+
+    def utm_converter(
+        self,
+        shapely_shape: shapely.geometry.base.BaseGeometry,
+        inverse: bool = False,
+    ) -> shapely.geometry.base.BaseGeometry:
+        """
+        Converts coordinates between latitude/longitude and UTM.
+
+        Args:
+            shapely_shape (shapely.geometry.base.BaseGeometry): The shapely geometry object to convert.
+            inverse (bool): If True, converts from UTM to lat/lon. If False, converts from lat/lon to UTM.
+
+        Returns:
+            shapely.geometry.base.BaseGeometry: The converted shapely geometry object.
 
 
-            A helper function to convert from lat / lon to UTM coordinates for buffering. tracks. This is the UTM projection (https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system), we use Zone 54N which encompasses Japan, this zone has to be set for each locale / city. Adapted from https://gis.stackexchange.com/questions/325926/buffering-geometry-with-points-in-wgs84-using-shapely"
-            """
-            proj = Proj(proj="utm", zone=self.utm_zone, ellps="WGS84", datum="WGS84")
+        A helper function to convert from lat / lon to UTM coordinates for buffering. tracks. This is the UTM projection (https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system), we use Zone 54N which encompasses Japan, this zone has to be set for each locale / city. Adapted from https://gis.stackexchange.com/questions/325926/buffering-geometry-with-points-in-wgs84-using-shapely"
+        """
+        proj = Proj(proj="utm", zone=self.utm_zone, ellps="WGS84", datum="WGS84")
 
-            geo_interface = shapely_shape.__geo_interface__
-            point_or_polygon = geo_interface["type"]
-            coordinates = geo_interface["coordinates"]
+        geo_interface = shapely_shape.__geo_interface__
+        point_or_polygon = geo_interface["type"]
+        coordinates = geo_interface["coordinates"]
 
-            if point_or_polygon == "Polygon":
-                new_coordinates = [[proj(*point, inverse=inverse) for point in linring] for linring in coordinates]
-            elif point_or_polygon == "Point":
-                new_coordinates = proj(*coordinates, inverse=inverse)
-            else:
-                raise RuntimeError(f"Unexpected geo_interface type: {point_or_polygon}")
+        if point_or_polygon == "Polygon":
+            new_coordinates = [[proj(*point, inverse=inverse) for point in linring] for linring in coordinates]
+        elif point_or_polygon == "Point":
+            new_coordinates = proj(*coordinates, inverse=inverse)
+        else:
+            raise RuntimeError(f"Unexpected geo_interface type: {point_or_polygon}")
 
-            return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
+        return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
 
     def convert_operational_intent_to_geo_json(self, volumes: list[Volume4D]):
         """

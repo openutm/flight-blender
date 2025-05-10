@@ -60,12 +60,18 @@ class FlightOperationConformanceHelper:
     def __init__(self, flight_declaration_id: str):
         self.flight_declaration_id = flight_declaration_id
         self.database_reader = FlightBlenderDatabaseReader()
-        self.flight_declaration = self.database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
+        self.flight_declaration = self.database_reader.get_flight_declaration_by_id(
+            flight_declaration_id=self.flight_declaration_id
+        )
         self.database_writer = FlightBlenderDatabaseWriter()
-        self.ENABLE_CONFORMANCE_MONITORING = int(os.getenv("ENABLE_CONFORMANCE_MONITORING", 0))
+        self.ENABLE_CONFORMANCE_MONITORING = int(
+            os.getenv("ENABLE_CONFORMANCE_MONITORING", 0)
+        )
         self.USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 
-    def verify_operation_state_transition(self, original_state: int, new_state: int, event: str) -> bool:
+    def verify_operation_state_transition(
+        self, original_state: int, new_state: int, event: str
+    ) -> bool:
         """
         Verifies if a state transition for a flight operation is valid based on the given event.
         This method uses a state machine to simulate the transition from the original state
@@ -92,7 +98,9 @@ class FlightOperationConformanceHelper:
             logger.info("State change verification failed")
             return False
 
-    def manage_operation_state_transition(self, original_state: int, new_state: int, event: str):
+    def manage_operation_state_transition(
+        self, original_state: int, new_state: int, event: str
+    ):
         """
         Manages the state transition of an operation based on the original state, new state, and an event.
         This method determines the appropriate handler for the new state and invokes it to process
@@ -175,9 +183,15 @@ class FlightOperationConformanceHelper:
             None
         """
 
-        conformance_monitoring_job = self.database_reader.get_conformance_monitoring_task(flight_declaration=self.flight_declaration)
+        conformance_monitoring_job = (
+            self.database_reader.get_conformance_monitoring_task(
+                flight_declaration=self.flight_declaration
+            )
+        )
         if conformance_monitoring_job:
-            self.database_writer.remove_conformance_monitoring_periodic_task(conformance_monitoring_task=conformance_monitoring_job)
+            self.database_writer.remove_conformance_monitoring_periodic_task(
+                conformance_monitoring_task=conformance_monitoring_job
+            )
 
     def _handle_contingent_state(self, original_state: int, event: str):
         """
@@ -208,14 +222,20 @@ class FlightOperationConformanceHelper:
         valid_events_for_state_3 = ["timeout", "operator_confirms_contingent"]
 
         if self.USSP_NETWORK_ENABLED:
-            if original_state in [2, 3] and event in (valid_events_for_state_2 if original_state == 2 else valid_events_for_state_3):
+            if original_state in [2, 3] and event in (
+                valid_events_for_state_2
+                if original_state == 2
+                else valid_events_for_state_3
+            ):
                 management.call_command(
                     "operator_declares_contingency",
                     flight_declaration_id=self.flight_declaration_id,
                     dry_run=0,
                 )
         else:
-            logger.info("USSP Network is not enabled, skipping contingency state handling with DSS")
+            logger.info(
+                "USSP Network is not enabled, skipping contingency state handling with DSS"
+            )
 
     def _handle_non_conforming_state(self, original_state: int, event: str):
         """
@@ -242,6 +262,10 @@ class FlightOperationConformanceHelper:
                     non_conforming_events[event],
                     flight_declaration_id=self.flight_declaration_id,
                     dry_run=0,
+                )
+            else:
+                logger.info(
+                    "USSP Network is not enabled, skipping non-conforming state handling with DSS"
                 )
 
     def _handle_activated_state(self, original_state: int, event: str):
@@ -298,8 +322,16 @@ class FlightOperationConformanceHelper:
             None
         """
 
-        conformance_monitoring_job = self.database_writer.create_conformance_monitoring_periodic_task(flight_declaration=self.flight_declaration)
+        conformance_monitoring_job = (
+            self.database_writer.create_conformance_monitoring_periodic_task(
+                flight_declaration=self.flight_declaration
+            )
+        )
         if conformance_monitoring_job:
-            logger.info(f"Created conformance monitoring job for {self.flight_declaration_id}")
+            logger.info(
+                f"Created conformance monitoring job for {self.flight_declaration_id}"
+            )
         else:
-            logger.info(f"Error in creating conformance monitoring job for {self.flight_declaration_id}")
+            logger.info(
+                f"Error in creating conformance monitoring job for {self.flight_declaration_id}"
+            )

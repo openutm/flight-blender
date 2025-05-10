@@ -158,6 +158,8 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
         """
         my_database_reader = FlightBlenderDatabaseReader()
         fd = my_database_reader.get_flight_declaration_by_id(instance.id)
+        if not fd:
+            raise serializers.ValidationError("Flight declaration not found in the database")
         original_state = fd.state
         new_state = validated_data["state"]
         fd.state = new_state
@@ -166,7 +168,7 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
         fd.add_state_history_entry(
             original_state=original_state,
             new_state=new_state,
-            notes="State changed by operator",
+            notes=f"State changed by operator from {OPERATION_STATES[original_state][1]} to {OPERATION_STATES[new_state][1]}",
         )
         my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=str(instance.id))
         my_conformance_helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)

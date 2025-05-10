@@ -84,8 +84,14 @@ class FlightDeclarationRequestValidator:
                     "message": "Error in processing the submitted GeoJSON every Feature in a GeoJSON FeatureCollection must have a min_altitude and max_altitude data structure"
                 }, 400
             try:
-                min_altitude = Altitude(meters=props["min_altitude"]["meters"], datum=props["min_altitude"]["datum"])
-                max_altitude = Altitude(meters=props["max_altitude"]["meters"], datum=props["max_altitude"]["datum"])
+                min_altitude = Altitude(
+                    meters=props["min_altitude"]["meters"],
+                    datum=props["min_altitude"]["datum"],
+                )
+                max_altitude = Altitude(
+                    meters=props["max_altitude"]["meters"],
+                    datum=props["max_altitude"]["datum"],
+                )
             except TypeError:
                 return {
                     "message": "Error in processing the submitted GeoJSON: every Feature in a GeoJSON FeatureCollection must have a min_altitude and max_altitude data structure"
@@ -114,7 +120,11 @@ class FlightDeclarationRequestValidator:
         return None, None
 
     def check_intersections(
-        self, start_datetime: str, end_datetime: str, view_box: list[float], ussp_network_enabled: int
+        self,
+        start_datetime: str,
+        end_datetime: str,
+        view_box: list[float],
+        ussp_network_enabled: int,
     ) -> IntersectionCheckResult:
         all_relevant_fences = []
         all_relevant_declarations = []
@@ -132,10 +142,14 @@ class FlightDeclarationRequestValidator:
                 declaration_state = 8
 
         if FlightDeclaration.objects.filter(
-            start_datetime__lte=end_datetime, end_datetime__gte=start_datetime, state__in=ACTIVE_OPERATIONAL_STATES
+            start_datetime__lte=end_datetime,
+            end_datetime__gte=start_datetime,
+            state__in=ACTIVE_OPERATIONAL_STATES,
         ).exists():
             all_declarations_within_timelimits = FlightDeclaration.objects.filter(
-                start_datetime__lte=end_datetime, end_datetime__gte=start_datetime, state__in=ACTIVE_OPERATIONAL_STATES
+                start_datetime__lte=end_datetime,
+                end_datetime__gte=start_datetime,
+                state__in=ACTIVE_OPERATIONAL_STATES,
             )
             my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_INDEX_BASEPATH)
             my_fd_rtree_helper.generate_flight_declaration_index(all_flight_declarations=all_declarations_within_timelimits)
@@ -218,7 +232,10 @@ def set_flight_declaration(request):
     view_box = [float(i) for i in bounds.split(",")]
 
     intersection_check_results = my_flight_declaration_validator.check_intersections(
-        start_datetime=start_datetime, end_datetime=end_datetime, view_box=view_box, ussp_network_enabled=USSP_NETWORK_ENABLED
+        start_datetime=start_datetime,
+        end_datetime=end_datetime,
+        view_box=view_box,
+        ussp_network_enabled=USSP_NETWORK_ENABLED,
     )
 
     all_relevant_fences = intersection_check_results.all_relevant_fences
@@ -240,8 +257,6 @@ def set_flight_declaration(request):
         state=declaration_state,
     )
     flight_declaration.save()
-
-    my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(flight_declaration=flight_declaration)
     flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
     if declaration_state == 8:
         flight_declaration.add_state_history_entry(
@@ -251,6 +266,7 @@ def set_flight_declaration(request):
         )
 
     flight_declaration_id = str(flight_declaration.id)
+
     send_operational_update_message.delay(
         flight_declaration_id=flight_declaration_id,
         message_text="Flight Declaration created..",
@@ -274,7 +290,11 @@ def set_flight_declaration(request):
         is_approved=is_approved,
         state=declaration_state,
     )
-    return HttpResponse(json.dumps(asdict(creation_response)), status=200, content_type=RESPONSE_CONTENT_TYPE)
+    return HttpResponse(
+        json.dumps(asdict(creation_response)),
+        status=200,
+        content_type=RESPONSE_CONTENT_TYPE,
+    )
 
 
 @method_decorator(requires_scopes([FLIGHTBLENDER_WRITE_SCOPE]), name="dispatch")
@@ -407,7 +427,11 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
 
     def post(self, request, *args, **kwargs):
         if request.headers.get("Content-Type") != RESPONSE_CONTENT_TYPE:
-            return JsonResponse({"message": "Unsupported Media Type"}, status=415, content_type=RESPONSE_CONTENT_TYPE)
+            return JsonResponse(
+                {"message": "Unsupported Media Type"},
+                status=415,
+                content_type=RESPONSE_CONTENT_TYPE,
+            )
 
         req = request.data
         my_flight_declaration_validator = FlightDeclarationRequestValidator()
@@ -447,7 +471,10 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         view_box = [float(i) for i in bounds.split(",")]
 
         intersection_check_results = my_flight_declaration_validator.check_intersections(
-            start_datetime=start_datetime, end_datetime=end_datetime, view_box=view_box, ussp_network_enabled=USSP_NETWORK_ENABLED
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            view_box=view_box,
+            ussp_network_enabled=USSP_NETWORK_ENABLED,
         )
 
         all_relevant_fences = intersection_check_results.all_relevant_fences
@@ -504,4 +531,8 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
             is_approved=is_approved,
             state=declaration_state,
         )
-        return HttpResponse(json.dumps(asdict(creation_response)), status=200, content_type=RESPONSE_CONTENT_TYPE)
+        return HttpResponse(
+            json.dumps(asdict(creation_response)),
+            status=200,
+            content_type=RESPONSE_CONTENT_TYPE,
+        )
