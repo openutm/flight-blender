@@ -10,10 +10,17 @@ from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
+from flight_declaration_operations.utils import OperationalIntentsConverter
+from scd_operations.dss_scd_helper import SCDOperations
 
-from . import dss_scd_helper
 from .data_definitions import FlightDeclarationOperationalIntentStorageDetails
-from .scd_data_definitions import NotifyPeerUSSPostPayload, OperationalIntentSubmissionStatus, OperationalIntentUSSDetails, OtherError
+from .scd_data_definitions import (
+    CompositeOperationalIntentPayload,
+    NotifyPeerUSSPostPayload,
+    OperationalIntentSubmissionStatus,
+    OperationalIntentUSSDetails,
+    OtherError,
+)
 
 logger = logging.getLogger("django")
 
@@ -26,7 +33,8 @@ class DSSOperationalIntentsCreator:
     def __init__(self, flight_declaration_id: str):
         self.flight_declaration_id = flight_declaration_id
 
-        self.my_scd_dss_helper = dss_scd_helper.SCDOperations()
+        self.my_scd_dss_helper = SCDOperations()
+        self.my_operational_intent_reference_helper = OperationalIntentsConverter()
         self.my_database_reader = FlightBlenderDatabaseReader()
         self.my_database_writer = FlightBlenderDatabaseWriter()
 
@@ -103,18 +111,42 @@ class DSSOperationalIntentsCreator:
                 # Write the flight_operatinal_intent_reference to the database
                 logger.info("Successfully created operational intent in the DSS, updating database..")
 
-                self.my_database_writer.create_flight_operational_intent_reference(
+                created_flight_operational_intent_reference = self.my_database_writer.create_flight_operational_intent_reference(
                     flight_declaration=flight_declaration,
                     created_operational_intent_reference=op_int_submission_result.dss_response.operational_intent_reference,
                 )
-                self.my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
-                    flight_declaration=flight_declaration,
-                    operational_intent_details_payload=OperationalIntentUSSDetails(
-                        volumes=operational_intent_data.volumes,
-                        off_nominal_volumes=operational_intent_data.off_nominal_volumes,
-                        priority=operational_intent_data.priority,
-                    ),
+                operational_intent_details_payload = OperationalIntentUSSDetails(
+                    volumes=operational_intent_data.volumes,
+                    off_nominal_volumes=operational_intent_data.off_nominal_volumes,
+                    priority=operational_intent_data.priority,
                 )
+                created_flight_operational_intent_detail = (
+                    self.my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
+                        flight_declaration=flight_declaration, operational_intent_details_payload=operational_intent_details_payload
+                    )
+                )
+                # Create a composite operational intent reference
+                if created_flight_operational_intent_detail and created_flight_operational_intent_reference:
+                    generated_composite_operational_intent_data = (
+                        self.my_operational_intent_reference_helper.generate_bounds_altitude_time_for_volumes(
+                            operational_intent_details_payload=operational_intent_details_payload,
+                            flight_declaration_id=self.flight_declaration_id,
+                        )
+                    )
+                    composite_operational_intent_data = CompositeOperationalIntentPayload(
+                        bounds=generated_composite_operational_intent_data.bounds,
+                        start_datetime=generated_composite_operational_intent_data.start_datetime,
+                        end_datetime=generated_composite_operational_intent_data.end_datetime,
+                        alt_max=generated_composite_operational_intent_data.alt_max,
+                        alt_min=generated_composite_operational_intent_data.alt_min,
+                        operational_intent_reference_id=str(created_flight_operational_intent_reference.id),
+                        operational_intent_details_id=str(created_flight_operational_intent_detail.id),
+                    )
+
+                    self.my_database_writer.create_or_update_composite_operational_intent(
+                        flight_declaration=flight_declaration, composite_operational_intent_payload=composite_operational_intent_data
+                    )
+
                 # Update operation state
                 logger.info("Updating state from Processing to Accepted...")
                 self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=1)

@@ -367,6 +367,16 @@ class CompositeOperationalIntentPayload:
 
 
 @dataclass
+class OperationalIntentBoundsTimeAltitude:
+    bounds: str
+    start_datetime: StringBasedDateTime
+    end_datetime: StringBasedDateTime
+    alt_max: float
+    alt_min: float
+    flight_declaration_id: str
+
+
+@dataclass
 class OperationalIntentSubmissionError:
     result: str
     notes: str

@@ -120,52 +120,43 @@ class Command(BaseCommand):
             uss_base_url=stored_uss_base_url,
             subscription_id=stored_subscription_id,
         )
+        if dry_run:
+            logger.info("Dry run, not submitting to the DSS")
+            return
 
-        if not dry_run:
-            flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
-            for subscriber in dss_response_subscribers:
-                subscriptions = subscriber.subscriptions
-                uss_base_url = subscriber.uss_base_url
-                if flight_blender_base_url == uss_base_url:
-                    for s in subscriptions:
-                        subscription_id = s.subscription_id
-                        break
-            # Create a new subscription to the airspace
-            operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
-                subscription_id=subscription_id,
-                operational_intent_ref_id=reference.id,
-                extents=stored_volumes,
-                new_state=str(new_state),
-                ovn=reference.ovn,
-                deconfliction_check=True,
-                priority=0,
-                current_state=current_state_str,
+        # Create a new subscription to the airspace
+        operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
+            subscription_id=reference.subscription_id,
+            operational_intent_ref_id=str(reference.id),
+            extents=stored_volumes,
+            new_state=str(new_state),
+            ovn=reference.ovn,
+            deconfliction_check=True,
+            priority=0,
+            current_state=current_state_str,
+        )
+
+        if operational_update_response.status == 200:
+            logger.info(
+                "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
+                    operational_intent_id=operational_intent_id
+                )
+            )
+            flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+                flight_declaration_id=str(flight_declaration.id)
             )
 
-            if operational_update_response.status == 200:
-                logger.info(
-                    "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
-                        operational_intent_id=operational_intent_id
-                    )
-                )
-                flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
-                    flight_declaration_id=str(flight_declaration.id)
-                )
+            my_database_writer.update_flight_operational_intent_reference(
+                flight_operational_intent_reference=flight_operational_intent_reference,
+                update_operational_intent_reference=operational_update_response.dss_response.operational_intent_reference,
+            )
 
-                my_database_writer.update_flight_operational_intent_reference(
-                    flight_operational_intent_reference=flight_operational_intent_reference,
-                    update_operational_intent_reference=operational_update_response.dss_response.operational_intent_reference,
-                )
-
-                my_scd_dss_helper.process_peer_uss_notifications(
-                    all_subscribers=operational_update_response.dss_response.subscribers,
-                    operational_intent_details=flight_planning_notification_payload,
-                    operational_intent_reference=operational_update_response.dss_response.operational_intent_reference,
-                    operational_intent_id=dss_operational_intent_reference_id,
-                )
-
-            else:
-                logger.info("Error in updating operational intent on the DSS")
+            my_scd_dss_helper.process_peer_uss_notifications(
+                all_subscribers=operational_update_response.dss_response.subscribers,
+                operational_intent_details=stored_operational_intent.operational_intent_details,
+                operational_intent_reference=operational_update_response.dss_response.operational_intent_reference,
+                operational_intent_id=str(reference.id),
+            )
 
         else:
-            logger.info("Dry run, not submitting to the DSS")
+            logger.info("Error in updating operational intent on the DSS")

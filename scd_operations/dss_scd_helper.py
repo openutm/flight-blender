@@ -46,6 +46,7 @@ from .scd_data_definitions import (
     LatLng,
     LatLngPoint,
     NotifyPeerUSSPostPayload,
+    OperationalIntentBoundsTimeAltitude,
     OperationalIntentDetailsUSSResponse,
     OperationalIntentReference,
     OperationalIntentReferenceDSSResponse,

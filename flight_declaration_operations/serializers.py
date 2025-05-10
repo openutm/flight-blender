@@ -42,9 +42,7 @@ class FlightDeclarationSerializer(serializers.ModelSerializer):
             parsed_volume = my_operational_intent_parser.parse_volume_to_volume4D(v)
             volumes_list.append(parsed_volume)
         my_operational_intent_converter = OperationalIntentsConverter()
-        my_operational_intent_converter.convert_operational_intent_to_geo_json(
-            volumes=volumes_list
-        )
+        my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=volumes_list)
         return my_operational_intent_converter.geo_json
 
     def get_flight_declaration_raw_geojson(self, obj):
@@ -124,9 +122,7 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
             int: The validated state value.
         """
         if self.instance and value not in list(OPERATOR_EVENT_LOOKUP.keys()):
-            raise serializers.ValidationError(
-                "An operator can only set the state to Activated (2), Contingent (4) or Ended (5) using this endpoint"
-            )
+            raise serializers.ValidationError("An operator can only set the state to Activated (2), Contingent (4) or Ended (5) using this endpoint")
 
         current_state = self.instance.state
         event = OPERATOR_EVENT_LOOKUP[value]
@@ -137,9 +133,7 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
             )
 
         my_conformance_helper = FlightOperationConformanceHelper(str(self.instance.id))
-        transition_valid = my_conformance_helper.verify_operation_state_transition(
-            original_state=current_state, new_state=value, event=event
-        )
+        transition_valid = my_conformance_helper.verify_operation_state_transition(original_state=current_state, new_state=value, event=event)
 
         if not transition_valid:
             raise serializers.ValidationError(
@@ -151,9 +145,7 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
 
         return value
 
-    def update(
-        self, instance: FlightDeclaration, validated_data: dict
-    ) -> FlightDeclaration:
+    def update(self, instance: FlightDeclaration, validated_data: dict) -> FlightDeclaration:
         """
         Update the state of the flight declaration.
 
@@ -167,9 +159,7 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
         my_database_reader = FlightBlenderDatabaseReader()
         fd = my_database_reader.get_flight_declaration_by_id(instance.id)
         if not fd:
-            raise serializers.ValidationError(
-                "Flight declaration not found in the database"
-            )
+            raise serializers.ValidationError("Flight declaration not found in the database")
         original_state = fd.state
         new_state = validated_data["state"]
         fd.state = new_state
@@ -178,14 +168,10 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
         fd.add_state_history_entry(
             original_state=original_state,
             new_state=new_state,
-            notes="State changed by operator",
+            notes=f"State changed by operator from {OPERATION_STATES[original_state][1]} to {OPERATION_STATES[new_state][1]}",
         )
-        my_conformance_helper = FlightOperationConformanceHelper(
-            flight_declaration_id=str(instance.id)
-        )
-        my_conformance_helper.manage_operation_state_transition(
-            original_state=original_state, new_state=new_state, event=event
-        )
+        my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=str(instance.id))
+        my_conformance_helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)
         return fd
 
     class Meta:

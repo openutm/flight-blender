@@ -554,7 +554,7 @@ class FlightBlenderDatabaseWriter:
     def create_or_update_composite_operational_intent(
         self,
         flight_declaration: FlightDeclaration,
-        composite_operational_intent: CompositeOperationalIntentPayload | OperationalIntentStorage,
+        composite_operational_intent_payload: CompositeOperationalIntentPayload | OperationalIntentStorage,
     ) -> bool:
         try:
             operational_intent_details = FlightOperationalIntentDetail.objects.get(declaration=flight_declaration)
@@ -565,11 +565,11 @@ class FlightBlenderDatabaseWriter:
 
             composite_operational_intent_obj = CompositeOperationalIntent(
                 declaration=flight_declaration,
-                bounds=composite_operational_intent.bounds,
-                start_datetime=composite_operational_intent.start_datetime,
-                end_datetime=composite_operational_intent.end_datetime,
-                alt_min=composite_operational_intent.alt_min,
-                alt_max=composite_operational_intent.alt_max,
+                bounds=composite_operational_intent_payload.bounds,
+                start_datetime=composite_operational_intent_payload.start_datetime,
+                end_datetime=composite_operational_intent_payload.end_datetime,
+                alt_min=composite_operational_intent_payload.alt_min,
+                alt_max=composite_operational_intent_payload.alt_max,
                 operational_intent_details=operational_intent_details,
                 operational_intent_reference=operational_intent_reference,
             )
@@ -613,7 +613,7 @@ class FlightBlenderDatabaseWriter:
         self,
         flight_declaration: FlightDeclaration,
         created_operational_intent_reference: OperationalIntentReferenceDSSResponse,
-    ) -> bool:
+    ) -> bool | FlightOperationalIntentReference:
         try:
             flight_operational_intent_reference = FlightOperationalIntentReference(
                 id=created_operational_intent_reference.id,
@@ -629,7 +629,7 @@ class FlightBlenderDatabaseWriter:
                 subscription_id=created_operational_intent_reference.subscription_id,
             )
             flight_operational_intent_reference.save()
-            return True
+            return flight_operational_intent_reference
         except FlightDeclaration.DoesNotExist:
             return False
         except IntegrityError as ie:
