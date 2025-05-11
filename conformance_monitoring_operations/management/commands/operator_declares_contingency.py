@@ -1,3 +1,4 @@
+import json
 import logging
 from os import environ as env
 
@@ -12,14 +13,12 @@ from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from flight_declaration_operations.utils import OperationalIntentsConverter
 from flight_feed_operations import flight_stream_helper
+from scd_operations.data_definitions import FlightDeclarationOperationalIntentStorageDetails
 from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
     SCDOperations,
 )
 from scd_operations.scd_data_definitions import Polygon
-from scd_operations.data_definitions import FlightDeclarationOperationalIntentStorageDetails
-import json
-from dacite import from_dict
 
 load_dotenv(find_dotenv())
 
@@ -88,110 +87,111 @@ class Command(BaseCommand):
                     flight_declaration_id=flight_declaration_id
                 )
             )
+            return
+
+        ## Update / expand volume
+
+        # Get the last observation of the flight telemetry
+
+        all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
+        # Get the latest telemetry
+
+        if not all_flights_telemetry_data:
+            logger.error("Operator declares contingency command activated")
+            logger.error(f"No telemetry data found for operation {flight_declaration_id}")
+            return
+
+        distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []
+
+        relevant_observation = distinct_messages[0]
+
+        lat_dd = relevant_observation.latitude_dd
+        lon_dd = relevant_observation.longitude_dd
+        rid_location = Point(lon_dd, lat_dd)
+        # check if it is within declared bounds
+        # TODO: This code is same as the C7check in the conformance / utils file. Need to refactor
+
+        operational_intent = json.loads(flight_declaration.operational_intent)
+        operational_intent_data = from_dict(
+            data_class=FlightDeclarationOperationalIntentStorageDetails,
+            data=operational_intent,
+        )
+        declared_volumes = operational_intent_data.volumes
+
+        all_polygon_altitudes: list[PolygonAltitude] = []
+
+        rid_obs_within_all_volumes = []
+        all_altitudes = []
+        for v in declared_volumes:
+            altitude_lower = v.altitude_lower.value
+            altitude_upper = v.altitude_upper.value
+            all_altitudes.append(altitude_lower)
+            all_altitudes.append(altitude_upper)
+            outline_polygon = v.volume.outline_polygon
+            point_list = []
+            for vertex in outline_polygon.vertices:
+                p = Point(vertex.lng, vertex.lat)
+                point_list.append(p)
+            outline_polygon = Polygon([[p.x, p.y] for p in point_list])
+            pa = PolygonAltitude(
+                polygon=outline_polygon,
+                altitude_upper=altitude_upper,
+                altitude_lower=altitude_lower,
+            )
+            all_polygon_altitudes.append(pa)
+
+        for p in all_polygon_altitudes:
+            is_within = rid_location.within(p.polygon)
+            rid_obs_within_all_volumes.append(is_within)
+
+        aircraft_bounds_conformant = any(rid_obs_within_all_volumes)
+        if aircraft_bounds_conformant:  # Operator declares contingency, but the aircraft is within bounds, no need to update / change bounds
+            nominal_or_off_nominal_volumes = stored_volumes
 
         else:
-            ## Update / expand volume
-
-            # Get the last observation of the flight telemetry
-
-            all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
-            # Get the latest telemetry
-
-            if not all_flights_telemetry_data:
-                logger.error(f"No telemetry data found for operation {flight_declaration_id}")
-                return
-
-            distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []
-
-            relevant_observation = distinct_messages[0]
-
-            lat_dd = relevant_observation.latitude_dd
-            lon_dd = relevant_observation.longitude_dd
-            rid_location = Point(lon_dd, lat_dd)
-            # check if it is within declared bounds
-            # TODO: This code is same as the C7check in the conformance / utils file. Need to refactor
-
-            operational_intent = json.loads(flight_declaration.operational_intent)
-            operational_intent_data = from_dict(
-                data_class=FlightDeclarationOperationalIntentStorageDetails,
-                data=operational_intent,
+            max_altitude = max(all_altitudes)
+            min_altitude = min(all_altitudes)
+            # aircraft declares contingency when the aircraft is out of bounds
+            my_op_int_converter = OperationalIntentsConverter()
+            nominal_or_off_nominal_volumes = my_op_int_converter.buffer_point_to_volume4d(
+                lat=lat_dd,
+                lng=lon_dd,
+                start_datetime=flight_declaration.start_datetime.isoformat(),
+                end_datetime=flight_declaration.end_datetime.isoformat(),
+                min_altitude=min_altitude,
+                max_altitude=max_altitude,
             )
-            declared_volumes = operational_intent_data.volumes
+            logger.debug(nominal_or_off_nominal_volumes)
 
-            all_polygon_altitudes: list[PolygonAltitude] = []
+            if not dry_run:
+                flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
+                for subscriber in dss_response_subscribers:
+                    subscriptions = subscriber.subscriptions
+                    uss_base_url = subscriber.uss_base_url
+                    if flight_blender_base_url == uss_base_url:
+                        for s in subscriptions:
+                            subscription_id = s.subscription_id
+                            break
 
-            rid_obs_within_all_volumes = []
-            all_altitudes = []
-            for v in declared_volumes:
-                altitude_lower = v.altitude_lower.value
-                altitude_upper = v.altitude_upper.value
-                all_altitudes.append(altitude_lower)
-                all_altitudes.append(altitude_upper)
-                outline_polygon = v.volume.outline_polygon
-                point_list = []
-                for vertex in outline_polygon.vertices:
-                    p = Point(vertex.lng, vertex.lat)
-                    point_list.append(p)
-                outline_polygon = Polygon([[p.x, p.y] for p in point_list])
-                pa = PolygonAltitude(
-                    polygon=outline_polygon,
-                    altitude_upper=altitude_upper,
-                    altitude_lower=altitude_lower,
+                operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
+                    subscription_id=subscription_id,
+                    operational_intent_ref_id=reference_full.id,
+                    extents=nominal_or_off_nominal_volumes,
+                    current_state=current_state_str,
+                    new_state=contingent_state_str,
+                    ovn=reference_full.ovn,
+                    deconfliction_check=True,
                 )
-                all_polygon_altitudes.append(pa)
 
-            for p in all_polygon_altitudes:
-                is_within = rid_location.within(p.polygon)
-                rid_obs_within_all_volumes.append(is_within)
-
-            aircraft_bounds_conformant = any(rid_obs_within_all_volumes)
-            if aircraft_bounds_conformant:  # Operator declares contingency, but the aircraft is within bounds, no need to update / change bounds
-                nominal_or_off_nominal_volumes = stored_volumes
+                if operational_update_response.status == 200:
+                    logger.info(
+                        "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
+                            operational_intent_id=flight_declaration_id
+                        )
+                    )
+                    # TODO Notify subscribers
+                else:
+                    logger.info("Error in updating operational intent on the DSS")
 
             else:
-                max_altitude = max(all_altitudes)
-                min_altitude = min(all_altitudes)
-                # aircraft declares contingency when the aircraft is out of bounds
-                my_op_int_converter = OperationalIntentsConverter()
-                nominal_or_off_nominal_volumes = my_op_int_converter.buffer_point_to_volume4d(
-                    lat=lat_dd,
-                    lng=lon_dd,
-                    start_datetime=flight_declaration.start_datetime.isoformat(),
-                    end_datetime=flight_declaration.end_datetime.isoformat(),
-                    min_altitude=min_altitude,
-                    max_altitude=max_altitude,
-                )
-                logger.debug(nominal_or_off_nominal_volumes)
-
-                if not dry_run:
-                    flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
-                    for subscriber in dss_response_subscribers:
-                        subscriptions = subscriber.subscriptions
-                        uss_base_url = subscriber.uss_base_url
-                        if flight_blender_base_url == uss_base_url:
-                            for s in subscriptions:
-                                subscription_id = s.subscription_id
-                                break
-
-                    operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
-                        subscription_id=subscription_id,
-                        operational_intent_ref_id=reference_full.id,
-                        extents=nominal_or_off_nominal_volumes,
-                        current_state=current_state_str,
-                        new_state=contingent_state_str,
-                        ovn=reference_full.ovn,
-                        deconfliction_check=True,
-                    )
-
-                    if operational_update_response.status == 200:
-                        logger.info(
-                            "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
-                                operational_intent_id=flight_declaration_id
-                            )
-                        )
-                        # TODO Notify subscribers
-                    else:
-                        logger.info("Error in updating operational intent on the DSS")
-
-                else:
-                    logger.info("Dry run, not submitting to the DSS")
+                logger.info("Dry run, not submitting to the DSS")

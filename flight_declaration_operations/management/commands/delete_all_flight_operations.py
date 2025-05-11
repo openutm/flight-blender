@@ -62,10 +62,14 @@ class Command(BaseCommand):
                 logger.info("Dry Run : Deleting operation %s", flight_declaration.id)
             else:
                 logger.info("Deleting operation %s...", flight_declaration.id)
+
                 if clear_dss and f_a:
                     operational_intent_id = str(f_a.id)
                     stored_ovn = f_a.ovn
+
                     logger.info("Clearing operational intent id %s in the DSS...", operational_intent_id)
+                    logger.info("Stored OVN: %s", stored_ovn)
+                    logger.info("Flight declaration id: %s", flight_declaration.id)
                     if stored_ovn and USSP_NETWORK_ENABLED:
                         my_scd_dss_helper.delete_operational_intent(ovn=stored_ovn, dss_operational_intent_ref_id=operational_intent_id)
 

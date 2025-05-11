@@ -172,7 +172,7 @@ class FlightOperationalIntentReference(models.Model):
     uss_availability = models.CharField(max_length=256)
 
     ovn = models.CharField(
-        max_length=36,
+        max_length=128,
         blank=True,
         null=True,
         help_text="Once the operational intent is created, the OVN is stored here.",
@@ -263,7 +263,7 @@ class PeerOperationalIntentReference(models.Model):
     uss_availability = models.CharField(max_length=256)
 
     ovn = models.CharField(
-        max_length=36,
+        max_length=128,
         blank=True,
         null=True,
         help_text="Once the operational intent is created, the OVN is stored here.",
