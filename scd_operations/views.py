@@ -77,9 +77,7 @@ def is_valid_uuid(uuid_to_test, version=4):
 @requires_scopes(["utm.inject_test_data"])
 def scd_test_status(request):
     status = SCDTestStatusResponse(status="Ready", version="latest")
-    return JsonResponse(
-        json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200
-    )
+    return JsonResponse(json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200)
 
 
 @api_view(["GET"])
@@ -92,9 +90,7 @@ def scd_test_capabilities(request):
             USSCapabilitiesResponseEnum.HighPriorityFlights,
         ]
     )
-    return JsonResponse(
-        json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200
-    )
+    return JsonResponse(json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200)
 
 
 @api_view(["GET"])
@@ -124,29 +120,17 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
     if request.method == "PUT":
         scd_test_data = request.data
-        my_flight_plan_processor = FlightPlanningDataProcessor(
-            incoming_flight_information=scd_test_data
-        )
+        my_flight_plan_processor = FlightPlanningDataProcessor(incoming_flight_information=scd_test_data)
 
         scd_test_data = my_flight_plan_processor.process_incoming_flight_plan_data()
-        my_flight_plan_op_intent_bridge = FlightPlantoOperationalIntentProcessor(
-            flight_planning_request=scd_test_data
-        )
+        my_flight_plan_op_intent_bridge = FlightPlantoOperationalIntentProcessor(flight_planning_request=scd_test_data)
 
         flight_planning_off_nominal_volumes = []
         flight_planning_volumes = scd_test_data.intended_flight.basic_information.area
 
-        flight_planning_priority = (
-            scd_test_data.intended_flight.astm_f3548_21.priority
-            if scd_test_data.intended_flight.astm_f3548_21.priority
-            else 0
-        )
-        flight_planning_uas_state = (
-            scd_test_data.intended_flight.basic_information.uas_state.value
-        )
-        flight_planning_usage_state = (
-            scd_test_data.intended_flight.basic_information.usage_state.value
-        )
+        flight_planning_priority = scd_test_data.intended_flight.astm_f3548_21.priority if scd_test_data.intended_flight.astm_f3548_21.priority else 0
+        flight_planning_uas_state = scd_test_data.intended_flight.basic_information.uas_state.value
+        flight_planning_usage_state = scd_test_data.intended_flight.basic_information.usage_state.value
         # Parse the intent data and test state
         flight_planning_data = FlightPlanningInjectionData(
             volumes=flight_planning_volumes,
@@ -157,31 +141,21 @@ def upsert_close_flight_plan(request, flight_plan_id):
             state="Accepted",
         )
 
-        my_flight_planning_data_validator = dss_scd_helper.FlightPlanningDataValidator(
-            incoming_flight_planning_data=flight_planning_data
-        )
-        flight_planning_data_valid = (
-            my_flight_planning_data_validator.validate_flight_planning_test_data()
-        )
+        my_flight_planning_data_validator = dss_scd_helper.FlightPlanningDataValidator(incoming_flight_planning_data=flight_planning_data)
+        flight_planning_data_valid = my_flight_planning_data_validator.validate_flight_planning_test_data()
 
         if not flight_planning_data_valid:
             logger.info("Flight Planning data not valid..")
             return Response(
-                json.loads(
-                    json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)
-                ),
+                json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)),
                 status=status.HTTP_200_OK,
             )
 
-        volumes_valid = my_volumes_validator.validate_volumes(
-            volumes=scd_test_data.intended_flight.basic_information.area
-        )
+        volumes_valid = my_volumes_validator.validate_volumes(volumes=scd_test_data.intended_flight.basic_information.area)
 
         if not volumes_valid:
             return Response(
-                json.loads(
-                    json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)
-                ),
+                json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)),
                 status=status.HTTP_200_OK,
             )
         # End validation of Volumes
@@ -215,68 +189,38 @@ def upsert_close_flight_plan(request, flight_plan_id):
         try:
             assert "error" not in auth_token
         except AssertionError as e:
-            logger.error(
-                "Error in retrieving auth_token, check if the auth server is running properly, error details below"
-            )
+            logger.error("Error in retrieving auth_token, check if the auth server is running properly, error details below")
             logger.error(e)
             logger.error(auth_token["error"])
             return Response(
-                json.loads(
-                    json.dumps(
-                        asdict(failed_planning_response), cls=EnhancedJSONEncoder
-                    )
-                ),
+                json.loads(json.dumps(asdict(failed_planning_response), cls=EnhancedJSONEncoder)),
                 status=status.HTTP_200_OK,
             )
 
-        my_geo_json_converter.convert_volumes_to_geojson(
-            volumes=flight_planning_volumes
-        )
+        my_geo_json_converter.convert_volumes_to_geojson(volumes=flight_planning_volumes)
         view_rect_bounds = my_geo_json_converter.get_bounds()
         view_rect_bounds_storage = ",".join([str(i) for i in view_rect_bounds])
         view_r_bounds = ",".join(map(str, view_rect_bounds))
 
         # Check if operational intent exists in Flight Blender
         my_test_harness_helper = SCDTestHarnessHelper()
-        flight_plan_exists_in_flight_blender = (
-            my_test_harness_helper.check_if_same_flight_id_exists(
-                operation_id=operation_id_str
-            )
-        )
+        flight_plan_exists_in_flight_blender = my_test_harness_helper.check_if_same_flight_id_exists(operation_id=operation_id_str)
 
         # Create a payload for notification
         flight_planning_notification_payload = flight_planning_data
-        generated_operational_intent_state = (
-            my_flight_plan_op_intent_bridge.generate_operational_intent_state_from_planning_information()
-        )
+        generated_operational_intent_state = my_flight_plan_op_intent_bridge.generate_operational_intent_state_from_planning_information()
 
         # Flight plan exists in Flight Blender and the new state is off nominal or contingent
-        if (
-            flight_plan_exists_in_flight_blender
-            and generated_operational_intent_state in ["Activated", "Nonconforming"]
-        ):
+        if flight_plan_exists_in_flight_blender and generated_operational_intent_state in ["Activated", "Nonconforming"]:
             # Operational intent exists, update the operational intent based on SCD rules. Get the detail of the existing / stored operational intent
 
-            existing_op_int_details = (
-                my_operational_intent_parser.parse_stored_operational_intent_details(
-                    operation_id=operation_id_str
-                )
-            )
-            flight_declaration = my_database_reader.get_flight_declaration_by_id(
-                flight_declaration_id=operation_id_str
-            )
+            existing_op_int_details = my_operational_intent_parser.parse_stored_operational_intent_details(operation_id=operation_id_str)
+            flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
             if not flight_declaration:
-                failed_planning_response.notes = (
-                    "Flight Declaration with ID %s not found in Flight Blender"
-                    % operation_id_str
-                )
+                failed_planning_response.notes = "Flight Declaration with ID %s not found in Flight Blender" % operation_id_str
 
                 return Response(
-                    json.loads(
-                        json.dumps(
-                            asdict(failed_planning_response), cls=EnhancedJSONEncoder
-                        )
-                    ),
+                    json.loads(json.dumps(asdict(failed_planning_response), cls=EnhancedJSONEncoder)),
                     status=status.HTTP_200_OK,
                 )
 
@@ -286,34 +230,22 @@ def upsert_close_flight_plan(request, flight_plan_id):
             current_state = flight_declaration.state
             current_state_str = OPERATION_STATES[current_state][1]
             # ID of the operational intent reference stored in the DSS
-            dss_operational_intent_reference_id = str(
-                flight_operational_intent_reference.id
-            )
+            dss_operational_intent_reference_id = str(flight_operational_intent_reference.id)
             stored_operational_intent_details = my_operational_intent_parser.parse_and_load_stored_flight_operational_intent_reference(
                 operation_id=operation_id_str
             )
-            provided_volumes_off_nominal_volumes = (
-                scd_test_data.intended_flight.basic_information.area
-            )
+            provided_volumes_off_nominal_volumes = scd_test_data.intended_flight.basic_information.area
             deconfliction_check = True
 
             # If the flight is activated and submitted to the DSS and the new stat is non-conforming, submit off-nominal volumes and no need to check for de-confliction
-            if (
-                current_state_str in ["Accepted", "Activated"]
-                and generated_operational_intent_state == "Nonconforming"
-            ):
+            if current_state_str in ["Accepted", "Activated"] and generated_operational_intent_state == "Nonconforming":
                 deconfliction_check = False
             # If the flight state is activate and new state is also activated, check for deconfliction before updating the volumes
-            elif (
-                current_state_str == "Activated"
-                and generated_operational_intent_state == "Activated"
-            ):
+            elif current_state_str == "Activated" and generated_operational_intent_state == "Activated":
                 deconfliction_check = True
 
             operational_intent_update_job = my_scd_dss_helper.update_specified_operational_intent_reference(
-                operational_intent_ref_id=str(
-                    stored_operational_intent_details.reference.id
-                ),
+                operational_intent_ref_id=str(stored_operational_intent_details.reference.id),
                 extents=provided_volumes_off_nominal_volumes,
                 new_state=generated_operational_intent_state,
                 current_state=current_state_str,
@@ -330,10 +262,8 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 # Notify the subscribers that the operational intent has been updated
 
                 # Update the OVN in the Flight Blender database
-                flight_operational_intent_reference = (
-                    my_database_reader.get_flight_operational_intent_reference_by_id(
-                        stored_operational_intent_details.reference.id
-                    )
+                flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(
+                    stored_operational_intent_details.reference.id
                 )
                 flight_declaration = flight_operational_intent_reference.declaration
                 flight_operational_intent_details = my_database_reader.get_operational_intent_details_by_flight_declaration_id(
@@ -364,16 +294,12 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
                 if generated_operational_intent_state == "Activated":
                     # The current state is activated and the original state was also activated
-                    ready_to_fly_planning_response.notes = (
-                        "Created Operational Intent ID {operational_intent_id}".format(
-                            operational_intent_id=dss_operational_intent_reference_id
-                        )
+                    ready_to_fly_planning_response.notes = "Created Operational Intent ID {operational_intent_id}".format(
+                        operational_intent_id=dss_operational_intent_reference_id
                     )
 
                     # update the state to Activated
-                    my_database_writer.update_flight_operation_state(
-                        flight_declaration_id=operation_id_str, state=2
-                    )
+                    my_database_writer.update_flight_operation_state(flight_declaration_id=operation_id_str, state=2)
                     my_database_writer.create_flight_operational_intent_reference_subscribers(
                         flight_declaration=flight_declaration,
                         subscribers=operational_intent_update_job.dss_response.subscribers,
@@ -381,52 +307,26 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
                     new_updated_operational_intent_full_details = CompositeOperationalIntentPayload(
                         bounds=view_r_bounds,
-                        start_datetime=scd_test_data.intended_flight.basic_information.area[
-                            0
-                        ].time_start.value,
-                        end_datetime=scd_test_data.intended_flight.basic_information.area[
-                            0
-                        ].time_end.value,
-                        alt_max=scd_test_data.intended_flight.basic_information.area[
-                            0
-                        ].volume.altitude_upper.value,
-                        alt_min=scd_test_data.intended_flight.basic_information.area[
-                            0
-                        ].volume.altitude_lower.value,
-                        operational_intent_reference_id=str(
-                            flight_operational_intent_reference.id
-                        ),
-                        operational_intent_details_id=str(
-                            flight_operational_intent_details.id
-                        ),
+                        start_datetime=scd_test_data.intended_flight.basic_information.area[0].time_start.value,
+                        end_datetime=scd_test_data.intended_flight.basic_information.area[0].time_end.value,
+                        alt_max=scd_test_data.intended_flight.basic_information.area[0].volume.altitude_upper.value,
+                        alt_min=scd_test_data.intended_flight.basic_information.area[0].volume.altitude_lower.value,
+                        operational_intent_reference_id=str(flight_operational_intent_reference.id),
+                        operational_intent_details_id=str(flight_operational_intent_details.id),
                     )
 
                     update_operational_intent_response = Response(
-                        json.loads(
-                            json.dumps(
-                                ready_to_fly_planning_response, cls=EnhancedJSONEncoder
-                            )
-                        ),
+                        json.loads(json.dumps(ready_to_fly_planning_response, cls=EnhancedJSONEncoder)),
                         status=status.HTTP_200_OK,
                     )
 
                 elif generated_operational_intent_state == "Nonconforming":
                     # Update the declaration to non-conforming
-                    my_database_writer.update_flight_operation_state(
-                        flight_declaration_id=operation_id_str, state=3
-                    )
-                    existing_op_int_details.operational_intent_details.off_nominal_volumes = (
-                        scd_test_data.intended_flight.basic_information.area
-                    )
-                    existing_op_int_details.success_response.operational_intent_reference.state = (
-                        OperationalIntentState.Nonconforming
-                    )
-                    existing_op_int_details.operational_intent_details.state = (
-                        OperationalIntentState.Nonconforming
-                    )
-                    new_updated_operational_intent_full_details = (
-                        existing_op_int_details
-                    )
+                    my_database_writer.update_flight_operation_state(flight_declaration_id=operation_id_str, state=3)
+                    existing_op_int_details.operational_intent_details.off_nominal_volumes = scd_test_data.intended_flight.basic_information.area
+                    existing_op_int_details.success_response.operational_intent_reference.state = OperationalIntentState.Nonconforming
+                    existing_op_int_details.operational_intent_details.state = OperationalIntentState.Nonconforming
+                    new_updated_operational_intent_full_details = existing_op_int_details
                     # Remove outline circle from off-nominal volumes
 
                     update_operational_intent_response = Response(
@@ -449,15 +349,8 @@ def upsert_close_flight_plan(request, flight_plan_id):
             elif operational_intent_update_job.status == 999:
                 # The update cannot be sent to the DSS, there is additional information that needs to be sent
                 logger.info("Flight not sent to DSS..")
-                if (
-                    flight_plan_exists_in_flight_blender
-                    and operational_intent_update_job.additional_information.check_id.value
-                    == "B"
-                ):
-                    if (
-                        operational_intent_update_job.additional_information.tentative_flight_plan_processing_response.value
-                        == "OkToFly"
-                    ):
+                if flight_plan_exists_in_flight_blender and operational_intent_update_job.additional_information.check_id.value == "B":
+                    if operational_intent_update_job.additional_information.tentative_flight_plan_processing_response.value == "OkToFly":
                         return Response(
                             json.loads(
                                 json.dumps(
@@ -501,9 +394,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 # The update failed because the DSS returned a 4XX code
                 logger.info("Updating of Operational intent failed...")
                 return Response(
-                    json.loads(
-                        json.dumps(failed_planning_response, cls=EnhancedJSONEncoder)
-                    ),
+                    json.loads(json.dumps(failed_planning_response, cls=EnhancedJSONEncoder)),
                     status=status.HTTP_200_OK,
                 )
         else:
@@ -516,45 +407,31 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 state=OPERATION_STATES_LOOKUP[generated_operational_intent_state],
             )
 
-            flight_declaration = my_database_writer.create_flight_declaration(
-                flight_declaration_creation=flight_declaration_creation
-            )
+            flight_declaration = my_database_writer.create_flight_declaration(flight_declaration_creation=flight_declaration_creation)
 
-            pre_creation_checks_passed = (
-                my_volumes_validator.pre_operational_intent_creation_checks(
-                    volumes=scd_test_data.intended_flight.basic_information.area
-                )
+            pre_creation_checks_passed = my_volumes_validator.pre_operational_intent_creation_checks(
+                volumes=scd_test_data.intended_flight.basic_information.area
             )
             if not pre_creation_checks_passed:
                 return Response(
-                    json.loads(
-                        json.dumps(
-                            not_planned_planning_response, cls=EnhancedJSONEncoder
-                        )
-                    ),
+                    json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)),
                     status=status.HTTP_200_OK,
                 )
             off_nominal_volumes = (
-                scd_test_data.intended_flight.basic_information.area
-                if flight_planning_uas_state in ["OffNominal", "Contingent"]
-                else []
+                scd_test_data.intended_flight.basic_information.area if flight_planning_uas_state in ["OffNominal", "Contingent"] else []
             )
-            flight_planning_submission: OperationalIntentSubmissionStatus = (
-                my_scd_dss_helper.create_and_submit_operational_intent_reference(
-                    state=generated_operational_intent_state,
-                    volumes=scd_test_data.intended_flight.basic_information.area,
-                    off_nominal_volumes=off_nominal_volumes,
-                    priority=flight_planning_priority,
-                )
+            flight_planning_submission: OperationalIntentSubmissionStatus = my_scd_dss_helper.create_and_submit_operational_intent_reference(
+                state=generated_operational_intent_state,
+                volumes=scd_test_data.intended_flight.basic_information.area,
+                off_nominal_volumes=off_nominal_volumes,
+                priority=flight_planning_priority,
             )
 
             if flight_planning_submission.status == "success":
                 # Successfully submitted to the DSS, save the operational intent in DB
 
                 logger.info(f"Flight with declaration id {operation_id_str} created")
-                flight_declaration = my_database_reader.get_flight_declaration_by_id(
-                    flight_declaration_id=operation_id_str
-                )
+                flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)
 
                 flight_planning_data.state = generated_operational_intent_state
 
@@ -583,20 +460,12 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
                 composite_operational_intent_payload = CompositeOperationalIntentPayload(
                     bounds=view_r_bounds,
-                    start_datetime=scd_test_data.intended_flight.basic_information.area[
-                        0
-                    ].time_start.value,
-                    end_datetime=scd_test_data.intended_flight.basic_information.area[
-                        0
-                    ].time_end.value,
+                    start_datetime=scd_test_data.intended_flight.basic_information.area[0].time_start.value,
+                    end_datetime=scd_test_data.intended_flight.basic_information.area[0].time_end.value,
                     alt_max=50,
                     alt_min=25,
-                    operational_intent_reference_id=str(
-                        flight_operational_intent_reference.id
-                    ),
-                    operational_intent_details_id=str(
-                        flight_operational_intent_detail.id
-                    ),
+                    operational_intent_reference_id=str(flight_operational_intent_reference.id),
+                    operational_intent_details_id=str(flight_operational_intent_detail.id),
                 )
 
                 my_database_writer.create_or_update_composite_operational_intent(
@@ -612,9 +481,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                 )
 
                 # End store flight DSS
-                planned_test_injection_response.operational_intent_id = (
-                    flight_planning_submission.operational_intent_id
-                )
+                planned_test_injection_response.operational_intent_id = flight_planning_submission.operational_intent_id
                 # Create a flight declaration with operation id
                 # End create operational intent
 
@@ -624,9 +491,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                         return Response(
                             json.loads(
                                 json.dumps(
-                                    asdict(
-                                        not_planned_already_planned_planning_response
-                                    ),
+                                    asdict(not_planned_already_planned_planning_response),
                                     cls=EnhancedJSONEncoder,
                                 )
                             ),
@@ -668,10 +533,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
                         status=status.HTTP_200_OK,
                     )
 
-            if (
-                scd_test_data.intended_flight.basic_information.usage_state
-                == " Planned"
-            ):
+            if scd_test_data.intended_flight.basic_information.usage_state == " Planned":
                 return Response(
                     json.loads(
                         json.dumps(
@@ -708,48 +570,24 @@ def upsert_close_flight_plan(request, flight_plan_id):
             }
             # logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
 
-            deletion_response = my_scd_dss_helper.delete_operational_intent(
-                dss_operational_intent_ref_id=str(opint_id), ovn=ovn
-            )
+            deletion_response = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=str(opint_id), ovn=ovn)
             if deletion_response.status == 200:
-                logger.info(
-                    "Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(
-                        **ovn_opint
-                    )
-                )
+                logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
 
-                my_database_writer.delete_flight_declaration(
-                    flight_declaration_id=operation_id_str
-                )
+                my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id_str)
 
-                logging.info(
-                    "-- Deleted operational inent {opint_id} with Flight declaration ID {flight_declaration_id}".format(
-                        **ovn_opint
-                    )
-                )
-                flight_planning_deletion_response = (
-                    flight_planning_deletion_success_response
-                )
+                logging.info("-- Deleted operational inent {opint_id} with Flight declaration ID {flight_declaration_id}".format(**ovn_opint))
+                flight_planning_deletion_response = flight_planning_deletion_success_response
             else:
-                logger.info(
-                    "Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(
-                        **ovn_opint
-                    )
-                )
+                logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                 logger.error(deletion_response.status)
-                flight_planning_deletion_response = (
-                    flight_planning_deletion_failure_response
-                )
+                flight_planning_deletion_response = flight_planning_deletion_failure_response
 
         else:
-            flight_planning_deletion_response = (
-                flight_planning_deletion_failure_response
-            )
+            flight_planning_deletion_response = flight_planning_deletion_failure_response
 
         return Response(
-            json.loads(
-                json.dumps(flight_planning_deletion_response, cls=EnhancedJSONEncoder)
-            ),
+            json.loads(json.dumps(flight_planning_deletion_response, cls=EnhancedJSONEncoder)),
             status=status.HTTP_200_OK,
         )
 
@@ -765,9 +603,7 @@ def flight_planning_status(request):
         api_name="Flight Planning Automated Testing Interface",
         api_version="latest",
     )
-    return JsonResponse(
-        json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200
-    )
+    return JsonResponse(json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200)
 
 
 @api_view(["POST"])
@@ -781,16 +617,9 @@ def flight_planning_clear_area_request(request):
         extent_raw = clear_area_request["extent"]
     except KeyError as ke:
         return Response(
-            {
-                "result": "Could not parse clear area payload, expected key %s not found "
-                % ke
-            },
+            {"result": "Could not parse clear area payload, expected key %s not found " % ke},
             status=status.HTTP_400_BAD_REQUEST,
         )
     my_flight_plan_clear_area_handler = DSSAreaClearHandler(request_id=request_id)
-    clear_area_response = my_flight_plan_clear_area_handler.clear_area_request(
-        extent_raw=extent_raw
-    )
-    return JsonResponse(
-        json.loads(json.dumps(clear_area_response, cls=EnhancedJSONEncoder)), status=200
-    )
+    clear_area_response = my_flight_plan_clear_area_handler.clear_area_request(extent_raw=extent_raw)
+    return JsonResponse(json.loads(json.dumps(clear_area_response, cls=EnhancedJSONEncoder)), status=200)

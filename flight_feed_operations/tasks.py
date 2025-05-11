@@ -51,7 +51,7 @@ def write_incoming_air_traffic_data(observation: str):
     ) as e:
         logger.error(f"Error parsing observation: {e}")
         return
-    logger.info("Parsed observation: %s", single_air_traffic_observation)
+    logger.debug("Parsed observation: %s", single_air_traffic_observation)
 
     logger.info("Writing observation..")
     # TODO: Write this observation to the Database
