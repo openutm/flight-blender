@@ -97,7 +97,6 @@ class Command(BaseCommand):
         # Get the latest telemetry
 
         if not all_flights_telemetry_data:
-            logger.error("Operator declares contingency command activated")
             logger.error(f"No telemetry data found for operation {flight_declaration_id}")
             return
 
