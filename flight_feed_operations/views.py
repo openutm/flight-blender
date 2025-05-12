@@ -216,7 +216,8 @@ def get_air_traffic(request, session_id):
             content_type="application/json",
         )
     try:
-        my_observation_reader = flight_stream_helper.ObservationReadOperations()
+        view_port_box = view_port_ops.build_view_port_box(view_port_coords=view_port)
+        my_observation_reader = flight_stream_helper.ObservationReadOperations(view_port_box=view_port_box)
         all_observations = my_observation_reader.get_flight_observations(session_id=session_id)
 
         # Create a dictionary to store the latest observation for each icao_address

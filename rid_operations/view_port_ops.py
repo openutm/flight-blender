@@ -4,7 +4,7 @@ import shapely
 from shapely.geometry import box as shapley_box
 
 
-def build_view_port_box(view_port_coords) -> shapely.geometry.box:
+def build_view_port_box(view_port_coords) -> shapely_box:
     box = shapley_box(
         view_port_coords[0],
         view_port_coords[1],

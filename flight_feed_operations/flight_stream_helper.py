@@ -2,7 +2,10 @@ import json
 from itertools import zip_longest
 
 import arrow
+import shapely
 from dotenv import find_dotenv, load_dotenv
+from shapely.geometry import Point
+from shapely.geometry import box as shapely_box
 
 from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
@@ -40,6 +43,9 @@ class ObservationReadOperations:
                 - metadata: The metadata extracted and parsed from the message data.
 
     """
+
+    def __init__(self, view_port_box=None):
+        self.view_port_box: shapely_box = view_port_box
 
     def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
         """
@@ -85,5 +91,10 @@ class ObservationReadOperations:
                 updated_at=message["updated_at"],
                 metadata=json.loads(message["metadata"]),
             )
-            pending_messages.append(observation)
+            if self.view_port_box:
+                if shapely.contains(self.view_port_box, Point(observation.longitude_dd, observation.latitude_dd)):
+                    pending_messages.append(observation)
+            else:
+                pending_messages.append(observation)
+
         return pending_messages
