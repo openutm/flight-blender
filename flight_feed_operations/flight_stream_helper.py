@@ -76,7 +76,7 @@ class ObservationReadOperations:
         r.set(key, arrow.now().isoformat())
         r.expire(key, 300)
         pending_messages = []
-        all_flight_observations = my_database_reader.get_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
+        all_flight_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],
