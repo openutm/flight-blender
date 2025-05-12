@@ -1,7 +1,7 @@
 from math import atan2, cos, radians, sin, sqrt
 
 import shapely
-from shapely.geometry import box as shapley_box
+from shapely.geometry import box as shapely_box
 
 
 def build_view_port_box(view_port_coords) -> shapely_box:
