@@ -13,7 +13,7 @@ from common.database_operations import FlightBlenderDatabaseReader, FlightBlende
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from flight_declaration_operations.utils import OperationalIntentsConverter
 from flight_feed_operations import flight_stream_helper
-from scd_operations.dss_scd_helper import SCDOperations
+from scd_operations.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations
 from scd_operations.scd_data_definitions import (
     OperationalIntentReferenceDSSResponse,
     Time,
@@ -33,7 +33,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "-d",
+            "-f",
             "--flight_declaration_id",
             dest="flight_declaration_id",
             metavar="ID of the flight declaration",
@@ -42,8 +42,8 @@ class Command(BaseCommand):
 
         parser.add_argument(
             "-d",
-            "--dryrun",
-            dest="dryrun",
+            "--dry_run",
+            dest="dry_run",
             metavar="Set if this is a dry run",
             default="1",
             help="Set if it is a dry run",
@@ -131,18 +131,9 @@ class Command(BaseCommand):
             subscription_id=stored_subscription_id,
         )
         if not dry_run:
-            flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
-            for subscriber in dss_response_subscribers:
-                subscriptions = subscriber["subscriptions"]
-                uss_base_url = subscriber["uss_base_url"]
-                if flight_blender_base_url == uss_base_url:
-                    for s in subscriptions:
-                        subscription_id = s["subscription_id"]
-                        break
-            # Create a new subscription to the airspace
             operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
-                subscription_id=subscription_id,
-                operational_intent_ref_id=reference.id,
+                subscription_id=stored_subscription_id,
+                operational_intent_ref_id=str(reference.id),
                 extents=stored_volumes,
                 new_state=new_state_str,
                 ovn=reference.ovn,
@@ -157,61 +148,47 @@ class Command(BaseCommand):
 
             # Get the last observation of the flight telemetry
             obs_helper = flight_stream_helper.ObservationReadOperations()
-            all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
+            latest_telemetry_data = obs_helper.get_latest_flight_observation_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
             # Get the latest telemetry
 
-            if not all_flights_telemetry_data:
+            if not latest_telemetry_data:
                 logger.error(f"No telemetry data found for operation {flight_declaration_id}")
                 return
 
-            distinct_messages = all_flights_telemetry_data if all_flights_telemetry_data else []
-            relevant_observation = distinct_messages[0]
+            lat_dd = latest_telemetry_data.latitude_dd
+            lon_dd = latest_telemetry_data.longitude_dd
 
-            lat_dd = relevant_observation.latitude_dd
-            lon_dd = relevant_observation.longitude_dd
-
-            max_altitude = max(all_altitudes)
-            min_altitude = min(all_altitudes)
+            max_altitude = latest_telemetry_data.altitude_mm + 10
+            min_altitude = latest_telemetry_data.altitude_mm - 10
             my_op_int_converter = OperationalIntentsConverter()
             new_volume_4d = my_op_int_converter.buffer_point_to_volume4d(
                 lat=lat_dd,
                 lng=lon_dd,
-                start_datetime=flight_declaration.start_datetime,
-                end_datetime=flight_declaration.end_datetime,
+                start_datetime=flight_declaration.start_datetime.isoformat(),
+                end_datetime=flight_declaration.end_datetime.isoformat(),
                 min_altitude=min_altitude,
                 max_altitude=max_altitude,
             )
             logger.debug(new_volume_4d)
 
-            if not dry_run:
-                flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
-                for subscriber in dss_response_subscribers:
-                    subscriptions = subscriber["subscriptions"]
-                    uss_base_url = subscriber["uss_base_url"]
-                    if flight_blender_base_url == uss_base_url:
-                        for s in subscriptions:
-                            subscription_id = s["subscription_id"]
-                            break
-                # Create a new subscription to the airspace
+            operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
+                subscription_id=stored_subscription_id,
+                operational_intent_ref_id=reference.id,
+                extents=stored_volumes,
+                ovn=reference.ovn,
+                deconfliction_check=True,
+                new_state=new_state_str,
+                current_state=current_state_str,
+            )
 
-                operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
-                    subscription_id=subscription_id,
-                    operational_intent_ref_id=reference.id,
-                    extents=stored_volumes,
-                    ovn=reference.ovn,
-                    deconfliction_check=True,
-                    new_state=new_state_str,
-                    current_state=current_state_str,
-                )
-
-                if operational_update_response.status == 200:
-                    logger.info(
-                        "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
-                            operational_intent_id=stored_operational_intent_id
-                        )
+            if operational_update_response.status == 200:
+                logger.info(
+                    "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
+                        operational_intent_id=stored_operational_intent_id
                     )
-                else:
-                    logger.info("Error in updating operational intent on the DSS")
-
+                )
             else:
-                logger.info("Dry run, not submitting to the DSS")
+                logger.info("Error in updating operational intent on the DSS")
+
+        else:
+            logger.info("Dry run, not submitting to the DSS")

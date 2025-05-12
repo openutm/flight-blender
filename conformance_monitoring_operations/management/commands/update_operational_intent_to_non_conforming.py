@@ -25,17 +25,17 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "-d",
-            "--flightdeclarationid",
-            dest="flightdeclarationid",
+            "-f",
+            "--flight_declaration_id",
+            dest="flight_declaration_id",
             metavar="ID of the flight declaration",
             help="Specify the ID of Flight Declaration",
         )
 
         parser.add_argument(
             "-d",
-            "--dryrun",
-            dest="dryrun",
+            "--dry_run",
+            dest="dry_run",
             metavar="Set if this is a dry run",
             default="1",
             help="Set if it is a dry run",
@@ -46,10 +46,11 @@ class Command(BaseCommand):
         my_database_reader = FlightBlenderDatabaseReader()
         my_database_writer = FlightBlenderDatabaseWriter()
         my_operational_intents_helper = OperationalIntentReferenceHelper()
-        dry_run = options["dryrun"]
+        dry_run = options["dry_run"]
         dry_run = 1 if dry_run == "1" else 0
         # Set new state as non-conforming
-        new_state = OPERATION_STATES[3][1]
+        new_state = OPERATION_STATES[3][0]
+        new_state_str = OPERATION_STATES[3][1]
         try:
             flight_declaration_id = options["flight_declaration_id"]
         except Exception as e:
@@ -98,6 +99,11 @@ class Command(BaseCommand):
         stored_off_nominal_volumes = details_full.off_nominal_volumes
         logger.debug(stored_priority)
         logger.debug(stored_off_nominal_volumes)
+
+        # Update the flight declaration state
+        flight_declaration.state = new_state
+        flight_declaration.save()
+
         reference = OperationalIntentReferenceDSSResponse(
             id=stored_operational_intent_id,
             manager=stored_manager,
@@ -112,19 +118,12 @@ class Command(BaseCommand):
         )
         if not dry_run:
             flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
-            for subscriber in dss_response_subscribers:
-                subscriptions = subscriber.subscriptions
-                uss_base_url = subscriber.uss_base_url
-                if flight_blender_base_url == uss_base_url:
-                    for s in subscriptions:
-                        subscription_id = s.subscription_id
-                        break
 
             operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
-                subscription_id=subscription_id,
-                operational_intent_ref_id=reference.id,
+                subscription_id=stored_subscription_id,
+                operational_intent_ref_id=str(reference.id),
                 extents=stored_volumes,
-                new_state=str(new_state),
+                new_state=new_state_str,
                 ovn=reference.ovn,
                 deconfliction_check=True,
                 priority=0,

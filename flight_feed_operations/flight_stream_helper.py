@@ -98,3 +98,24 @@ class ObservationReadOperations:
                 pending_messages.append(observation)
 
         return pending_messages
+
+    def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
+        my_database_reader = FlightBlenderDatabaseReader()
+
+        latest_observation = my_database_reader.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
+        if not latest_observation:
+            return None
+        else:
+            return FlightObservationSchema(
+                id=str(latest_observation.id),
+                session_id=str(latest_observation.session_id),
+                latitude_dd=latest_observation.latitude_dd,
+                longitude_dd=latest_observation.longitude_dd,
+                altitude_mm=latest_observation.altitude_mm,
+                traffic_source=latest_observation.traffic_source,
+                source_type=latest_observation.source_type,
+                icao_address=latest_observation.icao_address,
+                created_at=latest_observation.created_at.isoformat(),
+                updated_at=latest_observation.updated_at.isoformat(),
+                metadata=json.loads(latest_observation.metadata),
+            )

@@ -502,10 +502,9 @@ def set_telemetry(request):
 
         current_states = flight["current_states"]
         flight_details = flight["flight_details"]
-
         try:
             all_states = my_telemetry_validator.parse_validate_current_states(current_states=current_states)
-            f_details = my_telemetry_validator.parse_validate_rid_details(rid_flight_details=flight_details["rid_details"])
+            f_details = my_telemetry_validator.parse_validate_rid_details(rid_flight_details=flight_details)
         except KeyError as ke:
             return JsonResponse(
                 {"message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"},
