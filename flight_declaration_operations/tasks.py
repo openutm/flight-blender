@@ -139,7 +139,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             flight_declaration.add_state_history_entry(
                 new_state=accepted_state,
                 original_state=original_state,
-                notes="Successfully submitted to the DSS",
+                notes="Successfully submitted to the DSS..",
             )
 
         submission_state_updated_msg = "Flight Operation with ID {operation_id} has a updated state: Accepted. ".format(

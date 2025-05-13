@@ -186,8 +186,8 @@ class Command(BaseCommand):
 
         operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
             subscription_id=stored_subscription_id,
-            operational_intent_ref_id=reference.id,
-            extents=stored_volumes,
+            operational_intent_ref_id=str(reference.id),
+            extents=[new_volume_4d],
             ovn=reference.ovn,
             deconfliction_check=True,
             new_state=new_state_str,
