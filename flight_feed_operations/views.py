@@ -220,12 +220,15 @@ def get_air_traffic(request, session_id):
         my_observation_reader = flight_stream_helper.ObservationReadOperations(view_port_box=view_port_box)
         all_observations = my_observation_reader.get_flight_observations(session_id=session_id)
 
-        # Create a dictionary to store the latest observation for each icao_address
+        # Filter the all observations to get the latest one for each ICAO address
         latest_observations = {}
         for observation in all_observations:
-            icao_address = observation.icao_address
-            if icao_address not in latest_observations or observation.created_at > latest_observations[icao_address]["timestamp"]:
-                latest_observations["icao_address"] = observation
+            if observation.icao_address not in latest_observations:
+                latest_observations[observation.icao_address] = observation
+            else:
+                # Compare timestamps to keep the latest one
+                if observation.created_at > latest_observations[observation.icao_address].created_at:
+                    latest_observations[observation.icao_address] = observation
 
         logger.info("Distinct messages: %s" % len(latest_observations))
     except KeyError as ke:
@@ -243,6 +246,7 @@ def get_air_traffic(request, session_id):
             source_type=observation.source_type,
             icao_address=icao_address,
             metadata=observation.metadata,
+            session_id=observation.session_id,
         )
         all_traffic_observations.append(asdict(so))
 
