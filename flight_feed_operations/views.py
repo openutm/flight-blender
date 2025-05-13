@@ -235,7 +235,6 @@ def get_air_traffic(request, session_id):
     all_traffic_observations = []
     for icao_address in latest_observations:
         observation = latest_observations[icao_address]
-        observation_metadata = json.loads(observation["metadata"])
         so = SingleAirtrafficObservation(
             lat_dd=observation.latitude_dd,
             lon_dd=observation.longitude_dd,
@@ -243,7 +242,7 @@ def get_air_traffic(request, session_id):
             traffic_source=observation.traffic_source,
             source_type=observation.source_type,
             icao_address=icao_address,
-            metadata=observation_metadata,
+            metadata=observation.metadata,
         )
         all_traffic_observations.append(asdict(so))
 

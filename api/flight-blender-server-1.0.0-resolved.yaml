@@ -863,7 +863,7 @@ paths:
       in: path
       required: true
 
-  /flight_stream/set_air_traffic:
+  /flight_stream/set_air_traffic/{session_id}:
     post:
       parameters:
       - name: session_id
@@ -886,7 +886,7 @@ paths:
               type: object
               properties:
                 observations:
-                  $ref: '#/components/schemas/FlightObservationProcessingResponse'
+                  $ref: '#/components/schemas/FlightFeedJSON'
 
       responses:
         '201':
@@ -972,7 +972,7 @@ paths:
       tags:
         - air-traffic
 
-  /flight_stream/get_air_traffic:
+  /flight_stream/get_air_traffic/{session_id}:
     get:
       parameters:
         - name: view
@@ -981,13 +981,11 @@ paths:
           schema:
             type: string
             example: 29.97816,31.13296,29.98025,31.13535
-
           required: true
 
         - name: session_id
           in: path
-          required: true
-          description: A UUID string identifying the session id associated with observation.
+          description: A UUID string identifying the session id associated with observation, if the session_id does not exist, observations received 20 seconds before now.
           schema:
             type: string
 

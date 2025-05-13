@@ -70,8 +70,8 @@ class ObservationReadOperations:
             after_datetime = arrow.get(last_reading_time)
         else:
             now = arrow.now()
-            one_second_before_now = now.shift(seconds=-1)
-            after_datetime = one_second_before_now
+            twenty_second_before_now = now.shift(seconds=-20)
+            after_datetime = twenty_second_before_now
 
         r.set(key, arrow.now().isoformat())
         r.expire(key, 300)
