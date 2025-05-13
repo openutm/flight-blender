@@ -232,7 +232,7 @@ class FlightOperationConformanceHelper:
         """
 
         non_conforming_events = {
-            "ua_exits_coordinated_op_intent": "update_operational_intent_to_non_conforming_update_expand_volumes",
+            "ua_exits_coordinated_op_intent": "transition_to_non_conforming_update_expand_volumes",
             "ua_departs_early_late": "update_operational_intent_to_non_conforming",
         }
 

@@ -100,6 +100,10 @@ class FlightBlenderDatabaseReader:
         )
         return observations
 
+    def get_latest_flight_observation_by_session(self, session_id: str):
+        observation = FlightObservation.objects.filter(session_id=session_id).latest("created_at")
+        return observation
+
     def get_all_flight_declarations(self) -> list[FlightDeclaration]:
         flight_declarations = FlightDeclaration.objects.all()
         return flight_declarations

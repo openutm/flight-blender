@@ -35,7 +35,7 @@ class FlightBlenderConformanceEngine:
         aircraft_id: str,
         telemetry_location: LatLngPoint,
         altitude_m_wgs_84: float,
-    ) -> bool:
+    ) -> int:
         """This method performs the conformance sequence per AMC1 Article 13(1) as specified in the EU AMC / GM on U-Space regulation.
         This method is called every time a telemetry has been sent into Flight Blender. Specifically, it checks this once a telemetry has been sent:
          - C2 Check if flight authorization is granted
@@ -61,6 +61,7 @@ class FlightBlenderConformanceEngine:
             logger.error(
                 f"Error in getting flight authorization and declaration for {flight_declaration_id}, cannot continue with conformance checks, C2 Check failed."
             )
+            logger.error("Conformance check failed, flight authorization not found, raising code {ConformanceChecksList.C2}")
             return ConformanceChecksList.C2
 
         operation_start_time = arrow.get(flight_declaration.start_datetime)
@@ -68,16 +69,21 @@ class FlightBlenderConformanceEngine:
 
         # C3 Check
         if flight_declaration.aircraft_id != aircraft_id:
-            logger.error(f"Aircraft ID mismatch for {flight_declaration_id}, C3 Check failed.")
-            return ConformanceChecksList.C3
+            logger.error(
+                f"Aircraft ID mismatch for {flight_declaration_id}, C3 Check failed: Flight Declaration {flight_declaration.aircraft_id} != Telemetry {aircraft_id}"
+            )
+            logger.error(f"Raising error code {ConformanceChecksList.C3}")
+            return ConformanceChecksList.C
 
         # C4, C5 Check
         if flight_declaration.state in [0, 5, 6, 7, 8]:
             logger.error(f"Flight state is invalid for {flight_declaration_id}, C4 Check failed.")
+            logger.error(f"Raising error code {ConformanceChecksList.C4}")
             return ConformanceChecksList.C4
 
         if flight_declaration.state not in [2, 3, 4]:
             logger.error(f"Flight state is not activated for {flight_declaration_id}, C5 Check failed.")
+            logger.error(f"Raising Error code {ConformanceChecksList.C5}")
             return ConformanceChecksList.C5
 
         # C6 Check
@@ -87,6 +93,7 @@ class FlightBlenderConformanceEngine:
             check_time=now,
         ):
             logger.error(f"Telemetry is not within operation time for {flight_declaration_id}, C6 Check failed.")
+            logger.error(f"Raising Error code {ConformanceChecksList.C6}")
             return ConformanceChecksList.C6
 
         # C7 Check: Check if the aircraft is within the 4D volume
@@ -125,10 +132,12 @@ class FlightBlenderConformanceEngine:
 
         if not aircraft_altitude_conformant:
             logger.error(f"Aircraft altitude is not conformant for {flight_declaration_id}, C7b Check failed.")
+            logger.error(f"Raising Error code {ConformanceChecksList.C7b}")
             return ConformanceChecksList.C7b
 
         if not aircraft_bounds_conformant:
             logger.error(f"Aircraft bounds are not conformant for {flight_declaration_id}, C7a Check failed.")
+            logger.error(f"Raising Error code {ConformanceChecksList.C7a}")
             return ConformanceChecksList.C7a
 
         # C8 Check: Check if aircraft is not breaching any active Geofences
@@ -144,15 +153,17 @@ class FlightBlenderConformanceEngine:
                 if geofence_type == "Polygon":
                     if self._is_within_geofence(rid_location, coordinates[0]):
                         logger.error(f"Aircraft is breaching an active GeoFence for {flight_declaration_id}, C8 Check failed.")
+                        logger.error(f"Raising Error code {ConformanceChecksList.C8}")
                         return ConformanceChecksList.C8
 
                 elif geofence_type == "MultiPolygon":
                     for polygon_coords in coordinates:
                         if self._is_within_geofence(rid_location, polygon_coords[0]):
                             logger.error(f"Aircraft is breaching an active GeoFence for {flight_declaration_id}, C8 Check failed.")
+                            logger.error(f"Raising Error code {ConformanceChecksList.C8}")
                             return ConformanceChecksList.C8
 
-        return True
+        return 100
 
     def _is_within_geofence(self, rid_location: Point, coordinates: list) -> bool:
         """Helper method to check if a location is within a geofence."""

@@ -33,6 +33,7 @@ def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_ru
     if flight_operational_intent_reference_conformant:
         logger.info(f"Operation with {flight_declaration_id} is conformant...")
         # Basic conformance checks passed, check telemetry conformance
+        logging.info("Checking telemetry conformance...")
         check_operation_telemetry_conformance(flight_declaration_id=flight_declaration_id, dry_run=d_run)
     else:
         custom_signals.flight_operational_intent_reference_non_conformance_signal.send(
@@ -75,9 +76,13 @@ def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: s
                 telemetry_location=LatLngPoint(lat=lat_dd, lng=lon_dd),
                 altitude_m_wgs_84=float(altitude_m_wgs84),
             )
-            if conformant_via_telemetry is True:
-                pass
-            else:
+            logger.info(
+                "Telemetry conformance check for operation {flight_declaration_id} is {conformant_via_telemetry}...".format(
+                    flight_declaration_id=flight_declaration_id,
+                    conformant_via_telemetry=conformant_via_telemetry,
+                )
+            )
+            if conformant_via_telemetry != 100:
                 logger.info(
                     "Operation with {flight_operation_id} is not conformant via telemetry failed test {conformant_via_telemetry}...".format(
                         flight_operation_id=flight_declaration_id,
@@ -89,4 +94,4 @@ def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: s
                     non_conformance_state=conformant_via_telemetry,
                     flight_declaration_id=flight_declaration_id,
                 )
-            break
+                break
