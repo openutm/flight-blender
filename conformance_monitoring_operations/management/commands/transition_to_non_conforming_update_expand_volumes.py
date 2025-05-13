@@ -1,7 +1,9 @@
 import json
 import logging
+from dataclasses import asdict
 from os import environ as env
 
+import arrow
 from dacite import from_dict
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
@@ -106,11 +108,11 @@ class Command(BaseCommand):
 
         stored_time_start = Time(
             format="RFC3339",
-            value=reference_full.time_start,
+            value=reference_full.time_start.value.isoformat(),
         )
         stored_time_end = Time(
             format="RFC3339",
-            value=reference_full.time_end,
+            value=reference_full.time_end.value.isoformat(),
         )
 
         stored_volumes = details_full.volumes
@@ -130,65 +132,73 @@ class Command(BaseCommand):
             uss_base_url=stored_uss_base_url,
             subscription_id=stored_subscription_id,
         )
-        if not dry_run:
-            operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
-                subscription_id=stored_subscription_id,
-                operational_intent_ref_id=str(reference.id),
-                extents=stored_volumes,
-                new_state=new_state_str,
-                ovn=reference.ovn,
-                deconfliction_check=False,
-                priority=0,
-                current_state=current_state_str,
-            )
 
-            ## Update / expand volume
+        if dry_run:
+            logger.info("In dry run mode, not updating operational intent reference on the DSS")
+            return
 
-            obs_helper = flight_stream_helper.ObservationReadOperations()
-
-            # Get the last observation of the flight telemetry
-            obs_helper = flight_stream_helper.ObservationReadOperations()
-            latest_telemetry_data = obs_helper.get_latest_flight_observation_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
-            # Get the latest telemetry
-
-            if not latest_telemetry_data:
-                logger.error(f"No telemetry data found for operation {flight_declaration_id}")
-                return
-
-            lat_dd = latest_telemetry_data.latitude_dd
-            lon_dd = latest_telemetry_data.longitude_dd
-
-            max_altitude = latest_telemetry_data.altitude_mm + 10
-            min_altitude = latest_telemetry_data.altitude_mm - 10
-            my_op_int_converter = OperationalIntentsConverter()
-            new_volume_4d = my_op_int_converter.buffer_point_to_volume4d(
-                lat=lat_dd,
-                lng=lon_dd,
-                start_datetime=flight_declaration.start_datetime.isoformat(),
-                end_datetime=flight_declaration.end_datetime.isoformat(),
-                min_altitude=min_altitude,
-                max_altitude=max_altitude,
-            )
-            logger.debug(new_volume_4d)
-
-            operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
-                subscription_id=stored_subscription_id,
-                operational_intent_ref_id=reference.id,
-                extents=stored_volumes,
-                ovn=reference.ovn,
-                deconfliction_check=True,
-                new_state=new_state_str,
-                current_state=current_state_str,
-            )
-
-            if operational_update_response.status == 200:
-                logger.info(
-                    "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
-                        operational_intent_id=stored_operational_intent_id
-                    )
+        operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
+            subscription_id=stored_subscription_id,
+            operational_intent_ref_id=str(reference.id),
+            extents=stored_volumes,
+            new_state=new_state_str,
+            ovn=reference.ovn,
+            deconfliction_check=False,
+            priority=0,
+            current_state=current_state_str,
+        )
+        if operational_update_response.status == 200:
+            logger.info(
+                "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
+                    operational_intent_id=stored_operational_intent_id
                 )
-            else:
-                logger.info("Error in updating operational intent on the DSS")
-
+            )
         else:
-            logger.info("Dry run, not submitting to the DSS")
+            logger.info("Error in updating operational intent on the DSS")
+            logger.info(operational_update_response.status)
+
+        obs_helper = flight_stream_helper.ObservationReadOperations()
+
+        # Get the last observation of the flight telemetry
+        obs_helper = flight_stream_helper.ObservationReadOperations()
+        latest_telemetry_data = obs_helper.get_latest_flight_observation_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
+        # Get the latest telemetry
+
+        if not latest_telemetry_data:
+            logger.error(f"No telemetry data found for operation {flight_declaration_id}")
+            return
+
+        lat_dd = latest_telemetry_data.latitude_dd
+        lon_dd = latest_telemetry_data.longitude_dd
+
+        max_altitude = latest_telemetry_data.altitude_mm + 10
+        min_altitude = latest_telemetry_data.altitude_mm - 10
+        my_op_int_converter = OperationalIntentsConverter()
+        new_volume_4d = my_op_int_converter.buffer_point_to_volume4d(
+            lat=lat_dd,
+            lng=lon_dd,
+            start_datetime=flight_declaration.start_datetime.isoformat(),
+            end_datetime=flight_declaration.end_datetime.isoformat(),
+            min_altitude=min_altitude,
+            max_altitude=max_altitude,
+        )
+        logger.debug(new_volume_4d)
+
+        operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
+            subscription_id=stored_subscription_id,
+            operational_intent_ref_id=reference.id,
+            extents=stored_volumes,
+            ovn=reference.ovn,
+            deconfliction_check=True,
+            new_state=new_state_str,
+            current_state=current_state_str,
+        )
+
+        if operational_update_response.status == 200:
+            logger.info(
+                "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
+                    operational_intent_id=stored_operational_intent_id
+                )
+            )
+        else:
+            logger.info("Error in updating operational intent on the DSS")

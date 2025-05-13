@@ -23,6 +23,7 @@ from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
+from common.utils import LazyEncoder
 from constraint_operations.data_definitions import (
     Constraint,
 )
@@ -1343,7 +1344,7 @@ class SCDOperations:
         flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
         dss_r = requests.put(
             dss_opint_update_url,
-            json=json.loads(json.dumps(asdict(operational_intent_update_payload))),
+            json=json.loads(json.dumps(asdict(operational_intent_update_payload), cls=LazyEncoder)),
             headers=headers,
         )
         dss_response = dss_r.json()

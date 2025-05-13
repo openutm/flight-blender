@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "-o",
+            "-f",
             "--flight_declaration_id",
             dest="flight_declaration_id",
             metavar="ID of the flight declaration",
