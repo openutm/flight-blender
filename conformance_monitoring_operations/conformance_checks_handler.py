@@ -243,6 +243,9 @@ class FlightOperationConformanceHelper:
                     flight_declaration_id=self.flight_declaration_id,
                     dry_run=0,
                 )
+
+            if self.ENABLE_CONFORMANCE_MONITORING:
+                self._remove_conformance_monitoring_task()
             else:
                 logger.info("USSP Network is not enabled, skipping non-conforming state handling with DSS")
 
