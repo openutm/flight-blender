@@ -173,14 +173,14 @@ class LatLngPoint:
     lat: Latitude
 
 
-class Reference1(Enum):
+class AltitudeReference(Enum):
     W84 = "W84"
 
 
 @dataclass
 class Altitude:
     value: float
-    reference: Reference1
+    reference: AltitudeReference
     units: Units
 
 
