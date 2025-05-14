@@ -355,7 +355,7 @@ def get_uss_flights(request):
 
     # Get the last observation of the flight telemetry
     obs_helper = flight_stream_helper.ObservationReadOperations()
-    all_flights_telemetry_data = obs_helper.get_latest_flight_observation_by_flight_declaration_id(session_id=flight_declaration_id)
+    all_flights_telemetry_data = obs_helper.get_latest_flight_observation_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
     # Get the latest telemetry
 
     if not all_flights_telemetry_data:
