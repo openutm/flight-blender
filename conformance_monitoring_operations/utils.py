@@ -1,6 +1,7 @@
 ## This file checks the conformance of a operation per the AMC stated in the EU Conformance monitoring service
 import json
 import logging
+from os import environ as env
 
 import arrow
 from dotenv import find_dotenv, load_dotenv
@@ -15,7 +16,11 @@ from .conformance_state_helper import ConformanceChecksList
 from .data_helper import cast_to_volume4d
 
 logger = logging.getLogger("django")
-load_dotenv(find_dotenv())
+
+
+ENV_FILE = find_dotenv()
+if ENV_FILE:
+    load_dotenv(ENV_FILE)
 
 
 def is_time_between(begin_time, end_time, check_time=None):
@@ -51,9 +56,16 @@ class FlightBlenderConformanceEngine:
         now = arrow.now()
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
-            flight_declaration_id=flight_declaration_id
-        )
+
+        USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
+
+        if USSP_NETWORK_ENABLED:
+            flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+                flight_declaration_id=flight_declaration_id
+            )
+        else:
+            flight_operational_intent_reference = True
+
         operational_intent_details = my_database_reader.get_operational_intent_details_by_flight_declaration(flight_declaration=flight_declaration)
 
         # C2 Check
