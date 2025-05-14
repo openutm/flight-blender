@@ -19,6 +19,7 @@ from scd_operations.dss_scd_helper import (
     SCDOperations,
 )
 from scd_operations.scd_data_definitions import Polygon
+from shapely.geometry import Polygon as ShapelyPolygon
 
 load_dotenv(find_dotenv())
 
@@ -122,8 +123,8 @@ class Command(BaseCommand):
         rid_obs_within_all_volumes = []
         all_altitudes = []
         for v in declared_volumes:
-            altitude_lower = v.altitude_lower.value
-            altitude_upper = v.altitude_upper.value
+            altitude_lower = v.volume.altitude_lower.value
+            altitude_upper = v.volume.altitude_upper.value
             all_altitudes.append(altitude_lower)
             all_altitudes.append(altitude_upper)
             outline_polygon = v.volume.outline_polygon
@@ -131,9 +132,9 @@ class Command(BaseCommand):
             for vertex in outline_polygon.vertices:
                 p = Point(vertex.lng, vertex.lat)
                 point_list.append(p)
-            outline_polygon = Polygon([[p.x, p.y] for p in point_list])
+            _shapely_outline_polygon = ShapelyPolygon([[p.x, p.y] for p in point_list])
             pa = PolygonAltitude(
-                polygon=outline_polygon,
+                polygon=_shapely_outline_polygon,
                 altitude_upper=altitude_upper,
                 altitude_lower=altitude_lower,
             )

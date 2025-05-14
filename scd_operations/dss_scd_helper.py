@@ -644,10 +644,10 @@ class OperationalIntentReferenceHelper:
         for volume in volumes:
             volume4D = self.parse_volume_to_volume4D(volume=volume)
             all_volumes.append(volume4D)
-
-        for off_nominal_volume in off_nominal_volumes:
-            off_nominal_volume4D = self.parse_volume_to_volume4D(volume=off_nominal_volume)
-            all_off_nominal_volumes.append(off_nominal_volume4D)
+        if off_nominal_volumes:
+            for off_nominal_volume in off_nominal_volumes:
+                off_nominal_volume4D = self.parse_volume_to_volume4D(volume=off_nominal_volume)
+                all_off_nominal_volumes.append(off_nominal_volume4D)
 
         o_i_d = OperationalIntentUSSDetails(
             volumes=all_volumes,
