@@ -93,7 +93,7 @@ class Command(BaseCommand):
 
         # Get the last observation of the flight telemetry
 
-        all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
+        all_flights_telemetry_data = obs_helper.get_temporal_flight_observations_by_session(session_id=flight_declaration_id)
         # Get the latest telemetry
 
         if not all_flights_telemetry_data:

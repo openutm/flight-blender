@@ -218,7 +218,7 @@ def get_air_traffic(request, session_id):
     try:
         view_port_box = view_port_ops.build_view_port_box(view_port_coords=view_port)
         my_observation_reader = flight_stream_helper.ObservationReadOperations(view_port_box=view_port_box)
-        all_observations = my_observation_reader.get_flight_observations(session_id=session_id)
+        all_observations = my_observation_reader.get_temporal_flight_observations_by_session(session_id=session_id)
 
         # Filter the all observations to get the latest one for each ICAO address
         latest_observations = {}

@@ -221,7 +221,7 @@ def get_rid_data(request, subscription_id):
     if bool(flights_dict):
         # Get the last observation of the flight telemetry
         obs_helper = flight_stream_helper.ObservationReadOperations()
-        all_flights_telemetry_data = obs_helper.get_flight_observations(session_id=subscription_id)
+        all_flights_telemetry_data = obs_helper.get_temporal_flight_observations_by_session(session_id=subscription_id)
         # Get the latest telemetry
 
         if not all_flights_telemetry_data:

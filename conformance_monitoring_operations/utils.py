@@ -54,10 +54,9 @@ class FlightBlenderConformanceEngine:
         """
         my_database_reader = FlightBlenderDatabaseReader()
         now = arrow.now()
+        USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-
-        USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 
         if USSP_NETWORK_ENABLED:
             flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
@@ -109,7 +108,10 @@ class FlightBlenderConformanceEngine:
             return ConformanceChecksList.C6
 
         # C7 Check: Check if the aircraft is within the 4D volume
-        all_volumes = json.loads(operational_intent_details.volumes)
+        all_volumes = []
+        if USSP_NETWORK_ENABLED:
+            all_volumes = json.loads(operational_intent_details.volumes)
+
         lng = float(telemetry_location.lng)
         lat = float(telemetry_location.lat)
         rid_location = Point(lng, lat)

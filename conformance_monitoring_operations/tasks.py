@@ -53,7 +53,7 @@ def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: s
     my_conformance_ops = FlightBlenderConformanceEngine()
     # Get Telemetry
     obs_helper = flight_stream_helper.ObservationReadOperations()
-    all_flights_rid_data = obs_helper.get_flight_observations(session_id=flight_declaration_id)
+    all_flights_rid_data = obs_helper.get_latest_flight_observation_by_flight_declaration_id(session_id=flight_declaration_id)
     # Get the latest telemetry
 
     if not all_flights_rid_data:
