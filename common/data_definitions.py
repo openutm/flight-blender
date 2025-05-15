@@ -13,7 +13,12 @@ ALTITUDE_REF = (
     (2, _("MSL")),
     (4, _("W84")),
 )
-
+ALTITUDE_REF_LOOKUP = {
+    "WGS84": 0,
+    "AGL": 1,
+    "MSL": 2,
+    "W84": 4,
+}
 
 OPERATION_STATES = (
     (0, _("Not Submitted")),

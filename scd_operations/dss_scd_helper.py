@@ -18,7 +18,7 @@ from shapely.ops import unary_union
 from auth_helper.common import get_redis
 from auth_helper.dss_auth_helper import AuthorityCredentialsGetter
 from common.auth_token_audience_helper import generate_audience_from_base_url
-from common.data_definitions import VALID_OPERATIONAL_INTENT_STATES
+from common.data_definitions import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
 from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
@@ -381,13 +381,14 @@ class ConstraintsWriter:
                 geofence_id = geo_fence.id
 
             my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
+            altitude_ref_int = ALTITUDE_REF_LOOKUP.get(my_volumes_converter.altitude_ref, 4)
 
             geofence_payload = GeofencePayload(
                 id=geofence_id,
                 raw_geo_fence=my_volumes_converter.geojson,
                 upper_limit=my_volumes_converter.upper_altitude,
                 lower_limit=my_volumes_converter.upper_altitude,
-                altitude_ref=my_volumes_converter.altitude_ref,
+                altitude_ref=altitude_ref_int,
                 name=constraint_details.volumes[0].name,
                 bounds=my_volumes_converter.get_bounds(),
                 status=1,
@@ -395,7 +396,7 @@ class ConstraintsWriter:
                 is_test_dataset=False,
                 start_datetime=constraint_reference.time_start,
                 end_datetime=constraint_reference.time_end,
-                geozone=asdict(constraint_details.geozone)
+                geozone=asdict(constraint_details.geozone),
             )
 
             geo_fence = self.my_database_writer.create_or_update_geofence(geofence_payload=geofence_payload)
