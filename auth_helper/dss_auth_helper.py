@@ -106,7 +106,7 @@ class AuthorityCredentialsGetter:
                 "grant_type": "client_credentials",
                 "client_id": env.get("AUTH_DSS_CLIENT_ID"),
                 "client_secret": env.get("AUTH_DSS_CLIENT_SECRET"),
-                "intended_audience": audience,
+                "audience": audience,
                 "scope": scopes_str,
             }
 
