@@ -6,6 +6,15 @@ FLIGHTBLENDER_READ_SCOPE = env.get("FLIGHTBLENDER_READ_SCOPE", "flightblender.re
 
 FLIGHTBLENDER_WRITE_SCOPE = env.get("FLIGHTBLENDER_WRITE_SCOPE", "flightblender.write")
 
+
+ALTITUDE_REF = (
+    (0, _("WGS84")),
+    (1, _("AGL")),
+    (2, _("MSL")),
+    (4, _("W84")),
+)
+
+
 OPERATION_STATES = (
     (0, _("Not Submitted")),
     (1, _("Accepted")),

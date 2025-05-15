@@ -395,6 +395,7 @@ class ConstraintsWriter:
                 is_test_dataset=False,
                 start_datetime=constraint_reference.time_start,
                 end_datetime=constraint_reference.time_end,
+                geozone=asdict(constraint_details.geozone)
             )
 
             geo_fence = self.my_database_writer.create_or_update_geofence(geofence_payload=geofence_payload)

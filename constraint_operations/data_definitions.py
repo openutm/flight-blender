@@ -33,7 +33,7 @@ class Volume4D:
     time_end: Time
 
 
-class CodeZoneReasonType(Enum):
+class CodeZoneReasonType(str,Enum):
     AIR_TRAFFIC = "AIR_TRAFFIC"
     SENSITIVE = "SENSITIVE"
     PRIVACY = "PRIVACY"
@@ -45,7 +45,7 @@ class CodeZoneReasonType(Enum):
     OTHER = "OTHER"
 
 
-class CodeZoneType(Enum):
+class CodeZoneType(str,Enum):
     COMMON = "COMMON"
     CUSTOMIZED = "CUSTOMIZED"
     PROHIBITED = "PROHIBITED"
@@ -54,13 +54,13 @@ class CodeZoneType(Enum):
     NO_RESTRICTION = "NO_RESTRICTION"
 
 
-class CodeAuthorityRole(Enum):
+class CodeAuthorityRole(str,Enum):
     AUTHORIZATION = "AUTHORIZATION"
     NOTIFICATION = "NOTIFICATION"
     INFORMATION = "INFORMATION"
 
 
-class CodeYesNoType(Enum):
+class CodeYesNoType(str,Enum):
     True_ = True
     False_ = False
 

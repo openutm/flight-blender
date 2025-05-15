@@ -6,7 +6,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Never, Union
 from uuid import UUID
-
+from common.utils import EnhancedJSONEncoder
 import arrow
 from django.db.models import QuerySet
 from django.db.utils import IntegrityError
@@ -905,9 +905,9 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def create_or_update_geofence(self, geofence_payload: GeofencePayload) -> None | GeoFence:
-        try:
+        try:    
             geofence = GeoFence(
-                raw_geo_fence=json.dumps(asdict(geofence_payload)),
+                raw_geo_fence=json.dumps(geofence_payload.raw_geo_fence),
                 id=geofence_payload.id,
                 upper_limit=geofence_payload.upper_limit,
                 lower_limit=geofence_payload.lower_limit,
@@ -918,7 +918,7 @@ class FlightBlenderDatabaseWriter:
                 is_test_dataset=geofence_payload.is_test_dataset,
                 start_datetime=geofence_payload.start_datetime.value,
                 end_datetime=geofence_payload.end_datetime.value,
-                geozone=json.dumps(geofence_payload.geozone),
+                geozone=json.dumps(geofence_payload.geozone,cls=EnhancedJSONEncoder),
             )
             geofence.save()
             return geofence

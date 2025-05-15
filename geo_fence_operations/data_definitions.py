@@ -38,23 +38,6 @@ class GeoAwarenessStatusResponseEnum(str, enum.Enum):
 
 
 @dataclass
-class GeofencePayload:
-    id: str
-    upper_limit: str
-    lower_limit: str
-    altitude_ref: str
-    name: str
-    bounds: str
-    status: str
-    message: str
-    is_test_dataset: bool
-    start_datetime: str
-    end_datetime: str
-    raw_geo_fence: dict
-    geozone = dict
-
-
-@dataclass
 class GeoSpatialMapTestHarnessStatus:
     status: Literal[
         GeoAwarenessStatusResponseEnum.Starting,
@@ -168,6 +151,22 @@ class GeoZone(ImplicitDict):
     title: str
     description: str
     features: list[GeoZoneFeature]
+
+@dataclass
+class GeofencePayload:
+    id: str
+    upper_limit: str
+    lower_limit: str
+    altitude_ref: str
+    name: str
+    bounds: str
+    status: str
+    message: str
+    is_test_dataset: bool
+    start_datetime: str
+    end_datetime: str
+    raw_geo_fence: dict
+    geozone : dict
 
 
 class GeoZoneFilterPosition(ImplicitDict):
