@@ -75,13 +75,18 @@ class ConstraintOperations:
                 _dss_constraint_references = query_constraints_request.json()
                 logger.debug(f"DSS Response {_dss_constraint_references}")
                 constraint_references = _dss_constraint_references["constraint_references"]
-
+            _constraint_references = []
             # Query the operational intent reference details
             for constraint_reference in constraint_references:
-                _constraint_reference = from_dict(data_class=ConstraintReference, data=constraint_reference, config=Config(cast=[Enum]))
-                constraint_references.append(_constraint_reference)
+                try:
+                    _constraint_reference_tmp = from_dict(data_class=ConstraintReference, data=constraint_reference, config=Config(cast=[Enum]))
 
-            for _constraint_reference in constraint_references:
+                except Exception as e:
+                    logger.error("Error in processing constraint reference %s " % e)
+                else:
+                    _constraint_references.append(_constraint_reference_tmp)
+
+            for _constraint_reference in _constraint_references:
                 logging.info("All Constraints in the area..")
 
                 current_uss_base_url = _constraint_reference.uss_base_url
