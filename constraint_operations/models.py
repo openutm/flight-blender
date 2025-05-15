@@ -32,7 +32,7 @@ class ConstraintDetail(models.Model):
         help_text="Reference to the geofence associated with the constraint.",
     )
     volumes = models.TextField(blank=True)
-    _type = models.CharField(max_length=256, blank=True)
+    _type = models.CharField(max_length=256, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
