@@ -2,11 +2,12 @@ import json
 import logging
 import uuid
 from dataclasses import asdict
+from enum import Enum
 from os import environ as env
 
 import requests
 import urllib3
-from dacite import from_dict
+from dacite import Config, from_dict
 from dotenv import find_dotenv, load_dotenv
 
 from auth_helper import dss_auth_helper
@@ -77,7 +78,7 @@ class ConstraintOperations:
 
             # Query the operational intent reference details
             for constraint_reference in constraint_references:
-                _constraint_reference = from_dict(data_class=ConstraintReference, data=constraint_reference)
+                _constraint_reference = from_dict(data_class=ConstraintReference, data=constraint_reference, config=Config(cast=[Enum]))
                 constraint_references.append(_constraint_reference)
 
             for _constraint_reference in constraint_references:
@@ -196,12 +197,10 @@ class ConstraintOperations:
 
                 if constraints_retrieved:
                     _constraint_reference_processed = from_dict(
-                        data_class=ConstraintReference,
-                        data=_constraint_reference_to_process,
+                        data_class=ConstraintReference, data=_constraint_reference_to_process, config=Config(cast=[Enum])
                     )
                     _constraint_details_processed = from_dict(
-                        data_class=ConstraintDetails,
-                        data=_constraint_details_to_process,
+                        data_class=ConstraintDetails, data=_constraint_details_to_process, config=Config(cast=[Enum])
                     )
                     _constraint = Constraint(
                         reference=_constraint_reference_processed,

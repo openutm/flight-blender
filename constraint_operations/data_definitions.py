@@ -3,7 +3,7 @@ from datetime import timedelta
 from enum import Enum
 from typing import Any
 
-from scd_operations.scd_data_definitions import SubscriptionState, Time, Volume4D
+from scd_operations.scd_data_definitions import SubscriptionState, Volume4D
 
 UUIDv4Format = str
 CodeUSpaceClassType = str
@@ -16,6 +16,12 @@ EntityOVN = str
 ConstraintUssBaseURL = str
 EntityVersion = int
 EntityID = UUIDv4Format
+
+
+@dataclass
+class Time:
+    format: str
+    value: str
 
 
 class CodeZoneReasonType(Enum):
