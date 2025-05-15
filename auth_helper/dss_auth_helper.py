@@ -115,5 +115,4 @@ class AuthorityCredentialsGetter:
         token_data = requests.post(url, data=payload, headers=headers)
         if token_data.status_code != 200:
             logger.error(f"Failed to get token: {token_data.status_code} - {token_data.text}")
-            raise Exception(f"Failed to get token: {token_data.status_code} - {token_data.text}")
         return token_data.json()
