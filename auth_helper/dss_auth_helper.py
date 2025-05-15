@@ -111,5 +111,9 @@ class AuthorityCredentialsGetter:
             }
 
         url = env.get("DSS_AUTH_URL", "http://host.docker.internal:8085") + env.get("DSS_AUTH_TOKEN_ENDPOINT", "/auth/token")
-        token_data = requests.get(url, params=payload)
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        token_data = requests.post(url, data=payload, headers=headers)
+        if token_data.status_code != 200:
+            logger.error(f"Failed to get token: {token_data.status_code} - {token_data.text}")
+            raise Exception(f"Failed to get token: {token_data.status_code} - {token_data.text}")
         return token_data.json()
