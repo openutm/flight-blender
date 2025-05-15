@@ -88,7 +88,7 @@ class AuthorityCredentialsGetter:
         return self._request_credentials(audience, ["utm.strategic_coordination", "utm.conformance_monitoring_sa"])
 
     def _get_constraints_credentials(self, audience: str):
-        return self._request_credentials(audience, ["utm.constraint_processing", "utm.constraint_management"])
+        return self._request_credentials(audience, ["utm.constraint_processing"])
 
     def _request_credentials(self, audience: str, scopes: list[str]):
         issuer = audience if audience == "localhost" else None
