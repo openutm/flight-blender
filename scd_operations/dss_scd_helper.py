@@ -382,15 +382,16 @@ class ConstraintsWriter:
 
             my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
             altitude_ref_int = ALTITUDE_REF_LOOKUP.get(my_volumes_converter.altitude_ref, 4)
-
+            bounds = my_volumes_converter.get_bounds()
+            bounds_str = ",".join(map(str, bounds))
             geofence_payload = GeofencePayload(
                 id=geofence_id,
-                raw_geo_fence=my_volumes_converter.geojson,
+                raw_geo_fence=my_volumes_converter.geo_json,
                 upper_limit=my_volumes_converter.upper_altitude,
                 lower_limit=my_volumes_converter.upper_altitude,
                 altitude_ref=altitude_ref_int,
-                name=constraint_details.volumes[0].name,
-                bounds=my_volumes_converter.get_bounds(),
+                name=constraint_details.geozone.name,
+                bounds=bounds_str,
                 status=1,
                 message="Constraint from peer USS",
                 is_test_dataset=False,

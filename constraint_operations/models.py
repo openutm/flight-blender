@@ -56,7 +56,7 @@ class ConstraintReference(models.Model):
     uss_availability = models.CharField(max_length=40, blank=True)
 
     ovn = models.CharField(
-        max_length=36,
+        max_length=128,
         blank=True,
         null=True,
         help_text="Once the operational intent is created, the OVN is stored here.",
