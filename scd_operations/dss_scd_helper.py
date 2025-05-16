@@ -27,7 +27,7 @@ from common.utils import LazyEncoder
 from constraint_operations.data_definitions import (
     Constraint,
 )
-from constraint_operations.dss_constraints_helper import ConstraintOperations, USSConstraintsOperations
+from constraint_operations.dss_constraints_helper import ConstraintOperations
 from geo_fence_operations.data_definitions import GeofencePayload
 from rid_operations import rtree_helper
 
@@ -1044,7 +1044,6 @@ class SCDOperations:
         for constraint in all_nearby_constraints:
             if constraint.reference.ovn:
                 latest_constraints_ovns.append(constraint.reference.ovn)
-            # Update constriant
 
         return latest_constraints_ovns
 
