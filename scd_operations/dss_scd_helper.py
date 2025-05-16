@@ -27,7 +27,7 @@ from common.utils import LazyEncoder
 from constraint_operations.data_definitions import (
     Constraint,
 )
-from constraint_operations.dss_constraints_helper import ConstraintOperations
+from constraint_operations.dss_constraints_helper import ConstraintOperations, USSConstraintsOperations
 from geo_fence_operations.data_definitions import GeofencePayload
 from rid_operations import rtree_helper
 
@@ -1034,6 +1034,20 @@ class SCDOperations:
 
         return feat_collection
 
+    def get_latest_airspace_constraints_ovn(self, volumes: list[Volume4D]) -> list | list[str]:
+        # Get the latest constraints from DSS
+
+        all_nearby_constraints = self.constraints_helper.get_nearby_constraints(volumes=volumes)
+        self.constraints_writer.write_nearby_constraints(constraints=all_nearby_constraints)
+        latest_constraints_ovns: list[str] = []
+
+        for constraint in all_nearby_constraints:
+            if constraint.reference.ovn:
+                latest_constraints_ovns.append(constraint.reference.ovn)
+            # Update constriant
+
+        return latest_constraints_ovns
+
     def get_latest_airspace_volumes(self, volumes: list[Volume4D]) -> list | list[OpInttoCheckDetails]:
         # This method checks if a flight volume has conflicts with any other volume in the airspace
         all_opints_to_check = []
@@ -1310,6 +1324,10 @@ class SCDOperations:
         )
         updated_ovn = latest_ovn if latest_ovn else ovn
         airspace_keys = self.generate_airspace_keys(current_network_opint_details_full=current_network_opint_details_full)
+
+        constraints_ovns = self.get_latest_airspace_constraints_ovn(volumes=extents)
+        if constraints_ovns:
+            airspace_keys.extend(constraints_ovns)
         operational_intent_update_payload.key = airspace_keys
         if all_existing_operational_intent_details:
             extents_conflict_with_dss_volumes = self.check_extents_conflict_with_latest_volumes(
