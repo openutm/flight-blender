@@ -161,7 +161,6 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
                 flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
 
                 if uss_base_url != flight_blender_base_url:  # There are others who are subscribesd, not just ourselves
-                    subscriptions = from_dict(data_class=SubscriptionState, data=subscriptions_raw)
                     op_int_details = from_dict(
                         data_class=OperationalIntentUSSDetails,
                         data=json.loads(flight_declaration.operational_intent),

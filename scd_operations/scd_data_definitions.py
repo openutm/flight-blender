@@ -27,7 +27,7 @@ class Time:
     """A class to hold time objects"""
 
     format: str
-    value: StringBasedDateTime
+    value: str
 
 
 @dataclass
@@ -78,8 +78,8 @@ class Volume4D:
     """A class to hold Volume4D objects"""
 
     volume: Volume3D
-    time_start: StringBasedDateTime
-    time_end: StringBasedDateTime
+    time_start: Time
+    time_end: Time
 
 
 @dataclass
