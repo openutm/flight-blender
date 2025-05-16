@@ -933,10 +933,13 @@ class FlightBlenderDatabaseWriter:
                 _constraint_volumes.append(asdict(_volume))
             constraint_obj = ConstraintDetail(volumes=json.dumps(_constraint_volumes), _type=constraint.type, geofence=geofence)
             constraint_obj.save()
+            return constraint_obj
         except IntegrityError:
             return None
 
-    def create_or_update_constraint_reference(self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence) -> bool:
+    def create_or_update_constraint_reference(
+        self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence
+    ) -> ConstraintReference | None:
         try:
             constraint_obj = ConstraintReference(
                 id=constraint_reference.id,
@@ -949,6 +952,6 @@ class FlightBlenderDatabaseWriter:
                 geofence=geofence,
             )
             constraint_obj.save()
-            return True
+            return constraint_obj
         except IntegrityError:
-            return False
+            return None
