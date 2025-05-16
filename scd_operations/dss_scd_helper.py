@@ -1423,7 +1423,7 @@ class SCDOperations:
         }
         airspace_keys = []
         flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
-        implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=flight_blender_base_url)
+        implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=flight_blender_base_url, notify_for_constraints=True)
         operational_intent_reference = OperationalIntentReference(
             extents=volumes,
             key=airspace_keys,
@@ -1482,6 +1482,10 @@ class SCDOperations:
         # Get all the constraints from DSS
         all_nearby_constraints = self.constraints_helper.get_nearby_constraints(volumes=volumes)
         self.constraints_writer.write_nearby_constraints(constraints=all_nearby_constraints)
+        all_constraint_ovns = []
+        for cur_constraint in all_nearby_constraints:
+            all_constraint_ovns.append(cur_constraint.reference.ovn)
+
         # TODO: Check intersection
 
         if all_existing_operational_intent_details:
@@ -1525,6 +1529,7 @@ class SCDOperations:
             )
             return d_r
 
+        airspace_keys.extend(all_constraint_ovns)
         operational_intent_reference.key = airspace_keys
 
         opint_creation_payload = json.loads(json.dumps(asdict(operational_intent_reference)))
