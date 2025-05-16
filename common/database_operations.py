@@ -6,12 +6,13 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Never, Union
 from uuid import UUID
-from common.utils import EnhancedJSONEncoder
+
 import arrow
 from django.db.models import QuerySet
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
 
+from common.utils import EnhancedJSONEncoder
 from conformance_monitoring_operations.models import TaskScheduler
 from constraint_operations.data_definitions import Constraint as ConstraintData
 from constraint_operations.data_definitions import ConstraintDetails
@@ -905,7 +906,7 @@ class FlightBlenderDatabaseWriter:
             return False
 
     def create_or_update_geofence(self, geofence_payload: GeofencePayload) -> None | GeoFence:
-        try:    
+        try:
             geofence = GeoFence(
                 raw_geo_fence=json.dumps(geofence_payload.raw_geo_fence),
                 id=geofence_payload.id,
@@ -918,23 +919,22 @@ class FlightBlenderDatabaseWriter:
                 is_test_dataset=geofence_payload.is_test_dataset,
                 start_datetime=geofence_payload.start_datetime.value,
                 end_datetime=geofence_payload.end_datetime.value,
-                geozone=json.dumps(geofence_payload.geozone,cls=EnhancedJSONEncoder),
+                geozone=json.dumps(geofence_payload.geozone, cls=EnhancedJSONEncoder),
             )
             geofence.save()
             return geofence
         except IntegrityError:
             return None
 
-    def create_or_update_constraint_detail(self, constraint: ConstraintDetails, geofence: GeoFence) -> bool:
+    def create_or_update_constraint_detail(self, constraint: ConstraintDetails, geofence: GeoFence) -> ConstraintDetail | None:
         try:
             _constraint_volumes = []
             for _volume in constraint.volumes:
                 _constraint_volumes.append(asdict(_volume))
             constraint_obj = ConstraintDetail(volumes=json.dumps(_constraint_volumes), _type=constraint.type, geofence=geofence)
             constraint_obj.save()
-            return True
         except IntegrityError:
-            return False
+            return None
 
     def create_or_update_constraint_reference(self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence) -> bool:
         try:
