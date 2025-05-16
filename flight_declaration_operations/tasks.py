@@ -172,7 +172,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
                     post_notification_payload = NotifyPeerUSSPostPayload(
                         operational_intent_id=created_opint,
                         operational_intent=operational_intent,
-                        subscriptions=subscriptions,
+                        subscriptions=subscriptions_raw,
                     )
                     # Notify Subscribers
                     my_dss_opint_creator.notify_peer_uss(
