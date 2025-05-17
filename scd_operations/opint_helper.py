@@ -196,7 +196,7 @@ class DSSOperationalIntentsCreator:
         """This method submits a flight declaration as a operational intent to the DSS"""
         # Get the Flight Declaration object
 
-        my_scd_dss_helper = dss_scd_helper.SCDOperations()
+        my_scd_dss_helper = SCDOperations()
 
         try:
             ext = tldextract.extract(uss_base_url)
