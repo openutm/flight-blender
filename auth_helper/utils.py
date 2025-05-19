@@ -103,7 +103,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 jwt.exceptions.MissingRequiredClaimError,
             ) as token_error:
                 logger.error(f"Token verification failed: {token_error}")
-                return JsonResponse({"detail": "Invalid token", "error details": token_error}, status=401)
+                return JsonResponse({"detail": "Invalid token", "error details": f"{token_error}"}, status=401)
             decoded_scopes_set = set(decoded.get("scope", "").split())
             if (allow_any and decoded_scopes_set & set(required_scopes)) or set(required_scopes).issubset(decoded_scopes_set):
                 return f(*args, **kwargs)
