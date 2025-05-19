@@ -48,6 +48,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
             API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
             BYPASS_AUTH_TOKEN_VERIFICATION = int(env.get("BYPASS_AUTH_TOKEN_VERIFICATION", 0))
             PASSPORT_JWKS_URL = f"{env.get('PASSPORT_URL', 'http://local.test:9000')}/.well-known/jwks.json"
+            DSS_AUTH_JWKS_ENDPOINT = f"{env.get('DSS_AUTH_JWKS_ENDPOINT', 'http://local.test:9000')}/.well-known/jwks.json"
 
             request = args[0]
             auth = request.META.get("HTTP_AUTHORIZATION", None)
@@ -64,9 +65,18 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 return handle_bypass_verification(token, f, *args, **kwargs)
 
             try:
-                jwks_data = s.get(PASSPORT_JWKS_URL).json()
+                passport_jwks_data = s.get(PASSPORT_JWKS_URL).json()
             except requests.exceptions.RequestException:
                 return JsonResponse({"detail": "Public Key Server necessary to validate the token could not be reached"}, status=400)
+            try:
+                dss_jwks_data = s.get(DSS_AUTH_JWKS_ENDPOINT).json()
+            except requests.exceptions.RequestException:
+                logger.info(
+                    "DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated"
+                )
+            # Combine keys from both JWKS sources
+            jwks_keys = passport_jwks_data.get("keys", []) + dss_jwks_data.get("keys", [])
+            jwks_data = {"keys": jwks_keys}
 
             public_keys = {jwk["kid"]: jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk)) for jwk in jwks_data["keys"]}
 
