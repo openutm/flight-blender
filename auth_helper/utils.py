@@ -47,7 +47,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
         def decorated(*args, **kwargs):
             API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
             BYPASS_AUTH_TOKEN_VERIFICATION = int(env.get("BYPASS_AUTH_TOKEN_VERIFICATION", 0))
-            PASSPORT_JWKS_URL = f"{env.get('PASSPORT_JWKS_URL', 'http://local.test:9000/.well-known/jwks.json')}"
+            PASSPORT_JWKS_URL = f"{env.get('PASSPORT_URL', 'http://local.test:9000')}/.well-known/jwks.json"
 
             request = args[0]
             auth = request.META.get("HTTP_AUTHORIZATION", None)
