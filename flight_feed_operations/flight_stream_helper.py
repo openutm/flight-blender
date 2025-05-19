@@ -103,9 +103,7 @@ class ObservationReadOperations:
         my_database_reader = FlightBlenderDatabaseReader()
 
         latest_observation = my_database_reader.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
-        if not latest_observation:
-            return None
-        else:
+        if latest_observation:
             return FlightObservationSchema(
                 id=str(latest_observation.id),
                 session_id=str(latest_observation.session_id),
@@ -119,6 +117,7 @@ class ObservationReadOperations:
                 updated_at=latest_observation.updated_at.isoformat(),
                 metadata=json.loads(latest_observation.metadata),
             )
+        return None
 
     def get_temporal_flight_observations_by_session(self, session_id: str) -> list[FlightObservationSchema]:
         """
