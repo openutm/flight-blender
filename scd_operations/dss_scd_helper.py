@@ -396,8 +396,8 @@ class ConstraintsWriter:
                 status=1,
                 message="Constraint from peer USS",
                 is_test_dataset=False,
-                start_datetime=constraint_reference.time_start.value,
-                end_datetime=constraint_reference.time_end.value,
+                start_datetime=constraint_reference.time_start,
+                end_datetime=constraint_reference.time_end,
                 geozone=asdict(constraint_details.geozone),
             )
 
