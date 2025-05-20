@@ -941,7 +941,7 @@ class FlightBlenderDatabaseWriter:
             return None
 
     def create_or_update_constraint_reference(
-        self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence
+        self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence, flight_declaration: FlightDeclaration
     ) -> ConstraintReference | None:
         try:
             constraint_obj = ConstraintReference(
@@ -953,6 +953,7 @@ class FlightBlenderDatabaseWriter:
                 time_start=constraint_reference.time_start.value,
                 time_end=constraint_reference.time_end.value,
                 geofence=geofence,
+                flight_declaration=flight_declaration,
             )
             constraint_obj.save()
             return constraint_obj

@@ -11,7 +11,7 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 from flight_declaration_operations.utils import OperationalIntentsConverter
-from scd_operations.dss_scd_helper import SCDOperations
+from scd_operations.dss_scd_helper import ConstraintsWriter, SCDOperations
 
 from .data_definitions import FlightDeclarationOperationalIntentStorageDetails
 from .scd_data_definitions import (
@@ -145,6 +145,13 @@ class DSSOperationalIntentsCreator:
 
                     self.my_database_writer.create_or_update_composite_operational_intent(
                         flight_declaration=flight_declaration, composite_operational_intent_payload=composite_operational_intent_data
+                    )
+                # Write the constraints
+                if op_int_submission_result.constraints:
+                    my_constraints_writer = ConstraintsWriter()
+                    my_constraints_writer.write_nearby_constraints(
+                        flight_declaration=flight_declaration,
+                        constraints=op_int_submission_result.constraints,
                     )
 
                 # Update operation state

@@ -3,8 +3,6 @@ from datetime import timedelta
 from enum import Enum
 from typing import Any
 
-from scd_operations.scd_data_definitions import SubscriptionState, Volume3D
-
 UUIDv4Format = str
 CodeUSpaceClassType = str
 TextShortType = str
@@ -16,6 +14,62 @@ EntityOVN = str
 ConstraintUssBaseURL = str
 EntityVersion = int
 EntityID = UUIDv4Format
+
+
+@dataclass
+class LatLngPoint:
+    """A clas to hold information about LatLngPoint"""
+
+    lat: float
+    lng: float
+
+
+@dataclass
+class Radius:
+    """A class to hold the radius object"""
+
+    value: float
+    units: str
+
+
+@dataclass
+class Polygon:
+    """A class to hold the polygon object"""
+
+    vertices: list[LatLngPoint]  # A minimum of three LatLngPoints
+
+
+@dataclass
+class Circle:
+    """Hold the details of a circle object"""
+
+    center: LatLngPoint
+    radius: Radius
+
+
+@dataclass
+class Altitude:
+    """A class to hold altitude"""
+
+    value: int | float
+    reference: str
+    units: str
+
+
+@dataclass
+class Volume3D:
+    """A class to hold Volume3D objects"""
+
+    outline_polygon: Polygon
+    altitude_lower: Altitude
+    altitude_upper: Altitude
+    outline_circle: Circle | None = None
+
+
+@dataclass
+class SubscriptionState:
+    subscription_id: str
+    notification_index: int
 
 
 @dataclass
@@ -33,7 +87,7 @@ class Volume4D:
     time_end: Time
 
 
-class CodeZoneReasonType(str,Enum):
+class CodeZoneReasonType(str, Enum):
     AIR_TRAFFIC = "AIR_TRAFFIC"
     SENSITIVE = "SENSITIVE"
     PRIVACY = "PRIVACY"
@@ -45,7 +99,7 @@ class CodeZoneReasonType(str,Enum):
     OTHER = "OTHER"
 
 
-class CodeZoneType(str,Enum):
+class CodeZoneType(str, Enum):
     COMMON = "COMMON"
     CUSTOMIZED = "CUSTOMIZED"
     PROHIBITED = "PROHIBITED"
@@ -54,13 +108,13 @@ class CodeZoneType(str,Enum):
     NO_RESTRICTION = "NO_RESTRICTION"
 
 
-class CodeAuthorityRole(str,Enum):
+class CodeAuthorityRole(str, Enum):
     AUTHORIZATION = "AUTHORIZATION"
     NOTIFICATION = "NOTIFICATION"
     INFORMATION = "INFORMATION"
 
 
-class CodeYesNoType(str,Enum):
+class CodeYesNoType(str, Enum):
     True_ = True
     False_ = False
 

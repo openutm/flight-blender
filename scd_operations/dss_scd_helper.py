@@ -28,6 +28,7 @@ from constraint_operations.data_definitions import (
     Constraint,
 )
 from constraint_operations.dss_constraints_helper import ConstraintOperations
+from flight_declaration_operations.models import FlightDeclaration
 from geo_fence_operations.data_definitions import GeofencePayload
 from rid_operations import rtree_helper
 
@@ -364,7 +365,7 @@ class ConstraintsWriter:
     # def parse_and_load_stored_constraint_reference(self, geozone_id: str) -> ConstraintReference | None:
     #     pass
 
-    def write_nearby_constraints(self, constraints: list[Constraint]):
+    def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: FlightDeclaration):
         # This method writes the constraint reference and constraint details to the database
         my_volumes_converter = VolumesConverter()
         for constraint in constraints:
@@ -395,8 +396,8 @@ class ConstraintsWriter:
                 status=1,
                 message="Constraint from peer USS",
                 is_test_dataset=False,
-                start_datetime=constraint_reference.time_start,
-                end_datetime=constraint_reference.time_end,
+                start_datetime=constraint_reference.time_start.value,
+                end_datetime=constraint_reference.time_end.value,
                 geozone=asdict(constraint_details.geozone),
             )
 
@@ -404,8 +405,7 @@ class ConstraintsWriter:
             # Create a new ConstraintReference object
 
             self.my_database_writer.create_or_update_constraint_reference(
-                constraint_reference=constraint_reference,
-                geofence=geo_fence,
+                constraint_reference=constraint_reference, geofence=geo_fence, flight_declaration=flight_declaration
             )
 
             # Write the constraint details to the database
@@ -1411,7 +1411,7 @@ class SCDOperations:
     def create_and_submit_operational_intent_reference(
         self,
         state: str,
-        priority: str,
+        priority: int,
         volumes: list[Volume4D],
         off_nominal_volumes: list[Volume4D],
     ) -> OperationalIntentSubmissionStatus:
@@ -1459,7 +1459,7 @@ class SCDOperations:
         # Check if there are conflicts (or not)
         logger.info("Checking flight de-confliction status...")
         # Get all operational intents in the area
-
+        s = []
         try:
             all_existing_operational_intent_details = self.get_latest_airspace_volumes(volumes=volumes)
         except ValueError:
@@ -1498,7 +1498,6 @@ class SCDOperations:
 
         # Get all the constraints from DSS
         all_nearby_constraints = self.constraints_helper.get_nearby_constraints(volumes=volumes)
-        self.constraints_writer.write_nearby_constraints(constraints=all_nearby_constraints)
         all_constraint_ovns = []
         for cur_constraint in all_nearby_constraints:
             all_constraint_ovns.append(cur_constraint.reference.ovn)
@@ -1596,6 +1595,7 @@ class SCDOperations:
                 operational_intent_reference=operational_intent_r,
                 subscribers=all_subscribers_to_notify,
             )
+
             logger.info("Successfully created operational intent in the DSS")
             logger.debug("Response details from the DSS %s" % dss_response)
             d_r = OperationalIntentSubmissionStatus(
@@ -1604,6 +1604,7 @@ class SCDOperations:
                 message="Successfully created operational intent in the DSS",
                 dss_response=dss_creation_response,
                 operational_intent_id=new_entity_id,
+                constraints=all_nearby_constraints,
             )
         elif dss_request_status_code in [400, 401, 403, 409, 43, 429]:
             logger.error("DSS operational intent reference creation error %s" % dss_request.text)

@@ -3,6 +3,7 @@ from datetime import datetime
 
 from django.db import models
 
+from flight_declaration_operations.models import FlightDeclaration
 from geo_fence_operations.models import GeoFence
 
 # Create your models here.
@@ -45,7 +46,13 @@ class ConstraintDetail(models.Model):
 
 class ConstraintReference(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-
+    flight_declaration = models.ForeignKey(
+        FlightDeclaration,
+        on_delete=models.CASCADE,
+        help_text="Reference to the flight declaration associated with the constraint.",
+        null=True,
+        blank=True,
+    )
     geofence = models.OneToOneField(
         GeoFence,
         on_delete=models.CASCADE,

@@ -23,6 +23,7 @@ from common.database_operations import (
 )
 from common.utils import EnhancedJSONEncoder
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
+from scd_operations.dss_scd_helper import ConstraintsWriter
 
 from . import dss_scd_helper
 from .flight_planning_data_definitions import (
@@ -467,6 +468,14 @@ def upsert_close_flight_plan(request, flight_plan_id):
                     operational_intent_reference_id=str(flight_operational_intent_reference.id),
                     operational_intent_details_id=str(flight_operational_intent_detail.id),
                 )
+
+                # Write the constraints
+                if flight_planning_submission.constraints:
+                    my_constraints_writer = ConstraintsWriter()
+                    my_constraints_writer.write_nearby_constraints(
+                        flight_declaration=flight_declaration,
+                        constraints=flight_planning_submission.constraints,
+                    )
 
                 my_database_writer.create_or_update_composite_operational_intent(
                     flight_declaration=flight_declaration,

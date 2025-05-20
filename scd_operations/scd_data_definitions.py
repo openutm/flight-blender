@@ -1,9 +1,11 @@
 import enum
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Optional
 
 from implicitdict import StringBasedDateTime
 from shapely.geometry import Polygon as Plgn
+
+from constraint_operations.data_definitions import Constraint
 
 
 @dataclass
@@ -401,6 +403,7 @@ class OperationalIntentSubmissionStatus:
     status_code: int
     message: str
     operational_intent_id: str
+    constraints: Optional[list[Constraint]] = None
 
 
 @dataclass
