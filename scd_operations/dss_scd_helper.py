@@ -1038,7 +1038,7 @@ class SCDOperations:
         # Get the latest constraints from DSS
 
         all_nearby_constraints = self.constraints_helper.get_nearby_constraints(volumes=volumes)
-        self.constraints_writer.write_nearby_constraints(constraints=all_nearby_constraints)
+        # self.constraints_writer.write_nearby_constraints(constraints=all_nearby_constraints)
         latest_constraints_ovns: list[str] = []
 
         for constraint in all_nearby_constraints:
