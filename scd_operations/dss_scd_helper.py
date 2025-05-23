@@ -24,9 +24,7 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 from common.utils import LazyEncoder
-from constraint_operations.data_definitions import (
-    Constraint,
-)
+from constraint_operations.data_definitions import CompositeConstraintPayload, Constraint
 from constraint_operations.dss_constraints_helper import ConstraintOperations
 from flight_declaration_operations.models import FlightDeclaration
 from geo_fence_operations.data_definitions import GeofencePayload
@@ -413,6 +411,18 @@ class ConstraintsWriter:
                 constraint=constraint_details,
                 geofence=geo_fence,
             )
+            # Write the composite constraint to the database
+            composite_constraint_payload = CompositeConstraintPayload(
+                constraint_reference_id=str(constraint_reference.id),
+                constraint_detail_id=str(constraint_details.id),
+                flight_declaration_id=str(flight_declaration.id),
+                bounds=bounds_str,
+                start_datetime=constraint_reference.time_start,
+                end_datetime=constraint_reference.time_end,
+                alt_max=my_volumes_converter.upper_altitude,
+                alt_min=my_volumes_converter.lower_altitude,
+            )
+            self.my_database_writer.create_or_update_composite_constraint(composite_constraint_payload=composite_constraint_payload)
 
 
 class OperationalIntentReferenceHelper:

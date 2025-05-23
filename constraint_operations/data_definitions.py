@@ -190,3 +190,15 @@ class PutConstraintDetailsParameters:
 @dataclass
 class QueryConstraintsPayload:
     area_of_interest: Volume4D
+
+
+@dataclass
+class CompositeConstraintPayload:
+    constraint_reference_id: str
+    constraint_detail_id: str
+    flight_declaration_id: str
+    bounds: str
+    start_datetime: str
+    end_datetime: str
+    alt_max: str
+    alt_min: str

@@ -14,10 +14,10 @@ from dotenv import find_dotenv, load_dotenv
 
 from common.utils import EnhancedJSONEncoder
 from conformance_monitoring_operations.models import TaskScheduler
+from constraint_operations.data_definitions import CompositeConstraintPayload, ConstraintDetails
 from constraint_operations.data_definitions import Constraint as ConstraintData
-from constraint_operations.data_definitions import ConstraintDetails
 from constraint_operations.data_definitions import ConstraintReference as ConstraintReferencePayload
-from constraint_operations.models import ConstraintDetail, ConstraintReference
+from constraint_operations.models import CompositeConstraint, ConstraintDetail, ConstraintReference
 from flight_declaration_operations.models import (
     CompositeOperationalIntent,
     FlightDeclaration,
@@ -891,6 +891,23 @@ class FlightBlenderDatabaseWriter:
                 details=json.dumps(asdict(constraint.reference)),
             )
             constraint_reference_obj.save()
+            return True
+        except IntegrityError:
+            return False
+
+    def create_or_update_composite_constraint(self, composite_constraint_payload: CompositeConstraintPayload) -> bool:
+        try:
+            composite_constraint_obj = CompositeConstraint(
+                constraint_reference=composite_constraint_payload.constraint_reference_id,
+                constraint_detail=composite_constraint_payload.constraint_detail_id,
+                flight_declaration=composite_constraint_payload.flight_declaration_id,
+                bounds=composite_constraint_payload.bounds,
+                start_datetime=composite_constraint_payload.start_datetime,
+                end_datetime=composite_constraint_payload.start_datetime,
+                alt_max=composite_constraint_payload.alt_max,
+                alt_min=composite_constraint_payload.lower_alalt_mintitude,
+            )
+            composite_constraint_obj.save()
             return True
         except IntegrityError:
             return False

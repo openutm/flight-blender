@@ -91,3 +91,21 @@ class ConstraintReference(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class CompositeConstraint(models.Model):
+    """
+    CompositeConstraint model links a constraint reference with constraint details.
+    It associates a specific FlightDeclaration with defined spatial and temporal bounds,
+    altitude limits, and references to both the constraint's metadata and its detailed description.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    declaration = models.OneToOneField(FlightDeclaration, on_delete=models.CASCADE)
+    bounds = models.CharField(max_length=140)
+    start_datetime = models.DateTimeField(default=datetime.now)
+    end_datetime = models.DateTimeField(default=datetime.now)
+    alt_max = models.FloatField()
+    alt_min = models.FloatField()
+    constraint_reference = models.ForeignKey(ConstraintReference, on_delete=models.CASCADE, related_name="composite_constraint_reference")
+    constraint_detail = models.ForeignKey(ConstraintDetail, on_delete=models.CASCADE, related_name="composite_constraint_detail")
