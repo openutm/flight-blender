@@ -895,17 +895,17 @@ class FlightBlenderDatabaseWriter:
         except IntegrityError:
             return False
 
-    def create_or_update_composite_constraint(self, composite_constraint_payload: CompositeConstraintPayload) -> bool:
+    def create_or_update_composite_constraint(self, composite_constraint_payload: CompositeConstraintPayload) -> CompositeConstraint | bool:
         try:
             composite_constraint_obj = CompositeConstraint(
-                constraint_reference=composite_constraint_payload.constraint_reference_id,
-                constraint_detail=composite_constraint_payload.constraint_detail_id,
-                flight_declaration=composite_constraint_payload.flight_declaration_id,
+                constraint_reference_id=composite_constraint_payload.constraint_reference_id,
+                constraint_detail_id=composite_constraint_payload.constraint_detail_id,
+                flight_declaration_id=composite_constraint_payload.flight_declaration_id,
                 bounds=composite_constraint_payload.bounds,
                 start_datetime=composite_constraint_payload.start_datetime,
                 end_datetime=composite_constraint_payload.start_datetime,
                 alt_max=composite_constraint_payload.alt_max,
-                alt_min=composite_constraint_payload.lower_alalt_mintitude,
+                alt_min=composite_constraint_payload.alt_min,
             )
             composite_constraint_obj.save()
             return True

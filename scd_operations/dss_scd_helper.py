@@ -402,23 +402,23 @@ class ConstraintsWriter:
             geo_fence = self.my_database_writer.create_or_update_geofence(geofence_payload=geofence_payload)
             # Create a new ConstraintReference object
 
-            self.my_database_writer.create_or_update_constraint_reference(
+            constraint_reference_obj = self.my_database_writer.create_or_update_constraint_reference(
                 constraint_reference=constraint_reference, geofence=geo_fence, flight_declaration=flight_declaration
             )
 
             # Write the constraint details to the database
-            self.my_database_writer.create_or_update_constraint_detail(
+            constraint_detail_obj = self.my_database_writer.create_or_update_constraint_detail(
                 constraint=constraint_details,
                 geofence=geo_fence,
             )
             # Write the composite constraint to the database
             composite_constraint_payload = CompositeConstraintPayload(
-                constraint_reference_id=str(constraint_reference.id),
-                constraint_detail_id=str(constraint_details.id),
+                constraint_reference_id=str(constraint_reference_obj.id),
+                constraint_detail_id=str(constraint_detail_obj.id),
                 flight_declaration_id=str(flight_declaration.id),
                 bounds=bounds_str,
-                start_datetime=constraint_reference.time_start,
-                end_datetime=constraint_reference.time_end,
+                start_datetime=constraint_reference_obj.time_start,
+                end_datetime=constraint_reference_obj.time_end,
                 alt_max=my_volumes_converter.upper_altitude,
                 alt_min=my_volumes_converter.lower_altitude,
             )
