@@ -900,7 +900,7 @@ class FlightBlenderDatabaseWriter:
             composite_constraint_obj = CompositeConstraint(
                 constraint_reference_id=composite_constraint_payload.constraint_reference_id,
                 constraint_detail_id=composite_constraint_payload.constraint_detail_id,
-                flight_declaration_id=composite_constraint_payload.flight_declaration_id,
+                declaration_id=composite_constraint_payload.flight_declaration_id,
                 bounds=composite_constraint_payload.bounds,
                 start_datetime=composite_constraint_payload.start_datetime,
                 end_datetime=composite_constraint_payload.start_datetime,
