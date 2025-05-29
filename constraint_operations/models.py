@@ -101,7 +101,7 @@ class CompositeConstraint(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    declaration = models.OneToOneField(FlightDeclaration, on_delete=models.CASCADE)
+    declaration = models.ForeignKey(FlightDeclaration, on_delete=models.CASCADE)
     bounds = models.CharField(max_length=140)
     start_datetime = models.DateTimeField(default=datetime.now)
     end_datetime = models.DateTimeField(default=datetime.now)
