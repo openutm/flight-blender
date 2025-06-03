@@ -92,7 +92,7 @@ class ObservationReadOperations:
                 metadata=json.loads(message["metadata"]),
             )
             if self.view_port_box:
-                if shapely.contains(self.view_port_box, Point(observation.longitude_dd, observation.latitude_dd)):
+                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
                     pending_messages.append(observation)
             else:
                 pending_messages.append(observation)
@@ -164,7 +164,7 @@ class ObservationReadOperations:
                 metadata=json.loads(message["metadata"]),
             )
             if self.view_port_box:
-                if shapely.contains(self.view_port_box, Point(observation.longitude_dd, observation.latitude_dd)):
+                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
                     pending_messages.append(observation)
             else:
                 pending_messages.append(observation)
