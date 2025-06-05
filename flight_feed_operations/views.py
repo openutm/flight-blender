@@ -539,11 +539,12 @@ def set_telemetry(request):
 
         flight_operation = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id)
 
-        if flight_operation.state in [
-            2,
-            3,
-            4,
-        ]:  # Activated, Contingent, Non-conforming
+        allowed_states = [2, 3, 4]  # Activated, Contingent, Non-conforming
+        USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
+        if not USSP_NETWORK_ENABLED:
+            allowed_states.append(1)  # USSP Network is not enabled, so we allow the state 1 (Accepted) as well
+
+        if flight_operation.state in allowed_states:  # Activated, Contingent, Non-conforming
             stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
         else:
             return JsonResponse(
