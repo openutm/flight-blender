@@ -92,6 +92,10 @@ class FlightBlenderDatabaseReader:
         observations = FlightObservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
         return observations
 
+    def get_flight_observation_objects(self):
+        observations = FlightObservation.objects.all().order_by("created_at").values()
+        return observations
+
     def get_temporal_flight_observations_by_session(self, session_id: str, after_datetime: arrow.arrow.Arrow):
         observations = (
             FlightObservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat()).order_by("created_at").values()

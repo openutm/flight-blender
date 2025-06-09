@@ -99,6 +99,33 @@ class ObservationReadOperations:
 
         return pending_messages
 
+    def get_all_flight_observations(self) -> list[FlightObservationSchema]:
+        my_database_reader = FlightBlenderDatabaseReader()
+
+        pending_messages = []
+        all_flight_observations = my_database_reader.get_flight_observation_objects()
+        for message in all_flight_observations:
+            observation = FlightObservationSchema(
+                id=message["id"],
+                session_id=message["session_id"],
+                latitude_dd=message["latitude_dd"],
+                longitude_dd=message["longitude_dd"],
+                altitude_mm=message["altitude_mm"],
+                traffic_source=message["traffic_source"],
+                source_type=message["source_type"],
+                icao_address=message["icao_address"],
+                created_at=message["created_at"],
+                updated_at=message["updated_at"],
+                metadata=json.loads(message["metadata"]),
+            )
+            if self.view_port_box:
+                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
+                    pending_messages.append(observation)
+            else:
+                pending_messages.append(observation)
+
+        return pending_messages
+
     def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
         my_database_reader = FlightBlenderDatabaseReader()
 

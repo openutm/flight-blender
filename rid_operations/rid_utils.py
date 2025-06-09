@@ -222,7 +222,7 @@ class RIDOperatorDetails:
     id: str
 
     operator_id: str | None
-    operator_location: RIDLatLngPoint | None
+    operator_location: OperatorLocation | None
     operation_description: str | None
     auth_data: RIDAuthData | None
     serial_number: str | None
