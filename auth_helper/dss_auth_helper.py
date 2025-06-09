@@ -94,7 +94,9 @@ class AuthorityCredentialsGetter:
         issuer = audience if audience == "localhost" else None
         scopes_str = " ".join(scopes)
 
-        if audience in ["localhost", "host.docker.internal"]:
+        auth_server_url = env.get("DSS_AUTH_URL", "http://host.docker.internal:8085") + env.get("DSS_AUTH_TOKEN_ENDPOINT", "/auth/token")
+
+        if auth_server_url.startswith("http://local_"):
             payload = {
                 "grant_type": "client_credentials",
                 "intended_audience": env.get("DSS_SELF_AUDIENCE"),
@@ -102,8 +104,11 @@ class AuthorityCredentialsGetter:
                 "issuer": issuer,
             }
 
-            url = env.get("DSS_AUTH_URL", "http://host.docker.internal:8085") + env.get("DSS_AUTH_TOKEN_ENDPOINT", "/auth/token")
-            token_data = requests.get(url, params=payload)
+            token_data = requests.get(auth_server_url, params=payload)
+            if token_data.status_code != 200:
+                logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {url}")
+                logger.error(f"Payload: {payload}")
+                logger.error(f"Failed to get token: {token_data.status_code} - {token_data.text}")
             return token_data.json()
         else:
             payload = {
@@ -114,9 +119,10 @@ class AuthorityCredentialsGetter:
                 "scope": scopes_str,
             }
 
-            url = env.get("DSS_AUTH_URL", "http://host.docker.internal:8085") + env.get("DSS_AUTH_TOKEN_ENDPOINT", "/auth/token")
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
-            token_data = requests.post(url, data=payload, headers=headers)
+            token_data = requests.post(auth_server_url, data=payload, headers=headers)
             if token_data.status_code != 200:
+                logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {url}")
+                logger.error(f"Payload: {payload}")
                 logger.error(f"Failed to get token: {token_data.status_code} - {token_data.text}")
             return token_data.json()

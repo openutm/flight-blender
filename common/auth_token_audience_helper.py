@@ -10,6 +10,7 @@ def generate_audience_from_base_url(base_url: str) -> str:
     switch = {
         "localhost": "localhost",
         "internal": "host.docker.internal",
+        "flight-blender": "flight-blender",
         "test": "local.test",
     }
 

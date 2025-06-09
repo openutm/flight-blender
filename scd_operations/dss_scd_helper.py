@@ -839,7 +839,8 @@ class SCDOperations:
                 else:  # This operational intent details is from a peer uss, need to query peer USS
                     uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
                     uss_auth_token = self.get_auth_token(audience=uss_audience)
-                    logger.debug(f"Auth Token {uss_auth_token}")
+                    logger.info(f"Auth Token {uss_auth_token}")
+
                     uss_headers = {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + uss_auth_token["access_token"],
@@ -940,6 +941,7 @@ class SCDOperations:
             auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="scd")
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
+            logger.error(f"Audience {audience}")
             logger.error(f"Auth server error {e}")
             auth_token["error"] = "Error in getting access token"
         else:
@@ -1156,7 +1158,7 @@ class SCDOperations:
                 )
                 audience = generate_audience_from_base_url(base_url=subscriber.uss_base_url)
 
-                if audience != "host.docker.internal":
+                if audience not in ["host.docker.internal", "flight-blender"]:
                     self.notify_peer_uss_of_created_updated_operational_intent(
                         uss_base_url=subscriber.uss_base_url,
                         notification_payload=notification_payload,
