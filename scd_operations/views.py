@@ -342,7 +342,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
                 my_database_writer.create_or_update_composite_operational_intent(
                     flight_declaration=flight_declaration,
-                    composite_operational_intent=new_updated_operational_intent_full_details,
+                    composite_operational_intent_payload=new_updated_operational_intent_full_details,
                 )
 
                 return update_operational_intent_response
@@ -479,7 +479,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
                 my_database_writer.create_or_update_composite_operational_intent(
                     flight_declaration=flight_declaration,
-                    composite_operational_intent=composite_operational_intent_payload,
+                    composite_operational_intent_payload=composite_operational_intent_payload,
                 )
                 # Notify the subscribers that the operational intent has been created
                 my_scd_dss_helper.process_peer_uss_notifications(
