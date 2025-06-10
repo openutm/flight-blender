@@ -54,7 +54,7 @@ load_dotenv(find_dotenv())
 
 
 def process_requested_flight(
-    requested_flight: dict, flight_injection_sorted_set: str, test_id: str
+    requested_flight: dict, flight_injection_sorted_set: str, test_id: str, injection_id: str
 ) -> tuple[RIDTestInjection, list[LatLngPoint], list[float]]:
     """
     Processes a requested flight by parsing flight details and telemetry data, storing relevant information in Redis,
@@ -85,10 +85,11 @@ def process_requested_flight(
     all_altitudes = []
     provided_telemetries = requested_flight["telemetry"]
     provided_flight_details = requested_flight["details_responses"]
+    my_database_writer = FlightBlenderDatabaseWriter()
 
     for provided_flight_detail in provided_flight_details:
         fd = provided_flight_detail["details"]
-        requested_flight_detail_id = fd["id"]
+
         operator_location = None
         uas_id = None
         eu_classification = None
@@ -118,7 +119,7 @@ def process_requested_flight(
             )
 
         flight_detail = RIDFlightDetails(
-            id=requested_flight_detail_id,
+            id=injection_id,
             operation_description=fd["operation_description"],
             operator_location=operator_location,
             operator_id=fd["operator_id"],
@@ -132,11 +133,7 @@ def process_requested_flight(
         )
         all_flight_details.append(pfd)
 
-        flight_details_storage = "flight_details:" + requested_flight_detail_id
-
-        r.set(flight_details_storage, json.dumps(asdict(flight_detail)))
-        # expire in 5 mins
-        r.expire(flight_details_storage, time=3000)
+        my_database_writer.create_or_update_rid_flight_details(rid_flight_details_payload=flight_detail)
 
     # Iterate over telemetry details provided
     for telemetry_id, provided_telemetry in enumerate(provided_telemetries):
@@ -199,6 +196,8 @@ def process_requested_flight(
         flight_state_storage = RIDTestDataStorage(
             flight_state=teletemetry_observation,
             details_response=closest_details_response,
+            aircraft_type=requested_flight["aircraft_type"],
+            injection_id=requested_flight["injection_id"],
         )
         zadd_struct = {json.dumps(asdict(flight_state_storage)): formatted_timestamp.int_timestamp}
         # Add these as a sorted set in Redis
@@ -206,6 +205,7 @@ def process_requested_flight(
         all_telemetry.append(teletemetry_observation)
 
     _requested_flight = RIDTestInjection(
+        aircraft_type=requested_flight["aircraft_type"],
         injection_id=requested_flight["injection_id"],
         telemetry=all_telemetry,
         details_responses=all_flight_details,
@@ -315,7 +315,10 @@ def stream_rid_test_data(requested_flights, test_id):
     test_id = test_id.split("_")[1]
     all_requested_flights: list[RIDTestInjection] = []
     rf = json.loads(requested_flights)
+
     all_positions: list[LatLngPoint] = []
+    injection_id = rf[0]["injection_id"] if "injection_id" in rf[0] else "00000000-0000-0000-0000-000000000000"
+    aircraft_type = rf[0]["aircraft_type"] if "aircraft_type" in rf[0] else "Unknown"
 
     flight_injection_sorted_set = "requested_flight_ss"
     r = get_redis()
@@ -331,6 +334,7 @@ def stream_rid_test_data(requested_flights, test_id):
             requested_flight=requested_flight,
             flight_injection_sorted_set=flight_injection_sorted_set,
             test_id=test_id,
+            injection_id=injection_id,
         )
         all_positions.extend(_all_positions)
         all_altitudes.extend(_all_altitudes)
@@ -377,7 +381,6 @@ def stream_rid_test_data(requested_flights, test_id):
     # Buffer the altitude by 5 m
     altitude_lower = RIDAltitude(value=min(all_altitudes) - 5, reference="W84", units="M")
     altitude_upper = RIDAltitude(value=min(all_altitudes) + 5, reference="W84", units="M")
-
     volume_3_d = RIDVolume3D(
         outline_polygon=outline_polygon,
         altitude_upper=altitude_upper,
@@ -456,6 +459,8 @@ def stream_rid_test_data(requested_flights, test_id):
             observation_metadata = SingleObservationMetadata(
                 telemetry=single_telemetry_data,
                 details_response=single_details_response,
+                aircraft_type=aircraft_type,
+                injection_id=injection_id,
             )
             flight_details_id = single_details_response["details"]["id"]
             lat_dd = single_telemetry_data["position"]["lat"]

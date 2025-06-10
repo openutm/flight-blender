@@ -1,5 +1,6 @@
 import enum
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Literal, NamedTuple
 
 from implicitdict import ImplicitDict, StringBasedDateTime
@@ -244,59 +245,15 @@ class RIDFlightDetails:
 
 
 @dataclass
-class FlightState:
-    timestamp: StringBasedDateTime
-    timestamp_accuracy: float
-    operational_status: str | None
-    position: RIDAircraftPosition
-    track: float
-    speed: float
-    speed_accuracy: str
-    vertical_speed: float
-    height: RIDHeight | None
-    group_radius: int
-    group_ceiling: int
-    group_floor: int
-    group_count: int
-    group_time_start: StringBasedDateTime
-    group_time_end: StringBasedDateTime
-
-
-@dataclass
 class RIDTestDetailsResponse:
     effective_after: str
     details: RIDFlightDetails
 
 
 @dataclass
-class RIDTestInjection:
-    injection_id: str
-    telemetry: list[FlightState]
-    details_responses: list[RIDTestDetailsResponse]
-
-
-@dataclass
-class RIDTestDataStorage:
-    flight_state: FlightState
-    details_response: RIDTestDetailsResponse
-
-
-@dataclass
 class HTTPErrorResponse:
     message: str
     status: int
-
-
-@dataclass
-class CreateTestPayload:
-    requested_flights: list[RIDTestInjection]
-    test_id: str
-
-
-@dataclass
-class CreateTestResponse:
-    injected_flights: list[RIDTestInjection]
-    version: int
 
 
 @dataclass
@@ -348,6 +305,8 @@ class RIDFlightResponse:
 class SingleObservationMetadata:
     details_response: RIDTestDetailsResponse
     telemetry: RIDAircraftState
+    aircraft_type: str
+    injection_id: str
 
 
 @dataclass
@@ -355,3 +314,31 @@ class RIDFlightsRecord:
     service_areas: list[IdentificationServiceArea]
     subscription: RIDSubscription
     extents: RIDVolume4D | None = None
+
+
+@dataclass
+class RIDTestInjection:
+    aircraft_type: str
+    injection_id: str
+    telemetry: list[RIDAircraftState]
+    details_responses: list[RIDTestDetailsResponse]
+
+
+@dataclass
+class RIDTestDataStorage:
+    flight_state: RIDAircraftState
+    details_response: RIDTestDetailsResponse
+    aircraft_type: str
+    injection_id: str
+
+
+@dataclass
+class CreateTestPayload:
+    requested_flights: list[RIDTestInjection]
+    test_id: str
+
+
+@dataclass
+class CreateTestResponse:
+    injected_flights: list[RIDTestInjection]
+    version: int

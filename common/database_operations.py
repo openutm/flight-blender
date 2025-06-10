@@ -14,10 +14,19 @@ from dotenv import find_dotenv, load_dotenv
 
 from common.utils import EnhancedJSONEncoder
 from conformance_monitoring_operations.models import TaskScheduler
-from constraint_operations.data_definitions import CompositeConstraintPayload, ConstraintDetails
+from constraint_operations.data_definitions import (
+    CompositeConstraintPayload,
+    ConstraintDetails,
+)
 from constraint_operations.data_definitions import Constraint as ConstraintData
-from constraint_operations.data_definitions import ConstraintReference as ConstraintReferencePayload
-from constraint_operations.models import CompositeConstraint, ConstraintDetail, ConstraintReference
+from constraint_operations.data_definitions import (
+    ConstraintReference as ConstraintReferencePayload,
+)
+from constraint_operations.models import (
+    CompositeConstraint,
+    ConstraintDetail,
+    ConstraintReference,
+)
 from flight_declaration_operations.models import (
     CompositeOperationalIntent,
     FlightDeclaration,
@@ -34,7 +43,8 @@ from geo_fence_operations.data_definitions import GeofencePayload
 from geo_fence_operations.models import GeoFence
 from notification_operations.models import OperatorRIDNotification
 from rid_operations.data_definitions import OperatorRIDNotificationCreationPayload
-from rid_operations.models import ISASubscription
+from rid_operations.models import ISASubscription, RIDFlightDetail
+from rid_operations.rid_utils import RIDFlightDetails
 from scd_operations.data_definitions import FlightDeclarationCreationPayload
 from scd_operations.scd_data_definitions import (
     CompositeOperationalIntentPayload,
@@ -90,6 +100,15 @@ class FlightBlenderDatabaseReader:
 
     def get_flight_observations(self, after_datetime: arrow.arrow.Arrow):
         observations = FlightObservation.objects.filter(created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
+        return observations
+
+    def get_closest_flight_observation_for_now(self, now: arrow.arrow.Arrow):
+        one_second_before_now = now.shift(seconds=-1)
+
+        observations = FlightObservation.objects.filter(
+            created_at__gte=one_second_before_now.isoformat(),
+            created_at__lte=now.isoformat(),
+        )
         return observations
 
     def get_flight_observation_objects(self):
@@ -293,6 +312,12 @@ class FlightBlenderDatabaseReader:
             .values_list("id", flat=True)
         )
         return relevant_ids
+
+    def check_flight_details_exist(self, flight_detail_id: str) -> bool:
+        return RIDFlightDetail.objects.filter(id=flight_detail_id).exists()
+
+    def get_flight_details_by_id(self, flight_detail_id: str) -> RIDFlightDetail:
+        return RIDFlightDetail.objects.get(id=flight_detail_id)
 
     def get_conformance_monitoring_task(self, flight_declaration: FlightDeclaration) -> None | TaskScheduler:
         try:
@@ -572,7 +597,7 @@ class FlightBlenderDatabaseWriter:
     def create_or_update_composite_operational_intent(
         self,
         flight_declaration: FlightDeclaration,
-        composite_operational_intent_payload: CompositeOperationalIntentPayload | OperationalIntentStorage,
+        composite_operational_intent_payload: (CompositeOperationalIntentPayload | OperationalIntentStorage),
     ) -> bool:
         try:
             operational_intent_details = FlightOperationalIntentDetail.objects.get(declaration=flight_declaration)
@@ -955,14 +980,21 @@ class FlightBlenderDatabaseWriter:
             _constraint_volumes = []
             for _volume in constraint.volumes:
                 _constraint_volumes.append(asdict(_volume))
-            constraint_obj = ConstraintDetail(volumes=json.dumps(_constraint_volumes), _type=constraint.type, geofence=geofence)
+            constraint_obj = ConstraintDetail(
+                volumes=json.dumps(_constraint_volumes),
+                _type=constraint.type,
+                geofence=geofence,
+            )
             constraint_obj.save()
             return constraint_obj
         except IntegrityError:
             return None
 
     def create_or_update_constraint_reference(
-        self, constraint_reference: ConstraintReferencePayload, geofence: GeoFence, flight_declaration: FlightDeclaration
+        self,
+        constraint_reference: ConstraintReferencePayload,
+        geofence: GeoFence,
+        flight_declaration: FlightDeclaration,
     ) -> ConstraintReference | None:
         try:
             constraint_obj = ConstraintReference(
@@ -980,3 +1012,56 @@ class FlightBlenderDatabaseWriter:
             return constraint_obj
         except IntegrityError:
             return None
+
+    def _serialize_operator_location(self, operator_location):
+        return json.dumps(asdict(operator_location)) if operator_location else json.dumps({})
+
+    def _serialize_auth_data(self, auth_data):
+        return json.dumps(asdict(auth_data)) if auth_data else json.dumps({})
+
+    def _serialize_eu_classification(self, eu_classification):
+        return json.dumps(asdict(eu_classification)) if eu_classification else json.dumps({})
+
+    def _serialize_uas_id(self, uas_id):
+        return json.dumps(asdict(uas_id)) if uas_id else json.dumps({})
+
+    def _create_rid_flight_details(self, rid_flight_details_payload: RIDFlightDetails):
+        operator_location = self._serialize_operator_location(rid_flight_details_payload.operator_location)
+        auth_data = self._serialize_auth_data(rid_flight_details_payload.auth_data)
+        eu_classification = self._serialize_eu_classification(rid_flight_details_payload.eu_classification)
+        uas_id = self._serialize_uas_id(rid_flight_details_payload.uas_id)
+        try:
+            rid_flight_details = RIDFlightDetail(
+                id=rid_flight_details_payload.id,
+                operation_description=rid_flight_details_payload.operation_description,
+                operator_location=operator_location,
+                operator_id=rid_flight_details_payload.operator_id,
+                auth_data=auth_data,
+                uas_id=uas_id,
+                eu_classification=eu_classification,
+            )
+            rid_flight_details.save()
+            return rid_flight_details
+        except IntegrityError:
+            return None
+
+    def create_or_update_rid_flight_details(self, rid_flight_details_payload: RIDFlightDetails):
+        rid_flight_details_exist = RIDFlightDetail.objects.filter(id=rid_flight_details_payload.id).exists()
+        operator_location = self._serialize_operator_location(rid_flight_details_payload.operator_location)
+        auth_data = self._serialize_auth_data(rid_flight_details_payload.auth_data)
+        eu_classification = self._serialize_eu_classification(rid_flight_details_payload.eu_classification)
+        uas_id = self._serialize_uas_id(rid_flight_details_payload.uas_id)
+        if rid_flight_details_exist:
+            rid_flight_details = RIDFlightDetail.objects.get(id=rid_flight_details_payload.id)
+            rid_flight_details.operation_description = rid_flight_details_payload.operation_description
+            rid_flight_details.operator_location = operator_location
+            rid_flight_details.auth_data = auth_data
+            rid_flight_details.uas_id = uas_id
+            rid_flight_details.eu_classification = eu_classification
+            try:
+                rid_flight_details.save()
+                return rid_flight_details
+            except IntegrityError:
+                return None
+        else:
+            return self._create_rid_flight_details(rid_flight_details_payload)

@@ -92,12 +92,44 @@ class ObservationReadOperations:
                 metadata=json.loads(message["metadata"]),
             )
             if self.view_port_box:
-                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
+                if shapely.contains(
+                    self.view_port_box,
+                    Point(observation.latitude_dd, observation.longitude_dd),
+                ):
                     pending_messages.append(observation)
             else:
                 pending_messages.append(observation)
 
         return pending_messages
+
+    def get_closest_observation_for_now(self, now: arrow.arrow.Arrow):
+        my_database_reader = FlightBlenderDatabaseReader()
+
+        all_observations = []
+        closest_observations = my_database_reader.get_closest_flight_observation_for_now(now=now)
+        for closest_observation in closest_observations:
+            single_observation = FlightObservationSchema(
+                id=str(closest_observation.id),
+                session_id=str(closest_observation.session_id),
+                latitude_dd=closest_observation.latitude_dd,
+                longitude_dd=closest_observation.longitude_dd,
+                altitude_mm=closest_observation.altitude_mm,
+                traffic_source=closest_observation.traffic_source,
+                source_type=closest_observation.source_type,
+                icao_address=closest_observation.icao_address,
+                created_at=closest_observation.created_at.isoformat(),
+                updated_at=closest_observation.updated_at.isoformat(),
+                metadata=json.loads(closest_observation.metadata),
+            )
+            if self.view_port_box:
+                if shapely.contains(
+                    self.view_port_box,
+                    Point(single_observation.latitude_dd, single_observation.longitude_dd),
+                ):
+                    all_observations.append(single_observation)
+            else:
+                all_observations.append(single_observation)
+        return all_observations
 
     def get_all_flight_observations(self) -> list[FlightObservationSchema]:
         my_database_reader = FlightBlenderDatabaseReader()
@@ -119,7 +151,10 @@ class ObservationReadOperations:
                 metadata=json.loads(message["metadata"]),
             )
             if self.view_port_box:
-                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
+                if shapely.contains(
+                    self.view_port_box,
+                    Point(observation.latitude_dd, observation.longitude_dd),
+                ):
                     pending_messages.append(observation)
             else:
                 pending_messages.append(observation)
@@ -191,7 +226,10 @@ class ObservationReadOperations:
                 metadata=json.loads(message["metadata"]),
             )
             if self.view_port_box:
-                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
+                if shapely.contains(
+                    self.view_port_box,
+                    Point(observation.latitude_dd, observation.longitude_dd),
+                ):
                     pending_messages.append(observation)
             else:
                 pending_messages.append(observation)

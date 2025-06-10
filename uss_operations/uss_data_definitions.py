@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
 
-from rid_operations.rid_utils import RIDOperatorDetails
+from rid_operations.rid_utils import RIDFlightDetails
 
 
 # TODO: Need to consolidate all data_definitions across different apps
@@ -42,7 +42,7 @@ class FlightDetailsNotFoundMessage:
 
 @dataclass
 class OperatorDetailsSuccessResponse:
-    details: RIDOperatorDetails
+    details: RIDFlightDetails
 
 
 @dataclass
