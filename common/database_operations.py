@@ -1065,3 +1065,19 @@ class FlightBlenderDatabaseWriter:
                 return None
         else:
             return self._create_rid_flight_details(rid_flight_details_payload)
+
+    def delete_all_flight_observations(self) -> bool:
+        try:
+            FlightObservation.objects.all().delete()
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting all flight observations: {e}")
+            return False
+
+    def delete_all_flight_details(self) -> bool:
+        try:
+            RIDFlightDetail.objects.all().delete()
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting all flight observations: {e}")
+            return False

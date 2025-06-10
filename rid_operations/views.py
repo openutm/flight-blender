@@ -499,7 +499,8 @@ def delete_test(request, test_id, version):
 
     my_database_writer = FlightBlenderDatabaseWriter()
     my_database_writer.delete_all_simulated_rid_subscription_records()
-
+    my_database_writer.delete_all_flight_observations()
+    my_database_writer.delete_all_flight_details()
     # Stop streaming if it exists for this test
     r.set("stop_streaming_" + test_id_str, "1")
 
