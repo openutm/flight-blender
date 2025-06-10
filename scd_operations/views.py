@@ -108,7 +108,6 @@ def upsert_close_flight_plan(request, flight_plan_id):
     # view_name = request.resolver_match.view_name
     # uspace_test = True if "u-space" in view_name else False
 
-    # flight_details_storage = "flight_details:" + str(flight_plan_id)
     my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
     my_scd_dss_helper = dss_scd_helper.SCDOperations()
     my_geo_json_converter = dss_scd_helper.VolumesConverter()

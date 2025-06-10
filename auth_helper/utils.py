@@ -1,7 +1,9 @@
 import json
 import logging
+import re
 from functools import wraps
 from os import environ as env
+from urllib.parse import urlparse
 
 import jwt
 import requests
@@ -62,7 +64,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 return JsonResponse({"detail": "Bearer token could not be decoded properly"}, status=401)
 
             if BYPASS_AUTH_TOKEN_VERIFICATION:
-                return handle_bypass_verification(token, f, *args, **kwargs)
+                return handle_bypass_verification(token, required_scopes, f, *args, **kwargs)
 
             try:
                 passport_jwks_data = s.get(PASSPORT_JWKS_URL).json()
@@ -115,11 +117,22 @@ def requires_scopes(required_scopes, allow_any: bool = False):
     return require_scope
 
 
-def handle_bypass_verification(token, f, *args, **kwargs):
+def handle_bypass_verification(token, required_scopes, f, *args, **kwargs):
     try:
         unverified_token_details = jwt.decode(token, algorithms=["RS256"], options={"verify_signature": False})
     except jwt.DecodeError:
         return JsonResponse({"detail": "Invalid token provided"}, status=401)
+    decoded_scopes_set = set(unverified_token_details.get("scope", "").split())
+    if not set(required_scopes).issubset(decoded_scopes_set):
+        return JsonResponse({"message": "You don't have access to this resource"}, status=403)
+
+    iss = unverified_token_details.get("iss")
+    if not iss:
+        return JsonResponse({"detail": "Incomplete token provided, issuer (iss) claim must be present and should not be empty"}, status=401)
+    if iss != "dummy":
+        parsed_iss = urlparse(iss)
+        if not (parsed_iss.scheme in ("http", "https") and parsed_iss.netloc):
+            return JsonResponse({"detail": "Issuer (iss) claim is not a valid URL"}, status=401)
 
     if not unverified_token_details.get("aud"):
         return JsonResponse({"detail": "Incomplete token provided, audience claim must be present and should not be empty"}, status=401)

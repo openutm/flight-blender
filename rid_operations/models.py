@@ -16,3 +16,22 @@ class ISASubscription(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class RIDFlightDetail(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    operation_description = models.TextField(help_text="The operation description of the flight", blank=True, null=True)
+    operator_location = models.TextField(help_text="The operator location of the flight", blank=True, null=True)
+    operator_id = models.CharField(max_length=255, help_text="The operator ID of the flight, e.g., a UAS operator ID", blank=True, null=True)
+    auth_data = models.CharField(
+        max_length=255, help_text="The authorization data of the flight, e.g., a UAS authorization ID", blank=True, null=True
+    )
+    uas_id = models.CharField(max_length=255, help_text="The UAS ID of the flight, e.g., a UAS serial number", blank=True, null=True)
+    eu_classification = models.CharField(
+        max_length=255, help_text="The EU classification of the flight, e.g., Open, Specific, Certified", blank=True, null=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]

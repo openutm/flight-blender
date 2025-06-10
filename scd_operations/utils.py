@@ -216,10 +216,10 @@ class DSSAreaClearHandler:
 
         all_deletion_requests_status = []
         if all_existing_op_ints_in_area:
-            for flight_details in all_existing_op_ints_in_area:
-                if flight_details:
+            for existing_op_ints_in_area in all_existing_op_ints_in_area:
+                if existing_op_ints_in_area:
                     deletion_success = False
-                    operation_id = flight_details["flight_id"]
+                    operation_id = existing_op_ints_in_area["flight_id"]
 
                     composite_operational_intent = my_database_reader.get_composite_operational_intent_by_declaration_id(
                         flight_declaration_id=operation_id

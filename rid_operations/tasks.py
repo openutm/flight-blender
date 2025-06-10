@@ -3,11 +3,12 @@ import logging
 import time
 from dataclasses import asdict
 from datetime import timedelta
+from enum import Enum
 from os import environ as env
 
 import arrow
 from arrow.parser import ParserError
-from dacite import from_dict
+from dacite import Config, from_dict
 from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import MultiPoint, Point, box
 
@@ -53,8 +54,30 @@ load_dotenv(find_dotenv())
 
 
 def process_requested_flight(
-    requested_flight: dict, flight_injection_sorted_set: str, test_id: str
+    requested_flight: dict, flight_injection_sorted_set: str, test_id: str, injection_id: str
 ) -> tuple[RIDTestInjection, list[LatLngPoint], list[float]]:
+    """
+    Processes a requested flight by parsing flight details and telemetry data, storing relevant information in Redis,
+    and returning structured representations of the flight, positions, and altitudes.
+    Args:
+        requested_flight (dict): Dictionary containing flight details and telemetry data. Expected keys are:
+            - "telemetry": List of telemetry observations, each containing position, timestamp, and other flight state data.
+            - "details_responses": List of flight detail responses, each with flight and operator information.
+            - "injection_id": Unique identifier for the flight injection.
+        flight_injection_sorted_set (str): Redis sorted set key for storing telemetry observations.
+        test_id (str): Identifier for the test session, used for operator notifications.
+    Returns:
+        tuple:
+            - RIDTestInjection: Structured object representing the injected flight, including telemetry and details responses.
+            - list[LatLngPoint]: List of latitude/longitude points representing the flight path.
+            - list[float]: List of altitudes corresponding to the telemetry positions.
+    Side Effects:
+        - Stores flight details and telemetry observations in Redis.
+        - Sets expiration for stored flight details.
+        - Sends operator notifications if telemetry timestamps are invalid.
+    Raises:
+        None directly, but logs and notifies on telemetry timestamp parsing errors.
+    """
     r = get_redis()
     all_telemetry = []
     all_flight_details = []
@@ -62,31 +85,41 @@ def process_requested_flight(
     all_altitudes = []
     provided_telemetries = requested_flight["telemetry"]
     provided_flight_details = requested_flight["details_responses"]
+    my_database_writer = FlightBlenderDatabaseWriter()
 
     for provided_flight_detail in provided_flight_details:
         fd = provided_flight_detail["details"]
-        requested_flight_detail_id = fd["id"]
+
         operator_location = None
         uas_id = None
         eu_classification = None
         auth_data = None
         if "operator_location" in fd.keys():
-            operator_location = from_dict(data_class=OperatorLocation, data=fd["operator_location"])
+            position = from_dict(data_class=LatLngPoint, data=fd["operator_location"])
+            operator_location = OperatorLocation(position=position)
         if "auth_data" in fd.keys():
             auth_data = RIDAuthData(format=fd["auth_data"]["format"], data=fd["auth_data"]["data"])
         if "uas_id" in fd.keys():
+            specific_session_id = fd["uas_id"].get("specific_session_id", None)
+            serial_number = fd["uas_id"].get("serial_number", "")
+            registration_id = fd["uas_id"].get("registration_id", "")
+            utm_id = fd["uas_id"].get("utm_id", "")
             uas_id = UASID(
-                specific_session_id=fd["uas_id"]["specific_session_id"],
-                serial_number=fd["uas_id"]["serial_number"],
-                registration_id=fd["uas_id"]["registration_id"],
-                utm_id=fd["uas_id"]["utm_id"],
+                specific_session_id=specific_session_id,
+                serial_number=serial_number,
+                registration_id=registration_id,
+                utm_id=utm_id,
             )
 
         if fd.get("eu_classification"):
-            eu_classification = from_dict(data_class=UAClassificationEU, data=fd["eu_classfication"])
+            eu_classification = from_dict(
+                data_class=UAClassificationEU,
+                data=fd["eu_classification"],
+                config=Config(cast=[Enum]),
+            )
 
         flight_detail = RIDFlightDetails(
-            id=requested_flight_detail_id,
+            id=injection_id,
             operation_description=fd["operation_description"],
             operator_location=operator_location,
             operator_id=fd["operator_id"],
@@ -100,11 +133,7 @@ def process_requested_flight(
         )
         all_flight_details.append(pfd)
 
-        flight_details_storage = "flight_details:" + requested_flight_detail_id
-
-        r.set(flight_details_storage, json.dumps(asdict(flight_detail)))
-        # expire in 5 mins
-        r.expire(flight_details_storage, time=3000)
+        my_database_writer.create_or_update_rid_flight_details(rid_flight_details_payload=flight_detail)
 
     # Iterate over telemetry details provided
     for telemetry_id, provided_telemetry in enumerate(provided_telemetries):
@@ -142,7 +171,8 @@ def process_requested_flight(
             logger.info("Error in parsing telemetry timestamp")
             # Set an operator notification
             write_operator_rid_notification.delay(
-                session_id=test_id, message="The mandatory timestamp provided in the telemetry is not in the correct format"
+                session_id=test_id,
+                message="The mandatory timestamp provided in the telemetry is not in the correct format",
             )
 
             formatted_timestamp = arrow.now()
@@ -163,13 +193,19 @@ def process_requested_flight(
             all_flight_details,
             key=lambda d: abs(arrow.get(d.effective_after) - formatted_timestamp),
         )
-        flight_state_storage = RIDTestDataStorage(flight_state=teletemetry_observation, details_response=closest_details_response)
+        flight_state_storage = RIDTestDataStorage(
+            flight_state=teletemetry_observation,
+            details_response=closest_details_response,
+            aircraft_type=requested_flight["aircraft_type"],
+            injection_id=requested_flight["injection_id"],
+        )
         zadd_struct = {json.dumps(asdict(flight_state_storage)): formatted_timestamp.int_timestamp}
         # Add these as a sorted set in Redis
         r.zadd(flight_injection_sorted_set, zadd_struct)
         all_telemetry.append(teletemetry_observation)
 
     _requested_flight = RIDTestInjection(
+        aircraft_type=requested_flight["aircraft_type"],
         injection_id=requested_flight["injection_id"],
         telemetry=all_telemetry,
         details_responses=all_flight_details,
@@ -224,7 +260,11 @@ def run_ussp_polling_for_rid(end_time: str, session_id: str):
             subscription_id = str(subscription_record.subscription_id)
             view = subscription_record.view
             flight_details = subscription_record.flight_details
-            my_dss_subscriber.query_uss_for_rid(flight_details=flight_details, subscription_id=subscription_id, view=view)
+            my_dss_subscriber.query_uss_for_rid(
+                flight_details=flight_details,
+                subscription_id=subscription_id,
+                view=view,
+            )
 
             time.sleep(0.6)
 
@@ -275,7 +315,10 @@ def stream_rid_test_data(requested_flights, test_id):
     test_id = test_id.split("_")[1]
     all_requested_flights: list[RIDTestInjection] = []
     rf = json.loads(requested_flights)
+
     all_positions: list[LatLngPoint] = []
+    injection_id = rf[0]["injection_id"] if "injection_id" in rf[0] else "00000000-0000-0000-0000-000000000000"
+    aircraft_type = rf[0]["aircraft_type"] if "aircraft_type" in rf[0] else "Unknown"
 
     flight_injection_sorted_set = "requested_flight_ss"
     r = get_redis()
@@ -288,7 +331,10 @@ def stream_rid_test_data(requested_flights, test_id):
 
     for requested_flight in rf:
         processed_flight, _all_positions, _all_altitudes = process_requested_flight(
-            requested_flight=requested_flight, flight_injection_sorted_set=flight_injection_sorted_set, test_id=test_id
+            requested_flight=requested_flight,
+            flight_injection_sorted_set=flight_injection_sorted_set,
+            test_id=test_id,
+            injection_id=injection_id,
         )
         all_positions.extend(_all_positions)
         all_altitudes.extend(_all_altitudes)
@@ -335,7 +381,6 @@ def stream_rid_test_data(requested_flights, test_id):
     # Buffer the altitude by 5 m
     altitude_lower = RIDAltitude(value=min(all_altitudes) - 5, reference="W84", units="M")
     altitude_upper = RIDAltitude(value=min(all_altitudes) + 5, reference="W84", units="M")
-
     volume_3_d = RIDVolume3D(
         outline_polygon=outline_polygon,
         altitude_upper=altitude_upper,
@@ -414,6 +459,8 @@ def stream_rid_test_data(requested_flights, test_id):
             observation_metadata = SingleObservationMetadata(
                 telemetry=single_telemetry_data,
                 details_response=single_details_response,
+                aircraft_type=aircraft_type,
+                injection_id=injection_id,
             )
             flight_details_id = single_details_response["details"]["id"]
             lat_dd = single_telemetry_data["position"]["lat"]
@@ -436,7 +483,8 @@ def stream_rid_test_data(requested_flights, test_id):
                     if not time_since_last_notification or (query_time.int_timestamp - int(time_since_last_notification)) >= 10:
                         # Send a notification about the RID data stream error
                         write_operator_rid_notification.delay(
-                            message="NET0040: RID data stream error, the last observation was received more than 1 second ago", session_id=test_id
+                            message="NET0040: RID data stream error, the last observation was received more than 1 second ago",
+                            session_id=test_id,
                         )
                         # Update the timestamp of the last notification sent in Redis
                         r.set(time_since_last_notification_key, query_time.int_timestamp)

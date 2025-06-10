@@ -26,7 +26,7 @@ from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
 from common.auth_token_audience_helper import generate_audience_from_base_url
 from common.data_definitions import RESPONSE_CONTENT_TYPE
-from common.database_operations import FlightBlenderDatabaseWriter
+from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from rid_operations.data_definitions import (
     UASID,
@@ -79,7 +79,15 @@ class RemoteIDOperations:
 
         return poly_area_m2
 
-    def extend_cluster(self, view_area_sqm: float, min_x: float, min_y: float, max_x: float, max_y: float, all_positions: list[Point]) -> Cluster:
+    def extend_cluster(
+        self,
+        view_area_sqm: float,
+        min_x: float,
+        min_y: float,
+        max_x: float,
+        max_y: float,
+        all_positions: list[Point],
+    ) -> Cluster:
         """Code from InterUSS monitoring mocks"""
 
         cluster = Cluster(
@@ -307,6 +315,7 @@ class RemoteIDOperations:
                     except Exception as re:
                         logger.error(f"Error in sending subscriber notification to {url} :  {re} ")
                     if response.status_code == 204:
+                        logger.info(response.text)
                         logger.info(response.status_code)
                         logger.info("Successfully notified subscriber %s" % url)
 
@@ -323,7 +332,12 @@ class RemoteIDOperations:
                 return asdict(isa_creation_response)
 
     def create_dss_subscription(
-        self, vertex_list: list, view: str, request_uuid, subscription_duration_seconds: int = 30, is_simulated: bool = False
+        self,
+        vertex_list: list,
+        view: str,
+        request_uuid,
+        subscription_duration_seconds: int = 30,
+        is_simulated: bool = False,
     ) -> SubscriptionResponse:
         """This method PUTS /dss/subscriptions"""
         subscription_response = SubscriptionResponse(created=False, dss_subscription_id=None, notification_index=0)
@@ -428,7 +442,12 @@ class RemoteIDOperations:
                     end_datetime=fifteen_seconds_from_now_isoformat,
                     is_simulated=is_simulated,
                     view=view,
-                    flights_dict=json.dumps(asdict(flights_dict, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)})),
+                    flights_dict=json.dumps(
+                        asdict(
+                            flights_dict,
+                            dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)},
+                        )
+                    ),
                 )
 
                 return subscription_response
@@ -455,8 +474,11 @@ class RemoteIDOperations:
             - The stored flight details expire after 5 minutes (3000 seconds).
         """
 
-        flight_details_storage = "flight_details:" + flight_id
-        if not self.r.exists(flight_details_storage):
+        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_writer = FlightBlenderDatabaseWriter()
+
+        flight_details_exist = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)
+        if not flight_details_exist:
             # Get and store the flight details
             flight_details_request = requests.get(rid_flight_details_query_url, headers=headers)
             if flight_details_request.status_code != 200:
@@ -498,10 +520,7 @@ class RemoteIDOperations:
                 uas_id=uas_id,
                 eu_classification=eu_classification,
             )
-
-            self.r.set(flight_details_storage, json.dumps(asdict(flight_detail)))
-
-            self.r.expire(flight_details_storage, time=1200)
+            my_database_writer.create_or_update_rid_flight_details(rid_flight_details_payload=flight_detail)
 
     def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
         _flight_details = from_dict(data_class=RIDFlightsRecord, data=json.loads(flight_details))
@@ -533,7 +552,11 @@ class RemoteIDOperations:
 
                     rid_flight_details_query_url = f"{_service_area.uss_base_url}/uss/flights/{flight_id}/details"
 
-                    self.query_uss_for_rid_details(rid_flight_details_query_url=rid_flight_details_query_url, flight_id=flight_id, headers=headers)
+                    self.query_uss_for_rid_details(
+                        rid_flight_details_query_url=rid_flight_details_query_url,
+                        flight_id=flight_id,
+                        headers=headers,
+                    )
 
                     try:
                         assert flight.get("current_state") is not None
@@ -567,7 +590,10 @@ class RemoteIDOperations:
                                 "altitude_mm": position["alt"],
                                 "metadata": flight_metadata,
                             }
-                            single_observation = from_dict(data_class=SingleAirtrafficObservation, data=single_observation)
+                            single_observation = from_dict(
+                                data_class=SingleAirtrafficObservation,
+                                data=single_observation,
+                            )
                             logger.debug("Writing flight remote-id data..")
                             my_database_writer.write_flight_observation(single_observation=single_observation)
 

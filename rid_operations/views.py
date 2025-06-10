@@ -291,11 +291,12 @@ def dss_isa_callback(request, isa_id):
 @requires_scopes(["dss.read.identification_service_areas"])
 def get_flight_data(request, flight_id):
     """This is the end point for the rid_qualifier to get details of a flight"""
-    r = get_redis()
-    flight_details_storage = "flight_details:" + str(flight_id)
 
-    if r.exists(flight_details_storage):
-        flight_details = r.get(flight_details_storage)
+    my_database_reader = FlightBlenderDatabaseReader()
+    flight_details_record_exists = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)
+
+    if flight_details_record_exists:
+        flight_details = my_database_reader.get_flight_details_by_id(flight_detail_id=flight_id)
 
         flight_detail = from_dict(data_class=RIDFlightDetails, data=json.loads(flight_details))
 
@@ -498,7 +499,8 @@ def delete_test(request, test_id, version):
 
     my_database_writer = FlightBlenderDatabaseWriter()
     my_database_writer.delete_all_simulated_rid_subscription_records()
-
+    my_database_writer.delete_all_flight_observations()
+    my_database_writer.delete_all_flight_details()
     # Stop streaming if it exists for this test
     r.set("stop_streaming_" + test_id_str, "1")
 
