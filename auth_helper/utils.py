@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 from functools import wraps
 from os import environ as env
 from urllib.parse import urlparse
@@ -55,7 +54,10 @@ def requires_scopes(required_scopes, allow_any: bool = False):
             request = args[0]
             auth = request.META.get("HTTP_AUTHORIZATION", None)
             if not auth or len(parts := auth.split()) <= 1:
-                return JsonResponse({"detail": "Authentication credentials were not provided"}, status=401)
+                return JsonResponse(
+                    {"detail": "Authentication credentials were not provided"},
+                    status=401,
+                )
 
             token = parts[1]
             try:
@@ -69,10 +71,15 @@ def requires_scopes(required_scopes, allow_any: bool = False):
             try:
                 passport_jwks_data = s.get(PASSPORT_JWKS_URL).json()
             except requests.exceptions.RequestException:
-                return JsonResponse({"detail": "Public Key Server necessary to validate the token could not be reached"}, status=400)
+                passport_jwks_data = {}
+                return JsonResponse(
+                    {"detail": "Public Key Server necessary to validate the token could not be reached"},
+                    status=400,
+                )
             try:
                 dss_jwks_data = s.get(DSS_AUTH_JWKS_ENDPOINT).json()
             except requests.exceptions.RequestException:
+                dss_jwks_data = {}
                 logger.info(
                     "DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated"
                 )
@@ -84,7 +91,10 @@ def requires_scopes(required_scopes, allow_any: bool = False):
 
             kid = unverified_token_headers.get("kid")
             if not kid or kid not in public_keys:
-                return JsonResponse({"detail": f"Error in parsing public keys, the signing key id {kid} is not present in JWKS"}, status=401)
+                return JsonResponse(
+                    {"detail": f"Error in parsing public keys, the signing key id {kid} is not present in JWKS"},
+                    status=401,
+                )
 
             public_key = public_keys[kid]
             try:
@@ -105,7 +115,10 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 jwt.exceptions.MissingRequiredClaimError,
             ) as token_error:
                 logger.error(f"Token verification failed: {token_error}")
-                return JsonResponse({"detail": "Invalid token", "error details": f"{token_error}"}, status=401)
+                return JsonResponse(
+                    {"detail": "Invalid token", "error details": f"{token_error}"},
+                    status=401,
+                )
             decoded_scopes_set = set(decoded.get("scope", "").split())
             if (allow_any and decoded_scopes_set & set(required_scopes)) or set(required_scopes).issubset(decoded_scopes_set):
                 return f(*args, **kwargs)
@@ -128,14 +141,20 @@ def handle_bypass_verification(token, required_scopes, f, *args, **kwargs):
 
     iss = unverified_token_details.get("iss")
     if not iss:
-        return JsonResponse({"detail": "Incomplete token provided, issuer (iss) claim must be present and should not be empty"}, status=401)
+        return JsonResponse(
+            {"detail": "Incomplete token provided, issuer (iss) claim must be present and should not be empty"},
+            status=401,
+        )
     if iss != "dummy":
         parsed_iss = urlparse(iss)
         if not (parsed_iss.scheme in ("http", "https") and parsed_iss.netloc):
             return JsonResponse({"detail": "Issuer (iss) claim is not a valid URL"}, status=401)
 
     if not unverified_token_details.get("aud"):
-        return JsonResponse({"detail": "Incomplete token provided, audience claim must be present and should not be empty"}, status=401)
+        return JsonResponse(
+            {"detail": "Incomplete token provided, audience claim must be present and should not be empty"},
+            status=401,
+        )
 
     return f(*args, **kwargs)
 
