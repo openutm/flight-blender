@@ -63,6 +63,7 @@ dev = [
     "pyright>=1.1.398",
     "pyupgrade>=3.19.1",
     "ruff>=0.11.4",
+    "python-lsp-server>=1.12.2",
 ]
 
 [build-system]

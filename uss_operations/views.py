@@ -4,7 +4,6 @@ import time
 import uuid
 from dataclasses import asdict
 from enum import Enum
-from typing import List
 from uuid import UUID
 
 import arrow
@@ -14,7 +13,6 @@ from dotenv import find_dotenv, load_dotenv
 from rest_framework.decorators import api_view
 
 import rid_operations.view_port_ops as view_port_ops
-from auth_helper.common import get_redis
 from auth_helper.utils import requires_scopes
 from common.database_operations import (
     FlightBlenderDatabaseReader,
@@ -25,14 +23,11 @@ from constraint_operations.data_definitions import PutConstraintDetailsParameter
 from flight_feed_operations import flight_stream_helper
 from rid_operations.data_definitions import (
     UASID,
-    Altitude,
-    LatLngPoint,
     OperatorLocation,
     UAClassificationEU,
 )
-from rid_operations.rid_utils import RIDAuthData, RIDFlightDetails, RIDOperatorDetails
+from rid_operations.rid_utils import RIDAuthData, RIDFlightDetails
 from scd_operations.dss_scd_helper import (
-    OperationalIntentReferenceHelper,
     VolumesConverter,
 )
 from scd_operations.scd_data_definitions import CompositeOperationalIntentPayload
@@ -82,7 +77,6 @@ def is_valid_uuid(uuid_to_test, version=4):
 @requires_scopes(["utm.strategic_coordination"])
 def uss_update_opint_details(request):
     # Get notifications from peer uss re changed operational intent details https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/astm-utm/Protocol/cb7cf962d3a0c01b5ab12502f5f54789624977bf/utm.yaml#tag/p2p_utm/operation/notifyOperationalIntentDetailsChanged
-    database_reader = FlightBlenderDatabaseReader()
     database_writer = FlightBlenderDatabaseWriter()
     my_geo_json_converter = VolumesConverter()
     op_int_update_details_data = request.data
@@ -94,8 +88,6 @@ def uss_update_opint_details(request):
     logger.info("Incoming data for operation ID %s" % operation_id_str)
 
     logger.info(incoming_update_payload)
-
-    subscriptions = incoming_update_payload.subscriptions
 
     # Update the subscription state
 
