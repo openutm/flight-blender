@@ -100,6 +100,7 @@ def process_requested_flight(
         "speed_accuracy",
         "vertical_speed",
     ]
+    MANDATORY_POSITION_FIELDS = ["lat", "lng", "alt"]
     for provided_flight_detail in provided_flight_details:
         fd = provided_flight_detail["details"]
 
@@ -157,6 +158,15 @@ def process_requested_flight(
             write_operator_rid_notification.delay(
                 session_id=test_id,
                 message=f"NET0030: RID data stream error, telemetry entry {telemetry_id} is missing mandatory fields: {', '.join(missing_fields)}",
+            )
+            continue
+
+        missing_position_fields = [field for field in MANDATORY_POSITION_FIELDS if field not in provided_telemetry["position"]]
+        if missing_position_fields:
+            logger.warning(f"Telemetry position data is missing mandator fields: {missing_fields}")
+            write_incoming_air_traffic_data.delay(
+                session_id=test_id,
+                message=f"NET0030: RID data stream error, telemetry position entry is missing mandatory fields: {', '.join(missing_fields)}",
             )
             continue
 
@@ -432,7 +442,6 @@ def stream_rid_test_data(requested_flights, test_id):
     time.sleep(2)  # Wait 2 seconds before starting mission
     should_continue = True
     # Calculate the target number of queries based on the provided telemetry item length and ASTM time shift
-    query_target = provided_telemetry_item_length + ASTM_TIME_SHIFT_SECS  # one per second
 
     # Retrieve all telemetry details from the sorted set in Redis
     all_telemetry_details = r.zrange(flight_injection_sorted_set, 0, -1, withscores=True)
