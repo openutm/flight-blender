@@ -9,6 +9,7 @@ from os import environ as env
 import arrow
 from arrow.parser import ParserError
 from dacite import Config, from_dict
+from dacite.exceptions import DaciteFieldError
 from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import MultiPoint, Point, box
 
@@ -54,7 +55,10 @@ load_dotenv(find_dotenv())
 
 
 def process_requested_flight(
-    requested_flight: dict, flight_injection_sorted_set: str, test_id: str, injection_id: str
+    requested_flight: dict,
+    flight_injection_sorted_set: str,
+    test_id: str,
+    injection_id: str,
 ) -> tuple[RIDTestInjection, list[LatLngPoint], list[float]]:
     """
     Processes a requested flight by parsing flight details and telemetry data, storing relevant information in Redis,
@@ -87,6 +91,15 @@ def process_requested_flight(
     provided_flight_details = requested_flight["details_responses"]
     my_database_writer = FlightBlenderDatabaseWriter()
 
+    MANDATORY_TELEMETRY_FIELDS = [
+        "timestamp",
+        "timestamp_accuracy",
+        "position",
+        "track",
+        "speed",
+        "speed_accuracy",
+        "vertical_speed",
+    ]
     for provided_flight_detail in provided_flight_details:
         fd = provided_flight_detail["details"]
 
@@ -137,8 +150,17 @@ def process_requested_flight(
 
     # Iterate over telemetry details provided
     for telemetry_id, provided_telemetry in enumerate(provided_telemetries):
-        pos = provided_telemetry["position"]
+        # Check if all mandatory telemetry fields are present
+        missing_fields = [field for field in MANDATORY_TELEMETRY_FIELDS if field not in provided_telemetry]
+        if missing_fields:
+            logger.warning(f"Telemetry entry {telemetry_id} is missing mandatory fields: {missing_fields}")
+            write_operator_rid_notification.delay(
+                session_id=test_id,
+                message=f"NET0030: RID data stream error, telemetry entry {telemetry_id} is missing mandatory fields: {', '.join(missing_fields)}",
+            )
+            continue
 
+        pos = provided_telemetry["position"]
         # In provided telemetry position and pressure altitude and extrapolated values are optional use if provided else generate them.
         pressure_altitude = pos["pressure_altitude"] if "pressure_altitude" in pos else 0.0
         extrapolated = pos["extrapolated"] if "extrapolated" in pos else False
@@ -175,26 +197,33 @@ def process_requested_flight(
                 message="The mandatory timestamp provided in the telemetry is not in the correct format",
             )
 
-            formatted_timestamp = arrow.now()
-
-        teletemetry_observation = RIDAircraftState(
-            timestamp=RIDTime(value=provided_telemetry["timestamp"], format="RFC3339"),
-            timestamp_accuracy=provided_telemetry["timestamp_accuracy"],
-            operational_status=provided_telemetry["operational_status"],
-            position=position,
-            track=provided_telemetry["track"],
-            speed=provided_telemetry["speed"],
-            speed_accuracy=provided_telemetry["speed_accuracy"],
-            vertical_speed=provided_telemetry["vertical_speed"],
-            height=height,
-        )
-
+        formatted_timestamp = arrow.now()
+        try:
+            telemetry_observation = from_dict(data_class=RIDAircraftState, data=provided_telemetry)
+        except DaciteFieldError:
+            logger.warning(f"Telemetry entry {telemetry_id} is missing mandatory fields: {missing_fields}")
+            write_operator_rid_notification.delay(
+                session_id=test_id,
+                message="NET0030: RID data stream error, telemetry observation has keys is missing ",
+            )
+            continue
+        # teletemetry_observation = RIDAircraftState(
+        #     timestamp=RIDTime(value=provided_telemetry["timestamp"], format="RFC3339"),
+        #     timestamp_accuracy=provided_telemetry["timestamp_accuracy"],
+        #     operational_status=provided_telemetry["operational_status"],
+        #     position=position,
+        #     track=provided_telemetry["track"],
+        #     speed=provided_telemetry["speed"],
+        #     speed_accuracy=provided_telemetry["speed_accuracy"],
+        #     vertical_speed=provided_telemetry["vertical_speed"],
+        #     height=height,
+        # )
         closest_details_response = min(
             all_flight_details,
             key=lambda d: abs(arrow.get(d.effective_after) - formatted_timestamp),
         )
         flight_state_storage = RIDTestDataStorage(
-            flight_state=teletemetry_observation,
+            flight_state=telemetry_observation,
             details_response=closest_details_response,
             aircraft_type=requested_flight["aircraft_type"],
             injection_id=requested_flight["injection_id"],
@@ -202,7 +231,7 @@ def process_requested_flight(
         zadd_struct = {json.dumps(asdict(flight_state_storage)): formatted_timestamp.int_timestamp}
         # Add these as a sorted set in Redis
         r.zadd(flight_injection_sorted_set, zadd_struct)
-        all_telemetry.append(teletemetry_observation)
+        all_telemetry.append(telemetry_observation)
 
     _requested_flight = RIDTestInjection(
         aircraft_type=requested_flight["aircraft_type"],

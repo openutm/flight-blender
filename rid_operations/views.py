@@ -102,7 +102,12 @@ class SubscriptionsHelper:
         return subscription_found
 
     def create_new_rid_subscription(
-        self, request_id: str, subscription_duration_seconds: int, view: str, vertex_list: list, is_simulated: bool
+        self,
+        request_id: str,
+        subscription_duration_seconds: int,
+        view: str,
+        vertex_list: list,
+        is_simulated: bool,
     ) -> SubscriptionResponse:
         my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
         subscription_r = my_dss_subscriber.create_dss_subscription(
@@ -165,7 +170,11 @@ def create_dss_subscription(request, *args, **kwargs):
 
     my_subscription_helper = SubscriptionsHelper()
     subscription_r = my_subscription_helper.create_new_rid_subscription(
-        request_id=request_id, vertex_list=vertex_list, view=view, is_simulated=False, subscription_duration_seconds=30
+        request_id=request_id,
+        vertex_list=vertex_list,
+        view=view,
+        is_simulated=False,
+        subscription_duration_seconds=30,
     )
 
     if subscription_r.created:
@@ -276,12 +285,21 @@ def dss_isa_callback(request, isa_id):
                 else:
                     updated_service_areas_db.append(service_area)
 
-            flights_record = RIDFlightsRecord(service_areas=updated_service_areas_db, subscription=subscription, extents=extents)
+            flights_record = RIDFlightsRecord(
+                service_areas=updated_service_areas_db,
+                subscription=subscription,
+                extents=extents,
+            )
             # Update flight details in the database
             my_database_writer = FlightBlenderDatabaseWriter()
             my_database_writer.update_flight_details_in_rid_subscription_record(
                 existing_subscription_record=existing_subscription_record,
-                flights_dict=json.dumps(asdict(flights_record, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)})),
+                flights_dict=json.dumps(
+                    asdict(
+                        flights_record,
+                        dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)},
+                    )
+                ),
             )
 
     return HttpResponse(status=204, content_type=RESPONSE_CONTENT_TYPE)
@@ -301,7 +319,10 @@ def get_flight_data(request, flight_id):
         flight_detail = from_dict(data_class=RIDFlightDetails, data=json.loads(flight_details))
 
         flight_details_full = OperatorDetailsSuccessResponse(details=flight_detail)
-        flight_details_response = asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)})
+        flight_details_response = asdict(
+            flight_details_full,
+            dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)},
+        )
         return JsonResponse(json.loads(json.dumps(flight_details_response)), status=200)
     else:
         fd = FlightDetailsNotFoundMessage(message="The requested flight could not be found")
@@ -528,7 +549,10 @@ def user_notifications(request):
     all_notifications = []
     for user_notification in all_user_notifications:
         time = ImplicitDict.parse({"value": user_notification.created_at, "format": "RFC3339"}, Time)
-        user_notification = ImplicitDict.parse({"message": user_notification.message, "observed_at": time}, UserNotification)
+        user_notification = ImplicitDict.parse(
+            {"message": user_notification.message, "observed_at": time},
+            UserNotification,
+        )
         all_notifications.append(user_notification)
 
     user_notifications = ImplicitDict.parse({"user_notifications": all_notifications}, ServiceProviderUserNotifications)
