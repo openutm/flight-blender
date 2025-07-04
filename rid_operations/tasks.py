@@ -54,6 +54,13 @@ logger = logging.getLogger("django")
 load_dotenv(find_dotenv())
 
 
+@app.task(name="write_operator_rid_notification")
+def write_operator_rid_notification(message: str, session_id: str):
+    operator_rid_notification = OperatorRIDNotificationCreationPayload(message=message, session_id=session_id)
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)
+
+
 def process_requested_flight(
     requested_flight: dict,
     flight_injection_sorted_set: str,
@@ -152,19 +159,31 @@ def process_requested_flight(
     # Iterate over telemetry details provided
     for telemetry_id, provided_telemetry in enumerate(provided_telemetries):
         # Check if all mandatory telemetry fields are present
-        missing_fields = [field for field in MANDATORY_TELEMETRY_FIELDS if field not in provided_telemetry]
+
+        missing_fields = [field for field in MANDATORY_TELEMETRY_FIELDS if field not in provided_telemetry or provided_telemetry[field] is None]
+        logger.debug("Processing telemetry entry %s", telemetry_id)
+        logger.debug(f"Number of missing fields: {len(missing_fields)}")
         if missing_fields:
-            logger.warning(f"Telemetry entry {telemetry_id} is missing mandatory fields: {missing_fields}")
+            logger.info("Missing telemetry fields, in telemetry: %s", missing_fields)
+
+            logger.info(f"Telemetry entry {telemetry_id} is missing mandatory fields: {missing_fields}")
             write_operator_rid_notification.delay(
                 session_id=test_id,
                 message=f"NET0030: RID data stream error, telemetry entry {telemetry_id} is missing mandatory fields: {', '.join(missing_fields)}",
             )
             continue
 
-        missing_position_fields = [field for field in MANDATORY_POSITION_FIELDS if field not in provided_telemetry["position"]]
+        missing_position_fields = [
+            field
+            for field in MANDATORY_POSITION_FIELDS
+            if field not in provided_telemetry["position"] or provided_telemetry["position"][field] is None
+        ]
+        logger.debug("Processing position entry %s", telemetry_id)
+        logger.debug(f"Number of missing position fields: {len(missing_position_fields)}")
         if missing_position_fields:
+            logger.info("Missing position fields: %s", missing_position_fields)
             logger.warning(f"Telemetry position data is missing mandator fields: {missing_fields}")
-            write_incoming_air_traffic_data.delay(
+            write_operator_rid_notification.delay(
                 session_id=test_id,
                 message=f"NET0030: RID data stream error, telemetry position entry is missing mandatory fields: {', '.join(missing_fields)}",
             )
@@ -209,25 +228,26 @@ def process_requested_flight(
 
         formatted_timestamp = arrow.now()
         try:
-            telemetry_observation = from_dict(data_class=RIDAircraftState, data=provided_telemetry)
-        except DaciteFieldError:
-            logger.warning(f"Telemetry entry {telemetry_id} is missing mandatory fields: {missing_fields}")
-            write_operator_rid_notification.delay(
-                session_id=test_id,
-                message="NET0030: RID data stream error, telemetry observation has keys is missing ",
+            telemetry_observation = RIDAircraftState(
+                timestamp=RIDTime(value=provided_telemetry["timestamp"], format="RFC3339"),
+                timestamp_accuracy=provided_telemetry["timestamp_accuracy"],
+                operational_status=provided_telemetry["operational_status"],
+                position=position,
+                track=provided_telemetry["track"],
+                speed=provided_telemetry["speed"],
+                speed_accuracy=provided_telemetry["speed_accuracy"],
+                vertical_speed=provided_telemetry["vertical_speed"],
+                height=height,
             )
+        except DaciteFieldError as e:
+            logger.error(
+                "Error in parsing telemetry observation: %s. Error: %s",
+                provided_telemetry,
+                e,
+            )
+            logger.info("Skipping telemetry observation due to parsing error. Please check the provided telemetry data.")
             continue
-        # teletemetry_observation = RIDAircraftState(
-        #     timestamp=RIDTime(value=provided_telemetry["timestamp"], format="RFC3339"),
-        #     timestamp_accuracy=provided_telemetry["timestamp_accuracy"],
-        #     operational_status=provided_telemetry["operational_status"],
-        #     position=position,
-        #     track=provided_telemetry["track"],
-        #     speed=provided_telemetry["speed"],
-        #     speed_accuracy=provided_telemetry["speed_accuracy"],
-        #     vertical_speed=provided_telemetry["vertical_speed"],
-        #     height=height,
-        # )
+
         closest_details_response = min(
             all_flight_details,
             key=lambda d: abs(arrow.get(d.effective_after) - formatted_timestamp),
@@ -381,6 +401,7 @@ def stream_rid_test_data(requested_flights, test_id):
         all_requested_flights.append(processed_flight)
 
     start_time_of_injection_list = r.zrange(flight_injection_sorted_set, 0, 0, withscores=True)
+
     start_time_of_injections = arrow.get(start_time_of_injection_list[0][1])
 
     # Computing when the requested flight data will end
@@ -565,13 +586,6 @@ def stream_rid_test_data(requested_flights, test_id):
             _stream_data(query_time=query_time)
 
         time.sleep(0.3)
-
-
-@app.task(name="write_operator_rid_notification")
-def write_operator_rid_notification(message: str, session_id: str):
-    operator_rid_notification = OperatorRIDNotificationCreationPayload(message=message, session_id=session_id)
-    my_database_writer = FlightBlenderDatabaseWriter()
-    my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)
 
 
 @app.task(name="check_rid_stream_conformance")
