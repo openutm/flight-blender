@@ -219,117 +219,114 @@ class RemoteIDOperations:
             assert error is None
         except AssertionError:
             return isa_creation_response
-        else:
-            # A token from authority was received,
 
-            dss_isa_create_url = self.dss_base_url + "rid/v2/dss/identification_service_areas/" + new_isa_id
+        # A token from authority was received,
 
-            # check if a subscription already exists for this view_port
+        dss_isa_create_url = self.dss_base_url + "rid/v2/dss/identification_service_areas/" + new_isa_id
 
+        # check if a subscription already exists for this view_port
+        headers = {
+            "content-type": RESPONSE_CONTENT_TYPE,
+            "Authorization": "Bearer " + auth_token["access_token"],
+        }
+        p = ISACreationRequest(extents=flight_extents, uss_base_url=uss_base_url)
+        p_dict = asdict(p)
+        try:
+            dss_r = requests.put(
+                dss_isa_create_url,
+                json=json.loads(json.dumps(p_dict)),
+                headers=headers,
+            )
+        except Exception as re:
+            logger.error("Error in posting to DSS URL %s " % re)
+            return isa_creation_response
+
+        try:
+            assert dss_r.status_code == 200
+            isa_creation_response.created = 1
+        except AssertionError:
+            logger.error("Error in creating ISA in the DSS %s" % dss_r.text)
+            return isa_creation_response
+
+        dss_response = dss_r.json()
+        dss_response_service_area = dss_response["service_area"]
+        service_area = IdentificationServiceArea(
+            uss_base_url=dss_response_service_area["uss_base_url"],
+            owner=dss_response_service_area["owner"],
+            time_start=RIDTime(
+                value=dss_response_service_area["time_start"]["value"],
+                format=dss_response_service_area["time_start"]["format"],
+            ),
+            time_end=RIDTime(
+                value=dss_response_service_area["time_end"]["value"],
+                format=dss_response_service_area["time_end"]["format"],
+            ),
+            version=dss_response_service_area["version"],
+            id=dss_response_service_area["id"],
+        )
+
+        dss_response_subscribers = dss_response["subscribers"]
+
+        dss_r_subs: list[SubscriberToNotify] = []
+        for subscriber in dss_response_subscribers:
+            subs = subscriber["subscriptions"]
+            all_s = []
+            for sub in subs:
+                s = SubscriptionState(
+                    subscription_id=sub["subscription_id"],
+                    notification_index=sub["notification_index"],
+                )
+                all_s.append(asdict(s))
+
+            subscriber_to_notify = SubscriberToNotify(url=subscriber["url"], subscriptions=all_s)
+            dss_r_subs.append(subscriber_to_notify)
+
+        for subscriber in dss_r_subs:
+            url = f"{subscriber.url}/uss/identification_service_areas/{new_isa_id}"
+            try:
+                ext = tldextract.extract(subscriber.url)
+            except Exception:
+                uss_audience = "localhost"
+            else:
+                if ext.domain in [
+                    "localhost",
+                    "internal",
+                    "localutm",
+                ]:  # for host.docker.internal type calls
+                    uss_audience = "localhost"
+                else:
+                    uss_audience = ".".join(ext[:3])  # get the subdomain, domain and suffix and create a audience and get credentials
+
+            # Notify subscribers
+            payload = {
+                "service_area": asdict(service_area),
+                "subscriptions": subscriber.subscriptions,
+                "extents": json.loads(json.dumps(asdict(flight_extents))),
+            }
+
+            auth_credentials = my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
-                "Authorization": "Bearer " + auth_token["access_token"],
+                "Authorization": "Bearer " + auth_credentials["access_token"],
             }
-            p = ISACreationRequest(extents=flight_extents, uss_base_url=uss_base_url)
-            p_dict = asdict(p)
             try:
-                dss_r = requests.put(
-                    dss_isa_create_url,
-                    json=json.loads(json.dumps(p_dict)),
-                    headers=headers,
-                )
+                response = requests.post(url, headers=headers, json=json.loads(json.dumps(payload)))
             except Exception as re:
-                logger.error("Error in posting to DSS URL %s " % re)
-                return isa_creation_response
+                logger.error(f"Error in sending subscriber notification to {url} :  {re} ")
+            if response.status_code == 204:
+                logger.info("Successfully notified subscriber %s" % url)
 
-            try:
-                assert dss_r.status_code == 200
-                isa_creation_response.created = 1
-            except AssertionError:
-                logger.error("Error in creating ISA in the DSS %s" % dss_r.text)
-                return isa_creation_response
-            else:
-                dss_response = dss_r.json()
-                dss_response_service_area = dss_response["service_area"]
-                service_area = IdentificationServiceArea(
-                    uss_base_url=dss_response_service_area["uss_base_url"],
-                    owner=dss_response_service_area["owner"],
-                    time_start=RIDTime(
-                        value=dss_response_service_area["time_start"]["value"],
-                        format=dss_response_service_area["time_start"]["format"],
-                    ),
-                    time_end=RIDTime(
-                        value=dss_response_service_area["time_end"]["value"],
-                        format=dss_response_service_area["time_end"]["format"],
-                    ),
-                    version=dss_response_service_area["version"],
-                    id=dss_response_service_area["id"],
-                )
+        logger.info("Successfully created a DSS ISA %s" % new_isa_id)
+        # iterate over the service areas to get flights URL to poll
+        isa_key = "isa-" + service_area.id
+        isa_seconds_timedelta = timedelta(seconds=expiration_time_seconds)
+        self.r.set(isa_key, 1)
+        self.r.expire(name=isa_key, time=isa_seconds_timedelta)
+        isa_creation_response.created = 1
+        isa_creation_response.service_area = service_area
+        isa_creation_response.subscribers = dss_r_subs
 
-                dss_response_subscribers = dss_response["subscribers"]
-
-                dss_r_subs: list[SubscriberToNotify] = []
-                for subscriber in dss_response_subscribers:
-                    subs = subscriber["subscriptions"]
-                    all_s = []
-                    for sub in subs:
-                        s = SubscriptionState(
-                            subscription_id=sub["subscription_id"],
-                            notification_index=sub["notification_index"],
-                        )
-                        all_s.append(asdict(s))
-
-                    subscriber_to_notify = SubscriberToNotify(url=subscriber["url"], subscriptions=all_s)
-                    dss_r_subs.append(subscriber_to_notify)
-
-                for subscriber in dss_r_subs:
-                    url = f"{subscriber.url}/uss/identification_service_areas/{new_isa_id}"
-                    try:
-                        ext = tldextract.extract(subscriber.url)
-                    except Exception:
-                        uss_audience = "localhost"
-                    else:
-                        if ext.domain in [
-                            "localhost",
-                            "internal",
-                            "localutm",
-                        ]:  # for host.docker.internal type calls
-                            uss_audience = "localhost"
-                        else:
-                            uss_audience = ".".join(ext[:3])  # get the subdomain, domain and suffix and create a audience and get credentials
-
-                    # Notify subscribers
-                    payload = {
-                        "service_area": asdict(service_area),
-                        "subscriptions": subscriber.subscriptions,
-                        "extents": json.loads(json.dumps(asdict(flight_extents))),
-                    }
-
-                    auth_credentials = my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")
-                    headers = {
-                        "content-type": RESPONSE_CONTENT_TYPE,
-                        "Authorization": "Bearer " + auth_credentials["access_token"],
-                    }
-                    try:
-                        response = requests.post(url, headers=headers, json=json.loads(json.dumps(payload)))
-                    except Exception as re:
-                        logger.error(f"Error in sending subscriber notification to {url} :  {re} ")
-                    if response.status_code == 204:
-                        logger.info(response.text)
-                        logger.info(response.status_code)
-                        logger.info("Successfully notified subscriber %s" % url)
-
-                logger.info("Successfully created a DSS ISA %s" % new_isa_id)
-                # iterate over the service areas to get flights URL to poll
-                isa_key = "isa-" + service_area.id
-                isa_seconds_timedelta = timedelta(seconds=expiration_time_seconds)
-                self.r.set(isa_key, 1)
-                self.r.expire(name=isa_key, time=isa_seconds_timedelta)
-                isa_creation_response.created = 1
-                isa_creation_response.service_area = service_area
-                isa_creation_response.subscribers = dss_r_subs
-
-                return asdict(isa_creation_response)
+        return isa_creation_response
 
     def create_dss_subscription(
         self,

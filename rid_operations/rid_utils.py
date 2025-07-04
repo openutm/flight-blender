@@ -134,7 +134,7 @@ class RIDSubscription:
 class ISACreationRequest:
     """A object to hold details of a request that indicates the DSS"""
 
-    extents: Volume4D
+    extents: Volume4D | RIDVolume4D
     uss_base_url: str
 
 
@@ -152,9 +152,9 @@ class IdentificationServiceArea:
 class ISACreationResponse:
     """A object to hold details of a request for creation of an ISA in the DSS"""
 
-    created: bool
+    created: int
     subscribers: list[SubscriberToNotify]
-    service_area: IdentificationServiceArea
+    service_area: IdentificationServiceArea | None
 
 
 class CreateSubscriptionResponse(NamedTuple):
