@@ -152,6 +152,7 @@ class GeoZone(ImplicitDict):
     description: str
     features: list[GeoZoneFeature]
 
+
 @dataclass
 class GeofencePayload:
     id: str
@@ -166,7 +167,7 @@ class GeofencePayload:
     start_datetime: str
     end_datetime: str
     raw_geo_fence: dict
-    geozone : dict
+    geozone: dict
 
 
 class GeoZoneFilterPosition(ImplicitDict):
@@ -217,7 +218,7 @@ class GeoZoneCheckRequestBody(ImplicitDict):
 class GeoZoneCheckResult:
     geozone: Literal[
         GeozoneCheckResultEnum.Present,
-        GeozoneCheckResultEnum.Present,
+        GeozoneCheckResultEnum.Absent,
         GeozoneCheckResultEnum.UnsupportedFilter,
         GeozoneCheckResultEnum.Error,
     ]

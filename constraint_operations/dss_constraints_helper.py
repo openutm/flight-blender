@@ -5,6 +5,7 @@ from dataclasses import asdict
 from enum import Enum
 from os import environ as env
 from urllib.parse import urlparse
+
 import requests
 import urllib3
 from dacite import Config, from_dict
@@ -75,17 +76,13 @@ class ConstraintOperations:
                 _dss_constraint_references = query_constraints_request.json()
                 logger.debug(f"DSS Response {_dss_constraint_references}")
                 constraint_references = _dss_constraint_references["constraint_references"]
-            _constraint_references= []
-            
+            _constraint_references = []
+
             # Query the operational intent reference details
             for constraint_reference in constraint_references:
-                
                 try:
-                
-                    _constraint_reference_tmp = from_dict(data_class=ConstraintReference, data=constraint_reference, config=Config(cast=
-                    [Enum]))
+                    _constraint_reference_tmp = from_dict(data_class=ConstraintReference, data=constraint_reference, config=Config(cast=[Enum]))
 
-                
                 except Exception as e:
                     logger.error("Error in processing constraint reference %s " % e)
                 else:
@@ -97,8 +94,6 @@ class ConstraintOperations:
                 current_uss_base_url = _constraint_reference.uss_base_url
                 _constraint_details_to_process = {}
                 _constraint_reference_to_process = {}
-                
-                
 
                 if current_uss_base_url == flight_blender_base_url:
                     # This constraint is managed in Blender, so we can get the details from the database
@@ -149,15 +144,15 @@ class ConstraintOperations:
                         logger.warning(f"Constraint reference not found in the database, : {_constraint_reference.id}")
                     constraints_retrieved = True
 
-                else:  # This operational intent details is from a peer uss, need to query peer USS                    
+                else:  # This operational intent details is from a peer uss, need to query peer USS
                     uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
-                    uss_auth_token = self.get_auth_token(audience=uss_audience)                    
+                    uss_auth_token = self.get_auth_token(audience=uss_audience)
                     logger.debug(f"Auth Token {uss_auth_token}")
                     uss_headers = {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + uss_auth_token["access_token"],
                     }
-                    
+
                     parsed_url = urlparse(current_uss_base_url)
                     if parsed_url.path:
                         current_uss_base_url = parsed_url.scheme + "://" + parsed_url.netloc
@@ -192,7 +187,7 @@ class ConstraintOperations:
 
                     else:
                         # Verify status of the response from the USS
-                        
+
                         if uss_constraint_request.status_code == 200:
                             retrived_constraints_json = uss_constraint_request.json()
                             constraints_retrieved = True
@@ -223,10 +218,10 @@ class ConstraintOperations:
                     _constraint = Constraint(
                         reference=_constraint_reference_processed,
                         details=_constraint_details_processed,
-                    )                    
+                    )
 
                     all_constraints_in_aoi.append(_constraint)
-                    
+
         return all_constraints_in_aoi
 
     def get_auth_token(self, audience: str = ""):

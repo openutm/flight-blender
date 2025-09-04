@@ -6,6 +6,7 @@ from dacite import from_dict
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import Point
+from shapely.geometry import Polygon as ShapelyPolygon
 
 from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
@@ -19,7 +20,6 @@ from scd_operations.dss_scd_helper import (
     SCDOperations,
 )
 from scd_operations.scd_data_definitions import Polygon
-from shapely.geometry import Polygon as ShapelyPolygon
 
 load_dotenv(find_dotenv())
 
