@@ -3,6 +3,7 @@ import json
 from marshmallow import Schema, fields
 from rest_framework import serializers
 
+from .data_definitions import GeoAwarenessImportResponseEnum, GeoAwarenessStatusResponseEnum, GeozoneCheckResultEnum
 from .models import GeoFence
 
 
@@ -95,3 +96,23 @@ class GeoSpatialMapListSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return obj.get_status_display()
+
+
+class GeoSpatialMapTestHarnessStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=[choice.value for choice in GeoAwarenessStatusResponseEnum])
+    api_version = serializers.CharField(allow_null=True)
+    api_name = serializers.CharField(default="Geospatial Map Provider Automated Testing Interface")
+
+
+class GeoAwarenessTestStatusSerializer(serializers.Serializer):
+    result = serializers.ChoiceField(choices=[choice.value for choice in GeoAwarenessImportResponseEnum])
+    message = serializers.CharField(allow_null=True)
+
+
+class GeoZoneCheckResultSerializer(serializers.Serializer):
+    geozone = serializers.ChoiceField(choices=[choice.value for choice in GeozoneCheckResultEnum])
+
+
+class GeoZoneChecksResponseSerializer(serializers.Serializer):
+    applicableGeozone = GeoZoneCheckResultSerializer(many=True)
+    message = serializers.CharField(allow_null=True)

@@ -3,7 +3,9 @@ from datetime import datetime
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
 from common.data_definitions import ALTITUDE_REF
+
 
 class GeoFence(models.Model):
     """A model for Geofence storage in Flight Blender"""

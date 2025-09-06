@@ -35,17 +35,26 @@ from . import rtree_geo_fence_helper
 from .buffer_helper import toFromUTM
 from .common import validate_geo_zone
 from .data_definitions import (
+    GeoAwarenessImportResponseEnum,
+    GeoAwarenessStatusResponseEnum,
     GeoAwarenessTestStatus,
     GeoFencePutSchema,
     GeoSpatialMapTestHarnessStatus,
     GeoZoneCheckRequestBody,
     GeoZoneCheckResult,
+    GeozoneCheckResultEnum,
     GeoZoneChecksResponse,
     GeoZoneFilterPosition,
     GeoZoneHttpsSource,
 )
 from .models import GeoFence
-from .serializers import GeoFenceSerializer, GeoSpatialMapListSerializer
+from .serializers import (
+    GeoAwarenessTestStatusSerializer,
+    GeoFenceSerializer,
+    GeoSpatialMapListSerializer,
+    GeoSpatialMapTestHarnessStatusSerializer,
+    GeoZoneChecksResponseSerializer,
+)
 from .tasks import download_geozone_source, write_geo_zone
 
 logger = logging.getLogger("django")
@@ -258,20 +267,24 @@ class GeospatialMapList(mixins.ListModelMixin, generics.GenericAPIView):
 
 @method_decorator(requires_scopes(["geo-awareness.test"]), name="dispatch")
 class GeoZoneTestHarnessStatus(generics.GenericAPIView):
+    serializer_class = GeoSpatialMapTestHarnessStatusSerializer
+
     def get(self, request, *args, **kwargs):
-        status = GeoSpatialMapTestHarnessStatus(status="Ready", api_version="latest")
+        status = GeoSpatialMapTestHarnessStatus(status=GeoAwarenessStatusResponseEnum.Ready, api_version="latest")
         return JsonResponse(json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200)
 
 
 @method_decorator(requires_scopes(["geo-awareness.test"]), name="dispatch")
 class GeoZoneSourcesOperations(generics.GenericAPIView):
+    serializer_class = GeoAwarenessTestStatusSerializer
+
     def put(self, request, geozone_source_id):
         r = get_redis()
         try:
             geo_zone_url_details = ImplicitDict.parse(request.data, GeoZoneHttpsSource)
         except KeyError:
             ga_import_response = GeoAwarenessTestStatus(
-                result="Rejected",
+                result=GeoAwarenessImportResponseEnum.Rejected,
                 message="There was an error in processing the request payload, a url and format key is required for successful processing",
             )
             return JsonResponse(
@@ -283,7 +296,9 @@ class GeoZoneSourcesOperations(generics.GenericAPIView):
         try:
             url_validator(geo_zone_url_details.https_source.url)
         except ValidationError:
-            ga_import_response = GeoAwarenessTestStatus(result="Unsupported", message="There was an error in the url provided")
+            ga_import_response = GeoAwarenessTestStatus(
+                result=GeoAwarenessImportResponseEnum.Unsupported, message="There was an error in the url provided"
+            )
             return JsonResponse(
                 json.loads(json.dumps(ga_import_response, cls=EnhancedJSONEncoder)),
                 status=200,
@@ -291,7 +306,7 @@ class GeoZoneSourcesOperations(generics.GenericAPIView):
 
         geoawareness_test_data_store = "geoawarenes_test." + str(geozone_source_id)
 
-        ga_import_response = GeoAwarenessTestStatus(result="Activating", message="")
+        ga_import_response = GeoAwarenessTestStatus(result=GeoAwarenessImportResponseEnum.Activating, message="")
         download_geozone_source.delay(
             geo_zone_url=geo_zone_url_details.https_source.url,
             geozone_source_id=geozone_source_id,
@@ -329,7 +344,7 @@ class GeoZoneSourcesOperations(generics.GenericAPIView):
             for geozone in all_test_geozones.all():
                 geozone.delete()
             deletion_status = GeoAwarenessTestStatus(
-                result="Deactivating",
+                result=GeoAwarenessImportResponseEnum.Deactivating,
                 message="Test data has been scheduled to be deleted",
             )
             r.set(geoawareness_test_data_store, json.dumps(asdict(deletion_status)))
@@ -344,6 +359,8 @@ class GeoZoneSourcesOperations(generics.GenericAPIView):
 
 @method_decorator(requires_scopes(["geo-awareness.test"]), name="dispatch")
 class GeoZoneCheck(generics.GenericAPIView):
+    serializer_class = GeoZoneChecksResponseSerializer
+
     def post(self, request, *args, **kwargs):
         proj = pyproj.Proj("+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs ")
 
@@ -410,11 +427,11 @@ class GeoZoneCheck(generics.GenericAPIView):
                             geo_zones_of_interest = True
 
         if geo_zones_of_interest:
-            geo_zone_check_result = GeoZoneCheckResult(geozone="Present")
+            geo_zone_check_result = GeoZoneCheckResult(geozone=GeozoneCheckResultEnum.Present)
         else:
-            geo_zone_check_result = GeoZoneCheckResult(geozone="Absent")
+            geo_zone_check_result = GeoZoneCheckResult(geozone=GeozoneCheckResultEnum.Absent)
 
-        geo_zone_response = GeoZoneChecksResponse(applicableGeozone=geo_zone_check_result, message="Test")
+        geo_zone_response = GeoZoneChecksResponse(applicableGeozone=[geo_zone_check_result], message="Test")
         return JsonResponse(
             json.loads(json.dumps(geo_zone_response, cls=EnhancedJSONEncoder)),
             status=200,
