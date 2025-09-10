@@ -58,7 +58,12 @@ OPERATOR_EVENT_LOOKUP = {
     4: "operator_initiates_contingent",
 }
 
-VALID_OPERATIONAL_INTENT_STATES = ["Accepted", "Activated", "Nonconforming", "Contingent"]
+VALID_OPERATIONAL_INTENT_STATES = [
+    "Accepted",
+    "Activated",
+    "Nonconforming",
+    "Contingent",
+]
 
 
 RESPONSE_CONTENT_TYPE = "application/json"

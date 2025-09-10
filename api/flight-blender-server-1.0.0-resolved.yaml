@@ -3,9 +3,9 @@ openapi: '3.0.0'
 info:
   title: 'Flight Blender API specification'
   description: |-
-    All the Interfaces for Flight Blender are defined here, using these APIs, you can submit raw air traffic observations, geo fencing data, flight declarations, enable ASTM specified network Remote-ID and U-Space Flight Authorisation (also know as Strategic Deconfliction).
+    This OpenAPI specification defines all interfaces for Flight Blender, including endpoints for submitting raw air traffic observations, geo-fencing data, flight declarations, ASTM-compliant network Remote-ID, and U-Space Flight Authorisation (Strategic Deconfliction).
 
-    Unless otherwise specified, fields specified in a message but not declared in the API shall be ignored.
+    Unless explicitly documented, any fields present in a request but not defined in the API schema will be ignored by the server implementation.
   version: '1.0.0'
 servers:
   - url: 'https://virtserver.swaggerhub.com/cygnus2936/flight-Flight Blender/1.0.0'
@@ -15,8 +15,13 @@ security:
       - 'flight_blender.write'
       - 'flight_blender.read'
   - AuthFromAuthorizationAuthority:
-    - dss.read.identification_service_areas
-    - dss.write.identification_service_areas
+      - utm.strategic_coordination
+      - utm.constraint_management
+      - utm.constraint_processing
+      - utm.conformance_monitoring_sa
+      - utm.availability_arbitration
+      - rid.display_provider
+      - rid.service_provider
 paths:
   /ping:
     get:
@@ -5427,22 +5432,22 @@ components:
 
 tags:
   - name: uss
-    description: Flight Blender allows connections and interactions with the DSS by enabling creation of subscriptions, operational intents to the DSS for ASTM Compliant Remote-ID data, these endpoints detail how the functionality work for creating a DSS subscription and querying the area for Remote-ID data and querying operational intents
+    description: Flight Blender enables connections with the DSS for ASTM-compliant Remote-ID data. These endpoints cover creating DSS subscriptions, submitting operational intents, and querying Remote-ID data and operational intents for a given area.
   - name: rid-qualifier
-    description: RID Qualifier is a set of tests created to check compliance with ASTM remote-id standards, these endpoints implement the Observation API as described by the test suite.
+    description: Endpoints for the RID Qualifier test suite, which verifies compliance with ASTM Remote-ID standards by implementing the Observation API required for automated testing.
   - name: flight-planning-qualifier
-    description: Flight Blender allows connections and interactions with the USSP software testing framework (via InterUSS) for Remote ID and Strategic deconfliction. These endpoints implement the stratetgic deconflication test framework APIs.
+    description: Flight Blender enables integration with the USSP software testing framework (InterUSS) for Remote ID and Strategic Deconfliction. These endpoints implement the strategic deconfliction test framework APIs for automated compliance testing.
   - name: rid
-    description: Flight Blender allows connections and interactions with the DSS by enabling creation of subscriptions to the DSS for Remote-ID data, these endpoints detail how the functionality work for creating a DSS subscription and querying the area for Remote-ID data.
+    description: Flight Blender enables integration with the DSS for ASTM-compliant Remote-ID data. These endpoints cover creating DSS subscriptions, submitting operational intents, and querying Remote-ID data and operational intents for a given area.
   - name: air-traffic
-    description: Airtraffic data from sensors such as ADS-B, FLARM etc. can be integrated into Flight Blender, Flight Blender will normalize the traffic and send it to the Display and or other API endpoints. Use these endpoints to submit / query air-traffic data.
+    description: Integrate air traffic data from sensors (e.g., ADS-B, FLARM) into Flight Blender. Flight Blender normalizes this data and makes it available to display applications and other API endpoints. Use these endpoints to submit or query air traffic data.
   - name: flight-declarations
-    description: Using tools like Flight Spotlight (see Openskies Github) you can submit declarations of flight for approval / review to the Flight Blender system. These endpoints define how flight declarations / operational intents can be created.
+    description: Endpoints for submitting, reviewing, and managing flight declarations and operational intents in Flight Blender. Use these APIs to create, approve, update, or delete flight declarations, and to query their status or details.
   - name: geo-fence
-    description: You can submit geo-fences as GeoJSON into Flight Blender, Flight Blender will convert the GeoJSON to a ED-269 Geofence in the background, use these operations into Flight Blender.
+    description: Submit geo-fences as GeoJSON to Flight Blender. Flight Blender will automatically convert the GeoJSON to an ED-269-compliant geofence in the background. Use these endpoints to manage geo-fences in Flight Blender.
   - name: geozone-qualifier
-    description: The InterUSS monitoring test suite has developed a series of tests to check compliance for ED-269 geofences as part of the EU U-Space regulations, these endpoints interact with the qualifier test suite.
+    description: Endpoints for the InterUSS monitoring test suite, which verify compliance with ED-269 geozone requirements under EU U-Space regulations. These APIs interact with the qualifier test suite to test geozone handling and compliance.
   - name: telemetry
-    description: Flight Blender enables GCS and trackers to submit telemetry data for processes, use this end point to submit the telemetry data.
+    description: Flight Blender allows GCS and trackers to submit telemetry data. Use these endpoints to send telemetry observations for processing and integration with other Flight Blender services.
   - name: message-signing-verification
-    description: Flight Blender provides security related features for signing of requests and responses. These endpoints provide data about public keys that can used to verify messages on Flight Blender and also in environments outside Flight Blender
+    description: Flight Blender provides security features for signing requests and responses. These endpoints allow you to manage public keys used to verify signed messages both within Flight Blender and in external environments.
