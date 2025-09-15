@@ -23,10 +23,18 @@ urlpatterns = [
     path("set_geozone", geo_fence_views.set_geozone),
     path("geo_fence", geo_fence_views.GeoFenceList.as_view()),
     path("geo_fence/<uuid:pk>", geo_fence_views.GeoFenceDetail.as_view()),
+    path(
+        "geo_fence/<uuid:pk>/delete",
+        geo_fence_views.GeoFenceDelete.as_view(),
+        name="geo-fence-delete",
+    ),
     # End points for automated testing interface
     path("geo_awareness/status", geo_fence_views.GeoZoneTestHarnessStatus.as_view()),
     # End points for automated testing interface
-    path("geo_awareness/geospatial_data_sources", geo_fence_views.GeospatialMapList.as_view()),
+    path(
+        "geo_awareness/geospatial_data_sources",
+        geo_fence_views.GeospatialMapList.as_view(),
+    ),
     path(
         "geo_awareness/geospatial_data_sources/<uuid:geozone_source_id>",
         geo_fence_views.GeoZoneSourcesOperations.as_view(),

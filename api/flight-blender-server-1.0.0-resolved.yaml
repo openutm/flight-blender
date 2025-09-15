@@ -1769,6 +1769,53 @@ paths:
       tags:
         - geo-fence
 
+
+  /geo_fence_ops/geo_fence/{geo_fence_id}/delete:
+    delete:
+      parameters:
+        - in: path
+          name: geo_fence_id
+          description: 'This is the ID of the geo fence'
+          schema:
+            type: string
+            format: uuid
+          required: true
+
+      summary: 'Delete the specified geo fence from Flight Blender'
+      security:
+        - AuthFromPassport: [flight_blender.write]
+      description: "Delete a geo fence, used by verification framework to tear down tests."
+
+      responses:
+        '204':
+          description: The Geo Fence has been deleted
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - geo-fence
+
   /geo_fence_ops/geo_awareness/status:
     get:
       operationId: GetStatus
@@ -2095,11 +2142,11 @@ components:
     AuthFromPassport:
       type: oauth2
       description: |-
-        Flight Blender utilizes JWT tokens issued by a OAUTH server. This can be configured as an environment variable. In this case we recommend using / deploying a Authorization Server: Flight Passport. For more information see https://id.openskies.sh
+        Flight Blender utilizes JWT tokens issued by a OAUTH server. This can be configured as an environment variable. In this case we recommend using / deploying a Authorization Server: Flight Passport. For more information see https://github.com/openutm/flight-passport
 
       flows:
         clientCredentials:
-          tokenUrl: 'http://id.openskies.sh/oauth/token'
+          tokenUrl: 'http://passport.openutm.net/oauth/token'
           scopes:
             flight_blender.write: 'Write data into Flight Blender'
             flight_blender.read: 'Read data into Flight Blender'

@@ -11,7 +11,7 @@ import arrow
 import pyproj
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from implicitdict import ImplicitDict
 from marshmallow import ValidationError
@@ -152,6 +152,26 @@ def set_geozone(request):
     else:
         msg = json.dumps({"message": "A valid geozone object with a description is necessary the body of the request"})
         return HttpResponse(msg, status=status.HTTP_400_BAD_REQUEST, content_type="application/json")
+
+
+@method_decorator(requires_scopes([FLIGHTBLENDER_WRITE_SCOPE]), name="dispatch")
+class GeoFenceDelete(generics.DestroyAPIView):
+    serializer_class = GeoFenceSerializer
+
+    def get_object(self):
+        declaration_id = self.kwargs.get("declaration_id")
+        try:
+            return GeoFence.objects.get(pk=declaration_id)
+        except GeoFence.DoesNotExist:
+            raise Http404
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            geo_fence = self.get_object()
+            geo_fence.delete()
+            return HttpResponse(status=status.HTTP_204_NO_CONTENT)
+        except Http404:
+            return HttpResponse(status=status.HTTP_404_NOT_FOUND)
 
 
 @method_decorator(requires_scopes([FLIGHTBLENDER_READ_SCOPE]), name="dispatch")
