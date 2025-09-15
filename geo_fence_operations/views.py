@@ -159,9 +159,9 @@ class GeoFenceDelete(generics.DestroyAPIView):
     serializer_class = GeoFenceSerializer
 
     def get_object(self):
-        declaration_id = self.kwargs.get("declaration_id")
+        geofence_id = self.kwargs.get("pk")
         try:
-            return GeoFence.objects.get(pk=declaration_id)
+            return GeoFence.objects.get(pk=geofence_id)
         except GeoFence.DoesNotExist:
             raise Http404
 
