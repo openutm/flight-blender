@@ -168,7 +168,7 @@ class FlightDeclarationRequestValidator:
         return result
 
 
-@method_decorator(requires_scopes(["FLIGHTBLENDER_WRITE_SCOPE"]), name="dispatch")
+@method_decorator(requires_scopes([FLIGHTBLENDER_WRITE_SCOPE]), name="dispatch")
 class FlightDeclarationDelete(generics.DestroyAPIView):
     serializer_class = FlightDeclarationApprovalSerializer
 
