@@ -1,7 +1,10 @@
 import logging
 
 import arrow
+import geojson
+from geojson import Feature, FeatureCollection
 from pyproj import Geod
+from shapely.geometry import Point, shape
 
 from common.data_definitions import (
     DEFAULT_UAV_CLIMB_RATE_M_PER_S,
@@ -15,21 +18,22 @@ from scd_operations.scd_data_definitions import (
     Volume3D,
     Volume4D,
 )
+from scd_operations.scd_data_definitions import Polygon as Plgn
 
 logger = logging.getLogger("django")
-from geojson import Feature, FeatureCollection
 
 
 class CustomVolumeGenerator:
     def __init__(
         self,
-        default_uav_speed_m_per_s: float | str,
-        default_uav_climb_rate_m_per_s: float | str,
-        default_uav_descent_rate_m_per_s: float | str,
+        default_uav_speed_m_per_s: float,
+        default_uav_climb_rate_m_per_s: float,
+        default_uav_descent_rate_m_per_s: float,
     ):
-        self.default_uav_speed_m_per_s = float(default_uav_speed_m_per_s)
-        self.default_uav_climb_rate_m_per_s = float(default_uav_climb_rate_m_per_s)
-        self.default_uav_descent_rate_m_per_s = float(default_uav_descent_rate_m_per_s)
+        self.default_uav_speed_m_per_s = default_uav_speed_m_per_s
+        self.default_uav_climb_rate_m_per_s = default_uav_climb_rate_m_per_s
+        self.default_uav_descent_rate_m_per_s = default_uav_descent_rate_m_per_s
+        self.all_features = []
 
     def _break_linestring_to_smaller_pieces(self, line_feature: Feature, piece_length_m: float = 5.5) -> list[Feature]:
         """
@@ -98,7 +102,7 @@ class CustomVolumeGenerator:
                 properties=line_feature["properties"],
             )
             new_features.append(new_feature)
-
+        logger.info(f"Broken into {len(new_features)} pieces.")
         return new_features
 
     def build_v4d_from_geojson(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
@@ -117,7 +121,7 @@ class CustomVolumeGenerator:
                 start_datetime=start_datetime,
                 end_datetime=end_datetime,
             )
-        elif collection_type == "all_polygons" or collection_type == "linestrings_and_polygons":
+        else:
             return self.build_v4d_from_mixed_polygons_and_linestrings(
                 geo_json_fc=geo_json_fc,
                 start_datetime=start_datetime,
@@ -176,23 +180,84 @@ class CustomVolumeGenerator:
             - Time calculations use the 'arrow' library for datetime manipulation.
             - Buffering is applied to the geometry for safety margins.
         """
+        geo_json_features = geo_json_fc["features"]
+        # sort the features based on the id property
+        geo_json_features.sort(key=lambda x: x["properties"].get("id", 0))
+        geo_json_fc["features"] = geo_json_features
         all_v4d = []
         _takeoff_start = arrow.get(start_datetime).shift(seconds=1).isoformat()
         _landing_time = arrow.get(end_datetime).shift(seconds=-1).isoformat()
+
+        # Get the first coordinate of the first feature to determine the takeoff location
+        first_feature = geo_json_fc["features"][0]
+
+        last_feature = geo_json_fc["features"][-1]
+        first_coord = first_feature["geometry"]["coordinates"][0]
+        last_coord = last_feature["geometry"]["coordinates"][-1]
+        takeoff_location = LatLngPoint(lat=first_coord[1], lng=first_coord[0])
+        landing_location = LatLngPoint(
+            lat=last_coord[1],
+            lng=last_coord[0],
+        )
+
+        # Buffer the first coordinate to create a takeoff volume
+        takeoff_point = Point(takeoff_location.lng, takeoff_location.lat)
+        buffered_takeoff = takeoff_point.buffer(0.0005)
+
+        coordinates = list(zip(*buffered_takeoff.exterior.coords.xy))
+        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+
+        max_altitude = first_feature["properties"]["max_altitude"]["meters"]
+        min_altitude = first_feature["properties"]["min_altitude"]["meters"]
+
+        volume_3d_takeoff = Volume3D(
+            outline_polygon=Plgn(vertices=polygon_vertices),
+            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+        )
+
+        volume_4d_takeoff = Volume4D(
+            volume=volume_3d_takeoff,
+            time_start=Time(format="RFC3339", value=start_datetime),
+            time_end=Time(format="RFC3339", value=_takeoff_start),
+        )
+
+        all_v4d.append(volume_4d_takeoff)
+
+        # Buffer the last coordinate to create a landing volume
+
+        landing_point = Point(landing_location.lng, landing_location.lat)
+        buffered_landing = landing_point.buffer(0.0005)
+        coordinates = list(zip(*buffered_landing.exterior.coords.xy))
+        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+        volume_3d_landing = Volume3D(
+            outline_polygon=Plgn(vertices=polygon_vertices),
+            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+        )
+
+        volume_4d_landing = Volume4D(
+            volume=volume_3d_landing,
+            time_start=Time(format="RFC3339", value=_landing_time),
+            time_end=Time(format="RFC3339", value=end_datetime),
+        )
+
+        all_v4d.append(volume_4d_landing)
+
         for feature in geo_json_fc["features"]:
             max_altitude = feature["properties"]["max_altitude"]["meters"]
             min_altitude = feature["properties"]["min_altitude"]["meters"]
 
-            broken_down_features = self._break_linestring_to_smaller_pieces(line_feature=feature, piece_length_m=DEFAULT_UAV_SPEED_M_PER_S)
+            broken_down_features = self._break_linestring_to_smaller_pieces(line_feature=feature, piece_length_m=self.default_uav_speed_m_per_s * 3)
 
             num_pieces = len(broken_down_features)
-            total_flight_time_s = num_pieces / DEFAULT_UAV_SPEED_M_PER_S
-            climb_time_s = abs(max_altitude - min_altitude) / DEFAULT_UAV_CLIMB_RATE_M_PER_S
-            descent_time_s = abs(max_altitude - min_altitude) / DEFAULT_UAV_DESCENT_RATE_M_PER_S
+            total_flight_time_s = num_pieces / self.default_uav_speed_m_per_s
+            climb_time_s = abs(max_altitude - min_altitude) / self.default_uav_climb_rate_m_per_s
+            descent_time_s = abs(max_altitude - min_altitude) / self.default_uav_descent_rate_m_per_s
             adjusted_flight_time_s = total_flight_time_s + climb_time_s + descent_time_s
 
             for idx, piece in enumerate(broken_down_features):
-                piece_start_time = arrow.get(_takeoff_start).shift(seconds=int(idx / DEFAULT_UAV_SPEED_M_PER_S + climb_time_s)).isoformat()
+                piece_start_time = arrow.get(_takeoff_start).shift(seconds=int(idx / self.default_uav_speed_m_per_s + climb_time_s)).isoformat()
                 piece_end_time = arrow.get(piece_start_time).shift(seconds=int(adjusted_flight_time_s)).isoformat()
 
                 piece_geom = piece["geometry"]
@@ -218,6 +283,6 @@ class CustomVolumeGenerator:
         # Check if the last piece's end time matches the landing time
         if all_v4d and all_v4d[-1].time_end.value != _landing_time:
             logger.warning(f"Piece end time {all_v4d[-1].time_end.value} does not match landing time {_landing_time}")
-            logger.info("The landing time is computed using the default UAV speed.")
+            logger.info("The landing time has been changed and is computed using the default UAV speed.")
 
         return all_v4d

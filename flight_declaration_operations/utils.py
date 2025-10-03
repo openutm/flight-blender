@@ -1,3 +1,4 @@
+import json
 import logging
 from dataclasses import asdict
 from os import environ as env
@@ -5,8 +6,8 @@ from os import environ as env
 import arrow
 import shapely.geometry
 from dotenv import find_dotenv, load_dotenv
-from geojson import Feature, FeatureCollection
-from pyproj import Geod, Proj
+from geojson import FeatureCollection
+from pyproj import Proj
 from shapely.geometry import Point, Polygon, shape
 from shapely.ops import unary_union
 
@@ -160,8 +161,10 @@ class OperationalIntentsConverter:
         Returns:
             None
         """
+
         for volume in volumes:
             geo_json_features = self._convert_operational_intent_to_geojson_feature(volume)
+
             self.geo_json["features"] += geo_json_features
 
     def create_partial_operational_intent_ref(
@@ -213,11 +216,20 @@ class OperationalIntentsConverter:
                 default_uav_climb_rate_m_per_s=DEFAULT_UAV_CLIMB_RATE_M_PER_S,
                 default_uav_descent_rate_m_per_s=DEFAULT_UAV_DESCENT_RATE_M_PER_S,
             )
-            return custom_volume_generator.build_v4d_from_geojson(
+
+            for feature in geo_json_fc["features"]:
+                geom = feature["geometry"]
+                shapely_geom = shape(geom)
+                buffered_geom = shapely_geom.buffer(0.0005)
+                self.all_features.append(buffered_geom)
+            all_volumes = custom_volume_generator.build_v4d_from_geojson(
                 geo_json_fc=geo_json_fc,
                 start_datetime=start_datetime,
                 end_datetime=end_datetime,
             )
+
+            self.convert_operational_intent_to_geo_json(all_volumes)
+            return all_volumes
         else:
             all_v4d = []
             for feature in geo_json_fc["features"]:
