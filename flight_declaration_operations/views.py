@@ -213,7 +213,7 @@ def set_flight_declaration(request):
     if error_response:
         return JsonResponse(error_response, status=status_code)
 
-    my_database_writer = FlightBlenderDatabaseWriter()
+    
     USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
     submitted_by = request_data.get("submitted_by")
 
