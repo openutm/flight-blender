@@ -61,6 +61,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
+  /surveillance_monitoring_operations/health:
+    get:
+      summary: 'Surveillance service status'
+      description: 'Retrieve the current operational status of the surveillance monitoring service.'
+      security:
+        - AuthFromPassport: [flight_blender.read]
+      responses:
+        '200':
+          description: Surveillance service status retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthMessage'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance
   /signing_public_key:
     get:
       summary: 'Flight Blender Signing Public Key'
@@ -993,6 +1032,7 @@ paths:
           description: A UUID string identifying the session id associated with observation, if the session_id does not exist, observations received 20 seconds before now.
           schema:
             type: string
+          required: true
 
 
       summary: 'Get Airtraffic observation(s)'
@@ -2465,6 +2505,45 @@ components:
           items:
             $ref: '#/components/schemas/Volume4D'
           default: []
+
+    SurveillanceStatus:
+      type: string
+      description: Operational status of the surveillance service.
+      enum:
+        - OPERATIONAL
+        - DEGRADED
+        - OUTAGE
+
+    HealthMessage:
+      type: object
+      description: Health information for the surveillance monitoring service.
+      required:
+        - sdsp_identifier
+        - current_status
+        - machine_readable_file_of_estimated_coverage
+        - scheduled_degrations
+        - timestamp
+      properties:
+        sdsp_identifier:
+          type: string
+          description: Identifier of the Surveillance Data Service Provider (SDSP).
+          example: SDSP123
+        current_status:
+          $ref: '#/components/schemas/SurveillanceStatus'
+        machine_readable_file_of_estimated_coverage:
+          type: string
+          format: uri
+          description: URL to a machine-readable file describing estimated coverage.
+          example: 'http://example.com/coverage'
+        scheduled_degrations:
+          type: string
+          description: Scheduled degradations or maintenance windows.
+          example: 'None'
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of the health status.
+          example: '2024-10-01T12:00:00Z'
 
     ExecutionStyle:
       type: string

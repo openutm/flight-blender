@@ -90,7 +90,9 @@ TEMPLATES = [
     },
 ]
 
+
 WSGI_APPLICATION = "flight_blender.wsgi.application"
+ASGI_APPLICATION = "flight_blender.asgi.application"
 
 
 # Database
@@ -152,6 +154,18 @@ if DEBUG:
     BROKER_URL = os.getenv("REDIS_BROKER_URL", "redis://localhost:6379/")
 else:
     BROKER_URL = os.getenv("REDIS_BROKER_URL", "redis://redis:6379/")
+
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.RedisChannelLayer',  # Use Redis as the channel layer backend
+        'CONFIG': {
+            'hosts': [(os.getenv("REDIS_HOST", "localhost"), os.getenv("REDIS_PORT", 6379))],
+        },
+    },
+}
+
+
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
