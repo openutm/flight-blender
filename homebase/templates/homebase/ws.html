@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flight Blender Realtime</title>
+</head>
+<body>
+    <h1>Flight Blender Realtime</h1>
+    <script>
+        const socket = new WebSocket('ws://' + window.location.host + '/ws/surveillance/');
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            console.log(data.message);
+        };
+    </script>
+</body>
+</html>

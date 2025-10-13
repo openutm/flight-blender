@@ -2,7 +2,7 @@ import logging
 
 import arrow
 from dotenv import find_dotenv, load_dotenv
-from celery import shared_task
+from flight_blender.celery import app
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
@@ -14,7 +14,7 @@ logger = logging.getLogger("django")
 load_dotenv(find_dotenv())
 
 
-@shared_task
+@app.task(name="send_sample_data_to_track_consumer")
 def send_sample_data_to_track_consumer():
     channel_layer = get_channel_layer()
     sample_data = {
@@ -29,7 +29,7 @@ def send_sample_data_to_track_consumer():
     )
 
 
-@shared_task
+@app.task(name="send_heartbeat_to_consumer")
 def send_heartbeat_to_consumer():
     channel_layer = get_channel_layer()
     heartbeat_data = HeartbeatMessage(

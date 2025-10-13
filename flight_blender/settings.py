@@ -90,10 +90,7 @@ TEMPLATES = [
     },
 ]
 
-
-WSGI_APPLICATION = "flight_blender.wsgi.application"
 ASGI_APPLICATION = "flight_blender.asgi.application"
-
 
 # Database
 # https://docs.djangoproject.com/en/3.1/ref/settings/#databases
@@ -105,7 +102,9 @@ if USE_LOCAL_SQLITE_DATABASE:
     DATABASES = {
         "default": {
             "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
-            "NAME": os.getenv("DB_DATABASE", os.path.join(BASE_DIR, "flight_blender.sqlite3")),
+            "NAME": os.getenv(
+                "DB_DATABASE", os.path.join(BASE_DIR, "flight_blender.sqlite3")
+            ),
         }
     }
 else:
@@ -157,10 +156,12 @@ else:
 
 
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.RedisChannelLayer',  # Use Redis as the channel layer backend
-        'CONFIG': {
-            'hosts': [(os.getenv("REDIS_HOST", "localhost"), os.getenv("REDIS_PORT", 6379))],
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [
+                (os.getenv("REDIS_HOST", "localhost"), os.getenv("REDIS_PORT", 6379))
+            ],
         },
     },
 }

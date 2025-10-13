@@ -12,19 +12,20 @@ import os
 import django
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from myapp.routing import websocket_urlpatterns
-from channels.routing import get_default_application
 
+from surveillance_monitoring_operations.routing import websocket_urlpatterns
+
+from django.core.asgi import get_asgi_application
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "flight_blender.settings")
 django.setup()
 
-
+django_asgi_app = get_asgi_application()
 
 application = ProtocolTypeRouter({
-    "http": get_default_application(),
-    "websocket": AuthMiddlewareStack(
+    "http": django_asgi_app,
+    "websocket":
         URLRouter(
             websocket_urlpatterns
-        )
+        
     ),
 })

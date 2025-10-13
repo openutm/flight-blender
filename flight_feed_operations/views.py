@@ -49,6 +49,8 @@ if ENV_FILE:
 class HomeView(TemplateView):
     template_name = "homebase/home.html"
 
+class ASGIHomeView(TemplateView):
+    template_name = "homebase/ws.html"
 
 @api_view(["GET"])
 def public_key_view(request):
