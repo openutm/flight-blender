@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "django_celery_beat",
     "rest_framework",
     "flight_declaration_operations",
+    "detect_and_avoid_operations",
     "constraint_operations",
     "geo_fence_operations",
     "scd_operations",
