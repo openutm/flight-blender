@@ -3,7 +3,7 @@
 source .venv/bin/activate
 
 echo Waiting for DBs...
-if ! wait-for-it --parallel --service redis-blender:6379; then
+if ! wait-for-it --parallel --service $REDIS_HOST:$REDIS_PORT; then
     exit
 fi
 
