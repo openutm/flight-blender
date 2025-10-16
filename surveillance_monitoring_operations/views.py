@@ -5,11 +5,14 @@ from .data_definitions import HealthMessage, SurveillanceStatus
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
 from auth_helper.utils import requires_scopes
-from common.data_definitions import FLIGHTBLENDER_READ_SCOPE
+from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 
 from common.database_operations import (
     FlightBlenderDatabaseWriter,
+    FlightBlenderDatabaseReader,
 )
+import uuid
+from django.utils import timezone, timedelta
 
 # Create your views here.
 import logging
@@ -33,11 +36,12 @@ def surveillance_health(request):
 
 
 @api_view(["POST"])
-@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
-def start_stop_surveillance_heartbeat_track(request):
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
+def start_stop_surveillance_heartbeat_track(request, session_id):
 
     database_writer = FlightBlenderDatabaseWriter()
-    
+    database_reader = FlightBlenderDatabaseReader()
+
     action = request.data.get("action")
     if action not in ["start", "stop"]:
         return JsonResponse({"error": "Invalid action"}, status=400)
@@ -45,11 +49,27 @@ def start_stop_surveillance_heartbeat_track(request):
     # Logic to start or stop the heartbeat task
     if action == "start":
         # Start the heartbeat task
-        database_writer.create_surveillance_monitoring_heartbeat_periodic_task()
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            end_datetime = (timezone.now() + timedelta(minutes=30)).isoformat()
+        database_writer.create_surveillance_session(
+            session_id=session_id, valid_until=end_datetime
+        )
+        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(
+            session_id=session_id
+        )
         return JsonResponse({"status": "Surveillance monitoring heartbeat started"})
     else:
         # Stop the heartbeat task
         # Note: Stopping a Celery task programmatically can be complex and may require additional setup
+        surveillance_task = database_reader.get_surveillance_session_by_id(
+            session_id=session_id
+        )
+        if not surveillance_task:
+            return JsonResponse({"error": "Invalid session_id"}, status=400)
+        database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(
+            surveillance_monitoring_heartbeat_task=surveillance_task
+        )
         return JsonResponse(
-            {"status": "Surveillance monitoring heartbeat stopping not implemented"}
+            {"status": "Surveillance monitoring task removed successfully"}
         )

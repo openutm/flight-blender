@@ -55,6 +55,8 @@ from scd_operations.scd_data_definitions import (
     SubscriberToNotify,
 )
 
+from surveillance_monitoring_operations.models import SurveillanceSession
+
 logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
@@ -459,6 +461,11 @@ class FlightBlenderDatabaseReader:
         except FlightObservation.DoesNotExist:
             return None
 
+    def get_surveillance_session_by_id(self, session_id: str) -> None | SurveillanceSession:
+        try:
+            return SurveillanceSession.objects.get(id=session_id)
+        except SurveillanceSession.DoesNotExist:
+            return None
     def get_active_user_notifications_between_interval(
         self, start_time: datetime, end_time: datetime
     ) -> None | QuerySet | list[OperatorRIDNotification]:
@@ -984,12 +991,21 @@ class FlightBlenderDatabaseWriter:
             return True
         except Exception:
             return False
-
-    def create_surveillance_monitoring_heartbeat_periodic_task(self) -> bool:
+    def create_surveillance_session(self, session_id: str, valid_until: str) -> bool:
+        try:
+            surveillance_session = SurveillanceSession(
+                id=session_id,
+                valid_until=valid_until,
+            )
+            surveillance_session.save()
+            return True
+        except IntegrityError:
+            return False
+    def create_surveillance_monitoring_heartbeat_periodic_task(self, session_id:str) -> bool:
         surveillance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=1))
         now = arrow.now()
-        session_id = str(uuid.uuid4())
+        session_id = session_id if session_id else str(uuid.uuid4())
         fd_end = now.shift(minutes=10)  # Surveillance runs for 10 minutes
         delta = fd_end - now
         delta_seconds = delta.total_seconds()
@@ -1019,7 +1035,7 @@ class FlightBlenderDatabaseWriter:
         self, surveillance_monitoring_heartbeat_task: TaskScheduler
     ):
         surveillance_monitoring_heartbeat_task.terminate()
-
+        
     def create_conformance_monitoring_periodic_task(
         self, flight_declaration: FlightDeclaration
     ) -> bool:
