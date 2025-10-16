@@ -61,7 +61,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
-  
+
   /surveillance_monitoring_operations/start_stop_surveillance_heartbeat_track:
     put:
       summary: 'Start or stop surveillance heartbeat track'

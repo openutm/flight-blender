@@ -1,21 +1,22 @@
-from dataclasses import asdict
-
-from surveillance_monitoring_operations.tasks import send_heartbeat_to_consumer
-from .data_definitions import HealthMessage, SurveillanceStatus
-from django.http import JsonResponse
-from rest_framework.decorators import api_view
-from auth_helper.utils import requires_scopes
-from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
-
-from common.database_operations import (
-    FlightBlenderDatabaseWriter,
-    FlightBlenderDatabaseReader,
-)
-import uuid
-from django.utils import timezone
-from datetime import timedelta
 # Create your views here.
 import logging
+import uuid
+from dataclasses import asdict
+from datetime import timedelta
+
+from django.http import JsonResponse
+from django.utils import timezone
+from rest_framework.decorators import api_view
+
+from auth_helper.utils import requires_scopes
+from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from common.database_operations import (
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
+)
+from surveillance_monitoring_operations.tasks import send_heartbeat_to_consumer
+
+from .data_definitions import HealthMessage, SurveillanceStatus
 
 logger = logging.getLogger("django")
 
@@ -38,7 +39,6 @@ def surveillance_health(request):
 @api_view(["PUT"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def start_stop_surveillance_heartbeat_track(request, session_id):
-
     database_writer = FlightBlenderDatabaseWriter()
     database_reader = FlightBlenderDatabaseReader()
 
@@ -52,24 +52,14 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
         if not session_id:
             session_id = str(uuid.uuid4())
             end_datetime = (timezone.now() + timedelta(minutes=30)).isoformat()
-        database_writer.create_surveillance_session(
-            session_id=session_id, valid_until=end_datetime
-        )
-        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(
-            session_id=session_id
-        )
+        database_writer.create_surveillance_session(session_id=session_id, valid_until=end_datetime)
+        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(session_id=session_id)
         return JsonResponse({"status": "Surveillance monitoring heartbeat started"})
     else:
         # Stop the heartbeat task
         # Note: Stopping a Celery task programmatically can be complex and may require additional setup
-        surveillance_task = database_reader.get_surveillance_session_by_id(
-            session_id=session_id
-        )
+        surveillance_task = database_reader.get_surveillance_session_by_id(session_id=session_id)
         if not surveillance_task:
             return JsonResponse({"error": "Invalid session_id"}, status=400)
-        database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(
-            surveillance_monitoring_heartbeat_task=surveillance_task
-        )
-        return JsonResponse(
-            {"status": "Surveillance monitoring task removed successfully"}
-        )
+        database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(surveillance_monitoring_heartbeat_task=surveillance_task)
+        return JsonResponse({"status": "Surveillance monitoring task removed successfully"})

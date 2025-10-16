@@ -1,13 +1,15 @@
+import json
 import logging
+from dataclasses import asdict
 
 import arrow
-from dotenv import find_dotenv, load_dotenv
-from flight_blender.celery import app
-from channels_redis.core import RedisChannelLayer
 from asgiref.sync import async_to_sync
-import json
+from channels_redis.core import RedisChannelLayer
+from dotenv import find_dotenv, load_dotenv
+
+from flight_blender.celery import app
+
 from .data_definitions import HeartbeatMessage
-from dataclasses import asdict
 
 logger = logging.getLogger("django")
 
@@ -24,9 +26,7 @@ def send_sample_data_to_track_consumer():
         "altitude": 10000,
         "timestamp": "2023-10-01T12:00:00Z",
     }
-    async_to_sync(channel_layer.group_send)(
-        "track_group", {"type": "track.message", "data": json.dumps(sample_data)}
-    )
+    async_to_sync(channel_layer.group_send)("track_group", {"type": "track.message", "data": json.dumps(sample_data)})
 
 
 @app.task(name="send_heartbeat_to_consumer")

@@ -104,9 +104,7 @@ if USE_LOCAL_SQLITE_DATABASE:
     DATABASES = {
         "default": {
             "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.sqlite3"),
-            "NAME": os.getenv(
-                "DB_DATABASE", os.path.join(BASE_DIR, "flight_blender.sqlite3")
-            ),
+            "NAME": os.getenv("DB_DATABASE", os.path.join(BASE_DIR, "flight_blender.sqlite3")),
         }
     }
 else:
@@ -161,9 +159,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [
-                (os.getenv("REDIS_HOST", "localhost"), os.getenv("REDIS_PORT", 6379))
-            ],
+            "hosts": [(os.getenv("REDIS_HOST", "localhost"), os.getenv("REDIS_PORT", 6379))],
         },
     },
 }

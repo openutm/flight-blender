@@ -1,12 +1,11 @@
-from django.db import models
 import uuid
-
-from django.utils import timezone
 from datetime import timedelta
+
+from django.db import models
+from django.utils import timezone
 
 
 def get_thirty_minutes_from_now():
-
     return timezone.now() + timedelta(minutes=30)
 
 
