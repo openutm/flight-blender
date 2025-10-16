@@ -35,7 +35,7 @@ def surveillance_health(request):
     return JsonResponse(asdict(health_obj))
 
 
-@api_view(["POST"])
+@api_view(["PUT"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def start_stop_surveillance_heartbeat_track(request, session_id):
 
