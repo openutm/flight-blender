@@ -17,4 +17,4 @@ python manage.py migrate
 
 # Start server
 echo "Starting server"
-gunicorn --bind :8000 --workers 3 flight_blender.wsgi
+uvicorn flight_blender.asgi:application --host 0.0.0.0 --port 8000 --workers 3

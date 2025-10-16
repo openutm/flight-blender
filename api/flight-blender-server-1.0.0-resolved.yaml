@@ -61,6 +61,101 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
+  
+  /surveillance_monitoring_operations/start_stop_surveillance_heartbeat_track:
+    put:
+      summary: 'Start or stop surveillance heartbeat track'
+      description: 'This operation allows starting or stopping the surveillance heartbeat track for monitoring purposes.'
+      security:
+        - AuthFromPassport: [flight_blender.write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop]
+                  description: 'Action to perform: start or stop the surveillance heartbeat track.'
+              required:
+                - action
+      responses:
+        '200':
+          description: 'Action performed successfully'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'Surveillance heartbeat track started/stopped successfully'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
+    get:
+      summary: 'Surveillance service status'
+      description: 'Retrieve the current operational status of the surveillance monitoring service.'
+      security:
+        - AuthFromPassport: [flight_blender.read]
+      responses:
+        '200':
+          description: Surveillance service status retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthMessage'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
   /signing_public_key:
     get:
       summary: 'Flight Blender Signing Public Key'
@@ -993,6 +1088,7 @@ paths:
           description: A UUID string identifying the session id associated with observation, if the session_id does not exist, observations received 20 seconds before now.
           schema:
             type: string
+          required: true
 
 
       summary: 'Get Airtraffic observation(s)'
@@ -2465,6 +2561,45 @@ components:
           items:
             $ref: '#/components/schemas/Volume4D'
           default: []
+
+    SurveillanceStatus:
+      type: string
+      description: Operational status of the surveillance service.
+      enum:
+        - OPERATIONAL
+        - DEGRADED
+        - OUTAGE
+
+    HealthMessage:
+      type: object
+      description: Health information for the surveillance monitoring service.
+      required:
+        - sdsp_identifier
+        - current_status
+        - machine_readable_file_of_estimated_coverage
+        - scheduled_degrations
+        - timestamp
+      properties:
+        sdsp_identifier:
+          type: string
+          description: Identifier of the Surveillance Data Service Provider (SDSP).
+          example: SDSP123
+        current_status:
+          $ref: '#/components/schemas/SurveillanceStatus'
+        machine_readable_file_of_estimated_coverage:
+          type: string
+          format: uri
+          description: URL to a machine-readable file describing estimated coverage.
+          example: 'http://example.com/coverage'
+        scheduled_degrations:
+          type: string
+          description: Scheduled degradations or maintenance windows.
+          example: 'None'
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of the health status.
+          example: '2024-10-01T12:00:00Z'
 
     ExecutionStyle:
       type: string
@@ -5498,3 +5633,5 @@ tags:
     description: Flight Blender allows GCS and trackers to submit telemetry data. Use these endpoints to send telemetry observations for processing and integration with other Flight Blender services.
   - name: message-signing-verification
     description: Flight Blender provides security features for signing requests and responses. These endpoints allow you to manage public keys used to verify signed messages both within Flight Blender and in external environments.
+  - name: surveillance-sdsp
+    description: Endpoints for managing surveillance monitoring tasks, including starting and stopping heartbeat tracking. Use these APIs to monitor the status of surveillance systems and ensure compliance with monitoring requirements and compliance to ASTM 3623-22.
