@@ -12,8 +12,8 @@ from common.database_operations import (
     FlightBlenderDatabaseReader,
 )
 import uuid
-from django.utils import timezone, timedelta
-
+from django.utils import timezone
+from datetime import timedelta
 # Create your views here.
 import logging
 

@@ -3,7 +3,7 @@ import logging
 import arrow
 from dotenv import find_dotenv, load_dotenv
 from flight_blender.celery import app
-from channels.layers import get_channel_layer
+from channels_redis.core import RedisChannelLayer
 from asgiref.sync import async_to_sync
 import json
 from .data_definitions import HeartbeatMessage
@@ -16,7 +16,7 @@ load_dotenv(find_dotenv())
 
 @app.task(name="send_sample_data_to_track_consumer")
 def send_sample_data_to_track_consumer():
-    channel_layer = get_channel_layer()
+    channel_layer = RedisChannelLayer()
     sample_data = {
         "track_id": "sample_123",
         "latitude": 37.7749,
@@ -31,7 +31,7 @@ def send_sample_data_to_track_consumer():
 
 @app.task(name="send_heartbeat_to_consumer")
 def send_heartbeat_to_consumer():
-    channel_layer = get_channel_layer()
+    channel_layer = RedisChannelLayer()
     heartbeat_data = HeartbeatMessage(
         surveillance_sdsp_name="heartbeat_123",
         meets_sla_surveillance_requirements=True,
