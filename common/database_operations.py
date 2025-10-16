@@ -461,11 +461,14 @@ class FlightBlenderDatabaseReader:
         except FlightObservation.DoesNotExist:
             return None
 
-    def get_surveillance_session_by_id(self, session_id: str) -> None | SurveillanceSession:
+    def get_surveillance_session_by_id(
+        self, session_id: str
+    ) -> None | SurveillanceSession:
         try:
             return SurveillanceSession.objects.get(id=session_id)
         except SurveillanceSession.DoesNotExist:
             return None
+
     def get_active_user_notifications_between_interval(
         self, start_time: datetime, end_time: datetime
     ) -> None | QuerySet | list[OperatorRIDNotification]:
@@ -991,6 +994,7 @@ class FlightBlenderDatabaseWriter:
             return True
         except Exception:
             return False
+
     def create_surveillance_session(self, session_id: str, valid_until: str) -> bool:
         try:
             surveillance_session = SurveillanceSession(
@@ -1001,7 +1005,10 @@ class FlightBlenderDatabaseWriter:
             return True
         except IntegrityError:
             return False
-    def create_surveillance_monitoring_heartbeat_periodic_task(self, session_id:str) -> bool:
+
+    def create_surveillance_monitoring_heartbeat_periodic_task(
+        self, session_id: str
+    ) -> bool:
         surveillance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=1))
         now = arrow.now()
@@ -1028,14 +1035,16 @@ class FlightBlenderDatabaseWriter:
             return True
         except Exception as e:
             logger.debug(e)
-            logger.error("Could not create surveillance monitoring heartbeat periodic task")
+            logger.error(
+                "Could not create surveillance monitoring heartbeat periodic task"
+            )
             return False
 
     def remove_surveillance_monitoring_heartbeat_periodic_task(
         self, surveillance_monitoring_heartbeat_task: TaskScheduler
     ):
         surveillance_monitoring_heartbeat_task.terminate()
-        
+
     def create_conformance_monitoring_periodic_task(
         self, flight_declaration: FlightDeclaration
     ) -> bool:
