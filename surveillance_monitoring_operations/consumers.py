@@ -1,7 +1,7 @@
 import json
 import logging
 
-from channels.generic.websocket import WebsocketConsumer
+from channels.generic.websocket import AsyncWebsocketConsumer, WebsocketConsumer
 
 logger = logging.getLogger("django")
 
@@ -18,13 +18,14 @@ class HomeConsumer(WebsocketConsumer):
         pass
 
 
-class TrackConsumer(WebsocketConsumer):
+class TrackConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.session_id = self.scope["url_route"]["kwargs"]["session_id"]
         self.room_group_name = f"track_{self.session_id}"
+        logger.info(f"TrackConsumer connecting to group: {self.room_group_name}")
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-        self.accept()
-        self.send(text_data=json.dumps({"message": "TrackConsumer WebSocket connection established."}))
+        await self.accept()
+        await self.send(text_data=json.dumps({"message": "TrackConsumer WebSocket connection established."}))
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
@@ -34,18 +35,18 @@ class TrackConsumer(WebsocketConsumer):
         # Publish the received data to the group
         await self.channel_layer.group_send(self.room_group_name, {"type": "publish_data", "data": text_data})
 
-    def publish_data(self, event):
+    async def publish_data(self, event):
         # Send the published data to the WebSocket
-        self.send(text_data=json.dumps({"published_data": event["data"]}))
+        sent = self.send(text_data=json.dumps({"published_data": event["data"]}))
 
 
-class HeartBeatConsumer(WebsocketConsumer):
+class HeartBeatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.session_id = self.scope["url_route"]["kwargs"]["session_id"]
         self.room_group_name = f"heartbeat_{self.session_id}"
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-        self.accept()
-        self.send(text_data=json.dumps({"message": "HeartBeatConsumer WebSocket connection established."}))
+        await self.accept()
+        await self.send(text_data=json.dumps({"message": "HeartBeatConsumer WebSocket connection established."}))
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
@@ -55,6 +56,9 @@ class HeartBeatConsumer(WebsocketConsumer):
         # Publish the received data to the group
         await self.channel_layer.group_send(self.room_group_name, {"type": "publish_data", "data": text_data})
 
-    def publish_data(self, event):
+    async def publish_data(self, event):
         # Send the published data to the WebSocket
-        self.send(text_data=json.dumps({"published_data": event["data"]}))
+        sent = self.send(text_data=json.dumps({"published_data": event["data"]}))
+
+    async def heartbeat_message(self, event):
+        await self.send(text_data=json.dumps({"heartbeat_data": event["data"]}))

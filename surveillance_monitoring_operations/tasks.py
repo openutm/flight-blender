@@ -30,7 +30,7 @@ def send_sample_data_to_track_consumer():
 
 
 @app.task(name="send_heartbeat_to_consumer")
-def send_heartbeat_to_consumer():
+def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: str = None) -> None:
     channel_layer = RedisChannelLayer()
     heartbeat_data = HeartbeatMessage(
         surveillance_sdsp_name="heartbeat_123",
@@ -40,7 +40,8 @@ def send_heartbeat_to_consumer():
         horizontal_or_vertical_95_percentile_accuracy_m=5,
         timestamp=arrow.utcnow().isoformat(),
     )
+    logger.debug("Sending heartbeat data:", asdict(heartbeat_data))
     async_to_sync(channel_layer.group_send)(
-        "heartbeat_group",  # Assuming the group name for HeartBeatConsumer
+        "heartbeat_" + session_id,  # Assuming the group name for HeartBeatConsumer
         {"type": "heartbeat.message", "data": json.dumps(asdict(heartbeat_data))},
     )

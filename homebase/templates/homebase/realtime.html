@@ -1,17 +1,40 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Flight Blender Realtime</title>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Flight Blender Realtime</h1>
+    <p>
+      This page verifies the connection to the Flight Blender for realtime data.
+    </p>
+    <h4>Realtime Data Stream:</h4>
+    <pre><code id="realtime-data" style="max-height: 300px; overflow-y: auto; display: block;"></code></pre>
     <script>
-        const socket = new WebSocket('ws://' + window.location.host + '/ws/surveillance/');
+      const sessionId = "{{ session_id }}";
+      let socket;
+      if (sessionId) {
+        console.log("Using session ID:", sessionId);
+        socket = new WebSocket(
+          "ws://" +
+            window.location.host +
+            "/ws/surveillance/heartbeat/" +
+            sessionId
+        );
+      } else {
+        console.log("No session ID provided.");
+        socket = new WebSocket(
+          "ws://" + window.location.host + "/ws/surveillance/"
+        );
+      }
 
-        socket.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            console.log(data.message);
-        };
+      socket.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        console.log(data);
+        let heartbeatData = JSON.parse(data.heartbeat_data);
+        document.getElementById('realtime-data').textContent = data.timestamp + '\n' + JSON.stringify(heartbeatData, null, 2);
+
+      };
     </script>
-</body>
+  </body>
 </html>

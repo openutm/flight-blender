@@ -44,16 +44,24 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
 
     action = request.data.get("action")
     if action not in ["start", "stop"]:
-        return JsonResponse({"error": "Invalid action"}, status=400)
+        return JsonResponse({"error": "Invalid action provided"}, status=400)
 
     # Logic to start or stop the heartbeat task
     if action == "start":
         # Start the heartbeat task
+        surveillance_task_exists = database_reader.get_surveillance_session_by_id(session_id=session_id)
+        # if task already exists, return error
+        if surveillance_task_exists:
+            return JsonResponse(
+                {"error": "Surveillance monitoring heartbeat task already exists"},
+                status=400,
+            )
+        end_datetime = (timezone.now() + timedelta(minutes=30)).isoformat()
         if not session_id:
             session_id = str(uuid.uuid4())
-            end_datetime = (timezone.now() + timedelta(minutes=30)).isoformat()
+
         database_writer.create_surveillance_session(session_id=session_id, valid_until=end_datetime)
-        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(session_id=session_id)
+        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(session_id=str(session_id))
         return JsonResponse({"status": "Surveillance monitoring heartbeat started"})
     else:
         # Stop the heartbeat task

@@ -6,7 +6,7 @@ from celery import Celery
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "flight_blender.settings")
 app = Celery(
     "flight_blender",
-    include=["conformance_monitoring_operations.tasks"],
+    include=["conformance_monitoring_operations.tasks", "surveillance_monitoring_operations.tasks"],
     broker_connection_retry_on_startup=True,
 )
 

@@ -4,7 +4,7 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from typing import Never, Union
+from typing import Never
 from uuid import UUID
 
 import arrow
@@ -819,12 +819,10 @@ class FlightBlenderDatabaseWriter:
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=1))
         now = arrow.now()
         session_id = session_id if session_id else str(uuid.uuid4())
-        fd_end = now.shift(minutes=10)  # Surveillance runs for 10 minutes
-        delta = fd_end - now
-        delta_seconds = delta.total_seconds()
-        expires = now.shift(seconds=delta_seconds)
-        task_name = "surveillance_monitoring_heartbeat"
-        logger.info("Creating periodic task for surveillance monitoring expires at %s" % expires)
+
+        expires = now.shift(minutes=1)
+        task_name = "send_heartbeat_to_consumer"
+        logger.info("Creating periodic task for surveillance monitoring, it expires at %s" % expires)
         try:
             p_task = surveillance_monitoring_job.schedule_every(
                 task_name=task_name,
@@ -834,7 +832,6 @@ class FlightBlenderDatabaseWriter:
                 session_id=session_id,
                 flight_declaration=None,
             )
-
             p_task.start()
             return True
         except Exception as e:

@@ -1,9 +1,9 @@
-from django.urls import re_path
+from django.urls import path
 
 from .consumers import HeartBeatConsumer, HomeConsumer, TrackConsumer
 
 websocket_urlpatterns = [
-    re_path(r"ws/surveillance/$", HomeConsumer.as_asgi()),
-    re_path(r"ws/surveillance/track/(?P<session_id>[0-9a-f-]+)", TrackConsumer.as_asgi()),
-    re_path(r"ws/surveillance/heartbeat/(?P<session_id>[0-9a-f-]+)", HeartBeatConsumer.as_asgi()),
+    path("ws/surveillance/", HomeConsumer.as_asgi()),
+    path("ws/surveillance/track/<uuid:session_id>", TrackConsumer.as_asgi()),
+    path("ws/surveillance/heartbeat/<uuid:session_id>", HeartBeatConsumer.as_asgi()),
 ]

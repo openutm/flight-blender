@@ -21,7 +21,7 @@ from flight_feed_operations import views as flight_feed_views
 
 urlpatterns = [
     path("", flight_feed_views.HomeView.as_view()),
-    path("realtime/", flight_feed_views.ASGIHomeView.as_view()),
+    path("realtime", flight_feed_views.ASGIHomeView.as_view()),
     path("admin/", admin.site.urls),
     path("ping", flight_feed_views.ping),
     path("signing_public_key", flight_feed_views.public_key_view),
