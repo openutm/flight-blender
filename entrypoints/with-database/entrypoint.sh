@@ -17,4 +17,4 @@ python manage.py migrate
 
 # Start server
 echo "Starting server"
-python -m uvicorn flight_blender.asgi:application
+uvicorn flight_blender.asgi:application
