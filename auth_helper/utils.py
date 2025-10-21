@@ -48,8 +48,12 @@ def requires_scopes(required_scopes, allow_any: bool = False):
         def decorated(*args, **kwargs):
             API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
             BYPASS_AUTH_TOKEN_VERIFICATION = int(env.get("BYPASS_AUTH_TOKEN_VERIFICATION", 0))
-            PASSPORT_JWKS_URL = f"{env.get('PASSPORT_URL', 'http://local.test:9000')}/.well-known/jwks.json"
-            print(f"Using Passport JWKS URL: {PASSPORT_JWKS_URL}")
+            PASSPORT_URL = env.get("PASSPORT_URL", "http://local.test:9000")
+            # remove the trailing slash if present
+            if PASSPORT_URL.endswith("/"):
+                PASSPORT_URL = PASSPORT_URL[:-1]
+            PASSPORT_JWKS_URL = f"{PASSPORT_URL}/.well-known/jwks.json"
+            
             DSS_AUTH_JWKS_ENDPOINT = f"{env.get('DSS_AUTH_JWKS_ENDPOINT', 'http://local.test:9000')}/.well-known/jwks.json"
 
             request = args[0]
@@ -71,15 +75,17 @@ def requires_scopes(required_scopes, allow_any: bool = False):
 
             try:
                 passport_jwks_data = s.get(PASSPORT_JWKS_URL).json()
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
                 passport_jwks_data = {}
+                logger.error(f"Error fetching Passport JWKS: {e}")
                 return JsonResponse(
-                    {"detail": "Public Key Server necessary to validate the token could not be reached"},
+                    {"detail": "Public Key Server necessary to validate the token could not be reached", "error": str(e)},
                     status=400,
                 )
             try:
                 dss_jwks_data = s.get(DSS_AUTH_JWKS_ENDPOINT).json()
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error fetching DSS JWKS: {e}")
                 dss_jwks_data = {}
                 logger.info(
                     "DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated"
