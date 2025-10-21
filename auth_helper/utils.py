@@ -49,7 +49,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
             API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
             BYPASS_AUTH_TOKEN_VERIFICATION = int(env.get("BYPASS_AUTH_TOKEN_VERIFICATION", 0))
             PASSPORT_JWKS_URL = f"{env.get('PASSPORT_URL', 'http://local.test:9000')}/.well-known/jwks.json"
-            logger.info(f"Using Passport JWKS URL: {PASSPORT_JWKS_URL}")
+            print(f"Using Passport JWKS URL: {PASSPORT_JWKS_URL}")
             DSS_AUTH_JWKS_ENDPOINT = f"{env.get('DSS_AUTH_JWKS_ENDPOINT', 'http://local.test:9000')}/.well-known/jwks.json"
 
             request = args[0]
