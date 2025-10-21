@@ -14,7 +14,8 @@ fi
 # Apply database migrations
 echo "Apply database migrations"
 python manage.py migrate
+echo "Database migrations applied"
 
 # Start server
 echo "Starting server"
-uvicorn flight_blender.asgi:application
+uvicorn flight_blender.asgi:application --host 0.0.0.0 --port 8000 --workers 3 --reload

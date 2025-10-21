@@ -66,8 +66,12 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
     else:
         # Stop the heartbeat task
         # Note: Stopping a Celery task programmatically can be complex and may require additional setup
-        surveillance_task = database_reader.get_surveillance_session_by_id(session_id=session_id)
-        if not surveillance_task:
+        surveillance_session = database_reader.get_surveillance_session_by_id(session_id=session_id)
+        if not surveillance_session:
             return JsonResponse({"error": "Invalid session_id"}, status=400)
+        surveillance_task = database_reader.get_periodic_task_by_session_id(session_id=session_id)
+        if not surveillance_task:
+            return JsonResponse({"error": "No active surveillance monitoring task found"}, status=400)
+
         database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(surveillance_monitoring_heartbeat_task=surveillance_task)
         return JsonResponse({"status": "Surveillance monitoring task removed successfully"})

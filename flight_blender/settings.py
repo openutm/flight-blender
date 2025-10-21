@@ -159,7 +159,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(os.getenv("REDIS_HOST", "localhost"), os.getenv("REDIS_PORT", 6379))],
+            "hosts": [BROKER_URL],
         },
     },
 }

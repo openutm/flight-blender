@@ -368,6 +368,12 @@ class FlightBlenderDatabaseReader:
         except SurveillanceSession.DoesNotExist:
             return None
 
+    def get_periodic_task_by_session_id(self, session_id: str) -> None | TaskScheduler:
+        try:
+            return TaskScheduler.objects.get(session_id=session_id)
+        except TaskScheduler.DoesNotExist:
+            return None
+
     def get_active_user_notifications_between_interval(
         self, start_time: datetime, end_time: datetime
     ) -> None | QuerySet | list[OperatorRIDNotification]:

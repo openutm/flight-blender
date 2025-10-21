@@ -53,7 +53,7 @@ class HomeView(TemplateView):
 class ASGIHomeView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        session_id = self.request.GET.get("session_id")
+        session_id = self.request.GET.get("session_id", "00000000-0000-0000-0000-000000000000")
         context["session_id"] = session_id
         return context
 

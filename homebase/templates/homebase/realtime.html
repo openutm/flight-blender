@@ -9,11 +9,12 @@
       This page verifies the connection to the Flight Blender for realtime data.
     </p>
     <h4>Realtime Data Stream:</h4>
+    <p id="messageRecivedTimestamp"></p>
     <pre><code id="realtime-data" style="max-height: 300px; overflow-y: auto; display: block;"></code></pre>
     <script>
       const sessionId = "{{ session_id }}";
       let socket;
-      if (sessionId) {
+      if (sessionId != "00000000-0000-0000-0000-000000000000") {
         console.log("Using session ID:", sessionId);
         socket = new WebSocket(
           "ws://" +
@@ -22,7 +23,7 @@
             sessionId
         );
       } else {
-        console.log("No session ID provided.");
+        console.log("No session ID provided, connecting to default endpoint.");
         socket = new WebSocket(
           "ws://" + window.location.host + "/ws/surveillance/"
         );
@@ -30,10 +31,12 @@
 
       socket.onmessage = function (event) {
         const data = JSON.parse(event.data);
-        console.log(data);
-        let heartbeatData = JSON.parse(data.heartbeat_data);
-        document.getElementById('realtime-data').textContent = data.timestamp + '\n' + JSON.stringify(heartbeatData, null, 2);
-
+        let timeStamp = new Date().toLocaleTimeString();
+        document.getElementById(
+          "messageRecivedTimestamp"
+        ).textContent = `Last message received at: ${timeStamp}`;
+        document.getElementById("realtime-data").textContent =
+          "\n" + JSON.stringify(data, null, 2);
       };
     </script>
   </body>

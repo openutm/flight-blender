@@ -17,4 +17,4 @@ python manage.py migrate
 
 # Start server
 echo "Starting server"
-python manage.py runserver 0.0.0.0:8000
+uvicorn flight_blender.asgi:application --host 0.0.0.0 --port 8000 --workers 3 --reload
