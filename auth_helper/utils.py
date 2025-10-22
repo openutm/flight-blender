@@ -82,9 +82,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 )
 
             try:
-
                 passport_jwks_data_response = s.get(PASSPORT_JWKS_URL)
-
                 passport_jwks_data = passport_jwks_data_response.json()
 
             except requests.exceptions.RequestException as e:
@@ -92,19 +90,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 logger.error(f"Error fetching Passport JWKS: {e}")
                 return JsonResponse(
                     {
-                        "detail": "Public Key Server necessary to validate the token could not be reached",
-                        "error": str(e),
-                        "passport_url": PASSPORT_JWKS_URL,
-                        "url_response_status": (
-                            passport_jwks_data_response.status_code
-                            if "passport_jwks_data_response" in locals()
-                            else "N/A"
-                        ),
-                        "url_response_content": (
-                            passport_jwks_data_response.text
-                            if "passport_jwks_data_response" in locals()
-                            else "N/A"
-                        ),
+                        "detail": f"Public Key Server necessary to validate the token could not be reached, tried to reach URL:{PASSPORT_JWKS_URL}"
                     },
                     status=400,
                 )
@@ -114,7 +100,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 logger.error(f"Error fetching DSS JWKS: {e}")
                 dss_jwks_data = {}
                 logger.info(
-                    "DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated"
+                    "DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated, tried to reach URL:{DSS_AUTH_JWKS_ENDPOINT}"
                 )
             # Combine keys from both JWKS sources
             jwks_keys = passport_jwks_data.get("keys", []) + dss_jwks_data.get(
