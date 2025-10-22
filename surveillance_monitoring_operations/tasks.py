@@ -8,6 +8,7 @@ from channels_redis.core import RedisChannelLayer
 from dotenv import find_dotenv, load_dotenv
 
 from flight_blender.celery import app
+from flight_blender.settings import BROKER_URL
 
 from .data_definitions import HeartbeatMessage
 
@@ -17,8 +18,9 @@ load_dotenv(find_dotenv())
 
 
 @app.task(name="send_sample_data_to_track_consumer")
-def send_sample_data_to_track_consumer():
-    channel_layer = RedisChannelLayer()
+def send_sample_data_to_track_consumer(session_id: str, flight_declaration_id: str = None) -> None:
+    channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
+    logger.info(f"Preparing to send sample data for session_id: {session_id}, flight_declaration_id: {flight_declaration_id}")
     sample_data = {
         "track_id": "sample_123",
         "latitude": 37.7749,
@@ -26,12 +28,13 @@ def send_sample_data_to_track_consumer():
         "altitude": 10000,
         "timestamp": "2023-10-01T12:00:00Z",
     }
-    async_to_sync(channel_layer.group_send)("track_group", {"type": "track.message", "data": json.dumps(sample_data)})
+    async_to_sync(channel_layer.group_send)("track_group", {"type": "track.message", "data": sample_data})
 
 
 @app.task(name="send_heartbeat_to_consumer")
 def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: str = None) -> None:
-    channel_layer = RedisChannelLayer()
+    channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
+    logger.info(f"Preparing to send heartbeat for session_id: {session_id}, flight_declaration_id: {flight_declaration_id}")
     heartbeat_data = HeartbeatMessage(
         surveillance_sdsp_name="heartbeat_123",
         meets_sla_surveillance_requirements=True,
@@ -43,5 +46,5 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: str = Non
     logger.debug("Sending heartbeat data:", asdict(heartbeat_data))
     async_to_sync(channel_layer.group_send)(
         "heartbeat_" + session_id,  # Assuming the group name for HeartBeatConsumer
-        {"type": "heartbeat.message", "data": json.dumps(asdict(heartbeat_data))},
+        {"type": "heartbeat.message", "data": asdict(heartbeat_data)},
     )

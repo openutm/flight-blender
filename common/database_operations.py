@@ -822,7 +822,7 @@ class FlightBlenderDatabaseWriter:
 
     def create_surveillance_monitoring_heartbeat_periodic_task(self, session_id: str) -> bool:
         surveillance_monitoring_job = TaskScheduler()
-        every = int(os.getenv("HEARTBEAT_RATE_SECS", default=1))
+        every = 1
         now = arrow.now()
         session_id = session_id if session_id else str(uuid.uuid4())
 
