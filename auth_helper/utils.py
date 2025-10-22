@@ -75,6 +75,8 @@ def requires_scopes(required_scopes, allow_any: bool = False):
 
             try:
                 passport_jwks_data = s.get(PASSPORT_JWKS_URL).json()
+                logger.info("Fetched Passport JWKS successfully")
+                logger.info(f"Passport JWKS data: {passport_jwks_data}")
             except requests.exceptions.RequestException as e:
                 passport_jwks_data = {}
                 logger.error(f"Error fetching Passport JWKS: {e}")
