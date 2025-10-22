@@ -34,5 +34,5 @@ urlpatterns = [
     path("weather_monitoring_ops/", include("weather_monitoring_operations.urls")),
     path("surveillance_monitoring_ops/", include("surveillance_monitoring_operations.urls")),
     # UTM Adapter endpoints
-    path("utm_adapter/", include("utm_adapter.urls")),
+    # path("utm_adapter/", include("utm_adapter.urls")),
 ]
