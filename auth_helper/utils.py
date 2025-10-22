@@ -46,14 +46,18 @@ def requires_scopes(required_scopes, allow_any: bool = False):
     def require_scope(f):
         @wraps(f)
         def decorated(*args, **kwargs):
-            API_IDENTIFIER = env.get("PASSPORT_AUDIENCE", "testflight.flightblender.com")
-            BYPASS_AUTH_TOKEN_VERIFICATION = int(env.get("BYPASS_AUTH_TOKEN_VERIFICATION", 0))
+            API_IDENTIFIER = env.get(
+                "PASSPORT_AUDIENCE", "testflight.flightblender.com"
+            )
+            BYPASS_AUTH_TOKEN_VERIFICATION = int(
+                env.get("BYPASS_AUTH_TOKEN_VERIFICATION", 0)
+            )
             PASSPORT_URL = env.get("PASSPORT_URL", "http://local.test:9000")
             # remove the trailing slash if present
             if PASSPORT_URL.endswith("/"):
                 PASSPORT_URL = PASSPORT_URL[:-1]
             PASSPORT_JWKS_URL = f"{PASSPORT_URL}/.well-known/jwks.json"
-            
+
             DSS_AUTH_JWKS_ENDPOINT = f"{env.get('DSS_AUTH_JWKS_ENDPOINT', 'http://local.test:9000')}/.well-known/jwks.json"
 
             request = args[0]
@@ -68,24 +72,40 @@ def requires_scopes(required_scopes, allow_any: bool = False):
             try:
                 unverified_token_headers = jwt.get_unverified_header(token)
             except jwt.DecodeError:
-                return JsonResponse({"detail": "Bearer token could not be decoded properly"}, status=401)
+                return JsonResponse(
+                    {"detail": "Bearer token could not be decoded properly"}, status=401
+                )
 
             if BYPASS_AUTH_TOKEN_VERIFICATION:
-                return handle_bypass_verification(token, required_scopes, f, *args, **kwargs)
+                return handle_bypass_verification(
+                    token, required_scopes, f, *args, **kwargs
+                )
 
             try:
-                print(f"Fetching Passport JWKS from {PASSPORT_JWKS_URL}")
+
                 passport_jwks_data_response = s.get(PASSPORT_JWKS_URL)
-                print(f"Passport JWKS response status code: {passport_jwks_data_response.status_code}")
-                print(f"Passport JWKS response content: {passport_jwks_data_response.text}")
+
                 passport_jwks_data = passport_jwks_data_response.json()
-                print("Fetched Passport JWKS successfully")
-                print(f"Passport JWKS data: {passport_jwks_data}")
+
             except requests.exceptions.RequestException as e:
                 passport_jwks_data = {}
                 logger.error(f"Error fetching Passport JWKS: {e}")
                 return JsonResponse(
-                    {"detail": "Public Key Server necessary to validate the token could not be reached", "error": str(e)},
+                    {
+                        "detail": "Public Key Server necessary to validate the token could not be reached",
+                        "error": str(e),
+                        "passport_url": PASSPORT_JWKS_URL,
+                        "url_response_status": (
+                            passport_jwks_data_response.status_code
+                            if "passport_jwks_data_response" in locals()
+                            else "N/A"
+                        ),
+                        "url_response_content": (
+                            passport_jwks_data_response.text
+                            if "passport_jwks_data_response" in locals()
+                            else "N/A"
+                        ),
+                    },
                     status=400,
                 )
             try:
@@ -97,15 +117,22 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                     "DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated"
                 )
             # Combine keys from both JWKS sources
-            jwks_keys = passport_jwks_data.get("keys", []) + dss_jwks_data.get("keys", [])
+            jwks_keys = passport_jwks_data.get("keys", []) + dss_jwks_data.get(
+                "keys", []
+            )
             jwks_data = {"keys": jwks_keys}
 
-            public_keys = {jwk["kid"]: jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk)) for jwk in jwks_data["keys"]}
+            public_keys = {
+                jwk["kid"]: jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
+                for jwk in jwks_data["keys"]
+            }
 
             kid = unverified_token_headers.get("kid")
             if not kid or kid not in public_keys:
                 return JsonResponse(
-                    {"detail": f"Error in parsing public keys, the signing key id {kid} is not present in JWKS"},
+                    {
+                        "detail": f"Error in parsing public keys, the signing key id {kid} is not present in JWKS"
+                    },
                     status=401,
                 )
 
@@ -133,10 +160,14 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                     status=401,
                 )
             decoded_scopes_set = set(decoded.get("scope", "").split())
-            if (allow_any and decoded_scopes_set & set(required_scopes)) or set(required_scopes).issubset(decoded_scopes_set):
+            if (allow_any and decoded_scopes_set & set(required_scopes)) or set(
+                required_scopes
+            ).issubset(decoded_scopes_set):
                 return f(*args, **kwargs)
 
-            return JsonResponse({"message": "You don't have access to this resource"}, status=403)
+            return JsonResponse(
+                {"message": "You don't have access to this resource"}, status=403
+            )
 
         return decorated
 
@@ -145,27 +176,37 @@ def requires_scopes(required_scopes, allow_any: bool = False):
 
 def handle_bypass_verification(token, required_scopes, f, *args, **kwargs):
     try:
-        unverified_token_details = jwt.decode(token, algorithms=["RS256"], options={"verify_signature": False})
+        unverified_token_details = jwt.decode(
+            token, algorithms=["RS256"], options={"verify_signature": False}
+        )
     except jwt.DecodeError:
         return JsonResponse({"detail": "Invalid token provided"}, status=401)
     decoded_scopes_set = set(unverified_token_details.get("scope", "").split())
     if not set(required_scopes).issubset(decoded_scopes_set):
-        return JsonResponse({"message": "You don't have access to this resource"}, status=403)
+        return JsonResponse(
+            {"message": "You don't have access to this resource"}, status=403
+        )
 
     iss = unverified_token_details.get("iss")
     if not iss:
         return JsonResponse(
-            {"detail": "Incomplete token provided, issuer (iss) claim must be present and should not be empty"},
+            {
+                "detail": "Incomplete token provided, issuer (iss) claim must be present and should not be empty"
+            },
             status=401,
         )
     if iss != "dummy":
         parsed_iss = urlparse(iss)
         if not (parsed_iss.scheme in ("http", "https") and parsed_iss.netloc):
-            return JsonResponse({"detail": "Issuer (iss) claim is not a valid URL"}, status=401)
+            return JsonResponse(
+                {"detail": "Issuer (iss) claim is not a valid URL"}, status=401
+            )
 
     if not unverified_token_details.get("aud"):
         return JsonResponse(
-            {"detail": "Incomplete token provided, audience claim must be present and should not be empty"},
+            {
+                "detail": "Incomplete token provided, audience claim must be present and should not be empty"
+            },
             status=401,
         )
 
