@@ -74,9 +74,13 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 return handle_bypass_verification(token, required_scopes, f, *args, **kwargs)
 
             try:
-                passport_jwks_data = s.get(PASSPORT_JWKS_URL).json()
-                logger.info("Fetched Passport JWKS successfully")
-                logger.info(f"Passport JWKS data: {passport_jwks_data}")
+                print(f"Fetching Passport JWKS from {PASSPORT_JWKS_URL}")
+                passport_jwks_data_response = s.get(PASSPORT_JWKS_URL)
+                print(f"Passport JWKS response status code: {passport_jwks_data_response.status_code}")
+                print(f"Passport JWKS response content: {passport_jwks_data_response.text}")
+                passport_jwks_data = passport_jwks_data_response.json()
+                print("Fetched Passport JWKS successfully")
+                print(f"Passport JWKS data: {passport_jwks_data}")
             except requests.exceptions.RequestException as e:
                 passport_jwks_data = {}
                 logger.error(f"Error fetching Passport JWKS: {e}")
