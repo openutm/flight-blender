@@ -1,7 +1,6 @@
 #!/bin/bash
 
-source .venv/bin/activate
-
+source /app_venv/.venv/bin/activate
 echo Waiting for DBs...
 if ! wait-for-it --parallel --service $REDIS_HOST:$REDIS_PORT --service $POSTGRES_HOST:$POSTGRES_PORT; then
     exit
