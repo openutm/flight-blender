@@ -1,7 +1,6 @@
 #!/bin/bash
 
-source .venv/bin/activate
-
+source /app_venv/.venv/bin/activate
 echo Waiting for DBs...
 if ! wait-for-it --parallel --service $REDIS_HOST:$REDIS_PORT; then
     exit
@@ -14,6 +13,7 @@ fi
 # Apply database migrations
 echo "Apply database migrations"
 python manage.py migrate
+echo "Database migrations applied"
 
 # Start server
 echo "Starting server"
