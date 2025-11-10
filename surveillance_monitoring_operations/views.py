@@ -14,7 +14,6 @@ from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
-from surveillance_monitoring_operations.tasks import send_heartbeat_to_consumer
 
 from .data_definitions import HealthMessage, SurveillanceStatus
 
