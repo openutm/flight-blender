@@ -368,11 +368,8 @@ class FlightBlenderDatabaseReader:
         except SurveillanceSession.DoesNotExist:
             return None
 
-    def get_periodic_task_by_session_id(self, session_id: str) -> None | TaskScheduler:
-        try:
-            return TaskScheduler.objects.get(session_id=session_id)
-        except TaskScheduler.DoesNotExist:
-            return None
+    def get_surveillance_periodic_tasks_by_session_id(self, session_id: str) -> QuerySet[TaskScheduler]:
+        return TaskScheduler.objects.filter(session_id=session_id)
 
     def get_active_user_notifications_between_interval(
         self, start_time: datetime, end_time: datetime
@@ -844,6 +841,34 @@ class FlightBlenderDatabaseWriter:
             logger.debug(e)
             logger.error("Could not create surveillance monitoring heartbeat periodic task")
             return False
+
+    def create_surveillance_monitoring_track_periodic_task(self, session_id: str) -> bool:
+        surveillance_monitoring_job = TaskScheduler()
+        every = 1
+        now = arrow.now()
+        session_id = session_id if session_id else str(uuid.uuid4())
+
+        expires = now.shift(minutes=1)
+        task_name = "send_track_to_consumer"
+        logger.info("Creating periodic task for surveillance monitoring tracks, it expires at %s" % expires)
+        try:
+            p_task = surveillance_monitoring_job.schedule_every(
+                task_name=task_name,
+                period="seconds",
+                every=every,
+                expires=expires.isoformat(),
+                session_id=session_id,
+                flight_declaration=None,
+            )
+            p_task.start()
+            return True
+        except Exception as e:
+            logger.debug(e)
+            logger.error("Could not create surveillance monitoring heartbeat periodic task")
+            return False
+
+    def remove_track_monitoring_heartbeat_periodic_task(self, track_monitoring_heartbeat_task: TaskScheduler):
+        track_monitoring_heartbeat_task.terminate()
 
     def remove_surveillance_monitoring_heartbeat_periodic_task(self, surveillance_monitoring_heartbeat_task: TaskScheduler):
         surveillance_monitoring_heartbeat_task.terminate()

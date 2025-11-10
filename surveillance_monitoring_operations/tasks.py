@@ -10,31 +10,63 @@ from dotenv import find_dotenv, load_dotenv
 from flight_blender.celery import app
 from flight_blender.settings import BROKER_URL
 
-from .data_definitions import HeartbeatMessage
+from .data_definitions import (
+    AircraftPosition,
+    AircraftState,
+    HeartbeatMessage,
+    SpeedAccuracy,
+    TrackMessage,
+)
 
 logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
 
 
-@app.task(name="send_sample_data_to_track_consumer")
-def send_sample_data_to_track_consumer(session_id: str, flight_declaration_id: str = None) -> None:
+# Generate unique aircraft positions
+def generate_unique_aircraft_position(session_id: str, unique_aircraft_identifier: str) -> AircraftPosition:
+    # This method would contain logic to generate unique positions based on session_id and unique_aircraft_identifier since the last time it was processed. This needs to be implemented for your
+    return AircraftPosition(
+        lat=37.7749,
+        lng=-122.4194,
+        alt=10000,
+        accuracy_h="SA1mps",
+        accuracy_v="SA3mps",
+        extrapolated=False,
+        pressure_altitude=10050,
+    )
+
+
+@app.task(name="send_track_to_consumer")
+def send_track_to_consumer(session_id: str, flight_declaration_id: str = None) -> None:
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
-    logger.info(f"Preparing to send sample data for session_id: {session_id}, flight_declaration_id: {flight_declaration_id}")
-    sample_data = {
-        "track_id": "sample_123",
-        "latitude": 37.7749,
-        "longitude": -122.4194,
-        "altitude": 10000,
-        "timestamp": "2023-10-01T12:00:00Z",
-    }
-    async_to_sync(channel_layer.group_send)("track_group", {"type": "track.message", "data": sample_data})
+    logger.info(f"Preparing to send sample data for session_id: {session_id}")
+    UNIQUE_AIRCRAFT_IDENTIFIER = "UA123"
+    position = generate_unique_aircraft_position(session_id=session_id, unique_aircraft_identifier=UNIQUE_AIRCRAFT_IDENTIFIER)
+    speed_accuracy = SpeedAccuracy("SA1mps")
+    aircraft_state = AircraftState(
+        position=position,  # Fill with appropriate AircraftPosition object
+        speed=250,
+        track=90,
+        vertical_speed=5,
+        speed_accuracy=speed_accuracy,  # Fill with appropriate SpeedAccuracy object
+    )
+    track_data = TrackMessage(
+        sdsdp_identifier="SDSP123",
+        unique_aircraft_identifier=UNIQUE_AIRCRAFT_IDENTIFIER,
+        state=aircraft_state,  # Fill with appropriate AircraftState object
+        timestamp=arrow.utcnow().isoformat(),
+        source="TestSource",
+        track_state="Active",
+    )
+    logger.debug("Sending track data:", asdict(track_data))
+    async_to_sync(channel_layer.group_send)("track_group", {"type": "track.message", "data": asdict(track_data)})
 
 
 @app.task(name="send_heartbeat_to_consumer")
 def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: str = None) -> None:
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
-    logger.info(f"Preparing to send heartbeat for session_id: {session_id}, flight_declaration_id: {flight_declaration_id}")
+    logger.info(f"Preparing to send heartbeat for session_id: {session_id}")
     heartbeat_data = HeartbeatMessage(
         surveillance_sdsp_name="heartbeat_123",
         meets_sla_surveillance_requirements=True,

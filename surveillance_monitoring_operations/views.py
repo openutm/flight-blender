@@ -62,16 +62,17 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
 
         database_writer.create_surveillance_session(session_id=session_id, valid_until=end_datetime)
         database_writer.create_surveillance_monitoring_heartbeat_periodic_task(session_id=str(session_id))
+        database_writer.create_surveillance_monitoring_track_periodic_task(session_id=str(session_id))
         return JsonResponse({"status": "Surveillance monitoring heartbeat started"})
     else:
         # Stop the heartbeat task
         # Note: Stopping a Celery task programmatically can be complex and may require additional setup
         surveillance_session = database_reader.get_surveillance_session_by_id(session_id=session_id)
         if not surveillance_session:
-            return JsonResponse({"error": "Invalid session_id"}, status=400)
-        surveillance_task = database_reader.get_periodic_task_by_session_id(session_id=session_id)
-        if not surveillance_task:
-            return JsonResponse({"error": "No active surveillance monitoring task found"}, status=400)
-
-        database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(surveillance_monitoring_heartbeat_task=surveillance_task)
+            return JsonResponse({"error": f"Invalid session_id provided: {session_id}"}, status=400)
+        surveillance_tasks = database_reader.get_surveillance_periodic_tasks_by_session_id(session_id=session_id)
+        if not surveillance_tasks:
+            return JsonResponse({"error": f"No active surveillance monitoring tasks found for {session_id}"}, status=400)
+        for surveillance_task in surveillance_tasks:
+            database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(surveillance_monitoring_heartbeat_task=surveillance_task)
         return JsonResponse({"status": "Surveillance monitoring task removed successfully"})
