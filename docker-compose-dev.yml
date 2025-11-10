@@ -1,0 +1,102 @@
+version: "3"
+services:
+  redis-blender:
+    platform: linux/amd64
+    command: ["redis-server", "/redis.conf", "--requirepass", "$REDIS_PASSWORD"]
+    image: "valkey/valkey:latest"
+    expose:
+      - "6379"
+    volumes:
+      - ./config/redis.conf:/redis.conf
+    container_name: "redis-blender"
+    env_file:
+      - ".env"
+    # networks:
+    #   - interop_ecosystem_network
+  db-blender:
+    platform: linux/amd64
+    container_name: "db-blender"
+    image: postgres:17
+    ports:
+      - "5432:5432"
+    expose:
+      - "5432"
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/postgresql/data/
+    env_file:
+      - ".env"
+    # networks:
+    #   - interop_ecosystem_network
+
+  flight-blender:
+    platform: linux/amd64
+    container_name: "flight-blender"
+    env_file:
+      - ".env"
+    build: .
+    image: openutm/flight-blender-dev
+    pull_policy: never
+    command: ./entrypoints/with-database/entrypoint.sh
+    ports:
+      - "8000:8000"
+    expose:
+      - "8000"
+      - "5678:5678"
+    depends_on:
+      - redis-blender
+      - db-blender
+    # volumes:
+    #   - .:/app
+    # networks:
+    #   - interop_ecosystem_network
+
+
+  flight-blender-celery:
+    platform: linux/amd64
+    container_name: worker
+    image: openutm/flight-blender-dev
+    pull_policy: never
+    build:
+      context: "."
+    env_file:
+      - ".env"
+    command: ./entrypoints/with-database/entrypoint-celery.sh
+    # volumes:
+    #   - .:/app
+    depends_on:
+      - redis-blender
+    # networks:
+    #   - interop_ecosystem_network
+
+  flight-blender-celery-beat:
+    platform: linux/amd64
+    container_name: flight-blender-beat
+    image: openutm/flight-blender-dev
+    pull_policy: never
+    restart: on-failure
+    build:
+      context: "."
+    env_file:
+      - ".env"
+    hostname: celery-beat
+    command: ./entrypoints/with-database/entrypoint-beat.sh
+    # volumes:
+    #   - .:/app
+    depends_on:
+      redis-blender:
+        condition: service_started
+      db-blender:
+        condition: service_started
+      flight-blender-celery:
+        condition: service_started
+  #   networks:
+  #     - interop_ecosystem_network
+
+volumes:
+  app:
+  db_data:
+
+# networks:
+#   interop_ecosystem_network:
+#     external: true

@@ -188,62 +188,38 @@ class CustomVolumeGenerator:
         _takeoff_start = arrow.get(start_datetime).shift(seconds=1).isoformat()
         _landing_time = arrow.get(end_datetime).shift(seconds=-1).isoformat()
 
-        # Get the first coordinate of the first feature to determine the takeoff location
+        # Get the first and last coordinates for takeoff and landing
         first_feature = geo_json_fc["features"][0]
-
         last_feature = geo_json_fc["features"][-1]
         first_coord = first_feature["geometry"]["coordinates"][0]
         last_coord = last_feature["geometry"]["coordinates"][-1]
         takeoff_location = LatLngPoint(lat=first_coord[1], lng=first_coord[0])
-        landing_location = LatLngPoint(
-            lat=last_coord[1],
-            lng=last_coord[0],
-        )
-
-        # Buffer the first coordinate to create a takeoff volume
-        takeoff_point = Point(takeoff_location.lng, takeoff_location.lat)
-        buffered_takeoff = takeoff_point.buffer(0.0005)
-
-        coordinates = list(zip(*buffered_takeoff.exterior.coords.xy))
-        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+        landing_location = LatLngPoint(lat=last_coord[1], lng=last_coord[0])
 
         max_altitude = first_feature["properties"]["max_altitude"]["meters"]
         min_altitude = first_feature["properties"]["min_altitude"]["meters"]
 
-        volume_3d_takeoff = Volume3D(
-            outline_polygon=Plgn(vertices=polygon_vertices),
-            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
-            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+        # Create takeoff volume
+        takeoff_volume_4d = self._create_buffered_volume_4d(
+            point=takeoff_location,
+            max_altitude=max_altitude,
+            min_altitude=min_altitude,
+            time_start=start_datetime,
+            time_end=_takeoff_start,
         )
+        all_v4d.append(takeoff_volume_4d)
 
-        volume_4d_takeoff = Volume4D(
-            volume=volume_3d_takeoff,
-            time_start=Time(format="RFC3339", value=start_datetime),
-            time_end=Time(format="RFC3339", value=_takeoff_start),
+        # Create landing volume
+        landing_volume_4d = self._create_buffered_volume_4d(
+            point=landing_location,
+            max_altitude=max_altitude,
+            min_altitude=min_altitude,
+            time_start=_landing_time,
+            time_end=end_datetime,
         )
+        all_v4d.append(landing_volume_4d)
 
-        all_v4d.append(volume_4d_takeoff)
-
-        # Buffer the last coordinate to create a landing volume
-
-        landing_point = Point(landing_location.lng, landing_location.lat)
-        buffered_landing = landing_point.buffer(0.0005)
-        coordinates = list(zip(*buffered_landing.exterior.coords.xy))
-        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
-        volume_3d_landing = Volume3D(
-            outline_polygon=Plgn(vertices=polygon_vertices),
-            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
-            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
-        )
-
-        volume_4d_landing = Volume4D(
-            volume=volume_3d_landing,
-            time_start=Time(format="RFC3339", value=_landing_time),
-            time_end=Time(format="RFC3339", value=end_datetime),
-        )
-
-        all_v4d.append(volume_4d_landing)
-
+        # Process each feature
         for feature in geo_json_fc["features"]:
             max_altitude = feature["properties"]["max_altitude"]["meters"]
             min_altitude = feature["properties"]["min_altitude"]["meters"]
@@ -251,14 +227,14 @@ class CustomVolumeGenerator:
             broken_down_features = self._break_linestring_to_smaller_pieces(line_feature=feature, piece_length_m=self.default_uav_speed_m_per_s * 3)
 
             num_pieces = len(broken_down_features)
-            total_flight_time_s = num_pieces / self.default_uav_speed_m_per_s
+            total_flight_time_s = num_pieces * 3  # Assuming each piece takes 3 seconds
             climb_time_s = abs(max_altitude - min_altitude) / self.default_uav_climb_rate_m_per_s
             descent_time_s = abs(max_altitude - min_altitude) / self.default_uav_descent_rate_m_per_s
             adjusted_flight_time_s = total_flight_time_s + climb_time_s + descent_time_s
 
             for idx, piece in enumerate(broken_down_features):
-                piece_start_time = arrow.get(_takeoff_start).shift(seconds=int(idx / self.default_uav_speed_m_per_s + climb_time_s)).isoformat()
-                piece_end_time = arrow.get(piece_start_time).shift(seconds=int(adjusted_flight_time_s)).isoformat()
+                piece_start_time = arrow.get(_takeoff_start).shift(seconds=int(idx * 3 + climb_time_s)).isoformat()
+                piece_end_time = arrow.get(piece_start_time).shift(seconds=3).isoformat()  # Each piece takes 3 seconds
 
                 piece_geom = piece["geometry"]
                 shapely_piece_geom = shape(piece_geom)
@@ -286,3 +262,22 @@ class CustomVolumeGenerator:
             logger.info("The landing time has been changed and is computed using the default UAV speed.")
 
         return all_v4d
+
+    def _create_buffered_volume_4d(self, point: LatLngPoint, max_altitude: float, min_altitude: float, time_start: str, time_end: str) -> Volume4D:
+        """Helper method to create a buffered Volume4D from a point."""
+        shapely_point = Point(point.lng, point.lat)
+        buffered_geom = shapely_point.buffer(0.0005)
+        coordinates = list(zip(*buffered_geom.exterior.coords.xy))
+        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+
+        volume_3d = Volume3D(
+            outline_polygon=Plgn(vertices=polygon_vertices),
+            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+        )
+
+        return Volume4D(
+            volume=volume_3d,
+            time_start=Time(format="RFC3339", value=time_start),
+            time_end=Time(format="RFC3339", value=time_end),
+        )

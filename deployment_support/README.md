@@ -47,7 +47,7 @@ If you are working in stand-alone mode, recommended initially, the above environ
 | FLIGHTBLENDER_FQDN | string | This is the domain name of a Flight Blender deployment, e.g., `https://beta.flightblender.com`. |
 
 ### 2. Use Docker Compose to stand up Flight Blender
-Once you have created and saved the .env file, you can then use the [docker-compose.yaml](../docker-compose.yml) file to start the instance. Just run `docker compose up` and a running instance of Flight Blender will be available.
+After creating and saving the .env file, you can utilize the [docker-compose-dev.yaml](../docker-compose-dev.yml) file to launch the instance. Simply execute `docker build . -t openutm/flight-blender-dev` to create the image, followed by `docker compose up` to make a running Flight Blender instance accessible.
 
 #### Running Flight Blender
 You can run Flight Blender by running `docker compose up` and then go to `http://localhost:8000`. You should see the Flight Blender Logo and a link to the API and Ping documentation. Congratulations 🎉 we now have a running version of the system!
