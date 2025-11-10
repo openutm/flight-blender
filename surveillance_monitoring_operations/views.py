@@ -75,4 +75,4 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
             return JsonResponse({"error": f"No active surveillance monitoring tasks found for {session_id}"}, status=400)
         for surveillance_task in surveillance_tasks:
             database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(surveillance_monitoring_heartbeat_task=surveillance_task)
-        return JsonResponse({"status": "Surveillance monitoring task removed successfully"})
+        return JsonResponse({"status": "Surveillance monitoring tasks removed successfully"})
