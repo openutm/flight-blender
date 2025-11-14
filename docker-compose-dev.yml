@@ -16,7 +16,7 @@ services:
   db-blender:
     platform: linux/amd64
     container_name: "db-blender"
-    image: postgres:17
+    image: postgres:latest
     ports:
       - "5432:5432"
     expose:
