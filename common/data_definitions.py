@@ -82,6 +82,7 @@ FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (9, _("ADS-B")),
     (10, _("FLARM")),
     (11, _("Network Remote-ID")),
+    (12, _("Other")),
 )
 
 # Locations for Index Creation, using tmp to avoid permission issues in Docker / Kubernetes

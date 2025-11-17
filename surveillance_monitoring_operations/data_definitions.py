@@ -77,3 +77,12 @@ class HeartbeatMessage:
     average_latenccy_or_95_percentile_latency_ms: int
     horizontal_or_vertical_95_percentile_accuracy_m: int
     timestamp: str
+
+
+@dataclass
+class SurveillanceSensorDetail:
+    id: str
+    sensor_type_display: str
+    sensor_identifier: str
+    created_at: str
+    updated_at: str

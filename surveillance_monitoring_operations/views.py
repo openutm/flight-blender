@@ -15,7 +15,7 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 
-from .data_definitions import HealthMessage, SurveillanceStatus
+from .data_definitions import HealthMessage, SurveillanceSensorDetail, SurveillanceStatus
 
 logger = logging.getLogger("django")
 
@@ -75,3 +75,23 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
         for surveillance_task in surveillance_tasks:
             database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(surveillance_monitoring_heartbeat_task=surveillance_task)
         return JsonResponse({"status": "Surveillance monitoring tasks removed successfully"})
+
+
+@api_view(["GET"])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
+def list_surveillance_sensors(request):
+    database_reader = FlightBlenderDatabaseReader()
+    sensors = database_reader.get_active_surveillance_sensors()
+    sensor_list = [
+        asdict(
+            SurveillanceSensorDetail(
+                id=str(sensor.id),
+                sensor_type_display=sensor.sensor_type_display(),
+                sensor_identifier=sensor.sensor_identifier,
+                created_at=sensor.created_at.isoformat(),
+                updated_at=sensor.updated_at.isoformat(),
+            )
+        )
+        for sensor in sensors
+    ]
+    return JsonResponse({"active_sensors": sensor_list})

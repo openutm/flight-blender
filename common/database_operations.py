@@ -54,7 +54,10 @@ from scd_operations.scd_data_definitions import (
     PartialCreateOperationalIntentReference,
     SubscriberToNotify,
 )
-from surveillance_monitoring_operations.models import SurveillanceSession
+from surveillance_monitoring_operations.models import (
+    SurveillanceSensor,
+    SurveillanceSession,
+)
 
 logger = logging.getLogger("django")
 
@@ -361,6 +364,9 @@ class FlightBlenderDatabaseReader:
             return observations
         except FlightObservation.DoesNotExist:
             return None
+
+    def get_active_surveillance_sensors(self) -> QuerySet[SurveillanceSensor]:
+        return SurveillanceSensor.objects.filter(is_active=True)
 
     def get_surveillance_session_by_id(self, session_id: str) -> None | SurveillanceSession:
         try:

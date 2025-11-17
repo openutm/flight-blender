@@ -12,8 +12,8 @@ servers:
     description: 'Flight Blender API'
 security:
   - AuthFromPassport:
-      - 'flight_blender.write'
-      - 'flight_blender.read'
+      - 'flightblender.write'
+      - 'flightblender.read'
   - AuthFromAuthorizationAuthority:
       - utm.strategic_coordination
       - utm.constraint_management
@@ -67,7 +67,7 @@ paths:
       summary: 'Start or stop surveillance heartbeat track'
       description: 'This operation allows starting or stopping the surveillance heartbeat track for monitoring purposes.'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       requestBody:
         required: true
         content:
@@ -122,7 +122,7 @@ paths:
       summary: 'Surveillance service status'
       description: 'Retrieve the current operational status of the surveillance monitoring service.'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       responses:
         '200':
           description: Surveillance service status retrieved successfully.
@@ -130,6 +130,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthMessage'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
+  /surveillance_monitoring_operations/list_surveillance_sensors:
+    get:
+      summary: 'List active surveillance sensors'
+      description: 'Retrieve a list of all active surveillance sensors.'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      responses:
+        '200':
+          description: 'List of active surveillance sensors in Flight Blender'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active_sensors:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SurveillanceSensorDetail'
         '400':
           description: Bad request submitted
           content:
@@ -200,7 +244,7 @@ paths:
     get:
       security:
       - AuthFromPassport:
-          - flight_blender.read
+          - flightblender.read
       responses:
         '200':
           content:
@@ -222,7 +266,7 @@ paths:
     put:
       summary: 'Create a Remote ID Subscription in the DSS'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description:
         "Create a subscription for an airspace to receive updates of operations in a volume of interest. After extents are submitted, Flight Blender will \
         \ get a appropriate token and create a subscription with a DSS instance, the DSS url needs to be confirmed / set as a part of Flight Blender setup. It will then poll flights through the Flights URLs provided by the DSS "
@@ -338,7 +382,7 @@ paths:
       - telemetry
       summary: 'Add Telemetry observation(s)'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description:
         "Submit data that is compliant with ASTM RemoteID from the vehicle / GCS into Flight Blender, after submission, Flight Blender will \
         \ normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces e.g. Network RID. A single or multiple flight states can be submitted at a given time."
@@ -407,7 +451,7 @@ paths:
     get:
       summary: 'Get flight data compliant with network remote id given a subscription id'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description:
         "By default Flight Blender sends flight data to Flight Spotlight as a scheduled job (push) every x seconds (which can be configured) \
         \ use this endpoint if you plan to implement polling mechanism (pull). This endpoint for e.g. is used in the RID Qualifier or can be to get flights if you are using a polling mechanism for your display client"
@@ -517,7 +561,7 @@ paths:
 
       summary: 'Get remote id data for a given view bounding box'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description: 'This endpoint is used in the context of running the rid_qualifier tool in the DSS. Poll this endpoint to get current remote ID display data as would be visualized by a Display Application. '
 
       responses:
@@ -974,7 +1018,7 @@ paths:
           type: string
       summary: 'Add Airtraffic observation(s)'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description:
         "Submit air traffic data into Flight Blender, after submission, Flight Blender will \
         \ normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces. A single or multiple observations can be submitted at a given time. No Network Remote ID data should be uploaded from this endpoint."
@@ -1032,7 +1076,7 @@ paths:
 
       summary: 'Start a stream of air-traffic data'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description:
         "Using this endpoint, you can start a stream of air-traffic observations for sixty seconds using the Opensky Network (https://opensky-network.org/).These observations are automatically submitted to Flight Spotlight for display"
 
@@ -1093,7 +1137,7 @@ paths:
 
       summary: 'Get Airtraffic observation(s)'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description:
         "Get all air traffic observations within Flight Blender for a view port. No Network Remote ID data will be provided from this endpoint."
       responses:
@@ -1134,7 +1178,7 @@ paths:
     get:
       summary: 'Get a list of all submitted flight declarations'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description: "Get a list of all Flight declarations in the database, if no start or end date is provided, Flight Blender will provide declarations for today"
 
       parameters:
@@ -1219,7 +1263,7 @@ paths:
 
       summary: 'Get a list of all flight declarations / operational intents from the USS Network'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description: "Get a list of all Operational Intents from the USSP network"
 
       responses:
@@ -1269,7 +1313,7 @@ paths:
 
       summary: 'Delete the specified flight declaration from Flight Blender'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description: "Delete a flight declaration, used by verification framework to tear down tests."
 
       responses:
@@ -1306,7 +1350,7 @@ paths:
     get:
       operationId: Get all Public Keys
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
 
       description: 'List Authorized Public keys that can be used for submitting remote ID data using the associated private key.'
       parameters: []
@@ -1324,7 +1368,7 @@ paths:
     post:
       operationId: Create a new Public Key
       security:
-        - AuthFromPassport: [ flight_blender.write]
+        - AuthFromPassport: [ flightblender.write]
       description: 'Create a new Authorized Public key. Once this key is submitted to Flight Blender, messages signed by the corresponding private key will be validated and processed.'
       parameters: []
       requestBody:
@@ -1351,7 +1395,7 @@ paths:
     get:
       operationId: Get a single key
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description: 'Get a single Authorized Public key by ID. A JWK json will be returned by Flight Blender.'
       parameters:
       - name: id
@@ -1373,7 +1417,7 @@ paths:
       operationId: Update public key details
       description: 'Update the Public Key URL for a key'
       security:
-        - AuthFromPassport: [ flight_blender.write]
+        - AuthFromPassport: [ flightblender.write]
       parameters:
       - name: id
         in: path
@@ -1405,7 +1449,7 @@ paths:
       operationId: Remove Public Key
       description: 'Remove details of a public key in Flight Blender'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       parameters:
       - name: id
         in: path
@@ -1422,7 +1466,7 @@ paths:
     get:
       summary: 'Get the details of a single flight declaration'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point can be queried to display authorization"
       parameters:
         - in: path
@@ -1472,7 +1516,7 @@ paths:
     put:
       summary: 'Submit a approval /rejection review for an operation'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description: "By default all flight declarations submitted in Flight Blender are not approved / authorized, for most most operations, authorization may \ not be necessary but in case operations needs authorization, this end point to change the status of operation and additionally update the state of the operations as it has commenced"
       parameters:
         - in: path
@@ -1531,7 +1575,7 @@ paths:
     put:
       summary: 'Update the state of a existing Flight Declaration'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description: "By default all flight declarations submitted in Flight Blender are not set a 'Accepted' state, for most operations this would suffice, however the state may be changed / updated manually. "
       parameters:
         - in: path
@@ -1592,7 +1636,7 @@ paths:
       description: "Submit a Flight Declaration into Flight Blender. \
         \ A flight declaration can be added upto 24 hours in advance and follows the ASTM Operational Intent data format. In most cases, you can use Flight Spotlight Launchpad functionality to submit a declaration."
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
 
       requestBody:
         required: true
@@ -1641,7 +1685,7 @@ paths:
     put:
       summary: 'Add a Geofence'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description:
         "Submit a Geofence in the form of a  GeoJSON declaration which is in turn submitted to  \
         \ Flight Spotlight. Geofence can be used to specify areas of interest, restricted areas, constraints etc."
@@ -1692,7 +1736,7 @@ paths:
     put:
       summary: 'Add a Geozone'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description:
         "Submit a Geofence in the form of a GeoZone which is in turn submitted to  \
         \ Flight Spotlight. Geofence can be used to specify areas of interest, restricted areas, constraints etc., Flight Blender will convert the fence into a format that is compatible with the EuroCAE ED-269 standard."
@@ -1743,7 +1787,7 @@ paths:
     get:
       summary: 'Get a list of all submitted Geofence'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description: 'By default all geo fence submitted in Flight Blender has  a start and end date, if none is provided, the server will default to today as start and end date'
 
       parameters:
@@ -1819,7 +1863,7 @@ paths:
     get:
       summary: 'Get details of a single geo fence'
       security:
-        - AuthFromPassport: [flight_blender.read]
+        - AuthFromPassport: [flightblender.read]
       description: 'Show details of a geofence as stored in the database'
       parameters:
         - in: path
@@ -1879,7 +1923,7 @@ paths:
 
       summary: 'Delete the specified geo fence from Flight Blender'
       security:
-        - AuthFromPassport: [flight_blender.write]
+        - AuthFromPassport: [flightblender.write]
       description: "Delete a geo fence, used by verification framework to tear down tests."
 
       responses:
@@ -2067,7 +2111,7 @@ paths:
 
       summary: 'Get latest air-traffic data'
       security:
-        - AuthFromPassport:  [flight_blender.read]
+        - AuthFromPassport:  [flightblender.read]
       description:
         "Using this endpoint, you can query a stream of air-traffic observations for the view port provided"
 
@@ -2244,8 +2288,8 @@ components:
         clientCredentials:
           tokenUrl: 'http://passport.openutm.net/oauth/token'
           scopes:
-            flight_blender.write: 'Write data into Flight Blender'
-            flight_blender.read: 'Read data into Flight Blender'
+            flightblender.write: 'Write data into Flight Blender'
+            flightblender.read: 'Read data into Flight Blender'
 
     AuthFromAuthorizationAuthority:
       flows:
@@ -5612,6 +5656,27 @@ components:
           description: >-
             'Human-readable description of the problem with the exchange, if any.'
 
+    SurveillanceSensorDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the sensor
+        sensor_type_display:
+          type: string
+          description: Type of the sensor
+        sensor_identifier:
+          type: string
+          description: A unique identifier for the sensor
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
 tags:
   - name: uss
     description: Flight Blender enables connections with the DSS for ASTM-compliant Remote-ID data. These endpoints cover creating DSS subscriptions, submitting operational intents, and querying Remote-ID data and operational intents for a given area.
@@ -5634,4 +5699,4 @@ tags:
   - name: message-signing-verification
     description: Flight Blender provides security features for signing requests and responses. These endpoints allow you to manage public keys used to verify signed messages both within Flight Blender and in external environments.
   - name: surveillance-sdsp
-    description: Endpoints for managing surveillance monitoring tasks, including starting and stopping heartbeat tracking. Use these APIs to monitor the status of surveillance systems and ensure compliance with monitoring requirements and compliance to ASTM 3623-22.
+    description: Endpoints for managing surveillance monitoring tasks, including starting and stopping heartbeat tracking. The heartbeat and tracking data are shared using Websocket information. Use these APIs to monitor the status of surveillance systems and ensure compliance with monitoring requirements and compliance to ASTM 3623-22.

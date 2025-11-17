@@ -9,4 +9,9 @@ urlpatterns = [
         surveillance_monitoring_views.start_stop_surveillance_heartbeat_track,
         name="start_stop_surveillance_heartbeat_track",
     ),
+    path(
+        "list_surveillance_sensors/",
+        surveillance_monitoring_views.list_surveillance_sensors,
+        name="list_surveillance_sensors",
+    ),
 ]
