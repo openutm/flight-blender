@@ -28,7 +28,7 @@ class FlightObservation(models.Model):
     Model representing a flight stream observation.
     Attributes:
         id (UUIDField): Primary key for the observation, auto-generated UUID.
-        session_id (UUIDField): Session ID for the RID stream.
+        session_id (UUIDField): Session ID for the observation, when an observation is associated with a flight declaration then the Flight Declaration ID is used here, when the observation is associated with a sensor, the sensor ID is used here, else it can be a random UUID.
         latitude_dd (FloatField): Latitude of the observation in decimal degrees.
         longitude_dd (FloatField): Longitude of the observation in decimal degrees.
         altitude_mm (FloatField): Altitude of the observation in millimeters.

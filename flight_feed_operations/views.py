@@ -152,42 +152,36 @@ def set_air_traffic(request, session_id):
 
         m = asdict(msg)
         return JsonResponse(m, status=m["status"])
-
     schema = ObservationSchema()
+    validated_observations = []
+
+    # Validate all observations first
     for observation in observations:
         try:
             validated_data = schema.load(observation)
-            lat_dd = validated_data["lat_dd"]
-            lon_dd = validated_data["lon_dd"]
-            altitude_mm = validated_data["altitude_mm"]
-            traffic_source = validated_data["traffic_source"]
-            source_type = validated_data["source_type"]
-            icao_address = validated_data["icao_address"]
-
+            validated_observations.append({**validated_data, "metadata": observation.get("metadata", {})})
         except ValidationError as err:
             msg = {
-                "message": "One of your observations do not have the mandatory required field",
+                "message": "One of your observations do not have mandatory required fields or has incorrect data types. Please see error details.",
                 "errors": err.messages,
             }
             return JsonResponse(msg, status=400)
-        metadata = {}
 
-        if "metadata" in observation.keys():
-            metadata = observation["metadata"]
+    # Process validated observations
+    session_id_str = str(session_id) if session_id else "00000000-0000-0000-0000-000000000000"
 
-        session_id = str(session_id) if session_id else "00000000-0000-0000-0000-000000000000"
+    for validated_data in validated_observations:
         so = SingleAirtrafficObservation(
-            session_id=session_id,
-            lat_dd=lat_dd,
-            lon_dd=lon_dd,
-            altitude_mm=altitude_mm,
-            traffic_source=traffic_source,
-            source_type=source_type,
-            icao_address=icao_address,
-            metadata=metadata,
+            session_id=session_id_str,
+            lat_dd=validated_data["lat_dd"],
+            lon_dd=validated_data["lon_dd"],
+            altitude_mm=validated_data["altitude_mm"],
+            traffic_source=validated_data["traffic_source"],
+            source_type=validated_data["source_type"],
+            icao_address=validated_data["icao_address"],
+            metadata=validated_data["metadata"],
         )
-
-        write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
+        write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
 
     op = FlightObservationsProcessingResponse(message="OK", status=201)
     return JsonResponse(asdict(op), status=op.status)

@@ -340,7 +340,9 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
     for observation in telemetry_observations:
         flight_details = observation["flight_details"]
         current_states = observation["current_states"]
-        operation_id = flight_details["id"]
+        operation_id = flight_details[
+            "id"
+        ]  # The Flight declaration ID is set as the session ID so that observations can be linked back to the flight declaration
         # Update telemetry received timestamp
         my_database_writer.update_telemetry_timestamp(flight_declaration_id=operation_id)
 
