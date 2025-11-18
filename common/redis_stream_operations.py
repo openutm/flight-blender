@@ -72,6 +72,29 @@ class RedisStreamOperations:
             logger.error(f"Error creating consumer group '{group_name}' for stream '{stream_name}': {e}")
             return False
 
+    def clear_stream(self, stream_name: str) -> bool:
+        """
+        Clear all messages from a Redis stream.
+
+        Args:
+            stream_name (str): The name of the Redis stream to clear.
+
+        Returns:
+            bool: True if stream was cleared successfully, False otherwise.
+        """
+        try:
+            # Delete the entire stream
+            result = self.redis.delete(stream_name)
+            if result:
+                logger.info(f"Redis stream '{stream_name}' cleared successfully.")
+                return True
+            else:
+                logger.warning(f"Redis stream '{stream_name}' does not exist or was already empty.")
+                return False
+        except Exception as e:
+            logger.error(f"Error clearing Redis stream '{stream_name}': {e}")
+            return False
+
     def create_consumer_reader(self) -> str:
         """
         Create a unique consumer identifier using UUID.
@@ -84,7 +107,12 @@ class RedisStreamOperations:
         return consumer_id
 
     def read_latest_air_traffic_data(
-        self, stream_name: str, consumer_group: str = "air_traffic_readers", consumer_id: Optional[str] = None, count: int = 10, block: int = 1000
+        self,
+        stream_name: str,
+        consumer_group: str = "air_traffic_readers",
+        consumer_id: Optional[str] = None,
+        count: int = 10,
+        block: int = 1000,
     ) -> List[SingleAirtrafficObservation]:
         """
         Read the latest air traffic data from the Redis stream since last access by this consumer.
@@ -111,7 +139,13 @@ class RedisStreamOperations:
                 return []
 
             # Read messages from the stream using consumer group
-            messages = self.redis.xreadgroup(consumer_group, consumer_id, {stream_name: ">"}, count=count, block=block)
+            messages = self.redis.xreadgroup(
+                consumer_group,
+                consumer_id,
+                {stream_name: ">"},
+                count=count,
+                block=block,
+            )
 
             observations = []
             message_ids_to_ack = []
