@@ -24,14 +24,12 @@ def get_redis() -> redis.Redis:
             host=redis_host,
             port=redis_port,
             password=redis_password,
-            charset="utf-8",
             decode_responses=True,
         )
     else:
         return redis.Redis(
             host=redis_host,
             port=redis_port,
-            charset="utf-8",
             decode_responses=True,
         )
 
@@ -57,14 +55,12 @@ class RedisHelper:
                 host=self.redis_host,
                 port=self.redis_port,
                 password=self.redis_password,
-                charset="utf-8",
                 decode_responses=True,
             )
         else:
             return redis.Redis(
                 host=self.redis_host,
                 port=self.redis_port,
-                charset="utf-8",
                 decode_responses=True,
             )
 

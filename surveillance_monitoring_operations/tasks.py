@@ -7,6 +7,7 @@ from asgiref.sync import async_to_sync
 from channels_redis.core import RedisChannelLayer
 from dotenv import find_dotenv, load_dotenv
 
+from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
 from flight_blender.settings import BROKER_URL
 
@@ -25,7 +26,13 @@ load_dotenv(find_dotenv())
 
 # Generate unique aircraft positions
 def generate_unique_aircraft_position(session_id: str, unique_aircraft_identifier: str) -> AircraftPosition:
-    # This method would contain logic to generate unique positions based on session_id and unique_aircraft_identifier since the last time it was processed. This needs to be implemented for your
+    # This method would contain logic to generate unique positions based on session_id and unique_aircraft_identifier since the last time it was processed. This needs to be implemented for your deployment.
+    stream_ops = RedisStreamOperations()
+    consumer_id = stream_ops.create_consumer_reader()
+    observations = stream_ops.read_latest_air_traffic_data(stream_name="air_traffic_stream", consumer_id=consumer_id, count=20)
+    for obs in observations:
+        print(f"Aircraft {obs.icao_address} at {obs.lat_dd}, {obs.lon_dd}")
+
     return AircraftPosition(
         lat=37.7749,
         lng=-122.4194,
