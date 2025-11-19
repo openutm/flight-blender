@@ -17,6 +17,8 @@ if ENV_FILE:
 
 
 class RedisStreamOperations:
+    """This module manages the redis entries to the flight stream, it is used to create the stream, add data to it, and read from it."""
+
     def __init__(self):
         self.redis = get_redis()
 

@@ -855,7 +855,7 @@ class FlightBlenderDatabaseWriter:
         session_id = session_id if session_id else str(uuid.uuid4())
 
         expires = now.shift(minutes=1)
-        task_name = "send_track_to_consumer"
+        task_name = "send_and_generate_track_to_consumer"
         logger.info("Creating periodic task for surveillance monitoring tracks, it expires at %s" % expires)
         try:
             p_task = surveillance_monitoring_job.schedule_every(
