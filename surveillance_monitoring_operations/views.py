@@ -15,7 +15,11 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 
-from .data_definitions import HealthMessage, SurveillanceSensorDetail, SurveillanceStatus
+from .data_definitions import (
+    HealthMessage,
+    SurveillanceSensorDetail,
+    SurveillanceStatus,
+)
 
 logger = logging.getLogger("django")
 
@@ -48,7 +52,9 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
     # Logic to start or stop the heartbeat task
     if action == "start":
         # Start the heartbeat task
-        surveillance_task_exists = database_reader.get_surveillance_session_by_id(session_id=session_id)
+        surveillance_task_exists = database_reader.get_surveillance_session_by_id(
+            session_id=session_id
+        )
         # if task already exists, return error
         if surveillance_task_exists:
             return JsonResponse(
@@ -59,22 +65,44 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        database_writer.create_surveillance_session(session_id=session_id, valid_until=end_datetime)
-        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(session_id=str(session_id))
-        database_writer.create_surveillance_monitoring_track_periodic_task(session_id=str(session_id))
+        database_writer.create_surveillance_session(
+            session_id=session_id, valid_until=end_datetime
+        )
+        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(
+            session_id=str(session_id)
+        )
+        database_writer.create_surveillance_monitoring_track_periodic_task(
+            session_id=str(session_id)
+        )
         return JsonResponse({"status": "Surveillance monitoring heartbeat started"})
     else:
         # Stop the heartbeat task
-        # Note: Stopping a Celery task programmatically can be complex and may require additional setup
-        surveillance_session = database_reader.get_surveillance_session_by_id(session_id=session_id)
+        surveillance_session = database_reader.get_surveillance_session_by_id(
+            session_id=session_id
+        )
         if not surveillance_session:
-            return JsonResponse({"error": f"Invalid session_id provided: {session_id}"}, status=400)
-        surveillance_tasks = database_reader.get_surveillance_periodic_tasks_by_session_id(session_id=session_id)
+            return JsonResponse(
+                {"error": f"Invalid session_id provided: {session_id}"}, status=400
+            )
+        surveillance_tasks = (
+            database_reader.get_surveillance_periodic_tasks_by_session_id(
+                session_id=session_id
+            )
+        )
         if not surveillance_tasks:
-            return JsonResponse({"error": f"No active surveillance monitoring tasks found for {session_id}"}, status=400)
+            return JsonResponse(
+                {
+                    "error": f"No active surveillance monitoring tasks found for {session_id}"
+                },
+                status=400,
+            )
         for surveillance_task in surveillance_tasks:
-            database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(surveillance_monitoring_heartbeat_task=surveillance_task)
-        return JsonResponse({"status": "Surveillance monitoring tasks removed successfully"})
+            database_writer.remove_surveillance_monitoring_heartbeat_periodic_task(
+                surveillance_monitoring_heartbeat_task=surveillance_task
+            )
+        return JsonResponse(
+            {"status": "Surveillance monitoring tasks removed successfully"}
+        )
 
 
 @api_view(["GET"])
