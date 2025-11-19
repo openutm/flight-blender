@@ -130,8 +130,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS = os.getenv(
     "ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS",
-    "surveillnce_monitoring_operations.utils.TrafficDataFuser",
+    "surveillance_monitoring_operations.utils.TrafficDataFuser",
 )
+CUSTOM_VOLUME_4D_GENERATION_CLASS = os.getenv("CUSTOM_VOLUME_4D_GENERATION_CLASS", "")
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
