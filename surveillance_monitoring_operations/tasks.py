@@ -31,10 +31,12 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     module = import_module(module_name)
     TrafficDataFuser = getattr(module, class_name)
 
-    traffic_data_fuser = TrafficDataFuser(raw_observations=raw_observations)
+    traffic_data_fuser = TrafficDataFuser(session_id=session_id, raw_observations=raw_observations)
 
-    fused_observations = traffic_data_fuser.fuse_raw_observations()
-    track_messages = traffic_data_fuser.generate_track_messages(fused_observations=fused_observations)
+    traffic_data_fuser.fuse_raw_observations()
+    traffic_data_fuser.generate_active_tracks()
+    active_tracks = stream_ops.get_all_active_tracks_in_session(session_id=session_id)
+    track_messages = traffic_data_fuser.generate_track_messages(active_tracks=active_tracks)
 
     for track_message in track_messages:
         logger.debug("Fused track message:", asdict(track_message))

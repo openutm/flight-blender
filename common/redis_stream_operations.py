@@ -6,6 +6,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from auth_helper.common import get_redis
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
+from surveillance_monitoring_operations.data_definitions import ActiveTrack
 
 logger = logging.getLogger("django")
 
@@ -131,6 +132,126 @@ class RedisStreamOperations:
         except Exception as e:
             logger.error(f"Error clearing Redis stream '{stream_name}': {e}")
             return False
+
+    def check_active_track_exists(self, session_id: str, unique_aircraft_identifier: str) -> bool:
+        """
+        Check if an active track exists for a given session ID and unique aircraft identifier.
+
+        Args:
+            session_id (str): The session ID.
+            unique_aircraft_identifier (str): The unique aircraft identifier (e.g., ICAO address).
+
+        Returns:
+            bool: True if the active track exists, False otherwise.
+        """
+        track_key = f"active_track:{session_id}:{unique_aircraft_identifier}"
+        exists = self.redis.exists(track_key)
+        logger.debug(f"Active track check for key '{track_key}': {'exists' if exists else 'does not exist'}")
+        return exists == 1
+
+    def get_active_track(self, session_id: str, unique_aircraft_identifier: str) -> ActiveTrack:
+        """
+        Retrieve an active track for a given session ID and unique aircraft identifier.
+
+        Args:
+            session_id (str): The session ID.
+            unique_aircraft_identifier (str): The unique aircraft identifier (e.g., ICAO address).
+        Returns:
+            Optional[ActiveTrack]: The active track if found, None otherwise.
+        """
+        track_key = f"active_track:{session_id}:{unique_aircraft_identifier}"
+        track_data = self.redis.hgetall(track_key)
+        if not track_data:
+            logger.debug(f"No active track found for key '{track_key}'")
+            return None
+
+        # Convert Redis bytes to appropriate types
+        field_data = {}
+        for key, value in track_data.items():
+            if isinstance(key, bytes):
+                key = key.decode("utf-8")
+            if isinstance(value, bytes):
+                value = value.decode("utf-8")
+            field_data[key] = value
+
+        active_track = ActiveTrack(
+            session_id=field_data.get("session_id", ""),
+            unique_aircraft_identifier=field_data.get("unique_aircraft_identifier", ""),
+            last_updated_timestamp=field_data.get("last_updated_timestamp", ""),
+            observations=eval(field_data.get("observations", "[]")),
+        )
+        logger.debug(f"Retrieved active track for key '{track_key}': {active_track}")
+        return active_track
+
+    def add_active_track_to_session(self, session_id: str, active_track: ActiveTrack) -> None:
+        """
+        Add a new active track to Redis for a given session ID.
+
+        Args:
+            session_id (str): The session ID.
+            active_track (ActiveTrack): The active track to add.
+        """
+        track_key = f"active_track:{session_id}:{active_track.unique_aircraft_identifier}"
+        track_data = {
+            "session_id": active_track.session_id,
+            "unique_aircraft_identifier": active_track.unique_aircraft_identifier,
+            "last_updated_timestamp": active_track.last_updated_timestamp,
+            "observations": str(active_track.observations),
+        }
+        self.redis.hmset(track_key, track_data)
+        logger.info(f"Added active track to Redis with key '{track_key}': {active_track}")
+
+    def update_active_track(self, session_id: str, active_track: ActiveTrack) -> None:
+        """
+        Update an existing active track in Redis for a given session ID.
+
+        Args:
+            session_id (str): The session ID.
+            active_track (ActiveTrack): The active track to update.
+        """
+        track_key = f"active_track:{session_id}:{active_track.unique_aircraft_identifier}"
+        track_data = {
+            "session_id": active_track.session_id,
+            "unique_aircraft_identifier": active_track.unique_aircraft_identifier,
+            "last_updated_timestamp": active_track.last_updated_timestamp,
+            "observations": str(active_track.observations),
+        }
+        self.redis.hmset(track_key, track_data)
+        logger.info(f"Updated active track in Redis with key '{track_key}': {active_track}")
+
+    def get_all_active_tracks_in_session(self, session_id: str) -> List[ActiveTrack]:
+        """
+        Retrieve all active tracks for a given session ID.
+
+        Args:
+            session_id (str): The session ID.
+        Returns:
+            List[ActiveTrack]: A list of active tracks for the session.
+        """
+        pattern = f"active_track:{session_id}:*"
+        track_keys = self.redis.keys(pattern)
+        active_tracks = []
+        for track_key in track_keys:
+            track_data = self.redis.hgetall(track_key)
+            if track_data:
+                # Convert Redis bytes to appropriate types
+                field_data = {}
+                for key, value in track_data.items():
+                    if isinstance(key, bytes):
+                        key = key.decode("utf-8")
+                    if isinstance(value, bytes):
+                        value = value.decode("utf-8")
+                    field_data[key] = value
+
+                active_track = ActiveTrack(
+                    session_id=field_data.get("session_id", ""),
+                    unique_aircraft_identifier=field_data.get("unique_aircraft_identifier", ""),
+                    last_updated_timestamp=field_data.get("last_updated_timestamp", ""),
+                    observations=eval(field_data.get("observations", "[]")),
+                )
+                active_tracks.append(active_track)
+        logger.debug(f"Retrieved {len(active_tracks)} active tracks for session_id '{session_id}'")
+        return active_tracks
 
     def create_consumer_reader(self) -> str:
         """

@@ -86,3 +86,11 @@ class SurveillanceSensorDetail:
     sensor_identifier: str
     created_at: str
     updated_at: str
+
+
+@dataclass
+class ActiveTrack:
+    session_id: str
+    unique_aircraft_identifier: str
+    last_updated_timestamp: str
+    observations: list[dict]
