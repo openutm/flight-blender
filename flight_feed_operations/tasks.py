@@ -13,6 +13,7 @@ from dotenv import find_dotenv, load_dotenv
 from pyproj import Transformer
 
 from common.database_operations import FlightBlenderDatabaseWriter
+from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
 
 from .data_definitions import SingleAirtrafficObservation
@@ -41,6 +42,7 @@ def write_incoming_air_traffic_data(observation: str):
         str: The message ID of the added observation.
     """
     my_database_writer = FlightBlenderDatabaseWriter()
+    my_redis_helper = RedisStreamOperations()
     obs = json.loads(observation)
     logger.debug("Received observation: %s", obs)
     try:
@@ -54,8 +56,10 @@ def write_incoming_air_traffic_data(observation: str):
     logger.debug("Parsed observation: %s", single_air_traffic_observation)
 
     logger.info("Writing observation..")
-    # TODO: Write this observation to the Database
+
     my_database_writer.write_flight_observation(single_air_traffic_observation)
+    logger.info("Writing to Redis stream..")
+    message_id = my_redis_helper.add_air_traffic_data(stream_name="air_traffic_stream", observation=asdict(single_air_traffic_observation))
 
 
 lonlat_to_webmercator = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)

@@ -22,31 +22,32 @@ class RedisStreamOperations:
     def __init__(self):
         self.redis = get_redis()
 
-    def create_air_traffic_stream(self, stream_name: str) -> None:
+    def create_air_traffic_stream(self, stream_name: str, max_len: int = 10000) -> None:
         """
-        Create a Redis stream for air traffic data.
+        Create a Redis stream for air traffic data with a maximum length.
 
         Args:
             stream_name (str): The name of the Redis stream.
+            max_len (int): The maximum number of entries to keep in the stream. Defaults to 10000.
         """
         try:
-            # Adding an initial entry to create the stream
-            self.redis.xadd(stream_name, {"message": "stream_created"})
-            logger.info(f"Redis stream '{stream_name}' created successfully.")
+            # Adding an initial entry to create the stream, with maxlen to limit size
+            self.redis.xadd(stream_name, {"message": "stream_created"}, maxlen=max_len)
+            logger.info(f"Redis stream '{stream_name}' created successfully with max length {max_len}.")
         except Exception as e:
             logger.error(f"Error creating Redis stream '{stream_name}': {e}")
 
-    def add_air_traffic_data(self, stream_name: str, data: dict) -> None:
+    def add_air_traffic_data(self, stream_name: str, observation: dict) -> None:
         """
         Add air traffic data to the Redis stream.
 
         Args:
             stream_name (str): The name of the Redis stream.
-            data (dict): The air traffic data to add to the stream.
+            observation (dict): The air traffic data to add to the stream, a dict representation of SingleAirtrafficObservation.
         """
         try:
-            self.redis.xadd(stream_name, data)
-            logger.info(f"Data added to Redis stream '{stream_name}': {data}")
+            self.redis.xadd(stream_name, observation)
+            logger.info(f"Data added to Redis stream '{stream_name}': {observation}")
         except Exception as e:
             logger.error(f"Error adding data to Redis stream '{stream_name}': {e}")
 
@@ -61,8 +62,19 @@ class RedisStreamOperations:
         Returns:
             bool: True if group was created or already exists, False on error.
         """
+
+        # Check if the consumer group already exists
         try:
-            # Use MKSTREAM to create the stream if it doesn't exist
+            groups = self.redis.xinfo_groups(stream_name)
+            for group in groups:
+                if group["name"].decode("utf-8") == group_name:
+                    logger.debug(f"Consumer group '{group_name}' already exists for stream '{stream_name}'.")
+                    return True
+        except Exception:
+            # Stream might not exist yet, which is fine - we'll create it with mkstream
+            pass
+        try:
+            # Create the consumer group (and stream if it doesn't exist)
             self.redis.xgroup_create(stream_name, group_name, id="0", mkstream=True)
             logger.info(f"Consumer group '{group_name}' created for stream '{stream_name}'.")
             return True

@@ -19,7 +19,7 @@ load_dotenv(find_dotenv())
 
 
 @app.task(name="send_and_generate_track_to_consumer")
-def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: str = None) -> None:
+def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
 
     stream_ops = RedisStreamOperations()
@@ -42,7 +42,7 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
 
 
 @app.task(name="send_heartbeat_to_consumer")
-def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: str = None) -> None:
+def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
     logger.info(f"Preparing to send heartbeat for session_id: {session_id}")
     heartbeat_data = HeartbeatMessage(

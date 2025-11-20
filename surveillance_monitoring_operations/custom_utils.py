@@ -10,7 +10,7 @@ from surveillance_monitoring_operations.data_definitions import (
 
 
 class SpecializedTrafficDataFuser:
-    """A placeholder data fuser to generate track messages use this to implement your data fusion logic and set the ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS environment variable to surveillance_monitoring_operations.custom_utils.SpecializedTrafficDataFuser to call this class"""
+    """A placeholder data fuser to generate track messages: use this to implement your custom data fusion logic and set the ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS environment variable to surveillance_monitoring_operations.custom_utils.SpecializedTrafficDataFuser to call this class"""
 
     def __init__(self, raw_observations: List[SingleAirtrafficObservation]):
         self.raw_observations = raw_observations
