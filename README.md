@@ -10,6 +10,8 @@ Flight Blender is an open-source backend and data-processing engine designed to 
 - Process geo-fences using the ED-269 standard.
 - Monitor conformance and send operator notifications.
 - Aggregate flight traffic feeds from various sources, including geo-fences, flight declarations, and air-traffic data.
+- Configure Blender to act as a Surveillance SDSP per the ASTM F3623-23 standard.
+- Implement alerts / near misses per the ASTM F3442 standard
 
 ## Key Features
 
@@ -31,8 +33,14 @@ Compliant with ASTM standards, this module can act as a "display provider" or "s
 ### Operator Notifications
 Send notifications to operators using an AMQP queue.
 
-### Conformance Monitoring (Beta)
+### Conformance Monitoring
 Monitor flight paths against declared 4D volumes for conformance.
+
+### Surveillance SDSP
+Blender conforms to the requirements for Surveillance supplemental data service providers (SDSPs) and associated equipment and services.
+
+### Detect, Alert and Avoid
+Flight Blender implements the Detect Alert and Avoid standard F3442
 
 ---
 

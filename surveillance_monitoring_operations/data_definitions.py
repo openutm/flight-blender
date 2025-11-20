@@ -74,7 +74,7 @@ class HeartbeatMessage:
     surveillance_sdsp_name: str
     meets_sla_surveillance_requirements: bool
     meets_sla_rr_lr_requirements: bool
-    average_latenccy_or_95_percentile_latency_ms: int
+    average_latency_or_95_percentile_latency_ms: int
     horizontal_or_vertical_95_percentile_accuracy_m: int
     timestamp: str
 

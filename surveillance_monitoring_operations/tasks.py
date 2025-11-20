@@ -11,26 +11,11 @@ from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
 from flight_blender.settings import ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS, BROKER_URL
 
-from .data_definitions import AircraftPosition, HeartbeatMessage
-from .utils import TrafficDataFuser
+from .data_definitions import HeartbeatMessage
 
 logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
-
-
-# Generate unique aircraft positions
-def generate_unique_aircraft_position(session_id: str, unique_aircraft_identifier: str) -> AircraftPosition:
-    # This method would contain logic to generate unique positions based on session_id and unique_aircraft_identifier since the last time it was processed. This needs to be implemented for your deployment.
-    return AircraftPosition(
-        lat=37.7749,
-        lng=-122.4194,
-        alt=10000,
-        accuracy_h="SA1mps",
-        accuracy_v="SA3mps",
-        extrapolated=False,
-        pressure_altitude=10050,
-    )
 
 
 @app.task(name="send_and_generate_track_to_consumer")
@@ -64,7 +49,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: str = Non
         surveillance_sdsp_name="heartbeat_123",
         meets_sla_surveillance_requirements=True,
         meets_sla_rr_lr_requirements=True,
-        average_latenccy_or_95_percentile_latency_ms=150,
+        average_latency_or_95_percentile_latency_ms=150,
         horizontal_or_vertical_95_percentile_accuracy_m=5,
         timestamp=arrow.utcnow().isoformat(),
     )
