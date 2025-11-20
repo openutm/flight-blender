@@ -86,6 +86,29 @@ class RedisStreamOperations:
             logger.error(f"Error creating consumer group '{group_name}' for stream '{stream_name}': {e}")
             return False
 
+    def delete_consumer_group(self, stream_name: str, group_name: str) -> bool:
+        """
+        Delete a consumer group from the Redis stream.
+
+        Args:
+            stream_name (str): The name of the Redis stream.
+            group_name (str): The name of the consumer group to delete.
+
+        Returns:
+            bool: True if group was deleted successfully, False otherwise.
+        """
+        try:
+            result = self.redis.xgroup_destroy(stream_name, group_name)
+            if result:
+                logger.info(f"Consumer group '{group_name}' deleted from stream '{stream_name}'.")
+                return True
+            else:
+                logger.warning(f"Consumer group '{group_name}' does not exist for stream '{stream_name}'.")
+                return False
+        except Exception as e:
+            logger.error(f"Error deleting consumer group '{group_name}' from stream '{stream_name}': {e}")
+            return False
+
     def clear_stream(self, stream_name: str) -> bool:
         """
         Clear all messages from a Redis stream.
