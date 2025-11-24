@@ -56,7 +56,7 @@ class TrackMessage:
 class HeartbeatCode:
     service_degraded: int
     service_outage: int
-    upcoming_degration: int
+    upcoming_degradation: int
     sensor_operational: int
 
 
@@ -65,7 +65,7 @@ class HealthMessage:
     sdsp_identifier: str
     current_status: SurveillanceStatus
     machine_readable_file_of_estimated_coverage: str
-    scheduled_degrations: str
+    scheduled_degradations: str
     timestamp: str
 
 

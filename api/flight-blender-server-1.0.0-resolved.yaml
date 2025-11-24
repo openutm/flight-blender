@@ -2621,7 +2621,7 @@ components:
         - sdsp_identifier
         - current_status
         - machine_readable_file_of_estimated_coverage
-        - scheduled_degrations
+        - scheduled_degradations
         - timestamp
       properties:
         sdsp_identifier:
@@ -2635,7 +2635,7 @@ components:
           format: uri
           description: URL to a machine-readable file describing estimated coverage.
           example: 'http://example.com/coverage'
-        scheduled_degrations:
+        scheduled_degradations:
           type: string
           description: Scheduled degradations or maintenance windows.
           example: 'None'
