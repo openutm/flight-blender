@@ -46,8 +46,7 @@ Flight Blender implements the Detect Alert and Avoid standard F3442
 
 ![roadmap](images/oss-roadmap.png)
 
-The image above details a general roadmap to standards compatibility. To monitor activities and track progress effectively, issues are the best way to manage and see the current work . 
-
+The image above details a general roadmap to standards compatibility. To monitor activities and track progress effectively, issues are the best way to manage and see the current work. 
 
 ---
 
