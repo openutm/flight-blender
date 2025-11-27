@@ -2274,9 +2274,128 @@ paths:
       tags:
         - flight-planning-qualifier
 
+  /conformance_monitoring_operations/get_conformance_records:
+    get:
+      summary: 'Get a list of conformance records'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      description: "Get a list of conformance records in the database, if no start or end date is provided, Flight Blender will provide records for today"
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: >
+            The start date for the report. Must be used together with `end_date`.
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: >
+            The end date for the report. Must be used together with `start_date`.
+        - name: page
+          in: query
+          schema:
+            type: number
+          description: >
+            Page to fetch.
+        - name: page_size
+          in: query
+          schema:
+            type: number
+          description: >
+            Amount of results per page.
+      responses:
+        '200':
+          description: Get a list of conformance records, `start_date`,`end_date` and `view` parameters are optional, if they are not provided all records for the past month are displayed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConformanceRecordPaginatedList'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - conformance-monitoring
 
+  /conformance_monitoring_operations/get_conformance_record_summary:
+    get:
+      summary: 'Get a summary of conformance records'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      description: "Get a summary of conformance records, aggregated by status or other criteria"
+      parameters:
 
-
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: >
+            The start date for the summary. Must be used together with `end_date`.
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: >
+            The end date for the summary. Must be used together with `start_date`.
+      responses:
+        '200':
+          description: Get a summary of conformance records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConformanceRecordSummary'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - conformance-monitoring
 components:
   securitySchemes:
     AuthFromPassport:
@@ -2970,7 +3089,88 @@ components:
       $ref: '#/components/schemas/JWKS'
 
 
+    ConformanceRecordSummary:
+        type: object
+        properties:
+          total_records:
+            type: integer
+          conforming_records:
+            type: integer
+          non_conforming_records:
+            type: integer
+          conformance_rate_percentage:
+            type: number
+            format: float
+          start_date:
+            type: string
+            format: date
+          end_date:
+            type: string
+            format: date
 
+
+    ConformanceRecord:
+        type: object
+        properties:
+          id:
+            type: string
+          flight_declaration_id:
+            type: string
+          conformance_state:
+            type: integer
+          timestamp:
+            type: string
+            format: date-time
+          description:
+            type: string
+          event_type:
+            type: string
+          geofence_breach:
+            type: boolean
+          geofence_id:
+            type: string
+            nullable: true
+          resolved:
+            type: boolean
+          created_at:
+            type: string
+            format: date-time
+          updated_at:
+            type: string
+            format: date-time
+
+    ConformanceRecordList:
+        type: array
+        items:
+        $ref: '#/components/schemas/ConformanceRecord'
+
+    ConformanceRecordPaginatedList:
+        type: object
+        properties:
+          links:
+            type: object
+            properties:
+              next:
+                type: string
+                format: uri
+                description: URL of the next page to query
+              previous:
+                type: string
+                format: uri
+                description: URL of the previous page to query
+              total:
+                type: integer
+              page:
+                type: integer
+                example: 1
+              pages:
+                type: integer
+                example: 2
+              page_size:
+                type: integer
+                example: 10
+              results:
+                $ref: '#/components/schemas/ConformanceRecordList'
     PongResponse:
       description: The server is running properly
       $ref: '#/components/schemas/Pong'
@@ -5700,3 +5900,5 @@ tags:
     description: Flight Blender provides security features for signing requests and responses. These endpoints allow you to manage public keys used to verify signed messages both within Flight Blender and in external environments.
   - name: surveillance-sdsp
     description: Endpoints for managing surveillance monitoring tasks, including starting and stopping heartbeat tracking. The heartbeat and tracking data are shared using Websocket information. Use these APIs to monitor the status of surveillance systems and ensure compliance with monitoring requirements and compliance to ASTM 3623-22.
+  - name: conformance-monitoring
+    description: Endpoints for managing conformance monitoring tasks in Flight Blender. Use these APIs to create, update, and query conformance records associated with flight declarations.

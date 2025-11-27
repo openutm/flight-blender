@@ -7,7 +7,68 @@ from django.db import models
 # Create your models here.
 from django_celery_beat.models import IntervalSchedule, PeriodicTask
 
+from common.data_definitions import CONFORMANCE_STATES
 from flight_declaration_operations.models import FlightDeclaration
+from geo_fence_operations.models import GeoFence
+
+
+class ConformanceRecord(models.Model):
+    id = models.UUIDField(
+        primary_key=True,
+        editable=False,
+        help_text="Unique identifier for the conformance record",
+    )
+    flight_declaration = models.ForeignKey(
+        FlightDeclaration,
+        on_delete=models.CASCADE,
+        help_text="The flight declaration associated with this conformance record",
+    )
+    conformance_state = models.IntegerField(
+        choices=CONFORMANCE_STATES,
+        help_text="The conformance state of the flight declaration at the time of the record",
+    )
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the conformance record was created",
+    )
+    description = models.TextField(
+        help_text="Description of the conformance event (deviation or rectification)",
+    )
+    event_type = models.CharField(
+        max_length=20,
+        choices=[("deviation", "Deviation"), ("rectification", "Rectification")],
+        help_text="Type of conformance event: deviation or rectification",
+    )
+    geofence_breach = models.BooleanField(
+        default=False,
+        help_text="Indicates whether the event involved a geofence breach",
+    )
+    geofence = models.ForeignKey(
+        GeoFence,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        help_text="The geofence involved in the event, if applicable",
+    )
+    resolved = models.BooleanField(
+        default=False,
+        help_text="Indicates whether the conformance issue has been resolved",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Timestamp when the conformance record was created",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Timestamp when the conformance record was last updated",
+    )
+
+    def get_conformance_state_display_text(self):
+        """Returns the human-readable text for the conformance state"""
+        return dict(CONFORMANCE_STATES).get(self.conformance_state, "Unknown")
+
+    def __str__(self):
+        return f"Conformance Record {self.id} for Flight Declaration {self.flight_declaration.id}"
 
 
 class TaskScheduler(models.Model):
