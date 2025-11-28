@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from typing import List, Optional
@@ -47,8 +48,13 @@ class RedisStreamOperations:
             observation (dict): The air traffic data to add to the stream, a dict representation of SingleAirtrafficObservation.
         """
         try:
+            # Serialize metadata to JSON string if it exists
+            if "metadata" in observation and isinstance(observation["metadata"], dict):
+                observation["metadata"] = json.dumps(observation["metadata"])
+
             self.redis.xadd(stream_name, observation)
-            logger.info(f"Data added to Redis stream '{stream_name}': {observation}")
+            logger.info(f"Data added to Redis stream '{stream_name}' successfully.")
+            logger.debug(f"Data added to Redis stream '{stream_name}': {observation}")
         except Exception as e:
             logger.error(f"Error adding data to Redis stream '{stream_name}': {e}")
 
@@ -247,7 +253,7 @@ class RedisStreamOperations:
                     session_id=field_data.get("session_id", ""),
                     unique_aircraft_identifier=field_data.get("unique_aircraft_identifier", ""),
                     last_updated_timestamp=field_data.get("last_updated_timestamp", ""),
-                    observations=eval(field_data.get("observations", "[]")),
+                    observations=json.loads(field_data.get("observations", "[]")),
                 )
                 active_tracks.append(active_track)
         logger.debug(f"Retrieved {len(active_tracks)} active tracks for session_id '{session_id}'")

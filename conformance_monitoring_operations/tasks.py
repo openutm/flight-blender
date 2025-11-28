@@ -23,7 +23,7 @@ logger = logging.getLogger("django")
 def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_run: str = "1"):
     # This method checks the conformance status for ongoing operations and sends notifications / via the notifications channel
 
-    dry_run = True if dry_run == "1" else False
+    dry_run = dry_run == "1"
     d_run = "1" if dry_run else "0"
     my_conformance_ops = FlightBlenderConformanceEngine()
 
@@ -49,7 +49,7 @@ def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_ru
 @app.task(name="check_operation_telemetry_conformance")
 def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: str = "1"):
     # This method checks the conformance status for ongoing operations and sends notifications / via the notifications channel
-    dry_run = True if dry_run == "1" else False
+    dry_run = dry_run == "1"
     my_conformance_ops = FlightBlenderConformanceEngine()
     # Get Telemetry
     obs_helper = flight_stream_helper.ObservationReadOperations()
