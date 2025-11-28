@@ -13,7 +13,7 @@ from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
 
 from common.utils import EnhancedJSONEncoder
-from conformance_monitoring_operations.models import TaskScheduler
+from conformance_monitoring_operations.models import ConformanceRecord, TaskScheduler
 from constraint_operations.data_definitions import (
     CompositeConstraintPayload,
     ConstraintDetails,
@@ -284,6 +284,37 @@ class FlightBlenderDatabaseReader:
         except ConstraintReference.DoesNotExist:
             return None
         except GeoFence.DoesNotExist:
+            return None
+
+    def get_conformance_records_for_duration(self, start_time: datetime, end_time: datetime) -> None | QuerySet | list[ConformanceRecord]:
+        """
+        Retrieves conformance records created within the specified time duration.
+        This method queries the ConformanceRecord model to fetch records where the
+        'created_at' field is between the given start_time and end_time (inclusive).
+        The results are ordered by 'created_at' in descending order (most recent first).
+        Args:
+            start_time (datetime): The start of the time range for filtering records.
+            end_time (datetime): The end of the time range for filtering records.
+        Returns:
+            None | QuerySet | list[ConformanceRecord]: A QuerySet of ConformanceRecord
+            objects if records are found, or None if no records exist (though note that
+            the exception handling may not trigger as expected for filter queries).
+        Raises:
+            ConformanceRecord.DoesNotExist: If the query fails due to model issues,
+            though this is unlikely for a filter operation.
+        """
+
+        try:
+            conformance_records = ConformanceRecord.objects.filter(created_at__gte=start_time, created_at__lte=end_time).order_by("-created_at")
+            return conformance_records
+        except ConformanceRecord.DoesNotExist:
+            return None
+
+    def get_conformance_record_by_flight_declaration(self, flight_declaration: FlightDeclaration) -> None | QuerySet:
+        try:
+            conformance_record = ConformanceRecord.objects.filter(flight_declaration=flight_declaration)
+            return conformance_record
+        except ConformanceRecord.DoesNotExist:
             return None
 
     def check_flight_declaration_active(self, flight_declaration_id: str, now: datetime) -> bool:

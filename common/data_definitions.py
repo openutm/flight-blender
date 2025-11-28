@@ -19,7 +19,10 @@ ALTITUDE_REF_LOOKUP = {
     "MSL": 2,
     "W84": 4,
 }
-
+CONFORMANCE_STATES = (
+    (0, _("Nonconforming")),
+    (1, _("Conforming")),
+)
 OPERATION_STATES = (
     (0, _("Not Submitted")),
     (1, _("Accepted")),

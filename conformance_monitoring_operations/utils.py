@@ -2,6 +2,7 @@
 import json
 import logging
 from os import environ as env
+from typing import Optional
 
 import arrow
 from dotenv import find_dotenv, load_dotenv
@@ -84,7 +85,7 @@ class FlightBlenderConformanceEngine:
                 f"Aircraft ID mismatch for {flight_declaration_id}, C3 Check failed: Flight Declaration {flight_declaration.aircraft_id} != Telemetry {aircraft_id}"
             )
             logger.error(f"Raising error code {ConformanceChecksList.C3}")
-            return ConformanceChecksList.C
+            return ConformanceChecksList.C3
 
         # C4, C5 Check
         if flight_declaration.state in [0, 5, 6, 7, 8]:
@@ -108,9 +109,9 @@ class FlightBlenderConformanceEngine:
             return ConformanceChecksList.C6
 
         # C7 Check: Check if the aircraft is within the 4D volume
-        all_volumes = []
-        if USSP_NETWORK_ENABLED:
-            all_volumes = json.loads(operational_intent_details.volumes)
+        # all_volumes = []
+        # if USSP_NETWORK_ENABLED:
+        all_volumes = json.loads(operational_intent_details.volumes)
 
         lng = float(telemetry_location.lng)
         lat = float(telemetry_location.lat)
@@ -201,7 +202,9 @@ class FlightBlenderConformanceEngine:
         # C11 Check
         if not flight_operational_intent_reference_exists:
             # if flight state is accepted, then change it to ended and delete from dss
-            return ConformanceChecksList.C11
+            logger.info(f"Flight authorization does not exist for {flight_declaration_id}, C11 Check failed.")
+            logger.info(f"Raising Error code {ConformanceChecksList.C11}")
+            return False
         # The time the most recent telemetry was sent
         latest_telemetry_datetime = flight_declaration.latest_telemetry_datetime
         # Check the current time is within the start / end date time +/- 15 seconds TODO: trim this window as it is to broad
@@ -212,16 +215,21 @@ class FlightBlenderConformanceEngine:
         allowed_states = [2, 3, 4]
         if flight_declaration.state not in allowed_states:
             # set state as ended
-            return ConformanceChecksList.C10
+            logger.info(f"Flight operation state is ended for {flight_declaration_id}, C10 Check failed.")
+            logger.info(f"Raising Error code {ConformanceChecksList.C10}")
+            return False
 
         # C9 state check
         # Operation is supposed to start check if telemetry is bieng submitted (within the last minute)
         if latest_telemetry_datetime:
             if not fifteen_seconds_before_now <= latest_telemetry_datetime <= fifteen_seconds_after_now:
-                return ConformanceChecksList.C9b
+                logger.info(f"No telemetry data being sent for {flight_declaration_id}, C9 Check failed.")
+                logger.info(f"Raising Error code {ConformanceChecksList.C9b}")
+                return False
         else:
             # declare state as contingent
-
-            return ConformanceChecksList.C9a
+            logger.info(f"Flight operation state is contingent for {flight_declaration_id}, C9 Check failed.")
+            logger.info(f"Raising Error code {ConformanceChecksList.C9a}")
+            return False
 
         return True
