@@ -145,6 +145,7 @@ class FlightOperationConformanceHelper:
             self._clear_operation_from_dss()
 
         if self.ENABLE_CONFORMANCE_MONITORING:
+            logger.info("Removing conformance monitoring task as operation has ended")
             self._remove_conformance_monitoring_task()
 
     def _clear_operation_from_dss(self):
@@ -176,6 +177,7 @@ class FlightOperationConformanceHelper:
         """
 
         conformance_monitoring_job = self.database_reader.get_conformance_monitoring_task(flight_declaration=self.flight_declaration)
+        logger.info(f"Removing conformance monitoring job for {self.flight_declaration_id}")
         if conformance_monitoring_job:
             self.database_writer.remove_conformance_monitoring_periodic_task(conformance_monitoring_task=conformance_monitoring_job)
 
@@ -245,7 +247,8 @@ class FlightOperationConformanceHelper:
                 )
 
             if self.ENABLE_CONFORMANCE_MONITORING:
-                self._remove_conformance_monitoring_task()
+                logger.info("Removing conformance monitoring task due to non-conformance")
+                # self._remove_conformance_monitoring_task()
             else:
                 logger.info("USSP Network is not enabled, skipping non-conforming state handling with DSS")
 

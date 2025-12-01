@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import datetime
 
 from django.db import models
@@ -14,6 +15,7 @@ from geo_fence_operations.models import GeoFence
 
 class ConformanceRecord(models.Model):
     id = models.UUIDField(
+        default=uuid.uuid4,
         primary_key=True,
         editable=False,
         help_text="Unique identifier for the conformance record",
