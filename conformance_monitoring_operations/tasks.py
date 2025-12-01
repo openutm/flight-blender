@@ -30,7 +30,8 @@ def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_ru
     flight_operational_intent_reference_conformant = my_conformance_ops.check_flight_operational_intent_reference_conformance(
         flight_declaration_id=flight_declaration_id
     )
-    if flight_operational_intent_reference_conformant:
+
+    if flight_operational_intent_reference_conformant == 1:
         logger.info(f"Operation with {flight_declaration_id} is conformant...")
         # Basic conformance checks passed, check telemetry conformance
         logging.info("Checking telemetry conformance...")

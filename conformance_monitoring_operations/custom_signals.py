@@ -3,7 +3,10 @@ import logging
 import django.dispatch
 from django.dispatch import receiver
 
-from common.database_operations import FlightBlenderDatabaseReader
+from common.database_operations import (
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
+)
 
 from .conformance_checks_handler import FlightOperationConformanceHelper
 from .conformance_state_helper import ConformanceChecksList
@@ -76,11 +79,21 @@ def process_telemetry_conformance_message(sender, **kwargs):
         new_state = 3
         event = "ua_exits_coordinated_op_intent"
 
+    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
+
+    fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer.write_flight_conformance_record(
+        flight_declaration=fd,
+        conformance_non_conformance_state=non_conformance_state,
+        event_type="deviation",
+        description="Telemetry non-conformance detected: %s" % non_conformance_state_code,
+        geofence_breach=False,
+        geofence=None,
+        resolved=False,
+    )
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
-        my_flight_blender_database_reader = FlightBlenderDatabaseReader()
-
-        fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         original_state = fd.state
         fd.add_state_history_entry(
             original_state=original_state,
@@ -140,10 +153,21 @@ def process_flight_operational_intent_reference_non_conformance_message(sender, 
         my_operation_notification.send_conformance_status_notification(message=authorization_not_granted_message, level="error")
         event = "flight_blender_confirms_contingent"
 
+    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
+
+    fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer.write_flight_conformance_record(
+        flight_declaration=fd,
+        conformance_non_conformance_state=non_conformance_state,
+        event_type="deviation",
+        description="Flight Operational Intent Reference non-conformance detected: %s" % non_conformance_state_code,
+        geofence_breach=False,
+        geofence=None,
+        resolved=False,
+    )
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
-        my_flight_blender_database_reader = FlightBlenderDatabaseReader()
-        fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         original_state = fd.state
         fd.add_state_history_entry(
             original_state=original_state,

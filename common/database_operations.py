@@ -4,7 +4,7 @@ import os
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from typing import Never
+from typing import Never, Optional
 from uuid import UUID
 
 import arrow
@@ -189,7 +189,8 @@ class FlightBlenderDatabaseReader:
 
     def get_active_geofences(self) -> None | list[GeoFence]:
         now = arrow.now()
-        return GeoFence.objects.filter(start_datetime__lte=now, end_datetime__gte=now)
+
+        return GeoFence.objects.filter(start_datetime__lte=now.isoformat(), end_datetime__gte=now.isoformat())
 
     def get_flight_operational_intent_reference_by_flight_declaration_obj(
         self, flight_declaration: FlightDeclaration
@@ -614,6 +615,31 @@ class FlightBlenderDatabaseWriter:
 
             return flight_operational_intent_detail_obj
 
+        except IntegrityError:
+            return None
+
+    def write_flight_conformance_record(
+        self,
+        flight_declaration: FlightDeclaration,
+        conformance_non_conformance_state: int,
+        description: str,
+        event_type: str,
+        geofence_breach: bool,
+        resolved: bool,
+        geofence: Optional[GeoFence],
+    ) -> None | ConformanceRecord:
+        try:
+            conformance_record = ConformanceRecord(
+                flight_declaration=flight_declaration,
+                conformance_state=conformance_non_conformance_state,
+                description=description,
+                event_type=event_type,
+                geofence_breach=geofence_breach,
+                geofence=geofence,
+                resolved=resolved,
+            )
+            conformance_record.save()
+            return conformance_record
         except IntegrityError:
             return None
 
