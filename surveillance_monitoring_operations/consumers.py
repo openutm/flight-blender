@@ -39,6 +39,9 @@ class TrackConsumer(AsyncWebsocketConsumer):
         # Send the published data to the WebSocket
         sent = self.send(text_data=json.dumps({"published_data": event["data"]}))
 
+    async def track_message(self, event):
+        await self.send(text_data=json.dumps({"track_data": event["data"]}))
+
 
 class HeartBeatConsumer(AsyncWebsocketConsumer):
     async def connect(self):

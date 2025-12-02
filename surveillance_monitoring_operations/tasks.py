@@ -37,10 +37,11 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     traffic_data_fuser.generate_active_tracks()
     active_tracks = stream_ops.get_all_active_tracks_in_session(session_id=session_id)
     track_messages = traffic_data_fuser.generate_track_messages(active_tracks=active_tracks)
-
+    all_track_data = []
     for track_message in track_messages:
+        all_track_data.append(asdict(track_message))
         logger.debug("Fused track message:", asdict(track_message))
-        async_to_sync(channel_layer.group_send)("track_group", {"type": "track.message", "data": asdict(track_message)})
+    async_to_sync(channel_layer.group_send)("track_" + session_id, {"type": "track.message", "data": all_track_data})
 
 
 @app.task(name="send_heartbeat_to_consumer")

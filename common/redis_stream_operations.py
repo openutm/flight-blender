@@ -248,12 +248,11 @@ class RedisStreamOperations:
                     if isinstance(value, bytes):
                         value = value.decode("utf-8")
                     field_data[key] = value
-
                 active_track = ActiveTrack(
                     session_id=field_data.get("session_id", ""),
                     unique_aircraft_identifier=field_data.get("unique_aircraft_identifier", ""),
                     last_updated_timestamp=field_data.get("last_updated_timestamp", ""),
-                    observations=json.loads(field_data.get("observations", "[]")),
+                    observations=field_data.get("observations", "[]"),
                 )
                 active_tracks.append(active_track)
         logger.debug(f"Retrieved {len(active_tracks)} active tracks for session_id '{session_id}'")

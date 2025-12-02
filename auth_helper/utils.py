@@ -80,7 +80,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 passport_jwks_data = {}
                 logger.error(f"Error fetching Passport JWKS: {e}")
                 return JsonResponse(
-                    {"detail": f"Public Key Server necessary to validate the token could not be reached, tried to reach URL:{PASSPORT_JWKS_URL}"},
+                    {"detail": f"Public Key Server necessary to validate the token could not be reached, tried to reach URL: {PASSPORT_JWKS_URL}"},
                     status=400,
                 )
             try:
@@ -89,7 +89,7 @@ def requires_scopes(required_scopes, allow_any: bool = False):
                 logger.error(f"Error fetching DSS JWKS: {e}")
                 dss_jwks_data = {}
                 logger.info(
-                    "DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated, tried to reach URL:{DSS_AUTH_JWKS_ENDPOINT}"
+                    f"DSS Public Key Server necessary to validate the token could not be reached, tokens for DSS operations will not be validated, tried to reach URL:{DSS_AUTH_JWKS_ENDPOINT}"
                 )
             # Combine keys from both JWKS sources
             jwks_keys = passport_jwks_data.get("keys", []) + dss_jwks_data.get("keys", [])
