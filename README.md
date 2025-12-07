@@ -16,13 +16,13 @@ Flight Blender is an open-source backend and data-processing engine designed to 
 ## Key Features
 
 ### DSS Connectivity
-Connect and retrieve data such as Remote ID information or perform strategic deconfliction and flight authorization.
+Connect and retrieve data such as Remote ID information or perform strategic de-confliction and flight authorization.
 
 ### Flight Tracking
 Ingest flight tracking feeds from sources like ADS-B, live telemetry, and Broadcast Remote ID. Outputs a unified JSON feed for real-time display.
 
 ### Geofence Management
-Submit geofences to Flight Blender, which can then be transmitted to Spotlight.
+Submit geofence to Flight Blender, which can then be transmitted to Spotlight for visualization.
 
 ### Flight Declaration
 Submit future flight plans (up to 24 hours in advance) using the ASTM USS-to-USS API or as a standalone component. Supported DSS APIs are listed below.
@@ -31,16 +31,22 @@ Submit future flight plans (up to 24 hours in advance) using the ASTM USS-to-USS
 Compliant with ASTM standards, this module can act as a "display provider" or "service provider" for Network Remote ID.
 
 ### Operator Notifications
-Send notifications to operators using an AMQP queue.
+Send notifications to operators using an AMQP queue, enabling real-time alerts for flight updates, conformance issues, or other critical events.
 
 ### Conformance Monitoring
-Monitor flight paths against declared 4D volumes for conformance.
+Monitor flight paths against declared 4D volumes for conformance and report outputs.
 
 ### Surveillance SDSP
 Blender conforms to the requirements for Surveillance supplemental data service providers (SDSPs) and associated equipment and services.
 
 ### Detect, Alert and Avoid
 Flight Blender implements the Detect Alert and Avoid standard F3442
+
+## Roadmap
+
+![roadmap](images/oss-roadmap.png)
+
+The image above details a general roadmap to standards compatibility. To monitor activities and track progress effectively, issues are the best way to manage and see the current work. 
 
 ---
 
@@ -56,20 +62,15 @@ Follow our simple 5-step guide to deploy Flight Blender and explore its core fea
 
 ---
 
-## Technical Resources
+## Technical Resources and Background Information
 
 - **API Specification**: Explore the [API documentation](http://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/openutm/flight-blender/master/api/flight-blender-server-1.0.0-resolved.yaml) to understand available endpoints and data interactions.
-- **Flight Tracking Data**: Review [sample flight tracking data](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/air_traffic_samples/micro_flight_data_single.json) and the [Air-traffic Data Protocol](https://github.com/openskies-sh/airtraffic-data-protocol-development/blob/master/Airtraffic-Data-Protocol.md).
+- **Flight Tracking Data**: Review the [Air-traffic Data Protocol](https://github.com/openutm-labs/airtraffic-data-protocol-development/blob/master/Airtraffic-Data-Protocol.md).
 
 ---
 
-## Submitting Data to Flight Blender
-
-Here are examples of the types of data you can submit to Flight Blender:
-
-- **Area of Interest (AOI)**: [Sample AOI GeoJSON](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/aoi_geo_fence_samples/aoi.geojson)
-- **Geofence**: [Sample Geofence GeoJSON](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/aoi_geo_fence_samples/geo_fence.geojson). Includes converters for EuroCAE ED-269 standard.
-- **Flight Declaration**: [Sample Flight Declaration](https://github.com/openutm/verification/blob/main/flight_blender_e2e_integration/flight_declarations_samples/flight-1-bern.json). This follows the [Flight Declaration Protocol](https://github.com/openskies-sh/flight-declaration-protocol-development) and supports "operational intent" APIs when using DSS components.
+## Flight Blender Verification
+Flight Blender includes a robust verification framework to ensure your deployment operates as expected. Explore the [verification](https://github.com/openutm/verification) repository to use and create verification scenarios. Additionally, Flight Blender is fully compliant with the InterUSS Monitoring test suite.
 
 ---
 

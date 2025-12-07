@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import List
 
 
 class SurveillanceStatus(str, Enum):
@@ -94,3 +95,21 @@ class ActiveTrack:
     unique_aircraft_identifier: str
     last_updated_timestamp: str
     observations: list[dict]
+
+
+@dataclass
+class FlightPoint:
+    """This object holds basic information about a point on the flight track, it has latitude, longitude and altitude in WGS 1984 datum"""
+
+    lat: float  # Degrees of latitude north of the equator, with reference to the WGS84 ellipsoid. For more information see: https://github.com/uastech/standards/blob/master/remoteid/canonical.yaml#L1160
+    lng: float  # Degrees of longitude east of the Prime Meridian, with reference to the WGS84 ellipsoid. For more information see: https://github.com/uastech/standards/blob/master/remoteid/canonical.yaml#L1170
+    alt: float  # meters in WGS 84, normally calculated as height of ground level in WGS84 and altitude above ground level
+    speed: float  # speed in m / s
+    bearing: float  # forward azimuth for the this and the next point on the track
+
+
+@dataclass
+class GridCellFlight:
+    """A object to hold details of a grid location and the track within it"""
+    icao_address_or_flight_id: str
+    track: List[FlightPoint]

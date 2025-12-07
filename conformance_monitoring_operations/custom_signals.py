@@ -3,7 +3,10 @@ import logging
 import django.dispatch
 from django.dispatch import receiver
 
-from common.database_operations import FlightBlenderDatabaseReader
+from common.database_operations import (
+    FlightBlenderDatabaseReader,
+    FlightBlenderDatabaseWriter,
+)
 
 from .conformance_checks_handler import FlightOperationConformanceHelper
 from .conformance_state_helper import ConformanceChecksList
@@ -29,10 +32,13 @@ def process_telemetry_conformance_message(sender, **kwargs):
 
     non_conformance_state_code = ConformanceChecksList.state_code(non_conformance_state)
 
+    detailed_non_conformance_message = ""
+
     if non_conformance_state_code == "C3":
         invalid_aircraft_id_msg = "The aircraft ID provided in telemetry for operation {flight_declaration_id}, does not match the declared / authorized aircraft, you must stop operation. C3 Check failed.".format(
             flight_declaration_id=flight_declaration_id
         )
+        detailed_non_conformance_message = invalid_aircraft_id_msg
         logger.error(invalid_aircraft_id_msg)
         my_operation_notification.send_conformance_status_notification(message=invalid_aircraft_id_msg, level="error")
         new_state = 4
@@ -42,6 +48,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
         flight_state_not_correct_msg = "The state for operation {flight_declaration_id}, is not one of 'Accepted' or 'Activated', your authorization is invalid. C4+C5 Check failed.".format(
             flight_declaration_id=flight_declaration_id
         )
+        detailed_non_conformance_message = flight_state_not_correct_msg
         logger.error(flight_state_not_correct_msg)
         my_operation_notification.send_conformance_status_notification(message=flight_state_not_correct_msg, level="error")
         event = "flight_blender_confirms_contingent"
@@ -51,6 +58,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
         telemetry_timestamp_not_within_op_start_end_msg = "The telemetry timestamp provided for operation {flight_declaration_id}, is not within the start / end time for an operation. C6 Check failed.".format(
             flight_declaration_id=flight_declaration_id
         )
+        detailed_non_conformance_message = telemetry_timestamp_not_within_op_start_end_msg
         logger.error(telemetry_timestamp_not_within_op_start_end_msg)
         my_operation_notification.send_conformance_status_notification(message=telemetry_timestamp_not_within_op_start_end_msg, level="error")
         new_state = 3
@@ -62,6 +70,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
                 flight_declaration_id=flight_declaration_id
             )
         )
+        detailed_non_conformance_message = aircraft_altitude_nonconformant_msg
         logger.error(aircraft_altitude_nonconformant_msg)
         my_operation_notification.send_conformance_status_notification(message=aircraft_altitude_nonconformant_msg, level="error")
         new_state = 3
@@ -71,16 +80,28 @@ def process_telemetry_conformance_message(sender, **kwargs):
         aircraft_bounds_nonconformant_msg = "The telemetry location provided for operation {flight_declaration_id}, is not within the declared bounds for an operation. C7b check failed.".format(
             flight_declaration_id=flight_declaration_id
         )
+        detailed_non_conformance_message = aircraft_bounds_nonconformant_msg
         logger.error(aircraft_bounds_nonconformant_msg)
         my_operation_notification.send_conformance_status_notification(message=aircraft_bounds_nonconformant_msg, level="error")
         new_state = 3
         event = "ua_exits_coordinated_op_intent"
 
+    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
+
+    fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
+    my_database_writer = FlightBlenderDatabaseWriter()
+
+    my_database_writer.write_flight_conformance_record(
+        flight_declaration=fd,
+        conformance_non_conformance_state=non_conformance_state,
+        event_type="deviation",
+        description=detailed_non_conformance_message,
+        geofence_breach=False,
+        geofence=None,
+        resolved=False,
+    )
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
-        my_flight_blender_database_reader = FlightBlenderDatabaseReader()
-
-        fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         original_state = fd.state
         fd.add_state_history_entry(
             original_state=original_state,
@@ -140,10 +161,21 @@ def process_flight_operational_intent_reference_non_conformance_message(sender, 
         my_operation_notification.send_conformance_status_notification(message=authorization_not_granted_message, level="error")
         event = "flight_blender_confirms_contingent"
 
+    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
+
+    fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer.write_flight_conformance_record(
+        flight_declaration=fd,
+        conformance_non_conformance_state=non_conformance_state,
+        event_type="deviation",
+        description="Flight Operational Intent Reference non-conformance detected: %s" % non_conformance_state_code,
+        geofence_breach=False,
+        geofence=None,
+        resolved=False,
+    )
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
-        my_flight_blender_database_reader = FlightBlenderDatabaseReader()
-        fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         original_state = fd.state
         fd.add_state_history_entry(
             original_state=original_state,

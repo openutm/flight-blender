@@ -2,6 +2,7 @@
 import json
 import logging
 from os import environ as env
+from typing import Optional
 
 import arrow
 from dotenv import find_dotenv, load_dotenv
@@ -65,7 +66,8 @@ class FlightBlenderConformanceEngine:
         else:
             flight_operational_intent_reference = True
 
-        operational_intent_details = my_database_reader.get_operational_intent_details_by_flight_declaration(flight_declaration=flight_declaration)
+        operational_intent_details_raw = flight_declaration.operational_intent
+        operational_intent_details = json.loads(operational_intent_details_raw)
 
         # C2 Check
         if not flight_operational_intent_reference or not flight_declaration:
@@ -84,7 +86,7 @@ class FlightBlenderConformanceEngine:
                 f"Aircraft ID mismatch for {flight_declaration_id}, C3 Check failed: Flight Declaration {flight_declaration.aircraft_id} != Telemetry {aircraft_id}"
             )
             logger.error(f"Raising error code {ConformanceChecksList.C3}")
-            return ConformanceChecksList.C
+            return ConformanceChecksList.C3
 
         # C4, C5 Check
         if flight_declaration.state in [0, 5, 6, 7, 8]:
@@ -108,13 +110,14 @@ class FlightBlenderConformanceEngine:
             return ConformanceChecksList.C6
 
         # C7 Check: Check if the aircraft is within the 4D volume
-        all_volumes = []
-        if USSP_NETWORK_ENABLED:
-            all_volumes = json.loads(operational_intent_details.volumes)
+        # all_volumes = []
+        # if USSP_NETWORK_ENABLED:
+        all_volumes = operational_intent_details["volumes"]
 
         lng = float(telemetry_location.lng)
         lat = float(telemetry_location.lat)
         rid_location = Point(lng, lat)
+        logger.info(f"Checking C7 Conformance for location {rid_location.wkt}...")
         all_polygon_altitudes: list[PolygonAltitude] = []
 
         for v in all_volumes:
@@ -137,10 +140,12 @@ class FlightBlenderConformanceEngine:
 
         for p in all_polygon_altitudes:
             is_within = rid_location.within(p.polygon)
+            logger.debug(f"Altitude Check: {altitude_m_wgs_84} between {p.altitude_lower} and {p.altitude_upper}")
             altitude_conformant = p.altitude_lower <= altitude_m_wgs_84 <= p.altitude_upper
             rid_obs_within_all_volumes.append(is_within)
             rid_obs_within_altitudes.append(altitude_conformant)
-
+        logger.debug(f"Polygon conformity results: {rid_obs_within_all_volumes}")
+        logger.debug(f"Altitude conformity results: {rid_obs_within_altitudes}")
         aircraft_bounds_conformant = any(rid_obs_within_all_volumes)
         aircraft_altitude_conformant = any(rid_obs_within_altitudes)
 
@@ -184,7 +189,7 @@ class FlightBlenderConformanceEngine:
         geofence_polygon = Plgn(coordinates)
         return rid_location.within(geofence_polygon)
 
-    def check_flight_operational_intent_reference_conformance(self, flight_declaration_id: str) -> bool:
+    def check_flight_operational_intent_reference_conformance(self, flight_declaration_id: str) -> int:
         """This method checks the conformance of a flight authorization independent of telemetry observations being sent:
         C9 a/b Check if telemetry is being sent
         C10 Check operation state that it not ended and the time limit of the flight authorization has passed
@@ -199,8 +204,12 @@ class FlightBlenderConformanceEngine:
             flight_declaration_id=flight_declaration_id
         )
         # C11 Check
-        if not flight_operational_intent_reference_exists:
+        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", 0))
+        # Only when the USSP network is enabled do we check for the flight authorization existence
+        if ussp_network_enabled and not flight_operational_intent_reference_exists:
             # if flight state is accepted, then change it to ended and delete from dss
+            logger.info(f"Flight authorization / operational intent reference does not exist for {flight_declaration_id}, C11 Check failed.")
+            logger.info(f"Raising Error code {ConformanceChecksList.C11}")
             return ConformanceChecksList.C11
         # The time the most recent telemetry was sent
         latest_telemetry_datetime = flight_declaration.latest_telemetry_datetime
@@ -212,16 +221,21 @@ class FlightBlenderConformanceEngine:
         allowed_states = [2, 3, 4]
         if flight_declaration.state not in allowed_states:
             # set state as ended
+            logger.info(f"Flight operation state is ended for {flight_declaration_id}, C10 Check failed.")
+            logger.info(f"Raising Error code {ConformanceChecksList.C10}")
             return ConformanceChecksList.C10
 
         # C9 state check
         # Operation is supposed to start check if telemetry is bieng submitted (within the last minute)
         if latest_telemetry_datetime:
             if not fifteen_seconds_before_now <= latest_telemetry_datetime <= fifteen_seconds_after_now:
+                logger.info(f"No telemetry data being sent for {flight_declaration_id}, C9 Check failed.")
+                logger.info(f"Raising Error code {ConformanceChecksList.C9b}")
                 return ConformanceChecksList.C9b
         else:
             # declare state as contingent
-
+            logger.info(f"Flight operation state is contingent for {flight_declaration_id}, C9 Check failed.")
+            logger.info(f"Raising Error code {ConformanceChecksList.C9a}")
             return ConformanceChecksList.C9a
 
-        return True
+        return 1

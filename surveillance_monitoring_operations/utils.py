@@ -2,6 +2,7 @@ from dataclasses import asdict
 from typing import List
 
 import arrow
+from pyproj import Geod
 
 from common.redis_stream_operations import RedisStreamOperations
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
@@ -23,6 +24,23 @@ class TrafficDataFuser:
         self.SDSP_IDENTIFIER = "SDSP123"
         self.redis_stream_helper = RedisStreamOperations()
         self.session_id = session_id
+        self.geod = Geod(ellps="WGS84")
+
+    def generate_flight_speed_bearing(self, adjacent_points: List, delta_time_secs: int) -> List[float]:
+        """A method to generate flight speed, assume that the flight has to traverse two adjacent points in x number of seconds provided, calculating speed in meters / second. It also generates bearing between this and next point, this is used to populate the 'track' parameter in the Aircraft State JSON."""
+
+        first_point = adjacent_points[0]
+        second_point = adjacent_points[1]
+
+        fwd_azimuth, back_azimuth, adjacent_point_distance_mts = self.geod.inv(first_point.x, first_point.y, second_point.x, second_point.y)
+
+        speed_mts_per_sec = adjacent_point_distance_mts / delta_time_secs
+        speed_mts_per_sec = float("{:.2f}".format(speed_mts_per_sec))
+
+        if fwd_azimuth < 0:
+            fwd_azimuth = 360 + fwd_azimuth
+
+        return [speed_mts_per_sec, fwd_azimuth]
 
     def fuse_raw_observations(self) -> List[SingleAirtrafficObservation]:
         # No fusing is actually done, this just returns the data that is in the redis streams.
