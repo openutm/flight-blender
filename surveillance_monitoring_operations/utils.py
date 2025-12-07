@@ -9,6 +9,7 @@ from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from surveillance_monitoring_operations.data_definitions import (
     AircraftPosition,
     AircraftState,
+    LatLangAltPoint,
     SpeedAccuracy,
     TrackMessage,
 )
@@ -26,21 +27,24 @@ class TrafficDataFuser:
         self.session_id = session_id
         self.geod = Geod(ellps="WGS84")
 
-    def generate_flight_speed_bearing(self, adjacent_points: List, delta_time_secs: int) -> List[float]:
-        """A method to generate flight speed, assume that the flight has to traverse two adjacent points in x number of seconds provided, calculating speed in meters / second. It also generates bearing between this and next point, this is used to populate the 'track' parameter in the Aircraft State JSON."""
-
+    def generate_flight_speed_bearing(self, adjacent_points: List[LatLangAltPoint], delta_time_secs: float = 1.0) -> List[float]:
         first_point = adjacent_points[0]
         second_point = adjacent_points[1]
 
-        fwd_azimuth, back_azimuth, adjacent_point_distance_mts = self.geod.inv(first_point.x, first_point.y, second_point.x, second_point.y)
+        fwd_azimuth, back_azimuth, adjacent_point_distance_mts = self.geod.inv(first_point.lng, first_point.lat, second_point.lng, second_point.lat)
 
         speed_mts_per_sec = adjacent_point_distance_mts / delta_time_secs
         speed_mts_per_sec = float("{:.2f}".format(speed_mts_per_sec))
 
         if fwd_azimuth < 0:
             fwd_azimuth = 360 + fwd_azimuth
+        if delta_time_secs == 0:
+            vertical_speed_mps = 0.0
+        else:
+            vertical_speed_mps = (second_point.alt - first_point.alt) / delta_time_secs
+        vertical_speed_mps = float("{:.2f}".format(vertical_speed_mps))
 
-        return [speed_mts_per_sec, fwd_azimuth]
+        return [speed_mts_per_sec, fwd_azimuth, vertical_speed_mps]
 
     def fuse_raw_observations(self) -> List[SingleAirtrafficObservation]:
         # No fusing is actually done, this just returns the data that is in the redis streams.
@@ -88,6 +92,23 @@ class TrafficDataFuser:
             fused_observations = [SingleAirtrafficObservation(**obs) for obs in track.observations]
             # For simplicity, we take the last observation as the latest
             latest_observation = fused_observations[-1]
+            one_before_latest_observation = fused_observations[-2] if len(fused_observations) > 1 else latest_observation
+            latest_observation_lat_lng_point = LatLangAltPoint(
+                lat=latest_observation.lat_dd, lng=-latest_observation.lon_dd, alt=latest_observation.altitude_mm / 1000.0
+            )
+            one_before_latest_observation_lat_lng_point = LatLangAltPoint(
+                lat=one_before_latest_observation.lat_dd,
+                lng=-one_before_latest_observation.lon_dd,
+                alt=one_before_latest_observation.altitude_mm / 1000.0,
+            )
+            # Calculate speed and bearing
+            speed_mps, bearing_degrees, vertical_speed_mps = self.generate_flight_speed_bearing(
+                adjacent_points=[
+                    one_before_latest_observation_lat_lng_point,
+                    latest_observation_lat_lng_point,
+                ],
+                delta_time_secs=(arrow.get(latest_observation.timestamp) - arrow.get(one_before_latest_observation.timestamp)).total_seconds(),
+            )
             # Create AircraftPosition
             aircraft_position = AircraftPosition(
                 lat=latest_observation.lat_dd,
@@ -101,9 +122,9 @@ class TrafficDataFuser:
             speed_accuracy = SpeedAccuracy("SA1mps")
             aircraft_state = AircraftState(
                 position=aircraft_position,
-                speed=latest_observation.speed_mps,
-                track=latest_observation.track_deg,
-                vertical_speed=latest_observation.vertical_speed_mps,
+                speed=speed_mps,
+                track=bearing_degrees,
+                vertical_speed=vertical_speed_mps,
                 speed_accuracy=speed_accuracy,
             )
             track_data = TrackMessage(

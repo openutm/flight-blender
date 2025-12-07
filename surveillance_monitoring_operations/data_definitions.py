@@ -24,6 +24,13 @@ class SurveillanceServiceStatus:
 
 
 @dataclass
+class LatLangAltPoint:
+    lat: float
+    lng: float
+    alt: float
+
+
+@dataclass
 class AircraftPosition:
     lat: float
     lng: float
@@ -90,14 +97,6 @@ class SurveillanceSensorDetail:
 
 
 @dataclass
-class ActiveTrack:
-    session_id: str
-    unique_aircraft_identifier: str
-    last_updated_timestamp: str
-    observations: list[dict]
-
-
-@dataclass
 class FlightPoint:
     """This object holds basic information about a point on the flight track, it has latitude, longitude and altitude in WGS 1984 datum"""
 
@@ -109,7 +108,8 @@ class FlightPoint:
 
 
 @dataclass
-class GridCellFlight:
-    """A object to hold details of a grid location and the track within it"""
-    icao_address_or_flight_id: str
-    track: List[FlightPoint]
+class ActiveTrack:
+    session_id: str
+    unique_aircraft_identifier: str
+    last_updated_timestamp: str
+    observations: list[dict]
