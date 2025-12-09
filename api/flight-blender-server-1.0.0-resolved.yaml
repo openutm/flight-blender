@@ -3461,7 +3461,7 @@ components:
             max_altitude:
               type: object
               properties:
-                metres:
+                meters:
                   type: number
                 datum:
                   type: string
@@ -3470,7 +3470,7 @@ components:
             min_altitude:
               type: object
               properties:
-                metres:
+                meters:
                   type: number
                 datum:
                   type: string
