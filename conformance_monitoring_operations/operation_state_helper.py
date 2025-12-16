@@ -1,9 +1,7 @@
-import logging
-
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 class State:

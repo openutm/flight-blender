@@ -1,8 +1,8 @@
 import json
-import logging
 from functools import partial
 
 import pyproj
+from loguru import logger
 from shapely.geometry import Point, mapping
 from shapely.ops import transform
 
@@ -15,7 +15,6 @@ from .data_definitions import (
     ZoneAuthority,
 )
 
-logger = logging.getLogger("django")
 proj_wgs84 = pyproj.Proj("+proj=longlat +datum=WGS84")
 
 

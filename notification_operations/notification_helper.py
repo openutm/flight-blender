@@ -1,15 +1,15 @@
 import json
-import logging
 from dataclasses import asdict
 
 import pika
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 # import signal, sys
 from .data_definitions import FlightDeclarationUpdateMessage
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
+
 
 # def signal_handler(signal, frame):
 #     sys.exit(0)

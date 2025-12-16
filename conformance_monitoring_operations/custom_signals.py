@@ -1,7 +1,6 @@
-import logging
-
 import django.dispatch
 from django.dispatch import receiver
+from loguru import logger
 
 from common.database_operations import (
     FlightBlenderDatabaseReader,
@@ -12,7 +11,6 @@ from .conformance_checks_handler import FlightOperationConformanceHelper
 from .conformance_state_helper import ConformanceChecksList
 from .operator_conformance_notifications import OperationConformanceNotification
 
-logger = logging.getLogger("django")
 # Declare signals
 telemetry_non_conformance_signal = django.dispatch.Signal()
 flight_operational_intent_reference_non_conformance_signal = django.dispatch.Signal()

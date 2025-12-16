@@ -1,10 +1,10 @@
 import json
-import logging
 import uuid
 
 import arrow
 import tldextract
 from dacite import from_dict
+from loguru import logger
 
 from common.database_operations import (
     FlightBlenderDatabaseReader,
@@ -21,8 +21,6 @@ from .scd_data_definitions import (
     OperationalIntentUSSDetails,
     OtherError,
 )
-
-logger = logging.getLogger("django")
 
 INDEX_NAME = "opint_idx"
 

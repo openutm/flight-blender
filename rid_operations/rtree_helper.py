@@ -1,14 +1,12 @@
 import hashlib
-import logging
 
+from loguru import logger
 from rtree import index
 from shapely.geometry import Polygon
 
 from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
 from scd_operations.scd_data_definitions import Altitude, OpInttoCheckDetails, Time
-
-logger = logging.getLogger("django")
 
 
 class OperationalIntentComparisonFactory:

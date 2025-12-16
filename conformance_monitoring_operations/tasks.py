@@ -1,5 +1,3 @@
-import logging
-
 from dotenv import find_dotenv, load_dotenv
 
 from flight_blender.celery import app
@@ -15,33 +13,27 @@ ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 # This method conducts flight conformance checks as a async tasks
 @app.task(name="check_flight_conformance")
-def check_flight_conformance(
-    flight_declaration_id: str, session_id: str, dry_run: str = "1"
-):
+def check_flight_conformance(flight_declaration_id: str, session_id: str, dry_run: str = "1"):
     # This method checks the conformance status for ongoing operations and sends notifications / via the notifications channel
 
     dry_run = dry_run == "1"
     d_run = "1" if dry_run else "0"
     my_conformance_ops = FlightBlenderConformanceEngine()
 
-    flight_operational_intent_reference_conformant = (
-        my_conformance_ops.check_flight_operational_intent_reference_conformance(
-            flight_declaration_id=flight_declaration_id
-        )
+    flight_operational_intent_reference_conformant = my_conformance_ops.check_flight_operational_intent_reference_conformance(
+        flight_declaration_id=flight_declaration_id
     )
 
     if flight_operational_intent_reference_conformant == 1:
         logger.info(f"Operation with {flight_declaration_id} is conformant...")
         # Basic conformance checks passed, check telemetry conformance
         logging.info("Checking telemetry conformance...")
-        check_operation_telemetry_conformance(
-            flight_declaration_id=flight_declaration_id, dry_run=d_run
-        )
+        check_operation_telemetry_conformance(flight_declaration_id=flight_declaration_id, dry_run=d_run)
     else:
         custom_signals.flight_operational_intent_reference_non_conformance_signal.send(
             sender="check_flight_conformance",
@@ -54,19 +46,13 @@ def check_flight_conformance(
 
 # This method conducts flight telemetry checks
 @app.task(name="check_operation_telemetry_conformance")
-def check_operation_telemetry_conformance(
-    flight_declaration_id: str, dry_run: str = "1"
-):
+def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: str = "1"):
     # This method checks the conformance status for ongoing operations and sends notifications / via the notifications channel
     dry_run = dry_run == "1"
     my_conformance_ops = FlightBlenderConformanceEngine()
     # Get Telemetry
     obs_helper = flight_stream_helper.ObservationReadOperations()
-    latest_rid_observation = (
-        obs_helper.get_latest_flight_observation_by_flight_declaration_id(
-            flight_declaration_id=flight_declaration_id
-        )
-    )
+    latest_rid_observation = obs_helper.get_latest_flight_observation_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
     # Get the latest telemetry
 
     if not latest_rid_observation:
@@ -80,18 +66,14 @@ def check_operation_telemetry_conformance(
         altitude_m_wgs84 = latest_rid_observation.altitude_mm
         aircraft_id = latest_rid_observation.icao_address
 
-        conformant_via_telemetry = (
-            my_conformance_ops.is_operation_conformant_via_telemetry(
-                flight_declaration_id=flight_declaration_id,
-                aircraft_id=aircraft_id,
-                telemetry_location=LatLngPoint(lat=lat_dd, lng=lon_dd),
-                altitude_m_wgs_84=float(altitude_m_wgs84),
-            )
+        conformant_via_telemetry = my_conformance_ops.is_operation_conformant_via_telemetry(
+            flight_declaration_id=flight_declaration_id,
+            aircraft_id=aircraft_id,
+            telemetry_location=LatLngPoint(lat=lat_dd, lng=lon_dd),
+            altitude_m_wgs_84=float(altitude_m_wgs84),
         )
         if conformant_via_telemetry == 100:
-            logger.info(
-                f"Operation with {flight_declaration_id} is conformant via telemetry..."
-            )
+            logger.info(f"Operation with {flight_declaration_id} is conformant via telemetry...")
 
         else:
             logger.info(

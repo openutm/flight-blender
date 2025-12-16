@@ -1,5 +1,4 @@
 import json
-import logging
 from dataclasses import asdict
 from datetime import timedelta
 from uuid import UUID
@@ -7,6 +6,7 @@ from uuid import UUID
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -63,7 +63,6 @@ from .utils import (
 )
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 def is_valid_uuid(uuid_to_test, version=4):

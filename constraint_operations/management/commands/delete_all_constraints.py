@@ -1,14 +1,13 @@
-import logging
 from os import environ as env
 
 from django.core.management.base import BaseCommand
 
 # Configure logging
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from constraint_operations.models import ConstraintDetail
 
-logger = logging.getLogger("django")
 load_dotenv(find_dotenv())
 
 

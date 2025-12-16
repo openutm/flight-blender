@@ -1,6 +1,5 @@
 import hashlib
 import json
-import logging
 import time
 import uuid
 from dataclasses import asdict
@@ -14,6 +13,7 @@ from dacite import from_dict
 from django.http import HttpResponse, JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from implicitdict import ImplicitDict
+from loguru import logger
 from rest_framework.decorators import api_view
 from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiagonalKm
 from uas_standards.interuss.automated_testing.rid.v1.injection import (
@@ -65,7 +65,6 @@ from .tasks import (
 )
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 class RIDOutputHelper:

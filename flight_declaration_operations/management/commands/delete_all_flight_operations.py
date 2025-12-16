@@ -1,10 +1,10 @@
-import logging
 from os import environ as env
 
 from django.core.management.base import BaseCommand
 
 # Configure logging
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from common.database_operations import (
     FlightBlenderDatabaseReader,
@@ -12,7 +12,6 @@ from common.database_operations import (
 )
 from scd_operations import dss_scd_helper
 
-logger = logging.getLogger("django")
 load_dotenv(find_dotenv())
 
 

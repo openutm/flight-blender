@@ -1,5 +1,4 @@
 import json
-import logging
 import time
 import uuid
 from dataclasses import asdict
@@ -10,6 +9,9 @@ import arrow
 from dacite import Config, from_dict
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
+
+# Create your views here.
+from loguru import logger
 from rest_framework.decorators import api_view
 
 import rid_operations.view_port_ops as view_port_ops
@@ -58,11 +60,7 @@ from .uss_data_definitions import (
     VehicleTelemetryResponse,
 )
 
-# Create your views here.
-
-
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 def is_valid_uuid(uuid_to_test, version=4):

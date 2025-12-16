@@ -54,6 +54,7 @@ dependencies = [
     "wait-for-it==2.3.0",
     "channels==4.3.1",
     "channels-redis==4.3.0",
+    "loguru==0.7.3",
 ]
 
 [dependency-groups]

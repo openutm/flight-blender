@@ -1,4 +1,3 @@
-import logging
 from dataclasses import asdict
 from importlib import import_module
 
@@ -6,14 +5,13 @@ import arrow
 from asgiref.sync import async_to_sync
 from channels_redis.core import RedisChannelLayer
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
 from flight_blender.settings import ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS, BROKER_URL
 
 from .data_definitions import HeartbeatMessage
-
-logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
 

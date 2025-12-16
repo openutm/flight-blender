@@ -1,8 +1,7 @@
-import logging
-
 import arrow
 import geojson
 from geojson import Feature, FeatureCollection
+from loguru import logger
 from pyproj import Geod
 from shapely.geometry import Point, shape
 
@@ -19,8 +18,6 @@ from scd_operations.scd_data_definitions import (
     Volume4D,
 )
 from scd_operations.scd_data_definitions import Polygon as Plgn
-
-logger = logging.getLogger("django")
 
 
 class CustomVolumeGenerator:
