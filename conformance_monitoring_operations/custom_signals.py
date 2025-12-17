@@ -25,7 +25,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
     my_operation_notification = OperationConformanceNotification(flight_declaration_id=flight_declaration_id)
 
     # Check the conformance notification status and notification rules
-    logger.debug("{} -- {}".format(sender, kwargs["non_conformance_state"]))
+    logger.debug(f"{sender} -- {kwargs['non_conformance_state']}")
     event = False
 
     non_conformance_state_code = ConformanceChecksList.state_code(non_conformance_state)
@@ -37,7 +37,7 @@ def process_telemetry_conformance_message(sender, **kwargs):
             flight_declaration_id=flight_declaration_id
         )
         detailed_non_conformance_message = invalid_aircraft_id_msg
-        logger.error(invalid_aircraft_id_msg)
+        logger.error(f"{invalid_aircraft_id_msg}")
         my_operation_notification.send_conformance_status_notification(message=invalid_aircraft_id_msg, level="error")
         new_state = 4
         event = "flight_blender_confirms_contingent"

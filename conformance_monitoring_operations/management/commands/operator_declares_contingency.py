@@ -158,7 +158,7 @@ class Command(BaseCommand):
                 min_altitude=min_altitude,
                 max_altitude=max_altitude,
             )
-            logger.debug(nominal_or_off_nominal_volumes)
+            logger.debug(f"Nominal or off-nominal volumes: {nominal_or_off_nominal_volumes}")
 
             if not dry_run:
                 flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")

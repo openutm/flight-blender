@@ -38,7 +38,7 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     all_track_data = []
     for track_message in track_messages:
         all_track_data.append(asdict(track_message))
-        logger.debug("Fused track message:", asdict(track_message))
+        logger.debug(f"Fused track message: {asdict(track_message)}")
     async_to_sync(channel_layer.group_send)("track_" + session_id, {"type": "track.message", "data": all_track_data})
 
 
@@ -54,7 +54,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
         horizontal_or_vertical_95_percentile_accuracy_m=5,
         timestamp=arrow.utcnow().isoformat(),
     )
-    logger.debug("Sending heartbeat data:", asdict(heartbeat_data))
+    logger.debug(f"Sending heartbeat data: {asdict(heartbeat_data)}")
     async_to_sync(channel_layer.group_send)(
         "heartbeat_" + session_id,  # Assuming the group name for HeartBeatConsumer
         {"type": "heartbeat.message", "data": asdict(heartbeat_data)},

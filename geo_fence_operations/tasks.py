@@ -69,8 +69,8 @@ def write_geo_zone(geo_zone: str, test_harness_datasource: str = "0"):
         bounds = u.bounds
         bounds_str = ",".join([str(x) for x in bounds])
 
-        logger.debug("Bounding box for shape..")
-        logger.debug(bounds)
+        logger.debug(f"Bounding box for shape.. {bounds}")
+
         geo_zone = GeoZone(
             title=geo_zone["title"],
             description=geo_zone["description"],

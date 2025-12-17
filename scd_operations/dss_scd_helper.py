@@ -159,7 +159,7 @@ class PeerOperationalIntentValidator:
         try:
             assert operational_intent.reference.state in VALID_OPERATIONAL_INTENT_STATES
         except AssertionError:
-            logger.debug("Error in received operational intent state, the state declared is invalid: %s" % operational_intent.reference.state)
+            logger.debug(f"Error in received operational intent state, it is not valid {operational_intent.reference.state}")
             all_checks_passed.append(False)
         else:
             all_checks_passed.append(True)
@@ -167,7 +167,7 @@ class PeerOperationalIntentValidator:
         try:
             assert isinstance(operational_intent.details.priority, int)
         except AssertionError:
-            logger.debug("Error in received operational intent priority, it is not one an integer %s" % operational_intent.details.priority)
+            logger.debug(f"Error in received operational intent priority, it is not one an integer {operational_intent.details.priority}")
             all_checks_passed.append(False)
         else:
             all_checks_passed.append(True)
@@ -888,7 +888,7 @@ class SCDOperations:
                             404,
                             500,
                         ]:
-                            logger.debug(uss_operational_intent_request.json())
+                            logger.debug(f"Response: {uss_operational_intent_request.json()}")
                             logger.error(
                                 "Error in querying peer USS about operational intent (ID: {uss_op_int_id}) details from uss with base url {uss_base_url}".format(
                                     uss_op_int_id=current_uss_operational_intent_detail.id,
@@ -1606,7 +1606,7 @@ class SCDOperations:
             )
 
             logger.info("Successfully created operational intent in the DSS")
-            logger.debug("Response details from the DSS %s" % dss_response)
+            logger.debug(f"Response details from the DSS {dss_response}")
             d_r = OperationalIntentSubmissionStatus(
                 status="success",
                 status_code=201,

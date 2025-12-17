@@ -96,8 +96,8 @@ class Command(BaseCommand):
         stored_volumes = details_full.volumes
         stored_priority = details_full.priority
         stored_off_nominal_volumes = details_full.off_nominal_volumes
-        logger.debug(stored_priority)
-        logger.debug(stored_off_nominal_volumes)
+        logger.debug(f"stored_priority: {stored_priority}")
+        logger.debug(f"stored_off_nominal_volumes: {stored_off_nominal_volumes}")
 
         # Update the flight declaration state
         flight_declaration.state = new_state

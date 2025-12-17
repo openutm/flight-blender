@@ -107,8 +107,8 @@ class Command(BaseCommand):
         stored_volumes = details_full.volumes
         stored_priority = details_full.priority
         stored_off_nominal_volumes = details_full.off_nominal_volumes
-        logger.debug(stored_priority)
-        logger.debug(stored_off_nominal_volumes)
+        logger.debug(f"Stored priority: {stored_priority}")
+        logger.debug(f"Stored off nominal volumes: {stored_off_nominal_volumes}")
         reference = OperationalIntentReferenceDSSResponse(
             id=stored_operational_intent_id,
             manager=stored_manager,
@@ -171,7 +171,7 @@ class Command(BaseCommand):
             min_altitude=min_altitude,
             max_altitude=max_altitude,
         )
-        logger.debug(new_volume_4d)
+        logger.debug(f"New volume 4D: {new_volume_4d}")
 
         operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
             subscription_id=stored_subscription_id,

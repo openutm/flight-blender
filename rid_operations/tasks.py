@@ -159,7 +159,7 @@ def process_requested_flight(
         # Check if all mandatory telemetry fields are present
 
         missing_fields = [field for field in MANDATORY_TELEMETRY_FIELDS if field not in provided_telemetry or provided_telemetry[field] is None]
-        logger.debug("Processing telemetry entry %s", telemetry_id)
+        logger.debug(f"Processing telemetry entry {telemetry_id}")
         logger.debug(f"Number of missing fields: {len(missing_fields)}")
         if missing_fields:
             logger.info("Missing telemetry fields, in telemetry: %s", missing_fields)
@@ -176,7 +176,7 @@ def process_requested_flight(
             for field in MANDATORY_POSITION_FIELDS
             if field not in provided_telemetry["position"] or provided_telemetry["position"][field] is None
         ]
-        logger.debug("Processing position entry %s", telemetry_id)
+        logger.debug(f"Processing position entry {telemetry_id}")
         logger.debug(f"Number of missing position fields: {len(missing_position_fields)}")
         if missing_position_fields:
             logger.info("Missing position fields: %s", missing_position_fields)

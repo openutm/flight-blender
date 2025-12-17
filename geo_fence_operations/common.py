@@ -59,7 +59,7 @@ class GeoZoneParser:
                             "features": [{"type": "Feature", "properties": {}, "geometry": b}],
                         }
                         logger.info("Converting point to circle")
-                        logger.debug(json.dumps(fc))
+                        logger.debug(f"{json.dumps(fc)}")
                         ed_269_geometry["horizontalProjection"] = b
                 if not parse_error:
                     horizontal_projection = ImplicitDict.parse(ed_269_geometry["horizontalProjection"], HorizontalProjection)

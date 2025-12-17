@@ -899,7 +899,7 @@ class FlightBlenderDatabaseWriter:
             p_task.start()
             return True
         except Exception as e:
-            logger.debug(e)
+            logger.debug(f"{e}")
             logger.error("Could not create surveillance monitoring heartbeat periodic task")
             return False
 
@@ -924,7 +924,7 @@ class FlightBlenderDatabaseWriter:
             p_task.start()
             return True
         except Exception as e:
-            logger.debug(e)
+            logger.debug(f"Error creating surveillance monitoring heartbeat periodic task: {e}")
             logger.error("Could not create surveillance monitoring heartbeat periodic task")
             return False
 
@@ -958,7 +958,7 @@ class FlightBlenderDatabaseWriter:
             p_task.start()
             return True
         except Exception as e:
-            logger.debug(e)
+            logger.debug(f"Error creating conformance monitoring periodic task: {e}")
             logger.error("Could not create periodic task")
             return False
 

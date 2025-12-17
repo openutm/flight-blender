@@ -43,7 +43,7 @@ def write_incoming_air_traffic_data(observation: str):
     my_database_writer = FlightBlenderDatabaseWriter()
     my_redis_helper = RedisStreamOperations()
     obs = json.loads(observation)
-    logger.debug("Received observation: %s", obs)
+    logger.debug(f"Received observation: {obs}")
     try:
         single_air_traffic_observation = from_dict(data=obs, data_class=SingleAirtrafficObservation)
     except (
@@ -52,7 +52,7 @@ def write_incoming_air_traffic_data(observation: str):
     ) as e:
         logger.error(f"Error parsing observation: {e}")
         return
-    logger.debug("Parsed observation: %s", single_air_traffic_observation)
+    logger.debug(f"Parsed observation: {single_air_traffic_observation}")
 
     logger.info("Writing observation..")
 
@@ -113,7 +113,7 @@ def start_opensky_network_stream(view_port: str, session_id: str):
         logger.info(url_data)
         if response.status_code == 200:
             response_data = response.json()
-            logger.debug(response_data)
+            logger.debug(f"Response data: {response_data}")
 
             if response_data.get("states"):
                 col_names = [

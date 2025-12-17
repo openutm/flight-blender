@@ -528,7 +528,7 @@ class RemoteIDOperations:
         for _service_area in _flight_details.service_areas:
             rid_query_url = _service_area.uss_base_url + "/uss/flights" + "?view=" + view
 
-            logger.debug("Flight url list : %s" % all_flights_url)
+            logger.debug(f"Flight url list : {all_flights_url}")
             audience = generate_audience_from_base_url(base_url=_service_area.uss_base_url)
 
             auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")
@@ -558,7 +558,7 @@ class RemoteIDOperations:
                         assert flight.get("current_state") is not None
                     except AssertionError:
                         logger.error("There is no current_state provided by SP on the flights url %s" % rid_query_url)
-                        logger.debug(json.dumps(flight))
+                        logger.debug(f"{json.dumps(flight)}")
                     else:
                         flight_current_state = flight["current_state"]
                         position = flight_current_state["position"]
