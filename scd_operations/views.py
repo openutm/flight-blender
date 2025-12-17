@@ -1,6 +1,5 @@
 import json
 from dataclasses import asdict
-from datetime import timedelta
 from uuid import UUID
 
 from django.http import JsonResponse

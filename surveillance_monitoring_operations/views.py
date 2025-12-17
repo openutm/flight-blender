@@ -6,7 +6,6 @@ from datetime import timedelta
 
 from django.http import JsonResponse
 from django.utils import timezone
-from loguru import logger
 from rest_framework.decorators import api_view
 
 from auth_helper.utils import requires_scopes

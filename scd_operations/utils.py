@@ -1,10 +1,8 @@
-import json
 from itertools import cycle
 
 import arrow
 from loguru import logger
 
-from auth_helper.common import get_redis
 from common.data_definitions import OPINT_INDEX_BASEPATH
 from common.database_operations import (
     FlightBlenderDatabaseReader,

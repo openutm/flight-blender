@@ -1,4 +1,3 @@
-import json
 from dataclasses import asdict
 from importlib import import_module
 from os import environ as env
@@ -7,7 +6,6 @@ import arrow
 import shapely.geometry
 from dotenv import find_dotenv, load_dotenv
 from geojson import FeatureCollection
-from loguru import logger
 from pyproj import Proj
 from shapely.geometry import Point, Polygon, shape
 from shapely.ops import unary_union

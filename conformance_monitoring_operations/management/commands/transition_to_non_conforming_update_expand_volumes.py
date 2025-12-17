@@ -1,24 +1,14 @@
-import json
-from dataclasses import asdict
-from os import environ as env
-
-import arrow
-from dacite import from_dict
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
-from shapely.geometry import Point, Polygon
 
-from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-from conformance_monitoring_operations.data_definitions import PolygonAltitude
 from flight_declaration_operations.utils import OperationalIntentsConverter
 from flight_feed_operations import flight_stream_helper
 from scd_operations.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations
 from scd_operations.scd_data_definitions import (
     OperationalIntentReferenceDSSResponse,
     Time,
-    Volume4D,
 )
 
 load_dotenv(find_dotenv())

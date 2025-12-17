@@ -1,9 +1,6 @@
-import json
-
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
 
-from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
 from scd_operations.dss_scd_helper import SCDOperations
 

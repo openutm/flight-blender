@@ -1,6 +1,5 @@
 import enum
 from dataclasses import asdict, dataclass, field
-from enum import Enum
 from typing import Literal, NamedTuple
 
 from implicitdict import ImplicitDict, StringBasedDateTime

@@ -1,6 +1,5 @@
 import hashlib
 
-from loguru import logger
 from rtree import index
 from shapely.geometry import Polygon
 
