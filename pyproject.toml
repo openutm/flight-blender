@@ -27,7 +27,7 @@ dependencies = [
     "cryptography==44.0.1",
     "dacite==1.9.2",
     "dj-database-url==2.1.0",
-    "django==5.2.8",
+    "django==5.2.9",
     "django-celery-beat==2.8.1",
     "djangorestframework==3.16.1",
     "geojson==3.2.0",
