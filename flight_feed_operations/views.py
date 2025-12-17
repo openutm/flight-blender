@@ -1,6 +1,5 @@
 # Create your views here.
 import json
-import logging
 import uuid
 from dataclasses import asdict
 from os import environ as env
@@ -12,6 +11,7 @@ from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
 from dotenv import find_dotenv, load_dotenv
 from jwcrypto import jwk
+from loguru import logger
 from marshmallow import ValidationError
 from rest_framework import generics
 from rest_framework.decorators import api_view
@@ -38,8 +38,6 @@ from .pki_helper import MessageVerifier, ResponseSigningOperations
 from .rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
 from .serializers import SignedTelmetryPublicKeySerializer
 from .tasks import start_opensky_network_stream, write_incoming_air_traffic_data
-
-logger = logging.getLogger("django")
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:

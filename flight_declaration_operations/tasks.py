@@ -1,5 +1,4 @@
 import json
-import logging
 from dataclasses import asdict
 from datetime import timedelta
 from os import environ as env
@@ -7,6 +6,7 @@ from os import environ as env
 import arrow
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
@@ -28,8 +28,6 @@ from scd_operations.scd_data_definitions import (
     OperationalIntentUSSDetails,
     SubscriptionState,
 )
-
-logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
 

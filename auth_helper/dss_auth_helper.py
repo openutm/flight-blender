@@ -1,14 +1,12 @@
 import json
-import logging
 from datetime import datetime, timedelta
 from os import environ as env
 
 import requests
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from .common import get_redis
-
-logger = logging.getLogger("django")
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -52,6 +50,7 @@ class AuthorityCredentialsGetter:
 
         cache_key = audience + token_suffix
         token_details = self.redis.get(cache_key)
+        logger.info("Retrieved cached token details..")
 
         if token_details:
             token_details = json.loads(token_details)
@@ -106,7 +105,7 @@ class AuthorityCredentialsGetter:
 
             token_data = requests.get(auth_server_url, params=payload)
             if token_data.status_code != 200:
-                logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {url}")
+                logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {auth_server_url}")
                 logger.error(f"Payload: {payload}")
                 logger.error(f"Failed to get token: {token_data.status_code} - {token_data.text}")
             return token_data.json()
@@ -122,7 +121,7 @@ class AuthorityCredentialsGetter:
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
             token_data = requests.post(auth_server_url, data=payload, headers=headers)
             if token_data.status_code != 200:
-                logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {url}")
+                logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {auth_server_url}")
                 logger.error(f"Payload: {payload}")
                 logger.error(f"Failed to get token: {token_data.status_code} - {token_data.text}")
             return token_data.json()

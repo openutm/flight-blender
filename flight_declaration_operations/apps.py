@@ -1,13 +1,12 @@
-import logging
 from os import environ as env
 
 from django.apps import AppConfig
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from notification_operations.notification_helper import InitialNotificationFactory
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 class FlightDeclarationOperationsConfig(AppConfig):
@@ -17,6 +16,7 @@ class FlightDeclarationOperationsConfig(AppConfig):
         amqp_connection_url = env.get("AMQP_URL", 0)
 
         if amqp_connection_url:
+            logger.info(f"Connecting to AMQP {amqp_connection_url} for processing notifications..")
             my_notification_helper = InitialNotificationFactory(
                 amqp_connection_url=amqp_connection_url,
                 exchange_name="operational_events",

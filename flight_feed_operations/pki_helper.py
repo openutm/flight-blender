@@ -1,6 +1,5 @@
 import hashlib
 import json
-import logging
 from os import environ as env
 
 import http_sfv
@@ -27,7 +26,7 @@ from .models import SignedTelmetryPublicKey
 load_dotenv(find_dotenv())
 
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):

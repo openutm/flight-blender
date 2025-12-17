@@ -1,4 +1,3 @@
-import logging
 import os
 from os import environ as env
 
@@ -18,7 +17,7 @@ ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 class FlightOperationConformanceHelper:

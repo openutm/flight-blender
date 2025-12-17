@@ -1,9 +1,7 @@
 import json
-import logging
 
 from channels.generic.websocket import AsyncWebsocketConsumer, WebsocketConsumer
-
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 class HomeConsumer(WebsocketConsumer):

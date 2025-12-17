@@ -1,4 +1,3 @@
-import logging
 from os import environ as env
 
 from django.core.management.base import BaseCommand, CommandError
@@ -17,7 +16,7 @@ ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 class Command(BaseCommand):

@@ -1,4 +1,3 @@
-import logging
 from os import environ as env
 
 from dotenv import find_dotenv, load_dotenv
@@ -7,7 +6,7 @@ from flight_declaration_operations.tasks import send_operational_update_message
 
 load_dotenv(find_dotenv())
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 class OperationConformanceNotification:

@@ -1,8 +1,8 @@
 import json
-import logging
 from itertools import cycle
 
 import arrow
+from loguru import logger
 
 from auth_helper.common import get_redis
 from common.data_definitions import OPINT_INDEX_BASEPATH
@@ -14,8 +14,6 @@ from rid_operations import rtree_helper
 
 from . import dss_scd_helper
 from .scd_data_definitions import ClearAreaResponse, ClearAreaResponseOutcome
-
-logger = logging.getLogger("django")
 
 
 class UAVSerialNumberValidator:

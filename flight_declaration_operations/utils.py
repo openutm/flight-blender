@@ -1,5 +1,4 @@
 import json
-import logging
 from dataclasses import asdict
 from importlib import import_module
 from os import environ as env
@@ -8,6 +7,7 @@ import arrow
 import shapely.geometry
 from dotenv import find_dotenv, load_dotenv
 from geojson import FeatureCollection
+from loguru import logger
 from pyproj import Proj
 from shapely.geometry import Point, Polygon, shape
 from shapely.ops import unary_union
@@ -29,8 +29,6 @@ from scd_operations.scd_data_definitions import (
     Volume4D,
 )
 from scd_operations.scd_data_definitions import Polygon as Plgn
-
-logger = logging.getLogger("django")
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:

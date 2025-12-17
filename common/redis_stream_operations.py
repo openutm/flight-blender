@@ -1,15 +1,13 @@
 import json
-import logging
 import uuid
 from typing import List, Optional
 
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from auth_helper.common import get_redis
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from surveillance_monitoring_operations.data_definitions import ActiveTrack
-
-logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
 

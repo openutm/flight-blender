@@ -1,5 +1,4 @@
 import json
-import logging
 import time
 from dataclasses import asdict
 from os import environ as env
@@ -25,7 +24,7 @@ if ENV_FILE:
     load_dotenv(ENV_FILE)
 
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 #### Airtraffic Endpoint
 

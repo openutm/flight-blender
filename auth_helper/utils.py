@@ -1,5 +1,4 @@
 import json
-import logging
 from functools import wraps
 from os import environ as env
 from urllib.parse import urlparse
@@ -9,9 +8,9 @@ import requests
 from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 def jwt_get_username_from_payload_handler(payload):

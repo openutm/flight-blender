@@ -1,6 +1,5 @@
 # Create your views here.
 import json
-import logging
 from dataclasses import asdict
 from os import environ as env
 
@@ -8,6 +7,7 @@ import arrow
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from marshmallow.exceptions import ValidationError
 from rest_framework import generics, mixins, status
 from rest_framework.decorators import api_view
@@ -57,7 +57,6 @@ from .tasks import (
 from .utils import OperationalIntentsConverter
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 class FlightDeclarationRequestValidator:

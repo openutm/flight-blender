@@ -2,7 +2,6 @@
 
 # Create your views here.
 import json
-import logging
 import uuid
 from dataclasses import asdict
 from decimal import Decimal
@@ -14,6 +13,7 @@ from django.core.validators import URLValidator
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from implicitdict import ImplicitDict
+from loguru import logger
 from marshmallow import ValidationError
 from rest_framework import generics, mixins, status
 from rest_framework.decorators import api_view
@@ -56,8 +56,6 @@ from .serializers import (
     GeoZoneChecksResponseSerializer,
 )
 from .tasks import download_geozone_source, write_geo_zone
-
-logger = logging.getLogger("django")
 
 INDEX_NAME = "geofence_proc"
 

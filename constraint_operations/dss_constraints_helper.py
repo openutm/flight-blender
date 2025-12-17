@@ -1,5 +1,4 @@
 import json
-import logging
 import uuid
 from dataclasses import asdict
 from enum import Enum
@@ -32,7 +31,7 @@ ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 class ConstraintOperations:

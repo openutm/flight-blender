@@ -4,7 +4,6 @@
 
 import hashlib
 import json
-import logging
 import math
 import uuid
 from dataclasses import asdict
@@ -15,6 +14,7 @@ import requests
 import tldextract
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from pyproj import Geod
 from shapely.geometry import LineString, Point, Polygon
 from uas_standards.astm.f3411.v22a.constants import (
@@ -58,7 +58,6 @@ from .rid_utils import (
     Volume4D,
 )
 
-logger = logging.getLogger("django")
 load_dotenv(find_dotenv())
 
 ENV_FILE = find_dotenv()

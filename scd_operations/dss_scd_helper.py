@@ -1,5 +1,4 @@
 import json
-import logging
 import uuid
 from dataclasses import asdict
 from datetime import datetime
@@ -81,7 +80,7 @@ ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
 
-logger = logging.getLogger("django")
+from loguru import logger
 
 
 def is_time_within_time_period(start_time: datetime, end_time: datetime, time_to_check: datetime):

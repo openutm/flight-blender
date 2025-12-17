@@ -1,9 +1,9 @@
 import json
-import logging
 from dataclasses import asdict
 
 import arrow
 import requests
+from loguru import logger
 from requests.exceptions import ConnectionError
 from shapely.geometry import shape
 from shapely.ops import unary_union
@@ -14,8 +14,6 @@ from flight_blender.celery import app
 from .common import GeoZoneParser
 from .data_definitions import GeoAwarenessTestStatus, GeoZone
 from .models import GeoFence
-
-logger = logging.getLogger("django")
 
 
 @app.task(name="download_geozone_source")

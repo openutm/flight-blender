@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import uuid
 from dataclasses import asdict
@@ -11,6 +10,7 @@ import arrow
 from django.db.models import QuerySet
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from common.utils import EnhancedJSONEncoder
 from conformance_monitoring_operations.models import ConformanceRecord, TaskScheduler
@@ -58,8 +58,6 @@ from surveillance_monitoring_operations.models import (
     SurveillanceSensor,
     SurveillanceSession,
 )
-
-logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
 

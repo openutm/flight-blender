@@ -1,7 +1,9 @@
 import tldextract
+from loguru import logger
 
 
 def process_localutm(subdomain: str, domain: str) -> str:
+    logger.info(f"Processing localutm token for {subdomain} and {domain}..")
     uss_audience = subdomain + "." + domain
     return uss_audience
 

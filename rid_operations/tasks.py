@@ -1,5 +1,4 @@
 import json
-import logging
 import time
 from dataclasses import asdict
 from datetime import timedelta
@@ -11,6 +10,7 @@ from arrow.parser import ParserError
 from dacite import Config, from_dict
 from dacite.exceptions import DaciteFieldError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from shapely.geometry import MultiPoint, Point, box
 
 from auth_helper.common import get_redis
@@ -48,8 +48,6 @@ from .rid_utils import (
     RIDVolume4D,
     SingleObservationMetadata,
 )
-
-logger = logging.getLogger("django")
 
 load_dotenv(find_dotenv())
 

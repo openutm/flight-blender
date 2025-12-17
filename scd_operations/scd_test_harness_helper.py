@@ -1,9 +1,9 @@
 import json
-import logging
 from enum import Enum
 
 import dacite
 from dacite import from_dict
+from loguru import logger
 
 from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
@@ -28,8 +28,6 @@ from .scd_data_definitions import (
     TestInjectionResultState,
     Volume4D,
 )
-
-logger = logging.getLogger("django")
 
 # Set the responses to be used
 failed_test_injection_response = TestInjectionResult(

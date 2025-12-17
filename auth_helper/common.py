@@ -1,11 +1,10 @@
-import logging
 from os import environ as env
 
 import redis
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 load_dotenv(find_dotenv())
-logger = logging.getLogger("django")
 
 
 def get_redis() -> redis.Redis:
@@ -69,4 +68,5 @@ class RedisHelper:
         Flush the entire Redis database.
         """
         r = self._get_redis_instance()
+        logger.info("Flushing Redis db..")
         r.flushdb()
