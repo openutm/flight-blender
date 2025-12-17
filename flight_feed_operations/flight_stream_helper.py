@@ -78,7 +78,7 @@ class ObservationReadOperations:
         r.expire(key, 300)
         pending_messages = []
         all_flight_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
-        logger.info(f"Retrieved all flight observations..")
+        logger.info("Retrieved all flight observations..")
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],
@@ -109,7 +109,7 @@ class ObservationReadOperations:
 
         all_observations = []
         closest_observations = my_database_reader.get_closest_flight_observation_for_now(now=now)
-        logger.info(f"Retrieved closest_observations..")
+        logger.info("Retrieved closest_observations..")
         for closest_observation in closest_observations:
             single_observation = FlightObservationSchema(
                 id=str(closest_observation.id),

@@ -1,5 +1,4 @@
 import json
-import uuid
 from dataclasses import asdict
 from enum import Enum
 from os import environ as env

@@ -1,6 +1,4 @@
 import json
-from dataclasses import asdict
-from datetime import timedelta
 from os import environ as env
 
 import arrow
@@ -8,7 +6,6 @@ from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import (
     FlightBlenderDatabaseReader,
@@ -24,9 +21,7 @@ from scd_operations.opint_helper import DSSOperationalIntentsCreator
 from scd_operations.scd_data_definitions import (
     NotifyPeerUSSPostPayload,
     OperationalIntentDetailsUSSResponse,
-    OperationalIntentStorage,
     OperationalIntentUSSDetails,
-    SubscriptionState,
 )
 
 load_dotenv(find_dotenv())

@@ -1,22 +1,17 @@
 # Create your views here.
 # Create your views here.
 
-import uuid
 from dataclasses import asdict
-from datetime import timedelta
 
 import arrow
 from dacite import from_dict
 from django.http import JsonResponse
-from django.utils import timezone
-from loguru import logger
 from rest_framework.decorators import api_view
 
 from auth_helper.utils import requires_scopes
-from common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from common.data_definitions import FLIGHTBLENDER_READ_SCOPE
 from common.database_operations import (
     FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
 )
 
 from .data_definitions import ConformanceRecord, ConformanceSummary

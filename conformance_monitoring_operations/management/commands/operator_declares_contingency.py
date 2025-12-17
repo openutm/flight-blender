@@ -7,7 +7,6 @@ from dotenv import find_dotenv, load_dotenv
 from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
-from auth_helper.common import get_redis
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import FlightBlenderDatabaseReader
 from conformance_monitoring_operations.data_definitions import PolygonAltitude
@@ -18,7 +17,6 @@ from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
     SCDOperations,
 )
-from scd_operations.scd_data_definitions import Polygon
 
 load_dotenv(find_dotenv())
 

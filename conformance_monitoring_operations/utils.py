@@ -1,7 +1,6 @@
 ## This file checks the conformance of a operation per the AMC stated in the EU Conformance monitoring service
 import json
 from os import environ as env
-from typing import Optional
 
 import arrow
 from dotenv import find_dotenv, load_dotenv

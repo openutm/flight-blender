@@ -1,5 +1,3 @@
-from os import environ as env
-
 from django.core.management.base import BaseCommand
 
 # Configure logging

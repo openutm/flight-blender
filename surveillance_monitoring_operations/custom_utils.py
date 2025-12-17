@@ -2,9 +2,6 @@ from typing import List
 
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from surveillance_monitoring_operations.data_definitions import (
-    AircraftPosition,
-    AircraftState,
-    SpeedAccuracy,
     TrackMessage,
 )
 

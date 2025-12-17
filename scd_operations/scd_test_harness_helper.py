@@ -1,4 +1,3 @@
-import json
 from enum import Enum
 
 import dacite
@@ -26,7 +25,6 @@ from .flight_planning_data_definitions import (
 from .scd_data_definitions import (
     TestInjectionResult,
     TestInjectionResultState,
-    Volume4D,
 )
 
 # Set the responses to be used

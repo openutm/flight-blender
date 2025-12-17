@@ -4,23 +4,11 @@ import dacite
 from dacite import from_dict
 
 from rid_operations.data_definitions import (
-    UASID,
-    HorizontalAccuracy,
-    LatLngPoint,
-    OperatorLocation,
-    RIDAircraftPosition,
     RIDAircraftState,
-    RIDAuthData,
     RIDFlightDetails,
-    RIDHeight,
-    RIDOperationalStatus,
     SignedTelemetryRequest,
     SignedUnSignedTelemetryObservations,
-    SpeedAccuracy,
     SubmittedTelemetryFlightDetails,
-    Time,
-    UAClassificationEU,
-    VerticalAccuracy,
 )
 
 

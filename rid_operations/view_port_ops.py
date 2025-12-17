@@ -1,6 +1,5 @@
 from math import atan2, cos, radians, sin, sqrt
 
-import shapely
 from shapely.geometry import box as shapely_box
 
 
