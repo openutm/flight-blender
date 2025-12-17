@@ -769,7 +769,7 @@ class SCDOperations:
                     all_uss_operational_intent_details.append(o_i_r_formatted)
 
             for current_uss_operational_intent_detail in all_uss_operational_intent_details:
-                logging.info("All Operational intents in the area..")
+                logger.info("All Operational intents in the area..")
 
                 # check the USS for flight volume by using the URL to see if this is stored in Flight Blender, DSS will return all intent details including our own
                 current_uss_base_url = current_uss_operational_intent_detail.uss_base_url

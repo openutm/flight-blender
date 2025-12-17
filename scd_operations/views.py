@@ -582,7 +582,7 @@ def upsert_close_flight_plan(request, flight_plan_id):
 
                 my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id_str)
 
-                logging.info("-- Deleted operational inent {opint_id} with Flight declaration ID {flight_declaration_id}".format(**ovn_opint))
+                logger.info("-- Deleted operational inent {opint_id} with Flight declaration ID {flight_declaration_id}".format(**ovn_opint))
                 flight_planning_deletion_response = flight_planning_deletion_success_response
             else:
                 logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))

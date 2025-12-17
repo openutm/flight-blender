@@ -98,7 +98,7 @@ class FlightDeclarationRequestValidator:
                 return {
                     "message": "Error in processing the submitted GeoJSON: every Feature in a GeoJSON FeatureCollection must have a min_altitude and max_altitude data structure"
                 }, 400
-            logging.debug(min_altitude, max_altitude)
+            logger.debug(min_altitude, max_altitude)
             all_features.append(s)
         return all_features, None
 
