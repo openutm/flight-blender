@@ -1,12 +1,14 @@
 # ⌚ 20-min Quickstart
+
 In this article you will understand how to deploy the Flight Blender backend / data processing engine. If you need a front end / display you will need to install [Flight Spotlight](https://flightspotlight.com) (which communicates with Flight Blender via the API) and finally for production we also recommend that you use [Flight Passport](https://www.github.com/openskies-sh/flight_passport) authorization server for endpoint security.
 
 ## Who is this for?
+
 This guide is mainly for technical engineers within organizations interested in testing and standing up UTM capability. It is recommended that you are familiar with basic Docker, OAUTH/Bearer Tokens. The server is written in Django/Python if you want to use/run the built-in data. However, since it is all API-based, you can use any tools/languages that you are familiar with to communicate with the server.
 
 ## Introduction and objectives
 
-This quick start is for local development/testing only. For a more detailed "Production" instance, see the currently under development [Production Deployment](https://github.com/openutm/deployment/blob/main/oauth_infrastructure.md) document. The main difference between local development and production is that for production, you will need a full-fledged OAUTH server like [Flight Passport](https://github.com/openutm/flight_passport) or others. For this quickstart, we will use the simple authentication/token generation mechanism that requires no additional server setup. In this quickstart, we will:
+This quick start is for local development/testing only. For a more detailed "Production" instance, see [Production Deployment](https://github.com/openutm/deployment/) repository. The main difference between local development and production is that for production, you will need a full-fledged OAUTH server like [Flight Passport](https://github.com/openutm/flight_passport) or others. For this quickstart, we will use the simple authentication/token generation mechanism that requires no additional server setup. In this quickstart, we will:
 
 1. Create a .env file
 2. Use Docker Compose to run the Flight Blender server
@@ -47,16 +49,20 @@ If you are working in stand-alone mode, recommended initially, the above environ
 | FLIGHTBLENDER_FQDN | string | This is the domain name of a Flight Blender deployment, e.g., `https://beta.flightblender.com`. |
 
 ### 2. Use Docker Compose to stand up Flight Blender
+
 After creating and saving the .env file, you can utilize the [docker-compose-dev.yaml](../docker-compose-dev.yml) file to launch the instance. Simply execute `docker build . -t openutm/flight-blender-dev` to create the image, followed by `docker compose up` to make a running Flight Blender instance accessible.
 
 #### Running Flight Blender
+
 You can run Flight Blender by running `docker compose up` and then go to `http://localhost:8000`. You should see the Flight Blender Logo and a link to the API and Ping documentation. Congratulations 🎉 we now have a running version of the system!
 
 ### 3. Upload some flight information
+
 Next, we can now upload flight data. Flight Blender has an extensive API, and you can review it. Any data uploaded or downloaded is done via the API. We have a [verification](https://www.github.com/openutm/verification) repository that will help you with interacting with your system. It will submit flight declarations and other data in and out of Flight Blender.
 
 
 ### 4. Use Postman to query the API
+
 While the script is running, you can install Postman, which should help us query the API. You can import the [Postman Collection](../api/flight_blender_api.postman_collection.json) prior. You will also need a "NoAuth" Bearer JWT token that you can generate by using the [get_access_token.py](https://github.com/openutm/verification/blob/main/src/openutm_verification/importers/get_access_token.py) script. You should have a scope of `blender.read` and an audience of `testflight.flightblender.com`. We will use this token to go to the Postman collection > Flight Feed Operations > Get airtraffic observations. You should be able to see the output of the flight feed as a response!
 
 ## Frequently asked Questions (FAQs)

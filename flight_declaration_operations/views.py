@@ -7,6 +7,7 @@ import arrow
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from dotenv import find_dotenv, load_dotenv
+from geojson import Feature, FeatureCollection, Polygon
 from loguru import logger
 from marshmallow.exceptions import ValidationError
 from rest_framework import generics, mixins, status
@@ -29,9 +30,11 @@ from common.database_operations import (
 )
 from geo_fence_operations import rtree_geo_fence_helper
 from geo_fence_operations.models import GeoFence
+from rid_operations import view_port_ops
 from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
     SCDOperations,
+    VolumesConverter,
 )
 
 from .data_definitions import (
@@ -320,6 +323,99 @@ class FlightDeclarationDetail(mixins.RetrieveModelMixin, generics.GenericAPIView
 
     def get(self, request, *args, **kwargs):
         return self.retrieve(request, *args, **kwargs)
+
+
+@api_view(["GET"])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
+def network_flight_declaration_details_by_view(request):
+    USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
+
+    try:
+        view = request.query_params["view"]
+        view_port = [float(i) for i in view.split(",")]
+    except (KeyError, ValueError):
+        incorrect_parameters = {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}
+        return JsonResponse(incorrect_parameters, status=400, content_type="application/json")
+
+    if not view_port_ops.check_view_port(view_port_coords=view_port):
+        view_port_error = {"message": "An incorrect view port bbox was provided"}
+        return JsonResponse(view_port_error, status=400, content_type="application/json")
+
+    # if not USSP_NETWORK_ENABLED:
+    #     return JsonResponse(
+    #         asdict(HTTP400Response(message="USSP network cannot be queried since it is not enabled in Flight Blender")),
+    #         status=400,
+    #         content_type="application/json",
+    #     )
+    # start_datetime = arrow.now().isoformat()
+    # end_datetime = arrow.now().shift(minutes=2).isoformat()
+    # view_port_box = view_port_ops.build_view_port_box(view_port_coords=view_port)
+    # # Convert view_port_box to GeoJSON FeatureCollection
+    # geo_json = view_port_box.__geo_interface__
+    # geo_json_polygon = Polygon(coordinates=geo_json["coordinates"])
+    # geo_json_feature = Feature(
+    #     geometry=geo_json_polygon,
+    #     properties={
+    #         "min_altitude": {"meters": 0, "datum": "W84"},
+    #         "max_altitude": {"meters": 120, "datum": "W84"},
+    #     },
+    # )
+
+    # flight_declaration_geo_json = FeatureCollection(features=[geo_json_feature])
+
+    # my_operational_intent_converter = OperationalIntentsConverter()
+    # temporary_operational_intent_reference = my_operational_intent_converter.create_partial_operational_intent_ref(
+    #     geo_json_fc=flight_declaration_geo_json,
+    #     start_datetime=start_datetime,
+    #     end_datetime=end_datetime,
+    #     priority=0,
+    # )
+    # temporary_operational_intent_reference_volumes = temporary_operational_intent_reference.volumes
+    # my_scd_helper = SCDOperations()
+    # try:
+    #     operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=temporary_operational_intent_reference_volumes)
+    # except (ValueError, ConnectionError):
+    #     logger.info("The received data from peer USS had errors and failed validation checks..")
+    #     operational_intent_geojson = []
+    operational_intent_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"max_altitude": {"datum": "W84", "meters": 120}, "min_altitude": {"datum": "WGS84", "meters": 10}},
+                "geometry": {
+                    "coordinates": [
+                        [
+                            [7.428576446182603, 46.95342123952176],
+                            [7.430954409610848, 46.95027623505794],
+                            [7.444479075471634, 46.95676894402325],
+                            [7.449086379346625, 46.96184082505053],
+                            [7.433480995660915, 46.956971828720384],
+                            [7.428576446182603, 46.95342123952176],
+                        ]
+                    ],
+                    "type": "Polygon",
+                },
+            },
+            {
+                "type": "Feature",
+                "properties": {"max_altitude": {"datum": "W84", "meters": 70}, "min_altitude": {"datum": "WGS84", "meters": 40}},
+                "geometry": {
+                    "coordinates": [
+                        [
+                            [7.4367506952017095, 46.94926167806045],
+                            [7.4367506952017095, 46.94368127117312],
+                            [7.446411170816361, 46.94368127117312],
+                            [7.446411170816361, 46.94926167806045],
+                            [7.4367506952017095, 46.94926167806045],
+                        ]
+                    ],
+                    "type": "Polygon",
+                },
+            },
+        ],
+    }
+    return JsonResponse(operational_intent_geojson, status=200, content_type="application/json")
 
 
 @api_view(["GET"])

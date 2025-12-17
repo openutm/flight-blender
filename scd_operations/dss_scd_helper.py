@@ -322,7 +322,7 @@ class VolumesConverter:
 
                 polygon_feature = {
                     "type": "Feature",
-                    "properties": {},
+                    "properties": {"max_altitude": volume.volume.altitude_upper.value, "min_altitude": volume.volume.altitude_lower.value},
                     "geometry": outline_p,
                 }
                 geo_json_features.append(polygon_feature)
@@ -340,7 +340,7 @@ class VolumesConverter:
 
                 circle_feature = {
                     "type": "Feature",
-                    "properties": {},
+                    "properties": {"max_altitude": volume.volume.altitude_upper.value, "min_altitude": volume.volume.altitude_lower.value},
                     "geometry": outline_c,
                 }
 

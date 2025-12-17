@@ -1250,6 +1250,57 @@ paths:
       tags:
         - flight-declarations
 
+  /flight_declaration_ops/network_flight_declarations_by_view:
+    get:
+      parameters:
+        - name: view
+          description:
+            'The area of this view: lat1,lng1,lat2,lng2.  Size may not exceed a diagonal length specified in the standard. The view is the smallest box
+            bounded by the provided corner points.'
+          schema:
+            type: string
+            example: 29.97816,31.13296,29.98025,31.13535
+          in: query
+
+      summary: 'Get a list of all flight declarations / operational intents from the USS Network by view'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      description: "Get a list of all Operational Intents from the USSP network"
+
+      responses:
+        '200':
+          description: The USSP network has been queried and the operational intents that encompass the bounds of the current flight declaration are provided.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkOpIntGeoJSONFeatureCollection'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - p2p_utm
+
   /flight_declaration_ops/{flight_declaration_id}/network_flight_declarations:
     get:
       parameters:

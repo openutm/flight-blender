@@ -30,6 +30,10 @@ urlpatterns = [
         flight_declaration_views.network_flight_declaration_details,
     ),
     path(
+        "network_flight_declarations_by_view",
+        flight_declaration_views.network_flight_declaration_details_by_view,
+    ),
+    path(
         "flight_declaration_review/<uuid:pk>",
         flight_declaration_views.FlightDeclarationApproval.as_view(),
         name="flight-declaration-review",
