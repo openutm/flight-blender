@@ -6,7 +6,7 @@ from shapely.geometry import Polygon
 
 from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
-from scd_operations.scd_data_definitions import Altitude, OpInttoCheckDetails, Time, Volume4D
+from scd_operations.scd_data_definitions import Altitude, OpInttoCheckDetails, Time
 
 
 class OperationalIntentComparisonFactory:
