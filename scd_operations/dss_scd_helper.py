@@ -1039,6 +1039,7 @@ class SCDOperations:
             try:
                 operational_intent_reference_id = uss_op_int_detail.reference.id
                 operational_intent_reference_manager = uss_op_int_detail.reference.manager
+                operational_intent_state = uss_op_int_detail.reference.state
             except AttributeError:
                 operational_intent_reference_id = "unknown"
                 operational_intent_reference_manager = "unknown"
@@ -1048,6 +1049,7 @@ class SCDOperations:
             for f in my_volume_converter.geo_json["features"]:
                 f["properties"]["operational_intent_reference_id"] = operational_intent_reference_id
                 f["properties"]["operational_intent_reference_manager"] = operational_intent_reference_manager
+                f["properties"]["operational_intent_state"] = operational_intent_state
                 feat_collection["features"].append(f)
 
         return feat_collection
