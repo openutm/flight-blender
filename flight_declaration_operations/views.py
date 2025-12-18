@@ -348,7 +348,7 @@ def network_flight_declaration_details_by_view(request):
             content_type="application/json",
         )
     start_datetime = arrow.now().shift(minutes=-1).isoformat()
-    end_datetime = arrow.now().shift(minutes=5).isoformat()
+    end_datetime = arrow.now().shift(minutes=10).isoformat()
     view_port_box = view_port_ops.build_view_port_box_lng_lat(view_port_coords=view_port)
     # Convert view_port_box to GeoJSON FeatureCollection
     converted_geo_json = view_port_ops.convert_box_to_geojson_feature(box=view_port_box)
