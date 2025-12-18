@@ -192,6 +192,12 @@ class FlightDeclarationDelete(generics.DestroyAPIView):
 
 @api_view(["POST"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
+def set_operational_intent(request):
+    pass
+
+
+@api_view(["POST"])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_flight_declaration(request):
     request_data = request.data
     my_flight_declaration_validator = FlightDeclarationRequestValidator()
