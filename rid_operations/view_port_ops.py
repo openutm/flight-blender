@@ -1,5 +1,6 @@
 from math import atan2, cos, radians, sin, sqrt
 
+from geojson import Feature, FeatureCollection, Polygon
 from shapely.geometry import box as shapely_box
 
 
@@ -11,6 +12,34 @@ def build_view_port_box(view_port_coords) -> shapely_box:
         view_port_coords[3],
     )
     return box
+
+
+def build_view_port_box_lng_lat(view_port_coords) -> shapely_box:
+    # This function builds a shapely box from viewport coordinates so that it is compatible with GeoJSON standard longitude-latitude order
+    box = shapely_box(
+        view_port_coords[1],
+        view_port_coords[0],
+        view_port_coords[3],
+        view_port_coords[2],
+    )
+    return box
+
+
+def convert_box_to_geojson_feature(box: shapely_box) -> FeatureCollection:
+    # Convert shapely box to GeoJSON FeatureCollection, this assumes that the box is in longitude-latitude order per the GeoJSON standard
+    geo_json_coordinates = [list(box.exterior.coords)]
+
+    geo_json_polygon = Polygon(coordinates=geo_json_coordinates)
+    geo_json_feature = Feature(
+        geometry=geo_json_polygon,
+        properties={
+            "min_altitude": {"meters": 0, "datum": "W84"},
+            "max_altitude": {"meters": 120, "datum": "W84"},
+        },
+    )
+
+    flight_declaration_geo_json = FeatureCollection(features=[geo_json_feature])
+    return flight_declaration_geo_json
 
 
 # def get_view_port_area(view_box: shapley_box) -> int:
