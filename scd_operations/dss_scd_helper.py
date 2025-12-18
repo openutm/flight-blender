@@ -12,6 +12,7 @@ import urllib3
 from dotenv import find_dotenv, load_dotenv
 from pyproj import Proj
 from shapely.geometry import Point, Polygon
+from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from auth_helper.common import get_redis
@@ -296,7 +297,7 @@ class VolumesConverter:
             g_c.append(asdict(ll))
         return g_c
 
-    def get_minimum_rotated_rectangle(self) -> Polygon:
+    def get_minimum_rotated_rectangle(self) -> BaseGeometry:
         union = unary_union(self.all_volume_features)
         return union
 
@@ -1035,10 +1036,18 @@ class SCDOperations:
             raise ValueError("Error in validating received data, cannot progress with processing")
 
         for uss_op_int_detail in nearby_operational_intents:
+            try:
+                operational_intent_reference_id = uss_op_int_detail.reference.id
+                operational_intent_reference_manager = uss_op_int_detail.reference.manager
+            except AttributeError:
+                operational_intent_reference_id = "unknown"
+                operational_intent_reference_manager = "unknown"
             operational_intent_volumes = uss_op_int_detail.details.volumes
             my_volume_converter = VolumesConverter()
             my_volume_converter.convert_volumes_to_geojson(volumes=operational_intent_volumes)
             for f in my_volume_converter.geo_json["features"]:
+                f["properties"]["operational_intent_reference_id"] = operational_intent_reference_id
+                f["properties"]["operational_intent_reference_manager"] = operational_intent_reference_manager
                 feat_collection["features"].append(f)
 
         return feat_collection
