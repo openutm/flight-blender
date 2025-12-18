@@ -1,11 +1,12 @@
 import hashlib
 
+import arrow
 from rtree import index
 from shapely.geometry import Polygon
 
 from auth_helper.common import get_redis
 from common.database_operations import FlightBlenderDatabaseReader
-from scd_operations.scd_data_definitions import Altitude, OpInttoCheckDetails, Time
+from scd_operations.scd_data_definitions import Altitude, OpInttoCheckDetails, Time, Volume4D
 
 
 class OperationalIntentComparisonFactory:
@@ -123,3 +124,17 @@ def check_polygon_intersection(op_int_details: list[OpInttoCheckDetails], polygo
         return all(does_intersect)
     else:
         return False
+
+
+def check_time_intersection(op_int_details: list[OpInttoCheckDetails], volume_time_end: str, volume_time_start: str) -> bool:
+    """Method to check if a polygon is conflicted in time with existing operational intents"""
+    _volume_time_start = arrow.get(volume_time_start)
+    _volume_time_end = arrow.get(volume_time_end)
+    does_time_intersect = []
+    for existing_op_int in op_int_details:
+        if not (_volume_time_end < arrow.get(existing_op_int.time_start) or _volume_time_start > arrow.get(existing_op_int.time_end)):
+            does_time_intersect.append(True)
+        else:
+            does_time_intersect.append(False)
+
+    return any(does_time_intersect)

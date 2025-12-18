@@ -105,8 +105,6 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             level="info",
         )
 
-        ###### Change via new state check helper
-
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
 
         if not flight_declaration:

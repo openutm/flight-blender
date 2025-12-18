@@ -545,3 +545,5 @@ class OpInttoCheckDetails:
     ovn: str
     shape: Plgn
     id: str
+    time_start: Optional[str] = None
+    time_end: Optional[str] = None

@@ -301,6 +301,12 @@ class VolumesConverter:
         union = unary_union(self.all_volume_features)
         return union
 
+    def get_earliest_time_from_volumes(self) -> str:
+        return self.time_start
+
+    def get_latest_time_from_volumes(self) -> str:
+        return self.time_end
+
     def get_bounds(self) -> list[float]:
         union = unary_union(self.all_volume_features)
         rect_bounds = union.bounds
@@ -1095,11 +1101,15 @@ class SCDOperations:
                 operational_intent_volumes = uss_op_int_detail.details.volumes
             my_volume_converter = VolumesConverter()
             my_volume_converter.convert_volumes_to_geojson(volumes=operational_intent_volumes)
+            time_start = my_volume_converter.get_earliest_start_time()
+            time_end = my_volume_converter.get_latest_end_time()
             minimum_rotated_rect = my_volume_converter.get_minimum_rotated_rectangle()
             cur_op_int_details = OpInttoCheckDetails(
                 shape=minimum_rotated_rect,
                 ovn=uss_op_int_detail.reference.ovn,
                 id=uss_op_int_detail.reference.id,
+                time_end=time_end,
+                time_start=time_start,
             )
             all_opints_to_check.append(cur_op_int_details)
 
@@ -1536,19 +1546,31 @@ class SCDOperations:
             my_ind_volumes_converter = VolumesConverter()
             my_ind_volumes_converter.convert_volumes_to_geojson(volumes=volumes)
             ind_volumes_polygon = my_ind_volumes_converter.get_minimum_rotated_rectangle()
+            volume_time_start = my_ind_volumes_converter.get_earliest_time_from_volumes()
+            volume_time_end = my_ind_volumes_converter.get_latest_time_from_volumes()
 
             for cur_op_int_detail in all_existing_operational_intent_details:
                 airspace_keys.append(cur_op_int_detail.ovn)
 
+            is_conflicted_in_time = False
+            is_conflicted_in_space = False
             if priority == 100:
                 deconflicted = True
             else:
                 airspace_keys.append(management_key)
-                is_conflicted = rtree_helper.check_polygon_intersection(
+                is_conflicted_in_space = rtree_helper.check_polygon_intersection(
                     op_int_details=all_existing_operational_intent_details,
                     polygon_to_check=ind_volumes_polygon,
                 )
-                deconflicted = False if is_conflicted else True
+                # if the polygon is conflicted in space check if they are also conflicted in time
+                if is_conflicted_in_space:
+                    is_conflicted_in_time = rtree_helper.check_time_intersection(
+                        op_int_details=all_existing_operational_intent_details,
+                        volume_time_end=volume_time_end,
+                        volume_time_start=volume_time_start,
+                    )
+
+                deconflicted = False if any([is_conflicted_in_space, is_conflicted_in_time]) else True
         else:
             deconflicted = True
             logger.info("No existing operational intent references in the DSS, deconfliction status: %s" % deconflicted)
