@@ -1022,6 +1022,124 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Get Nearby Operational Intents by view",
+					"protocolProfileBehavior": {
+						"disabledSystemHeaders": {
+							"content-type": true
+						}
+					},
+					"request": {
+						"auth": {
+							"type": "oauth2",
+							"oauth2": [
+								{
+									"key": "accessTokenUrl",
+									"value": "{{passport_oauth_token_url}}",
+									"type": "string"
+								},
+								{
+									"key": "tokenRequestParams",
+									"value": [
+										{
+											"key": "audience",
+											"value": "{{flight_blender_audience}}",
+											"enabled": true,
+											"send_as": "request_body"
+										}
+									],
+									"type": "any"
+								},
+								{
+									"key": "scope",
+									"value": "{{flight_blender_scopes}}",
+									"type": "string"
+								},
+								{
+									"key": "tokenName",
+									"value": "Flight Blender RW",
+									"type": "string"
+								},
+								{
+									"key": "clientSecret",
+									"value": "{{client_secret}}",
+									"type": "string"
+								},
+								{
+									"key": "clientId",
+									"value": "{{client_id}}",
+									"type": "string"
+								},
+								{
+									"key": "redirect_uri",
+									"value": "http://local.test:8000/",
+									"type": "string"
+								},
+								{
+									"key": "grant_type",
+									"value": "client_credentials",
+									"type": "string"
+								},
+								{
+									"key": "authUrl",
+									"value": "http://local.test:8000/oauth/authorize/",
+									"type": "string"
+								},
+								{
+									"key": "client_authentication",
+									"value": "body",
+									"type": "string"
+								},
+								{
+									"key": "accessToken",
+									"value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6IjkzNDMyNTZiLTVlYTUtNGY0OC04NzJlLTE0YTI5N2NmZTkzYyJ9.eyJpc3MiOiJodHRwczovL2lkLm9wZW5za2llcy5zaC8iLCJleHAiOjE2MDU1MjQxNDcsImlhdCI6MTYwNTUyMDU0Nywic3ViIjoiRjB2a1ZnWkJDTWZCem1yQTZNUjRJSW5MU0trRGdYamNRb2pXTFZrU0BjbGllbnRzIiwic2NvcGUiOiJibGVuZGVyLnJlYWQgYmxlbmRlci53cml0ZSIsInR5cCI6IkJlYXJlciJ9.QFhKD6nmSByaRbCA8pCNElwSAvdpyJav4lNF6PKW3nsISsR1i560T9fX8wmJ6WBZ6mL-bIIYbv88So2reg3vGDZKl1PZCCxjq4-FpmJqITWdCxGrNoY7crpmFa9u6sIw4qzeL4PMOyAC2qCk43CJD7ohk5pHq2OyqclB0x4KtdeRVzUPNekIK5nPnLXiXrbWc2Y3p-VPOva3sOFfU8jvVO2JvHxpUGbQkqog01QPSkQZ0_tEg_n3YD_TnD1Su9EXNCP9ROfLVyzZQIYtCPfL5euQh5-llWK1uakjx0yC4sZIuTmKOME4WErUdUN0iH9nZdIrLMHqGTpWNFWKWb7ZaLEQ9PSuYEHXTJ0oMbk5OakwEbr3mFtQfjd8xFlcDaVjESL3U9cb6LVZfBumJrwtqg0h39oYNoTIWp7VPwZR1kRg43GkMa3Y6eLMTU4ul2OQf1QjQOq6WyNVYOUZArzpSv9ORw_R7WMSpqtTXUiMgW3dWytzOYH77SkASIzNVQyPqw37zek8fO7ET8NlKIT8GiL0dWcgbWtCVaAqpWnIfMqBg85XlhhtFGBntP8uRM_7h6k7jAFRNnYRe5RPrx5Nzq8goly_8TP2jCQuiQ20kqXMJGWQWo8H0X3HP3cgnyBUdh8Midakhg1cnqAqXIiAx0dcEKPoyJ5ky250brLwRTk",
+									"type": "string"
+								},
+								{
+									"key": "tokenType",
+									"value": "Bearer",
+									"type": "string"
+								},
+								{
+									"key": "addTokenTo",
+									"value": "header",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/flight_declaration_ops/network_flight_declarations_by_view?view=53.511407992126124,-113.34293092501264,53.570312127628284,-113.24566205668486",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"flight_declaration_ops",
+								"network_flight_declarations_by_view"
+							],
+							"query": [
+								{
+									"key": "",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "view",
+									"value": "53.511407992126124,-113.34293092501264,53.570312127628284,-113.24566205668486"
+								}
+							]
+						},
+						"description": "This request submits a Geofence to Flight Blender"
+					},
+					"response": []
 				}
 			]
 		},
@@ -4510,114 +4628,6 @@
 					],
 					"path": [
 						"ping"
-					],
-					"query": [
-						{
-							"key": "",
-							"value": "",
-							"disabled": true
-						}
-					]
-				},
-				"description": "This request submits a Geofence to Flight Blender"
-			},
-			"response": []
-		},
-		{
-			"name": "Get Public Key",
-			"protocolProfileBehavior": {
-				"disabledSystemHeaders": {
-					"content-type": true
-				}
-			},
-			"request": {
-				"auth": {
-					"type": "oauth2",
-					"oauth2": [
-						{
-							"key": "tokenName",
-							"value": "Flight Blender RW",
-							"type": "string"
-						},
-						{
-							"key": "scope",
-							"value": "{{flight_blender_scopes}}",
-							"type": "string"
-						},
-						{
-							"key": "audience",
-							"value": {
-								"29c3df1f-c177-4141-9918-542225ab0713": "{{flight_blender_audience}}"
-							},
-							"type": "any"
-						},
-						{
-							"key": "clientSecret",
-							"value": "{{client_secret}}",
-							"type": "string"
-						},
-						{
-							"key": "clientId",
-							"value": "{{client_id}}",
-							"type": "string"
-						},
-						{
-							"key": "redirect_uri",
-							"value": "http://local.test:8000/",
-							"type": "string"
-						},
-						{
-							"key": "grant_type",
-							"value": "client_credentials",
-							"type": "string"
-						},
-						{
-							"key": "authUrl",
-							"value": "http://local.test:8000/oauth/authorize/",
-							"type": "string"
-						},
-						{
-							"key": "client_authentication",
-							"value": "body",
-							"type": "string"
-						},
-						{
-							"key": "accessTokenUrl",
-							"value": "https://id.openskies.sh/oauth/token/",
-							"type": "string"
-						},
-						{
-							"key": "accessToken",
-							"value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6IjkzNDMyNTZiLTVlYTUtNGY0OC04NzJlLTE0YTI5N2NmZTkzYyJ9.eyJpc3MiOiJodHRwczovL2lkLm9wZW5za2llcy5zaC8iLCJleHAiOjE2MDU1MjQxNDcsImlhdCI6MTYwNTUyMDU0Nywic3ViIjoiRjB2a1ZnWkJDTWZCem1yQTZNUjRJSW5MU0trRGdYamNRb2pXTFZrU0BjbGllbnRzIiwic2NvcGUiOiJibGVuZGVyLnJlYWQgYmxlbmRlci53cml0ZSIsInR5cCI6IkJlYXJlciJ9.QFhKD6nmSByaRbCA8pCNElwSAvdpyJav4lNF6PKW3nsISsR1i560T9fX8wmJ6WBZ6mL-bIIYbv88So2reg3vGDZKl1PZCCxjq4-FpmJqITWdCxGrNoY7crpmFa9u6sIw4qzeL4PMOyAC2qCk43CJD7ohk5pHq2OyqclB0x4KtdeRVzUPNekIK5nPnLXiXrbWc2Y3p-VPOva3sOFfU8jvVO2JvHxpUGbQkqog01QPSkQZ0_tEg_n3YD_TnD1Su9EXNCP9ROfLVyzZQIYtCPfL5euQh5-llWK1uakjx0yC4sZIuTmKOME4WErUdUN0iH9nZdIrLMHqGTpWNFWKWb7ZaLEQ9PSuYEHXTJ0oMbk5OakwEbr3mFtQfjd8xFlcDaVjESL3U9cb6LVZfBumJrwtqg0h39oYNoTIWp7VPwZR1kRg43GkMa3Y6eLMTU4ul2OQf1QjQOq6WyNVYOUZArzpSv9ORw_R7WMSpqtTXUiMgW3dWytzOYH77SkASIzNVQyPqw37zek8fO7ET8NlKIT8GiL0dWcgbWtCVaAqpWnIfMqBg85XlhhtFGBntP8uRM_7h6k7jAFRNnYRe5RPrx5Nzq8goly_8TP2jCQuiQ20kqXMJGWQWo8H0X3HP3cgnyBUdh8Midakhg1cnqAqXIiAx0dcEKPoyJ5ky250brLwRTk",
-							"type": "string"
-						},
-						{
-							"key": "tokenType",
-							"value": "Bearer",
-							"type": "string"
-						},
-						{
-							"key": "addTokenTo",
-							"value": "header",
-							"type": "string"
-						}
-					]
-				},
-				"method": "GET",
-				"header": [
-					{
-						"key": "Content-Type",
-						"value": "application/json",
-						"type": "text"
-					}
-				],
-				"url": {
-					"raw": "{{base_url}}/signing_public_key",
-					"host": [
-						"{{base_url}}"
-					],
-					"path": [
-						"signing_public_key"
 					],
 					"query": [
 						{

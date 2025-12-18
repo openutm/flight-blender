@@ -363,7 +363,7 @@ def network_flight_declaration_details_by_view(request):
     temporary_operational_intent_reference_volumes = temporary_operational_intent_reference.volumes
     my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=temporary_operational_intent_reference_volumes)
     logger.debug("Temporary Operational Intent Reference GeoJSON:")
-    logger.debug(my_operational_intent_converter.geo_json)
+    logger.debug(json.dumps(my_operational_intent_converter.geo_json))
     my_scd_helper = SCDOperations()
     try:
         operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=temporary_operational_intent_reference_volumes)

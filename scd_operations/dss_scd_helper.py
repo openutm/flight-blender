@@ -726,7 +726,7 @@ class SCDOperations:
             operational_intent_references = []
             area_of_interest = QueryOperationalIntentPayload(area_of_interest=volume)
             logger.info("Querying DSS for operational intents in the area..")
-            logger.debug(f"Area of interest {area_of_interest}")
+            logger.debug(f"Area of interest {json.dumps(asdict(area_of_interest))}")
             try:
                 operational_intent_ref_response = requests.post(
                     query_op_int_url,
