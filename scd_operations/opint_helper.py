@@ -214,7 +214,9 @@ class DSSOperationalIntentsCreator:
             ]:  # for host.docker.internal type calls
                 uss_audience = "localhost"
             else:
-                uss_audience = ".".join(ext[:3])  # get the subdomain, domain and suffix and create a audience and get credentials
+                uss_audience = ".".join(
+                    [ext.subdomain, ext.domain, ext.suffix]
+                )  # get the subdomain, domain and suffix and create a audience and get credentials
 
         if ext.subdomain != "dummy" and ext.domain != "uss":
             # Do not notify dummy.uss
