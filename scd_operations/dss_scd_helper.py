@@ -1101,8 +1101,8 @@ class SCDOperations:
                 operational_intent_volumes = uss_op_int_detail.details.volumes
             my_volume_converter = VolumesConverter()
             my_volume_converter.convert_volumes_to_geojson(volumes=operational_intent_volumes)
-            time_start = my_volume_converter.get_earliest_start_time()
-            time_end = my_volume_converter.get_latest_end_time()
+            time_start = my_volume_converter.get_earliest_time_from_volumes()
+            time_end = my_volume_converter.get_latest_time_from_volumes()
             minimum_rotated_rect = my_volume_converter.get_minimum_rotated_rectangle()
             cur_op_int_details = OpInttoCheckDetails(
                 shape=minimum_rotated_rect,
