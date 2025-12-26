@@ -40,6 +40,7 @@ from scd_operations.dss_scd_helper import (
 from .data_definitions import (
     Altitude,
     CreateFlightDeclarationRequestSchema,
+    CreateFlightDeclarationViaOperationalIntentRequestSchema,
     FlightDeclarationCreateResponse,
     HTTP400Response,
     HTTP404Response,
@@ -63,6 +64,14 @@ load_dotenv(find_dotenv())
 
 
 class FlightDeclarationRequestValidator:
+    def validate_incoming_operational_intent(self, operational_intent_details_geojson):
+        schema = CreateFlightDeclarationViaOperationalIntentRequestSchema()
+        try:
+            schema.load(operational_intent_details_geojson)
+        except ValidationError as err:
+            return {"message": "Validation error", "errors": err.messages}, 400
+        return None, None
+
     def validate_request(self, request_data):
         schema = CreateFlightDeclarationRequestSchema()
         try:
@@ -193,7 +202,108 @@ class FlightDeclarationDelete(generics.DestroyAPIView):
 @api_view(["POST"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_operational_intent(request):
-    pass
+    request_data = request.data
+    my_operational_intent_converter = OperationalIntentsConverter()
+    my_flight_declaration_validator = FlightDeclarationRequestValidator()
+    error_response, status_code = my_flight_declaration_validator.validate_incoming_operational_intent(
+        operational_intent_details_geojson=request_data
+    )
+
+    if error_response:
+        return JsonResponse(error_response, status=status_code)
+
+    if request.headers.get("Content-Type") != RESPONSE_CONTENT_TYPE:
+        return {"message": "Unsupported Media Type"}, 415
+
+    operational_intent_volume4ds = request_data.get("operational_intent_volume4ds")
+
+    parsed_operational_intent = my_operational_intent_converter.parse_volume4ds_to_V4D_list(operational_intent_volume4ds)
+    my_operational_intent_converter.convert_operational_intent_to_geo_json(volumess=parsed_operational_intent)
+
+    flight_declaration_geo_json = my_operational_intent_converter.geo_json
+
+    start_datetime = request_data.get("start_datetime", arrow.now().isoformat())
+    end_datetime = request_data.get("end_datetime", arrow.now().isoformat())
+    error_response, status_code = my_flight_declaration_validator.validate_dates(start_datetime, end_datetime)
+    if error_response:
+        return JsonResponse(error_response, status=status_code)
+
+    USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
+    submitted_by = request_data.get("submitted_by")
+
+    type_of_operation = request_data.get("type_of_operation", 0)
+    originating_party = request_data.get("originating_party", "No Flight Information")
+    aircraft_id = request_data["aircraft_id"]
+
+    my_operational_intent_converter = OperationalIntentsConverter()
+
+    bounds = my_operational_intent_converter.get_geo_json_bounds()
+    view_box = [float(i) for i in bounds.split(",")]
+
+    intersection_check_results = my_flight_declaration_validator.check_intersections(
+        start_datetime=start_datetime,
+        end_datetime=end_datetime,
+        view_box=view_box,
+        ussp_network_enabled=USSP_NETWORK_ENABLED,
+    )
+
+    all_relevant_fences = intersection_check_results.all_relevant_fences
+    all_relevant_declarations = intersection_check_results.all_relevant_declarations
+    is_approved = intersection_check_results.is_approved
+    declaration_state = intersection_check_results.declaration_state
+
+    flight_declaration = FlightDeclaration(
+        operational_intent=json.dumps(asdict(parsed_operational_intent)),
+        bounds=bounds,
+        type_of_operation=type_of_operation,
+        aircraft_id=aircraft_id,
+        submitted_by=submitted_by,
+        is_approved=is_approved,
+        start_datetime=start_datetime,
+        end_datetime=end_datetime,
+        originating_party=originating_party,
+        flight_declaration_raw_geojson=json.dumps(flight_declaration_geo_json),
+        state=declaration_state,
+    )
+    flight_declaration.save()
+    flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
+    if declaration_state == 8:
+        flight_declaration.add_state_history_entry(
+            new_state=declaration_state,
+            original_state=0,
+            notes="Rejected by Flight Blender because of time/space conflicts with existing operations",
+        )
+
+    flight_declaration_id = str(flight_declaration.id)
+
+    send_operational_update_message.delay(
+        flight_declaration_id=flight_declaration_id,
+        message_text="Flight Declaration created..",
+        level="info",
+    )
+
+    if all_relevant_fences and all_relevant_declarations:
+        self_deconfliction_failed_msg = f"Self deconfliction failed for operation {flight_declaration_id} did not pass self-deconfliction, there are existing operations declared in the area"
+        send_operational_update_message.delay(
+            flight_declaration_id=flight_declaration_id,
+            message_text=self_deconfliction_failed_msg,
+            level="error",
+        )
+    else:
+        if declaration_state == 0 and USSP_NETWORK_ENABLED:
+            submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
+
+    creation_response = FlightDeclarationCreateResponse(
+        id=flight_declaration_id,
+        message="Submitted Flight Declaration",
+        is_approved=is_approved,
+        state=declaration_state,
+    )
+    return HttpResponse(
+        json.dumps(asdict(creation_response)),
+        status=200,
+        content_type=RESPONSE_CONTENT_TYPE,
+    )
 
 
 @api_view(["POST"])
