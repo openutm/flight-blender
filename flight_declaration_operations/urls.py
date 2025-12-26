@@ -20,6 +20,7 @@ from . import views as flight_declaration_views
 
 urlpatterns = [
     path("set_flight_declaration", flight_declaration_views.set_flight_declaration),
+    path("set_operational_intent", flight_declaration_views.set_operational_intent),
     path("flight_declaration", flight_declaration_views.FlightDeclarationCreateList.as_view()),
     path(
         "flight_declaration/<uuid:pk>",

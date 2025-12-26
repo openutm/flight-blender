@@ -1681,6 +1681,57 @@ paths:
         - flight-declarations
 
 
+  /flight_declaration_ops/set_operational_intent:
+    post:
+      summary: 'Submit Operational Intent to create Flight Declaration'
+      description: "Create a Flight Declaration in Flight Blender by submitting an Operational Intent. \
+        \ A flight declaration can be added upto 24 hours in advance and follows the ASTM Operational Intent data format. In most cases, you can use Flight Spotlight Launchpad functionality to submit a declaration."
+      security:
+        - AuthFromPassport: [flightblender.write]
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutFlightDeclarationByOperationalIntentRequest'
+
+      responses:
+        '200':
+          description: The flight declaration was successfully processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlightDeclarationCreationResponse'
+
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+
+      tags:
+        - flight-declarations
+
   /flight_declaration_ops/set_flight_declaration:
     post:
       summary: 'Add a new Flight Declaration'
@@ -3403,6 +3454,42 @@ components:
              * `2` - BVLOS
              * `3` - CREWED
 
+    PutFlightDeclarationByOperationalIntentRequest:
+      type: object
+      properties:
+        type_of_operation:
+          enum:
+          - 1
+          - 2
+          - 3
+          type: integer
+          description: >
+            Set the activity type and the airspace
+             * `1` - VLOS
+             * `2` - BVLOS
+             * `3` - CREWED
+        submitted_by:
+          description: Email address of person submitting this declaration
+          type: string
+          format: email
+        aircraft_id:
+          description: Specify the ID of the aircraft
+          type: string
+        originating_party:
+          description: Set the name of the flight declaration
+          type: string
+          example: Flight 1023
+        start_datetime:
+          description: The start date and time for the flight
+          type: string
+          format: date-time
+        end_datetime:
+          description: The end date and time for the flight
+          type: string
+          format: date-time
+        operational_intent_volume4ds:
+          $ref: "#/components/schemas/Volume4DArray"
+
     PutFlightDeclarationRequest:
       type: object
       properties:
@@ -3639,7 +3726,10 @@ components:
           description: End time of this volume.  RFC 3339 format, per OpenAPI specification.
           anyOf:
             - $ref: '#/components/schemas/Time'
-
+    Volume4DArray:
+      type: array
+      items:
+        $ref: '#/components/schemas/Volume4D'
     GeoFenceGeoJSON:
       type: object
       required:

@@ -193,6 +193,50 @@ class OperationalIntentsConverter:
 
         return op_int_ref
 
+    def parse_volume4ds_to_V4D_list(self, operational_intent_volume4ds: list[dict]) -> list[Volume4D]:
+        """
+        Parses a list of dictionaries representing Volume4D objects into a list of Volume4D dataclass instances.
+
+        Args:
+            operational_intent_volume4ds (list[dict]): A list of dictionaries representing Volume4D objects.
+
+        Returns:
+            list[Volume4D]: A list of Volume4D dataclass instances.
+        """
+        volume4d_list = []
+        for volume_dict in operational_intent_volume4ds:
+            volume_3d_dict = volume_dict.get("volume", {})
+            outline_polygon_dict = volume_3d_dict.get("outline_polygon")
+            outline_circle_dict = volume_3d_dict.get("outline_circle")
+
+            outline_polygon = None
+            if outline_polygon_dict:
+                vertices = [LatLngPoint(lat=vertex["lat"], lng=vertex["lng"]) for vertex in outline_polygon_dict.get("vertices", [])]
+                outline_polygon = Plgn(vertices=vertices)
+
+            outline_circle = None
+            if outline_circle_dict:
+                center_dict = outline_circle_dict.get("center", {})
+                radius_dict = outline_circle_dict.get("radius", {})
+                center = LatLngPoint(lat=center_dict.get("lat"), lng=center_dict.get("lng"))
+                radius = Altitude(value=radius_dict.get("value"), reference=radius_dict.get("reference"), units=radius_dict.get("units"))
+                outline_circle = {"center": center, "radius": radius}
+
+            volume_3d = Volume3D(
+                outline_polygon=outline_polygon,
+                outline_circle=outline_circle,
+                altitude_lower=Altitude(**volume_3d_dict.get("altitude_lower", {})),
+                altitude_upper=Altitude(**volume_3d_dict.get("altitude_upper", {})),
+            )
+
+            time_start = Time(**volume_dict.get("time_start", {}))
+            time_end = Time(**volume_dict.get("time_end", {}))
+
+            volume4d = Volume4D(volume=volume_3d, time_start=time_start, time_end=time_end)
+            volume4d_list.append(volume4d)
+
+        return volume4d_list
+
     def convert_geo_json_to_volume_4_d(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
         """
         Converts a GeoJSON FeatureCollection to a list of Volume4D objects.
