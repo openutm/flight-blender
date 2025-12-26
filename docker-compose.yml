@@ -16,7 +16,7 @@ services:
   db-blender:
     platform: linux/amd64
     container_name: "db-blender"
-    image: postgres
+    image: postgres:17
     expose:
       - "5432"
     restart: unless-stopped
