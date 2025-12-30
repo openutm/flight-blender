@@ -1,11 +1,13 @@
+import json
 from dataclasses import asdict
 from importlib import import_module
 from os import environ as env
 
 import arrow
+import geojson
 import shapely.geometry
 from dotenv import find_dotenv, load_dotenv
-from geojson import FeatureCollection
+from geojson import Feature, FeatureCollection
 from pyproj import Proj
 from shapely.geometry import Point, Polygon, shape
 from shapely.ops import unary_union
@@ -55,7 +57,7 @@ class OperationalIntentsConverter:
             Generates a new Volume4D object based on a buffered point.
         get_geo_json_bounds() -> str:
             Returns the bounding box of all features in GeoJSON format.
-        _convert_operational_intent_to_geojson_feature(volume: Volume4D):
+        _convert_operational_intent_to_geojson_features(volume: Volume4D):
             Converts a Volume4D object to GeoJSON features.
     """
 
@@ -156,11 +158,12 @@ class OperationalIntentsConverter:
         Returns:
             None
         """
-
         for volume in volumes:
-            geo_json_features = self._convert_operational_intent_to_geojson_feature(volume)
+            geo_json_features = self._convert_operational_intent_to_geojson_features(volume)
 
-            self.geo_json["features"] += geo_json_features
+            _seralized_features = [json.loads(geojson.dumps(feature)) for feature in geo_json_features]
+            for _serialized_feature in _seralized_features:
+                self.geo_json["features"].append(_serialized_feature)
 
     def create_partial_operational_intent_ref(
         self,
@@ -219,7 +222,11 @@ class OperationalIntentsConverter:
                 center_dict = outline_circle_dict.get("center", {})
                 radius_dict = outline_circle_dict.get("radius", {})
                 center = LatLngPoint(lat=center_dict.get("lat"), lng=center_dict.get("lng"))
-                radius = Altitude(value=radius_dict.get("value"), reference=radius_dict.get("reference"), units=radius_dict.get("units"))
+                radius = Altitude(
+                    value=radius_dict.get("value"),
+                    reference=radius_dict.get("reference"),
+                    units=radius_dict.get("units"),
+                )
                 outline_circle = {"center": center, "radius": radius}
 
             volume_3d = Volume3D(
@@ -355,7 +362,7 @@ class OperationalIntentsConverter:
 
         return bounds
 
-    def _convert_operational_intent_to_geojson_feature(self, volume: Volume4D):
+    def _convert_operational_intent_to_geojson_features(self, volume: Volume4D) -> list[Feature]:
         """
         Converts a Volume4D object to GeoJSON features.
 
@@ -379,11 +386,10 @@ class OperationalIntentsConverter:
             oriented_polygon = shapely.geometry.polygon.orient(outline_polygon)
             outline_polygon_geojson = shapely.geometry.mapping(oriented_polygon)
 
-            polygon_feature = {
-                "type": "Feature",
-                "properties": {"time_start": time_start, "time_end": time_end},
-                "geometry": outline_polygon_geojson,
-            }
+            polygon_feature = Feature(
+                properties={"time_start": time_start, "time_end": time_end},
+                geometry=outline_polygon_geojson,
+            )
             geo_json_features.append(polygon_feature)
 
         if "outline_circle" in volume_dict and volume_dict["outline_circle"] is not None:
@@ -397,11 +403,10 @@ class OperationalIntentsConverter:
 
             outline_circle_geojson = shapely.geometry.mapping(converted_circle)
 
-            circle_feature = {
-                "type": "Feature",
-                "properties": {"time_start": time_start, "time_end": time_end},
-                "geometry": outline_circle_geojson,
-            }
+            circle_feature = Feature(
+                properties={"time_start": time_start, "time_end": time_end},
+                geometry=outline_circle_geojson,
+            )
             geo_json_features.append(circle_feature)
 
         return geo_json_features

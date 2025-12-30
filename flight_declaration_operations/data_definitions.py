@@ -14,7 +14,7 @@ class CreateFlightDeclarationViaOperationalIntentRequestSchema(Schema):
     originating_party = fields.Str(required=True)
     start_datetime = fields.DateTime(required=True)
     end_datetime = fields.DateTime(required=True)
-    operational_intent_volume4ds = fields.Dict(required=True)
+    operational_intent_volume4ds = fields.List(fields.Dict(), required=True)
     type_of_operation = fields.Int(required=True)
     aircraft_id = fields.Str(required=True)
 

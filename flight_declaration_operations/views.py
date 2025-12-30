@@ -203,6 +203,7 @@ class FlightDeclarationDelete(generics.DestroyAPIView):
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_operational_intent(request):
     request_data = request.data
+
     my_operational_intent_converter = OperationalIntentsConverter()
     my_flight_declaration_validator = FlightDeclarationRequestValidator()
     error_response, status_code = my_flight_declaration_validator.validate_incoming_operational_intent(
@@ -218,7 +219,8 @@ def set_operational_intent(request):
     operational_intent_volume4ds = request_data.get("operational_intent_volume4ds")
 
     parsed_operational_intent = my_operational_intent_converter.parse_volume4ds_to_V4D_list(operational_intent_volume4ds)
-    my_operational_intent_converter.convert_operational_intent_to_geo_json(volumess=parsed_operational_intent)
+    _seralized_operational_intent = [asdict(v4d) for v4d in parsed_operational_intent]
+    my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=parsed_operational_intent)
 
     flight_declaration_geo_json = my_operational_intent_converter.geo_json
 
@@ -234,9 +236,6 @@ def set_operational_intent(request):
     type_of_operation = request_data.get("type_of_operation", 0)
     originating_party = request_data.get("originating_party", "No Flight Information")
     aircraft_id = request_data["aircraft_id"]
-
-    my_operational_intent_converter = OperationalIntentsConverter()
-
     bounds = my_operational_intent_converter.get_geo_json_bounds()
     view_box = [float(i) for i in bounds.split(",")]
 
@@ -253,7 +252,7 @@ def set_operational_intent(request):
     declaration_state = intersection_check_results.declaration_state
 
     flight_declaration = FlightDeclaration(
-        operational_intent=json.dumps(asdict(parsed_operational_intent)),
+        operational_intent=json.dumps(_seralized_operational_intent),
         bounds=bounds,
         type_of_operation=type_of_operation,
         aircraft_id=aircraft_id,
@@ -311,6 +310,7 @@ def set_operational_intent(request):
 def set_flight_declaration(request):
     request_data = request.data
     my_flight_declaration_validator = FlightDeclarationRequestValidator()
+    my_operational_intent_converter = OperationalIntentsConverter()
     error_response, status_code = my_flight_declaration_validator.validate_request(request_data=request_data)
     if error_response:
         return JsonResponse(error_response, status=status_code)
@@ -338,7 +338,6 @@ def set_flight_declaration(request):
     originating_party = request_data.get("originating_party", "No Flight Information")
     aircraft_id = request_data["aircraft_id"]
 
-    my_operational_intent_converter = OperationalIntentsConverter()
     parital_op_int_ref = my_operational_intent_converter.create_partial_operational_intent_ref(
         geo_json_fc=flight_declaration_geo_json,
         start_datetime=start_datetime,
