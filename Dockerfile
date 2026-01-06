@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.12-slim
+FROM --platform=$BUILDPLATFORM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
