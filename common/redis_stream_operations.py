@@ -184,7 +184,7 @@ class RedisStreamOperations:
             last_updated_timestamp=field_data.get("last_updated_timestamp", ""),
             observations=json.loads(field_data.get("observations", "[]")),
         )
-        logger.debug(f"Retrieved active track for key '{track_key}': {active_track}")
+        # logger.debug(f"Retrieved active track for key '{track_key}': {active_track}")
         return active_track
 
     def add_active_track_to_session(self, session_id: str, active_track: ActiveTrack) -> None:
@@ -221,7 +221,7 @@ class RedisStreamOperations:
             "observations": json.dumps(active_track.observations),
         }
         self.redis.hmset(track_key, track_data)
-        logger.info(f"Updated active track in Redis with key '{track_key}': {active_track}")
+        # logger.info(f"Updated active track in Redis with key '{track_key}': {active_track}")
 
     def get_all_active_tracks_in_session(self, session_id: str) -> List[ActiveTrack]:
         """
