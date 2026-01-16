@@ -80,6 +80,7 @@ class SingleAirtrafficObservation:
     traffic_source: int
     source_type: int
     icao_address: str
+    timestamp: int = 0
     metadata: dict = field(default_factory=dict)
     session_id: str | None = ""
 

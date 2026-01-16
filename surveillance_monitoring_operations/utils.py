@@ -33,15 +33,16 @@ class TrafficDataFuser:
 
         fwd_azimuth, back_azimuth, adjacent_point_distance_mts = self.geod.inv(first_point.lng, first_point.lat, second_point.lng, second_point.lat)
 
+        if fwd_azimuth < 0:
+            fwd_azimuth = 360 + fwd_azimuth
+
+        if delta_time_secs == 0:
+            return [0.0, fwd_azimuth, 0.0]
+
         speed_mts_per_sec = adjacent_point_distance_mts / delta_time_secs
         speed_mts_per_sec = float("{:.2f}".format(speed_mts_per_sec))
 
-        if fwd_azimuth < 0:
-            fwd_azimuth = 360 + fwd_azimuth
-        if delta_time_secs == 0:
-            vertical_speed_mps = 0.0
-        else:
-            vertical_speed_mps = (second_point.alt - first_point.alt) / delta_time_secs
+        vertical_speed_mps = (second_point.alt - first_point.alt) / delta_time_secs
         vertical_speed_mps = float("{:.2f}".format(vertical_speed_mps))
 
         return [speed_mts_per_sec, fwd_azimuth, vertical_speed_mps]
