@@ -4011,7 +4011,7 @@ components:
           altitude_mm:
             type: number
             format: float
-            description: Meters represented in WGS1984 Datum
+            description: Geometric altitude or barometric pressure altitude in millimeters
           lat_dd:
             type: number
             format: float
