@@ -4,6 +4,7 @@ import uuid
 from dataclasses import asdict
 from datetime import timedelta
 
+import arrow
 from django.http import JsonResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view
@@ -15,11 +16,7 @@ from common.database_operations import (
     FlightBlenderDatabaseWriter,
 )
 
-from .data_definitions import (
-    HealthMessage,
-    SurveillanceSensorDetail,
-    SurveillanceStatus,
-)
+from .data_definitions import HealthMessage, SurveillanceMetrics, SurveillanceSensorDetail, SurveillanceStatus
 
 
 @api_view(["GET"])
@@ -99,3 +96,23 @@ def list_surveillance_sensors(request):
         for sensor in sensors
     ]
     return JsonResponse({"active_sensors": sensor_list})
+
+
+@api_view(["GET"])
+@requires_scopes([FLIGHTBLENDER_READ_SCOPE])
+def service_metrics(request):
+    start_date_str = request.query_params.get("start_date", None)
+    end_date_str = request.query_params.get("end_date", None)
+    now = arrow.now()
+    one_week_ago = now.shift(weeks=-1)
+    start_date = arrow.get(start_date_str).datetime if start_date_str else one_week_ago.datetime
+    end_date = arrow.get(end_date_str).datetime if end_date_str else now.datetime
+
+    # TODO: Add logic to parse these dates and use them to filter metrics
+    # Placeholder logic for service metrics
+    metric_response = SurveillanceMetrics(
+        uptime_percent=99.9,
+        response_time_avg_ms=120,
+        active_sessions=42,
+    )
+    return JsonResponse(asdict(metric_response))

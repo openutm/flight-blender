@@ -112,3 +112,10 @@ class ActiveTrack:
     unique_aircraft_identifier: str
     last_updated_timestamp: str
     observations: list[dict]
+
+
+@dataclass
+class SurveillanceMetrics:
+    uptime_percent: float
+    response_time_avg_ms: int
+    active_sessions: int

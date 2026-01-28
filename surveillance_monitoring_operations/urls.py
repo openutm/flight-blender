@@ -14,4 +14,9 @@ urlpatterns = [
         surveillance_monitoring_views.list_surveillance_sensors,
         name="list_surveillance_sensors",
     ),
+    path(
+        "service_metrics/",
+        surveillance_monitoring_views.service_metrics,
+        name="service_metrics",
+    ),
 ]

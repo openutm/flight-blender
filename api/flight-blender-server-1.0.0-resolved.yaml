@@ -200,6 +200,58 @@ paths:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
       tags:
         - surveillance-sdsp
+  /surveillance_monitoring_operations/metrics:
+    get:
+      summary: 'Retrieve surveillance service metrics'
+      description: 'Retrieve metrics related to the surveillance monitoring service.'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date
+            description: The start date for the report. Must be used together with `end_date`.
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date
+            description: The end date for the report. Must be used together with `start_date`.
+      responses:
+        '200':
+          description: 'Retrieve surveillance service metrics successfully.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveillanceMetricsDetail'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
   /signing_public_key:
     get:
       summary: 'Flight Blender Signing Public Key'
@@ -2826,6 +2878,26 @@ components:
           items:
             $ref: '#/components/schemas/Volume4D'
           default: []
+
+    SurveillanceMetricsDetail:
+      type: object
+      description: >-
+        Surveillance monitoring service performance metrics.
+      required:
+        - uptime_percent
+        - response_time_avg_ms
+        - active_sessions
+      properties:
+        uptime_percent:
+          type: number
+          format: float
+          description: Percentage of time the surveillance service was operational.
+        response_time_avg_ms:
+          type: integer
+          description: Average response time of the surveillance service in milliseconds.
+        active_sessions:
+          type: integer
+          description: Number of active surveillance sessions.
 
     SurveillanceStatus:
       type: string
