@@ -1,14 +1,23 @@
 import uuid
 from datetime import timedelta
+from enum import Enum
 
 from django.db import models
 from django.utils import timezone
 
-from common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE
+from common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE, SURVEILLANCE_SENSOR_HEALTH_CHOICES, SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES
 
 
 def get_thirty_minutes_from_now():
     return timezone.now() + timedelta(minutes=30)
+
+
+def get_surveillance_sensor_health_choices():
+    return {i: i for i in SURVEILLANCE_SENSOR_HEALTH_CHOICES}
+
+
+def get_surveillance_sensor_maintenance_choices():
+    return {i: i for i in SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES}
 
 
 class SurveillanceSession(models.Model):
@@ -66,3 +75,22 @@ class SurveillanceSensor(models.Model):
 
     def __str__(self):
         return f"{self.sensor_type} - {self.sensor_identifier}"
+
+
+class SurveillanceSensorHealth(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sensor = models.OneToOneField(SurveillanceSensor, on_delete=models.CASCADE, related_name="health_records")
+    status = models.CharField(max_length=12, choices=SURVEILLANCE_SENSOR_HEALTH_CHOICES)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class SurveillanceSensorMaintenance(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sensor = models.OneToOneField(SurveillanceSensor, on_delete=models.CASCADE, related_name="maintenance_records")
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+    planned_or_unplanned = models.CharField(max_length=12, choices=SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

@@ -58,17 +58,17 @@ class Command(BaseCommand):
         for flight_declaration in all_operations:
             f_a = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
             if dry_run:
-                logger.info("Dry Run : Deleting operation %s", flight_declaration.id)
+                logger.info(f"Dry Run : Deleting operation {flight_declaration.id}")
             else:
-                logger.info("Deleting operation %s...", flight_declaration.id)
+                logger.info(f"Deleting operation {flight_declaration.id}...")
 
                 if clear_dss and f_a:
                     operational_intent_id = str(f_a.id)
                     stored_ovn = f_a.ovn
 
-                    logger.info("Clearing operational intent id %s in the DSS...", operational_intent_id)
-                    logger.info("Stored OVN: %s", stored_ovn)
-                    logger.info("Flight declaration id: %s", flight_declaration.id)
+                    logger.info(f"Clearing operational intent id {operational_intent_id} in the DSS...")
+                    logger.info(f"Stored OVN: {stored_ovn}")
+                    logger.info(f"Flight declaration id: {flight_declaration.id}")
                     if stored_ovn and USSP_NETWORK_ENABLED:
                         my_scd_dss_helper.delete_operational_intent(ovn=stored_ovn, dss_operational_intent_ref_id=operational_intent_id)
 

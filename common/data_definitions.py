@@ -88,6 +88,18 @@ FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (12, _("Other")),
 )
 
+
+SURVEILLANCE_SENSOR_HEALTH_CHOICES = [
+    ("operational", "Operational"),
+    ("degraded", "Degraded"),
+    ("outage", "Outage"),
+]
+
+SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES = [
+    ("planned", "Planned"),
+    ("unplanned", "Unplanned"),
+]
+
 # Locations for Index Creation, using tmp to avoid permission issues in Docker / Kubernetes
 FLIGHT_DECLARATION_INDEX_BASEPATH = "/tmp/blender_flight_declaration_idx"
 FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH = "/tmp/blender_opint_idx"
