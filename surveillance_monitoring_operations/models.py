@@ -66,6 +66,7 @@ class SurveillanceSensor(models.Model):
         unique=True,
         help_text="Describe the sensor, e.g., serial number or detailed location",
     )
+    refresh_rate_seconds = models.FloatField(default=1.0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
