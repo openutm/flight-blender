@@ -346,11 +346,18 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
 
         for current_state in current_states:
             observation_and_metadata = SignedUnsignedTelemetryObservation(current_state=current_state, flight_details=flight_details)
+            current__wgs84_m_altitude = observation_and_metadata.current_state.position.alt
+            current_height = observation_and_metadata.current_state.position.height
+            if current_height:
+                current_altitude = current_height.distance
+                current_altitude_reference = current_height.reference
+
+            # TODO: convert altitude from WGS1984 to Geometric altitude or barometric pressure altitude in millimeters based on the reference provided, for now we are assuming that the altitude provided is in WGS1984 and converting it to millimeters
 
             flight_details_id = flight_details["uas_id"]["serial_number"]
             lat_dd = current_state["position"]["lat"]
             lon_dd = current_state["position"]["lng"]
-            altitude_mm = current_state["position"]["alt"]
+            altitude_mm = processed_altitude
             traffic_source = 11  # Per the Air-traffic data protocol a source type of 11 means that the data is associated with RID observations
             source_type = 0
             icao_address = flight_details_id

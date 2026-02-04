@@ -3,7 +3,7 @@ openapi: '3.0.0'
 info:
   title: 'Flight Blender API specification'
   description: |-
-    This OpenAPI specification defines all interfaces for Flight Blender, including endpoints for submitting raw air traffic observations, geo-fencing data, flight declarations, ASTM-compliant network Remote-ID, and U-Space Flight Authorisation (Strategic Deconfliction).
+    This OpenAPI specification defines all interfaces for Flight Blender, including endpoints for submitting raw air traffic observations, geo-fencing data, flight declarations, ASTM-compliant network Remote-ID, and U-Space Flight Authorisation (Strategic Deconfliction), weather, Surveillance SDSP etc.
 
     Unless explicitly documented, any fields present in a request but not defined in the API schema will be ignored by the server implementation.
   version: '1.0.0'
@@ -2302,7 +2302,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
       tags:
-        - crewed-traffic
+        - air-traffic
 
 
   /status:
@@ -2329,6 +2329,77 @@ paths:
       operationId: GetStatus
       tags:
         - flight-planning-qualifier
+
+  /weather:
+    get:
+      summary: 'Get weather for a location and time'
+      description: 'Retrieve weather data for a given longitude and latitude. Query parameters: longitude (required), latitude (required), time (optional epoch seconds, defaults to now), timezone (optional, defaults to UTC).'
+      security:
+        - AuthFromPassport: [flightblender.write]
+      parameters:
+        - name: longitude
+          in: query
+          required: true
+          schema:
+            type: number
+            format: float
+            description: Longitude of the point (decimal degrees)
+            example: -118.456
+        - name: latitude
+          in: query
+          required: true
+          schema:
+            type: number
+            format: float
+            description: Latitude of the point (decimal degrees)
+            example: 34.12
+        - name: time
+          in: query
+          required: false
+          schema:
+            type: integer
+            description: Unix timestamp (seconds) for the requested time. Defaults to current time.
+            example: 1700000000
+        - name: timezone
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Timezone name (e.g., 'UTC'). Defaults to 'UTC'.
+            example: 'UTC'
+      responses:
+        '200':
+          description: Weather data for the requested location/time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Weather'
+        '400':
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - weather
 
   /clear_area_requests:
     post:
@@ -5892,6 +5963,95 @@ components:
           type: number
           default: 0
 
+    Hourly:
+      type: object
+      properties:
+        time:
+          type: array
+          items:
+            type: string
+            format: date-time
+        temperature_2m:
+          type: array
+          items:
+            type: number
+            format: float
+        showers:
+          type: array
+          items:
+            type: number
+            format: float
+        windspeed_10m:
+          type: array
+          items:
+            type: number
+            format: float
+        winddirection_10m:
+          type: array
+          items:
+            type: integer
+        windgusts_10m:
+          type: array
+          items:
+            type: number
+            format: float
+
+    HourlyUnits:
+      type: object
+      properties:
+        time:
+          type: string
+        temperature_2m:
+          type: string
+        showers:
+          type: string
+        windspeed_10m:
+          type: string
+        winddirection_10m:
+          type: string
+        windgusts_10m:
+          type: string
+
+    Weather:
+      type: object
+      required:
+        - latitude
+        - longitude
+        - generationtime_ms
+        - utc_offset_seconds
+        - timezone
+        - timezone_abbreviation
+        - elevation
+        - hourly_units
+        - hourly
+      properties:
+        latitude:
+          type: number
+          format: float
+          example: 34.12
+        longitude:
+          type: number
+          format: float
+          example: -118.456
+        generationtime_ms:
+          type: number
+          format: float
+          description: Time taken to generate the response in milliseconds
+        utc_offset_seconds:
+          type: integer
+          description: Offset from UTC in seconds
+        timezone:
+          type: string
+        timezone_abbreviation:
+          type: string
+        elevation:
+          type: number
+          format: float
+        hourly_units:
+          $ref: '#/components/schemas/HourlyUnits'
+        hourly:
+          $ref: '#/components/schemas/Hourly'
+
     GeozonesCheckRequest:
       type: object
       required:
@@ -6113,5 +6273,9 @@ tags:
     description: Flight Blender provides security features for signing requests and responses. These endpoints allow you to manage public keys used to verify signed messages both within Flight Blender and in external environments.
   - name: surveillance-sdsp
     description: Endpoints for managing surveillance monitoring tasks, including starting and stopping heartbeat tracking. The heartbeat and tracking data are shared using Websocket information. Use these APIs to monitor the status of surveillance systems and ensure compliance with monitoring requirements and compliance to ASTM 3623-22.
+  - name: weather
+    description: Endpoints related to weather data management in Flight Blender. Use these APIs to submit weather observations, query weather data for specific areas or times, and manage weather-related information for flights in Flight Blender.
+  - name: daa-operations
+    description: Endpoints for managing detect-and-avoid operations in Flight Blender. Use these APIs to submit events, query status, and manage detect, alert and avoid related data for flights in Flight Blender.
   - name: conformance-monitoring
     description: Endpoints for managing conformance monitoring tasks in Flight Blender. Use these APIs to create, update, and query conformance records associated with flight declarations.
