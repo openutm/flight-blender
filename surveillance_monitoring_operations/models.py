@@ -1,6 +1,5 @@
 import uuid
 from datetime import timedelta
-from enum import Enum
 
 from django.db import models
 from django.utils import timezone

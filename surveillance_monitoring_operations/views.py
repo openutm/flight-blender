@@ -7,6 +7,7 @@ from datetime import timedelta
 import arrow
 from django.http import JsonResponse
 from django.utils import timezone
+from loguru import logger
 from rest_framework.decorators import api_view
 
 from auth_helper.utils import requires_scopes
@@ -107,7 +108,7 @@ def service_metrics(request):
     one_week_ago = now.shift(weeks=-1)
     start_date = arrow.get(start_date_str).datetime if start_date_str else one_week_ago.datetime
     end_date = arrow.get(end_date_str).datetime if end_date_str else now.datetime
-
+    logger.info(f"Received request for service metrics with start_date: {start_date} and end_date: {end_date}")
     # TODO: Add logic to parse these dates and use them to filter metrics
     # Placeholder logic for service metrics
     metric_response = SurveillanceMetrics(
