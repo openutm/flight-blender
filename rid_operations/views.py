@@ -394,17 +394,13 @@ def get_display_data(request):
             logger.info("Sleeping 2 seconds..")
             time.sleep(2)
 
-        # Keep only the latest message
-
         # Get the last reading for view hash
-
         now = arrow.now()
         thirty_seconds_before_now = now.shift(seconds=-30)
 
         distinct_messages = my_database_reader.get_active_rid_observations_for_view(
             start_time=thirty_seconds_before_now.datetime, end_time=now.datetime
         )
-        logger.debug("Found %s distinct messages" % len(distinct_messages))
 
         distinct_messages = distinct_messages if distinct_messages else []
         unique_messages = {}
@@ -412,7 +408,7 @@ def get_display_data(request):
             if message.icao_address not in unique_messages:
                 unique_messages[message.icao_address] = message
         distinct_messages = list(unique_messages.values())
-        logger.info("Found %s distinct messages" % len(distinct_messages))
+        logger.info(f"Found {len(distinct_messages)} distinct messages")
 
         for observation_message in distinct_messages:
             all_recent_positions = []
