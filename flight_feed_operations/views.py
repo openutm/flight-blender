@@ -524,7 +524,7 @@ def set_telemetry(request):
             )
 
         single_observation_set = SignedUnSignedTelemetryObservations(current_states=all_states, flight_details=f_details)
-        unsigned_telemetry_observations.append(asdict(single_observation_set, dict_factory=NestedDict))
+        unsigned_telemetry_observations.append(single_observation_set)
 
         operation_id = f_details.id
         now = arrow.now().datetime
@@ -547,7 +547,8 @@ def set_telemetry(request):
             allowed_states.append(1)  # USSP Network is not enabled, so we allow the state 1 (Accepted) as well
 
         if flight_operation.state in allowed_states:  # Activated, Contingent, Non-conforming
-            stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
+            serialized_observations = [asdict(obs, dict_factory=NestedDict) for obs in unsigned_telemetry_observations]
+            stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(serialized_observations))
         else:
             return JsonResponse(
                 {

@@ -31,6 +31,8 @@ from rid_operations.data_definitions import (
 )
 
 from . import dss_rid_helper
+from .data_definitions import RIDAircraftState as LocalRIDAircraftState
+from .data_definitions import RIDFlightDetails as LocalRIDFlightDetails
 from .rid_telemetry_monitoring import FlightTelemetryRIDEngine
 from .rid_utils import (
     OperatorLocation,
@@ -346,7 +348,9 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
         my_database_writer.update_telemetry_timestamp(flight_declaration_id=operation_id)
 
         for current_state in current_states:
-            observation_and_metadata = SignedUnsignedTelemetryObservation(current_state=current_state, flight_details=flight_details)
+            _current_state = from_dict(data_class=LocalRIDAircraftState, data=current_state, config=Config(cast=[Enum]))
+            _flight_details = from_dict(data_class=LocalRIDFlightDetails, data=flight_details, config=Config(cast=[Enum]))
+            observation_and_metadata = SignedUnsignedTelemetryObservation(current_state=_current_state, flight_details=_flight_details)
             current_wgs84_m_altitude = observation_and_metadata.current_state.position.alt
             # current_height = observation_and_metadata.current_state.position.height
             # if current_height:
@@ -361,9 +365,9 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
                 hae_meters=current_wgs84_m_altitude,
             )
             altitude_mm = pressure_altitude * 1000  # Convert meters to millimeters
-            flight_details_id = flight_details["uas_id"]["serial_number"]
-            lat_dd = current_state["position"]["lat"]
-            lon_dd = current_state["position"]["lng"]
+            flight_details_id = observation_and_metadata.flight_details.uas_id.serial_number
+            lat_dd = observation_and_metadata.current_state.position.lat
+            lon_dd = observation_and_metadata.current_state.position.lng
             altitude_mm = altitude_mm
             traffic_source = 11  # Per the Air-traffic data protocol a source type of 11 means that the data is associated with RID observations
             source_type = 0
