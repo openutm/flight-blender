@@ -7,6 +7,7 @@ from channels_redis.core import RedisChannelLayer
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
+from common.base_traffic_data_fuser import BaseTrafficDataFuser
 from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
 from flight_blender.settings import ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS, BROKER_URL
@@ -27,14 +28,11 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     logger.info(f"Received {len(raw_observations)} observations for session_id: {session_id}")
     module_name, class_name = ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS.rsplit(".", 1)
     module = import_module(module_name)
-    TrafficDataFuser = getattr(module, class_name)
+    TrafficDataFuser: type[BaseTrafficDataFuser] = getattr(module, class_name)
 
     traffic_data_fuser = TrafficDataFuser(session_id=session_id, raw_observations=raw_observations)
 
-    traffic_data_fuser.fuse_raw_observations()
-    traffic_data_fuser.generate_active_tracks()
-    active_tracks = stream_ops.get_all_active_tracks_in_session(session_id=session_id)
-    track_messages = traffic_data_fuser.generate_track_messages(active_tracks=active_tracks)
+    track_messages = traffic_data_fuser.generate_track_messages()
     all_track_data = []
     for track_message in track_messages:
         all_track_data.append(asdict(track_message))
