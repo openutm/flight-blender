@@ -57,7 +57,7 @@ class BaseTrafficDataFuser(ABC):
         self.raw_observations = raw_observations
         self.geod = Geod(ellps="WGS84")
         self.redis_stream_helper: RedisStreamOperations
-        self.SDSP_IDENTIFIER: str
+        self.SDSP_IDENTIFIER: str = "FLIGHT_BLENDER_SDSP"
 
 
     def generate_track_messages(self) -> List[TrackMessage]:
@@ -75,8 +75,8 @@ class BaseTrafficDataFuser(ABC):
             List of track messages ready for distribution to consumers
         """
         self._pre_process_raw_data()
-        self._fuse_raw_observations()
-        self._generate_active_tracks()
+        fused_observations: List[SingleAirtrafficObservation] = self._fuse_raw_observations()
+        self._generate_active_tracks(fused_observations=fused_observations)
         active_tracks = self.redis_stream_helper.get_all_active_tracks_in_session(session_id=self.session_id)
         self._post_process_fused_data()
         return self._generate_track_messages_impl(active_tracks=active_tracks)
@@ -134,7 +134,7 @@ class BaseTrafficDataFuser(ABC):
         """
         all_track_data = []
         for track in active_tracks:
-            UNIQUE_AIRCRAFT_IDENTIFIER = track.unique_aircraft_identifier
+            single_unique_aircraft_identifier = track.unique_aircraft_identifier
             # Get the latest observation for this active track
             fused_observations = [SingleAirtrafficObservation(**obs) for obs in track.observations]
             # For simplicity, we take the last observation as the latest
@@ -176,7 +176,7 @@ class BaseTrafficDataFuser(ABC):
             )
             track_data = TrackMessage(
                 sdsdp_identifier=self.SDSP_IDENTIFIER,
-                unique_aircraft_identifier=UNIQUE_AIRCRAFT_IDENTIFIER,
+                unique_aircraft_identifier=single_unique_aircraft_identifier,
                 state=aircraft_state,
                 timestamp=arrow.utcnow().isoformat(),
                 source="FusedSource",
@@ -231,10 +231,10 @@ class BaseTrafficDataFuser(ABC):
         Returns:
             List of fused air traffic observations
         """
-        pass
+        raise NotImplementedError("Subclasses must implement _fuse_raw_observations()")
 
     @abstractmethod
-    def _generate_active_tracks(self) -> None:
+    def _generate_active_tracks(self, fused_observations: List[SingleAirtrafficObservation]) -> None:
         """Abstract method: Generate and maintain active tracks for the session.
         
         Subclasses must implement this method to define their track management
@@ -249,4 +249,4 @@ class BaseTrafficDataFuser(ABC):
         - Maintain track metadata (timestamps, observation history, etc.)
         - Handle track lifecycle (initiation, maintenance, termination)
         """
-        pass
+        raise NotImplementedError("Subclasses must implement _generate_active_tracks()")

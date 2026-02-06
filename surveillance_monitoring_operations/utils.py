@@ -25,13 +25,13 @@ class TrafficDataFuser (BaseTrafficDataFuser):
         # No fusing is actually done, this just returns the data that is in the redis streams.
         return self.raw_observations
 
-    def _generate_active_tracks(self):
+    def _generate_active_tracks(self, fused_observations: List[SingleAirtrafficObservation]):
         # This method generates active tracks for a session ID and stores it in Redis. Active tracks are objects that are being tracked for a session
         # Get all the existing tracks for this session ID from Redis
         my_redis_stream_helper = RedisStreamOperations()
         # Generate tracks from fused observations for each aircraft ICAO address
         active_tracks_in_session = {}
-        for observation in self.raw_observations:
+        for observation in fused_observations:
             icao_address = observation.icao_address
             if icao_address not in active_tracks_in_session:
                 active_tracks_in_session[icao_address] = []
