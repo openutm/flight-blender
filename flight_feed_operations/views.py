@@ -178,6 +178,7 @@ def set_air_traffic(request, session_id):
             source_type=validated_data["source_type"],
             icao_address=validated_data["icao_address"],
             metadata=validated_data["metadata"],
+            timestamp=validated_data["timestamp"],
         )
         write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
 
