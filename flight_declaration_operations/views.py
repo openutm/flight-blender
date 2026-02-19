@@ -1,11 +1,9 @@
 # Create your views here.
 import json
 from dataclasses import asdict
-from datetime import datetime
 from os import environ as env
 
 import arrow
-import geojson
 from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
@@ -36,7 +34,6 @@ from rid_operations import view_port_ops
 from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
     SCDOperations,
-    VolumesConverter,
 )
 
 from .data_definitions import (
@@ -147,57 +144,104 @@ class FlightDeclarationRequestValidator:
         No state updates are performed; the caller is responsible for acting
         on the results.
 
+        The GeoFence queryset and RTree index are built once for the entire
+        batch and reused for every declaration, avoiding O(batch_size) index
+        rebuilds.
+
         Returns:
             A dict mapping declaration ID (str) to IntersectionCheckResult.
         """
+        if not flight_declarations:
+            return {}
+
         results: dict[str, IntersectionCheckResult] = {}
         approved_ids: set = set()
         batch_ids = {fd.pk for fd in flight_declarations}
-        for fd in flight_declarations:
-            view_box = [float(i) for i in fd.bounds.split(",")]
-            start_datetime = fd.start_datetime
-            end_datetime = fd.end_datetime
-            all_relevant_fences = []
-            all_relevant_declarations = []
-            is_approved = True
-            declaration_state = 0 if ussp_network_enabled else 1
 
-            if GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime).exists():
-                all_fences_within_timelimits = GeoFence.objects.filter(start_datetime__lte=start_datetime, end_datetime__gte=end_datetime)
-                my_rtree_helper = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
-                my_rtree_helper.generate_geo_fence_index(all_fences=all_fences_within_timelimits)
-                all_relevant_fences = my_rtree_helper.check_box_intersection(view_box=view_box)
-                my_rtree_helper.clear_rtree_index()
-                if all_relevant_fences:
-                    is_approved = False
-                    declaration_state = 8
+        # ── GeoFence: query and index once for the entire batch ──────────
+        #
+        # A geofence is relevant to declaration d iff:
+        #   fence.start <= d.start  AND  fence.end >= d.end
+        #
+        # The superset across all declarations in the batch is:
+        #   fence.start <= max(d.start)  AND  fence.end >= min(d.end)
+        #
+        # We build the spatial index from this superset and post-filter
+        # temporally per declaration.
+        batch_max_start = max(fd.start_datetime for fd in flight_declarations)
+        batch_min_end = min(fd.end_datetime for fd in flight_declarations)
 
-            # Exclude the entire batch by default, then re-include only those
-            # that were approved earlier in this batch iteration.
-            declaration_queryset = FlightDeclaration.objects.filter(
-                Q(state__in=ACTIVE_OPERATIONAL_STATES) | Q(pk__in=approved_ids),
-                start_datetime__lte=end_datetime,
-                end_datetime__gte=start_datetime,
-            ).exclude(pk__in=batch_ids - approved_ids)
-
-            if declaration_queryset.exists():
-                my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_INDEX_BASEPATH)
-                my_fd_rtree_helper.generate_flight_declaration_index(all_flight_declarations=declaration_queryset)
-                all_relevant_declarations = my_fd_rtree_helper.check_flight_declaration_box_intersection(view_box=view_box)
-                my_fd_rtree_helper.clear_rtree_index()
-                if all_relevant_declarations:
-                    is_approved = False
-                    declaration_state = 8
-
-            if is_approved:
-                approved_ids.add(fd.pk)
-
-            results[str(fd.id)] = IntersectionCheckResult(
-                all_relevant_fences=all_relevant_fences,
-                all_relevant_declarations=all_relevant_declarations,
-                is_approved=is_approved,
-                declaration_state=declaration_state,
+        all_batch_fences = list(
+            GeoFence.objects.filter(
+                start_datetime__lte=batch_max_start,
+                end_datetime__gte=batch_min_end,
             )
+        )
+
+        geo_fence_index = None
+        geo_fence_lookup: dict[str, GeoFence] = {}
+        if all_batch_fences:
+            geo_fence_index = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(
+                index_name=GEOFENCE_INDEX_BASEPATH,
+            )
+            geo_fence_index.generate_geo_fence_index(all_fences=all_batch_fences)
+            geo_fence_lookup = {str(f.id): f for f in all_batch_fences}
+
+        try:
+            for fd in flight_declarations:
+                view_box = [float(i) for i in fd.bounds.split(",")]
+                start_datetime = fd.start_datetime
+                end_datetime = fd.end_datetime
+                all_relevant_fences = []
+                all_relevant_declarations = []
+                is_approved = True
+                declaration_state = 0 if ussp_network_enabled else 1
+
+                # ── GeoFence spatial check + temporal post-filter ────────
+                if geo_fence_index is not None:
+                    spatial_hits = geo_fence_index.check_box_intersection(view_box=view_box)
+                    for hit in spatial_hits:
+                        fence = geo_fence_lookup.get(hit["geo_fence_id"])
+                        if fence and fence.start_datetime <= start_datetime and fence.end_datetime >= end_datetime:
+                            all_relevant_fences.append(hit)
+                    if all_relevant_fences:
+                        is_approved = False
+                        declaration_state = 8
+
+                # ── Flight declaration intersection ──────────────────────
+                # The approved_ids set grows as declarations are approved,
+                # so the queryset must be evaluated per declaration.
+                # Materialise directly instead of exists() + re-query.
+                declaration_list = list(
+                    FlightDeclaration.objects.filter(
+                        Q(state__in=ACTIVE_OPERATIONAL_STATES) | Q(pk__in=approved_ids),
+                        start_datetime__lte=end_datetime,
+                        end_datetime__gte=start_datetime,
+                    ).exclude(pk__in=batch_ids - approved_ids)
+                )
+
+                if declaration_list:
+                    my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_INDEX_BASEPATH)
+                    my_fd_rtree_helper.generate_flight_declaration_index(all_flight_declarations=declaration_list)
+                    all_relevant_declarations = my_fd_rtree_helper.check_flight_declaration_box_intersection(view_box=view_box)
+                    my_fd_rtree_helper.clear_rtree_index()
+                    if all_relevant_declarations:
+                        is_approved = False
+                        declaration_state = 8
+
+                if is_approved:
+                    approved_ids.add(fd.pk)
+
+                results[str(fd.id)] = IntersectionCheckResult(
+                    all_relevant_fences=all_relevant_fences,
+                    all_relevant_declarations=all_relevant_declarations,
+                    is_approved=is_approved,
+                    declaration_state=declaration_state,
+                )
+        finally:
+            if geo_fence_index is not None:
+                geo_fence_index.clear_rtree_index()
+
         return results
 
 
@@ -257,7 +301,7 @@ def _validate_and_save_flight_declaration(request_data: dict, default_state: int
     originating_party = request_data.get("originating_party", "No Flight Information")
     aircraft_id = request_data["aircraft_id"]
 
-    parital_op_int_ref = my_operational_intent_converter.create_partial_operational_intent_ref(
+    partial_op_int_ref = my_operational_intent_converter.create_partial_operational_intent_ref(
         geo_json_fc=flight_declaration_geo_json,
         start_datetime=start_datetime,
         end_datetime=end_datetime,
@@ -266,7 +310,7 @@ def _validate_and_save_flight_declaration(request_data: dict, default_state: int
     bounds = my_operational_intent_converter.get_geo_json_bounds()
 
     flight_declaration = FlightDeclaration(
-        operational_intent=json.dumps(asdict(parital_op_int_ref)),
+        operational_intent=json.dumps(asdict(partial_op_int_ref)),
         bounds=bounds,
         type_of_operation=type_of_operation,
         aircraft_id=aircraft_id,
@@ -493,25 +537,20 @@ def set_flight_declarations_bulk(request):
 
     submitted_count = 0
     for idx, flight_declaration in saved.items():
-        try:
-            fd_id = str(flight_declaration.id)
-            creation_response = _process_intersection_result(
-                flight_declaration, intersection_results[fd_id], ussp_network_enabled
-            )
-            submitted_count += 1
-            results.append(
-                {
-                    "index": idx,
-                    "success": True,
-                    "id": creation_response.id,
-                    "is_approved": creation_response.is_approved,
-                    "state": creation_response.state,
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error during intersection check for flight declaration at index {idx}: {e}")
-            failed_count += 1
-            results.append({"index": idx, "success": False, "message": str(e)})
+        fd_id = str(flight_declaration.id)
+        creation_response = _process_intersection_result(
+            flight_declaration, intersection_results[fd_id], ussp_network_enabled
+        )
+        submitted_count += 1
+        results.append(
+            {
+                "index": idx,
+                "success": True,
+                "id": creation_response.id,
+                "is_approved": creation_response.is_approved,
+                "state": creation_response.state,
+            }
+        )
 
     results.sort(key=lambda r: r["index"])
 
@@ -576,25 +615,20 @@ def set_operational_intents_bulk(request):
 
     submitted_count = 0
     for idx, flight_declaration in saved.items():
-        try:
-            fd_id = str(flight_declaration.id)
-            creation_response = _process_intersection_result(
-                flight_declaration, intersection_results[fd_id], ussp_network_enabled
-            )
-            submitted_count += 1
-            results.append(
-                {
-                    "index": idx,
-                    "success": True,
-                    "id": creation_response.id,
-                    "is_approved": creation_response.is_approved,
-                    "state": creation_response.state,
-                }
-            )
-        except Exception as e:
-            logger.error(f"Error during intersection check for operational intent at index {idx}: {e}")
-            failed_count += 1
-            results.append({"index": idx, "success": False, "message": str(e)})
+        fd_id = str(flight_declaration.id)
+        creation_response = _process_intersection_result(
+            flight_declaration, intersection_results[fd_id], ussp_network_enabled
+        )
+        submitted_count += 1
+        results.append(
+            {
+                "index": idx,
+                "success": True,
+                "id": creation_response.id,
+                "is_approved": creation_response.is_approved,
+                "state": creation_response.state,
+            }
+        )
 
     results.sort(key=lambda r: r["index"])
 

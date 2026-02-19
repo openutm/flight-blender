@@ -1,4 +1,4 @@
-"""Tests for the single flight declaration endpoints.
+"""Tests for the flight declaration endpoints (single and bulk).
 
 These tests verify that the refactored ``set_flight_declaration`` and
 ``set_operational_intent`` endpoints produce exactly the same observable
@@ -11,6 +11,14 @@ behaviour as the original monolithic implementations:
   ``state=8``, ``is_approved=False``, and the rejection history entry is
   recorded.
 * Content-Type enforcement is preserved.
+
+The bulk endpoint tests additionally cover:
+
+* Batch submission with all-valid, all-invalid, and mixed payloads.
+* Correct HTTP status codes (200 vs 207 for partial failures).
+* Per-item result ordering and index labelling.
+* In-batch intersection conflict handling (some approved, some rejected).
+* Edge cases: empty list, non-list body, wrong content type.
 """
 
 import json
@@ -646,3 +654,694 @@ class SetOperationalIntentTests(TestCase):
 
         body = response.json()
         self.assertCountEqual(body.keys(), {"id", "message", "is_approved", "state"})
+
+
+# ---------------------------------------------------------------------------
+# Helpers for bulk intersection-check mocking
+# ---------------------------------------------------------------------------
+
+def _mock_check_intersections_alternating(approved_result, rejected_result):
+    """Return a side_effect that approves even-indexed declarations and rejects odd-indexed ones.
+
+    The declarations list order is used to determine the index.
+    """
+    def side_effect(flight_declarations, ussp_network_enabled):
+        results = {}
+        for i, fd in enumerate(flight_declarations):
+            results[str(fd.id)] = approved_result if i % 2 == 0 else rejected_result
+        return results
+    return side_effect
+
+
+# ---------------------------------------------------------------------------
+# set_flight_declarations_bulk tests
+# ---------------------------------------------------------------------------
+
+
+@override_settings(
+    DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
+    CELERY_TASK_ALWAYS_EAGER=True,
+)
+class SetFlightDeclarationsBulkTests(TestCase):
+    """Tests for the ``set_flight_declarations_bulk`` endpoint."""
+
+    URL = "/flight_declaration_ops/set_flight_declarations_bulk"
+
+    def setUp(self):
+        self.client = Client()
+        self.auth = _make_dummy_bearer_token()
+
+    def _post(self, payload, content_type=RESPONSE_CONTENT_TYPE):
+        return self.client.post(
+            self.URL,
+            data=json.dumps(payload),
+            content_type=content_type,
+            HTTP_AUTHORIZATION=self.auth,
+        )
+
+    # -- Happy path: all valid, no conflicts → 200 -------------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_all_valid_returns_200_with_all_approved(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_flight_declaration_payload(aircraft_id=f"ac-{i}") for i in range(3)]
+
+        response = self._post(payloads)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["submitted"], 3)
+        self.assertEqual(body["failed"], 0)
+        self.assertEqual(len(body["results"]), 3)
+
+        for i, result in enumerate(body["results"]):
+            self.assertEqual(result["index"], i)
+            self.assertTrue(result["success"])
+            self.assertTrue(result["is_approved"])
+            self.assertEqual(result["state"], 1)
+            self.assertIn("id", result)
+
+        # All three rows created in the database
+        self.assertEqual(FlightDeclaration.objects.count(), 3)
+
+    # -- All valid with USSP enabled → state=0 & DSS submission ------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(IntersectionCheckResult(
+            all_relevant_fences=[],
+            all_relevant_declarations=[],
+            is_approved=True,
+            declaration_state=0,
+        )),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_all_valid_ussp_enabled_submits_each_to_dss(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_flight_declaration_payload(aircraft_id=f"ac-{i}") for i in range(2)]
+
+        response = self._post(payloads)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        for result in body["results"]:
+            self.assertEqual(result["state"], 0)
+
+        # DSS submission called once per declaration
+        self.assertEqual(mock_submit_dss.delay.call_count, 2)
+
+    # -- Non-list body → 400 -----------------------------------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_non_list_body_returns_400(
+        self,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        response = self._post({"not": "a list"})
+
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertIn("message", body)
+        self.assertEqual(FlightDeclaration.objects.count(), 0)
+
+    # -- Empty list → 200 with submitted=0, failed=0 -----------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_empty_list_returns_200_with_zero_counts(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        response = self._post([])
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["submitted"], 0)
+        self.assertEqual(body["failed"], 0)
+        self.assertEqual(body["results"], [])
+
+    # -- Mixed valid/invalid → 207, partial failures -----------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_mixed_valid_invalid_returns_207(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        valid = _make_flight_declaration_payload()
+        invalid_missing_aircraft = _make_flight_declaration_payload()
+        del invalid_missing_aircraft["aircraft_id"]
+        valid2 = _make_flight_declaration_payload(aircraft_id="ac-2")
+
+        response = self._post([valid, invalid_missing_aircraft, valid2])
+
+        self.assertEqual(response.status_code, 207)
+        body = response.json()
+        self.assertEqual(body["submitted"], 2)
+        self.assertEqual(body["failed"], 1)
+        self.assertEqual(len(body["results"]), 3)
+
+        # Results sorted by index
+        self.assertEqual(body["results"][0]["index"], 0)
+        self.assertTrue(body["results"][0]["success"])
+        self.assertEqual(body["results"][1]["index"], 1)
+        self.assertFalse(body["results"][1]["success"])
+        self.assertEqual(body["results"][2]["index"], 2)
+        self.assertTrue(body["results"][2]["success"])
+
+        # Only 2 rows created
+        self.assertEqual(FlightDeclaration.objects.count(), 2)
+
+    # -- All invalid → 207 -------------------------------------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_all_invalid_returns_207_with_all_failed(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        bad1 = _make_flight_declaration_payload()
+        del bad1["aircraft_id"]
+        bad2 = _make_flight_declaration_payload()
+        del bad2["aircraft_id"]
+
+        response = self._post([bad1, bad2])
+
+        self.assertEqual(response.status_code, 207)
+        body = response.json()
+        self.assertEqual(body["submitted"], 0)
+        self.assertEqual(body["failed"], 2)
+        for result in body["results"]:
+            self.assertFalse(result["success"])
+
+        self.assertEqual(FlightDeclaration.objects.count(), 0)
+        # No intersection check needed when nothing was saved
+        mock_check_intersections.assert_called_once()
+
+    # -- Intersection conflict for some items in batch ---------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections_alternating(_NO_INTERSECTION, _CONFLICTING_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_partial_intersection_conflict_in_batch(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_flight_declaration_payload(aircraft_id=f"ac-{i}") for i in range(4)]
+
+        response = self._post(payloads)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["submitted"], 4)
+        self.assertEqual(body["failed"], 0)
+
+        # Even-indexed approved, odd-indexed rejected
+        for result in body["results"]:
+            if result["index"] % 2 == 0:
+                self.assertTrue(result["is_approved"])
+                self.assertEqual(result["state"], 1)
+            else:
+                self.assertFalse(result["is_approved"])
+                self.assertEqual(result["state"], 8)
+
+        # Rejected declarations in DB have state=8
+        for result in body["results"]:
+            fd = FlightDeclaration.objects.get(pk=result["id"])
+            if result["index"] % 2 == 0:
+                self.assertTrue(fd.is_approved)
+            else:
+                self.assertFalse(fd.is_approved)
+                self.assertEqual(fd.state, 8)
+
+    # -- check_intersections called once with all saved declarations -------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_check_intersections_called_once_with_all_saved(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_flight_declaration_payload(aircraft_id=f"ac-{i}") for i in range(3)]
+
+        self._post(payloads)
+
+        # check_intersections is called exactly once (batch call)
+        mock_check_intersections.assert_called_once()
+        args = mock_check_intersections.call_args
+        # First positional arg is the list of saved declarations
+        fds_arg = args[0][0]
+        self.assertEqual(len(fds_arg), 3)
+
+    # -- Notification tasks fired for each saved declaration ----------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_notification_task_called_per_saved_declaration(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_flight_declaration_payload(aircraft_id=f"ac-{i}") for i in range(3)]
+
+        self._post(payloads)
+
+        # One notification per saved declaration
+        self.assertEqual(mock_send_msg.delay.call_count, 3)
+
+    # -- Wrong content type → 415 ------------------------------------------
+
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_wrong_content_type_returns_415(self):
+        payloads = [_make_flight_declaration_payload()]
+
+        response = self._post(payloads, content_type="text/plain")
+
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(FlightDeclaration.objects.count(), 0)
+
+    # -- Response shape matches BulkFlightDeclarationCreateResponse --------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_response_shape_matches_bulk_dataclass(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_flight_declaration_payload()]
+
+        response = self._post(payloads)
+
+        body = response.json()
+        self.assertCountEqual(body.keys(), {"submitted", "failed", "results"})
+        result = body["results"][0]
+        self.assertIn("index", result)
+        self.assertIn("success", result)
+        self.assertIn("id", result)
+        self.assertIn("is_approved", result)
+        self.assertIn("state", result)
+
+    # -- Results ordered by original index despite mixed processing --------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_results_ordered_by_index(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        valid = _make_flight_declaration_payload()
+        invalid = _make_flight_declaration_payload()
+        del invalid["aircraft_id"]
+        valid2 = _make_flight_declaration_payload(aircraft_id="ac-x")
+
+        response = self._post([valid, invalid, valid2])
+
+        body = response.json()
+        indices = [r["index"] for r in body["results"]]
+        self.assertEqual(indices, [0, 1, 2])
+
+
+# ---------------------------------------------------------------------------
+# set_operational_intents_bulk tests
+# ---------------------------------------------------------------------------
+
+
+@override_settings(
+    DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
+    CELERY_TASK_ALWAYS_EAGER=True,
+)
+class SetOperationalIntentsBulkTests(TestCase):
+    """Tests for the ``set_operational_intents_bulk`` endpoint."""
+
+    URL = "/flight_declaration_ops/set_operational_intents_bulk"
+
+    def setUp(self):
+        self.client = Client()
+        self.auth = _make_dummy_bearer_token()
+
+    def _post(self, payload, content_type=RESPONSE_CONTENT_TYPE):
+        return self.client.post(
+            self.URL,
+            data=json.dumps(payload),
+            content_type=content_type,
+            HTTP_AUTHORIZATION=self.auth,
+        )
+
+    # -- Happy path: all valid, no conflicts → 200 -------------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_all_valid_returns_200_with_all_approved(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_operational_intent_payload(aircraft_id=f"ac-{i}") for i in range(3)]
+
+        response = self._post(payloads)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["submitted"], 3)
+        self.assertEqual(body["failed"], 0)
+        self.assertEqual(len(body["results"]), 3)
+
+        for i, result in enumerate(body["results"]):
+            self.assertEqual(result["index"], i)
+            self.assertTrue(result["success"])
+            self.assertTrue(result["is_approved"])
+            self.assertEqual(result["state"], 1)
+
+        self.assertEqual(FlightDeclaration.objects.count(), 3)
+
+    # -- All valid with USSP enabled → state=0 & DSS submission ------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(IntersectionCheckResult(
+            all_relevant_fences=[],
+            all_relevant_declarations=[],
+            is_approved=True,
+            declaration_state=0,
+        )),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_all_valid_ussp_enabled_submits_each_to_dss(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_operational_intent_payload(aircraft_id=f"ac-{i}") for i in range(2)]
+
+        response = self._post(payloads)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        for result in body["results"]:
+            self.assertEqual(result["state"], 0)
+
+        self.assertEqual(mock_submit_dss.delay.call_count, 2)
+
+    # -- Non-list body → 400 -----------------------------------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_non_list_body_returns_400(
+        self,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        response = self._post({"not": "a list"})
+
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertIn("message", body)
+        self.assertEqual(FlightDeclaration.objects.count(), 0)
+
+    # -- Empty list → 200 with submitted=0, failed=0 -----------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_empty_list_returns_200_with_zero_counts(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        response = self._post([])
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["submitted"], 0)
+        self.assertEqual(body["failed"], 0)
+        self.assertEqual(body["results"], [])
+
+    # -- Mixed valid/invalid → 207, partial failures -----------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_mixed_valid_invalid_returns_207(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        valid = _make_operational_intent_payload()
+        invalid_missing_aircraft = _make_operational_intent_payload()
+        del invalid_missing_aircraft["aircraft_id"]
+        valid2 = _make_operational_intent_payload(aircraft_id="ac-2")
+
+        response = self._post([valid, invalid_missing_aircraft, valid2])
+
+        self.assertEqual(response.status_code, 207)
+        body = response.json()
+        self.assertEqual(body["submitted"], 2)
+        self.assertEqual(body["failed"], 1)
+        self.assertEqual(len(body["results"]), 3)
+
+        self.assertTrue(body["results"][0]["success"])
+        self.assertFalse(body["results"][1]["success"])
+        self.assertTrue(body["results"][2]["success"])
+
+        self.assertEqual(FlightDeclaration.objects.count(), 2)
+
+    # -- All invalid → 207 -------------------------------------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_all_invalid_returns_207_with_all_failed(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        bad1 = _make_operational_intent_payload()
+        del bad1["aircraft_id"]
+        bad2 = _make_operational_intent_payload()
+        del bad2["aircraft_id"]
+
+        response = self._post([bad1, bad2])
+
+        self.assertEqual(response.status_code, 207)
+        body = response.json()
+        self.assertEqual(body["submitted"], 0)
+        self.assertEqual(body["failed"], 2)
+        self.assertEqual(FlightDeclaration.objects.count(), 0)
+
+    # -- Intersection conflict for some items in batch ---------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections_alternating(_NO_INTERSECTION, _CONFLICTING_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_partial_intersection_conflict_in_batch(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_operational_intent_payload(aircraft_id=f"ac-{i}") for i in range(4)]
+
+        response = self._post(payloads)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["submitted"], 4)
+        self.assertEqual(body["failed"], 0)
+
+        for result in body["results"]:
+            if result["index"] % 2 == 0:
+                self.assertTrue(result["is_approved"])
+                self.assertEqual(result["state"], 1)
+            else:
+                self.assertFalse(result["is_approved"])
+                self.assertEqual(result["state"], 8)
+
+    # -- check_intersections called once with all saved --------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_check_intersections_called_once_with_all_saved(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_operational_intent_payload(aircraft_id=f"ac-{i}") for i in range(3)]
+
+        self._post(payloads)
+
+        mock_check_intersections.assert_called_once()
+        fds_arg = mock_check_intersections.call_args[0][0]
+        self.assertEqual(len(fds_arg), 3)
+
+    # -- Wrong content type → 415 ------------------------------------------
+
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_wrong_content_type_returns_415(self):
+        payloads = [_make_operational_intent_payload()]
+
+        response = self._post(payloads, content_type="text/plain")
+
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(FlightDeclaration.objects.count(), 0)
+
+    # -- Response shape matches BulkFlightDeclarationCreateResponse --------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_response_shape_matches_bulk_dataclass(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        payloads = [_make_operational_intent_payload()]
+
+        response = self._post(payloads)
+
+        body = response.json()
+        self.assertCountEqual(body.keys(), {"submitted", "failed", "results"})
+        result = body["results"][0]
+        self.assertIn("index", result)
+        self.assertIn("success", result)
+        self.assertIn("id", result)
+        self.assertIn("is_approved", result)
+        self.assertIn("state", result)
+
+    # -- Results ordered by original index ---------------------------------
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
+        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_results_ordered_by_index(
+        self,
+        mock_check_intersections,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        valid = _make_operational_intent_payload()
+        invalid = _make_operational_intent_payload()
+        del invalid["aircraft_id"]
+        valid2 = _make_operational_intent_payload(aircraft_id="ac-x")
+
+        response = self._post([valid, invalid, valid2])
+
+        body = response.json()
+        indices = [r["index"] for r in body["results"]]
+        self.assertEqual(indices, [0, 1, 2])
