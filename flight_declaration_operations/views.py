@@ -375,7 +375,7 @@ def _validate_and_save_operational_intent(request_data: dict, default_state: int
         state=default_state,
     )
     flight_declaration.save()
-    flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
+    flight_declaration.add_state_history_entry(new_state=default_state, original_state=0, notes="Created Declaration")
     return flight_declaration, None
 
 
