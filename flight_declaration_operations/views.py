@@ -4,6 +4,7 @@ from dataclasses import asdict
 from os import environ as env
 
 import arrow
+from django.db import transaction
 from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
@@ -268,8 +269,19 @@ class FlightDeclarationDelete(generics.DestroyAPIView):
 def _validate_and_save_flight_declaration(request_data: dict, default_state: int) -> tuple[FlightDeclaration, None] | tuple[None, dict]:
     """Validate a GeoJSON flight declaration payload and persist it with *default_state*.
 
-    The declaration is saved immediately so that subsequent intersection checks
-    (run as a separate phase) can see it and all other declarations in the batch.
+    The declaration is saved immediately with ``is_approved=True`` and
+    ``state=default_state`` so that subsequent intersection checks (run as a
+    separate phase) can see it and all other declarations in the batch.
+
+    .. note::
+
+       There is a deliberate window between the initial save and the
+       intersection-check phase during which a declaration appears as
+       *approved* in the database.  If the intersection check later rejects
+       it, ``_process_intersection_result`` updates the row to
+       ``is_approved=False, state=8``.  For bulk requests this window is
+       bounded by a ``transaction.atomic()`` block in the calling endpoint,
+       so external queries will not observe the intermediate state.
 
     Returns:
         (FlightDeclaration, None) on success.
@@ -323,12 +335,15 @@ def _validate_and_save_flight_declaration(request_data: dict, default_state: int
         state=default_state,
     )
     flight_declaration.save()
-    flight_declaration.add_state_history_entry(new_state=0, original_state=0, notes="Created Declaration")
+    flight_declaration.add_state_history_entry(new_state=default_state, original_state=0, notes="Created Declaration")
     return flight_declaration, None
 
 
 def _validate_and_save_operational_intent(request_data: dict, default_state: int) -> tuple[FlightDeclaration, None] | tuple[None, dict]:
     """Validate an operational-intent payload and persist it with *default_state*.
+
+    See :func:`_validate_and_save_flight_declaration` for important notes on
+    the ``is_approved=True`` initial state and transactional guarantees.
 
     Returns:
         (FlightDeclaration, None) on success.
@@ -422,9 +437,12 @@ def _process_intersection_result(
             message_text=self_deconfliction_failed_msg,
             level="error",
         )
-    else:
-        if declaration_state == 0 and ussp_network_enabled:
-            submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
+
+    # Only submit to DSS when the declaration was approved and USSP is enabled.
+    # declaration_state is 0 only when ussp_network_enabled is truthy AND no
+    # intersection conflicts were found (conflicts set it to 8).
+    if is_approved and declaration_state == 0 and ussp_network_enabled:
+        submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
 
     return FlightDeclarationCreateResponse(
         id=flight_declaration_id,
@@ -514,45 +532,49 @@ def set_flight_declarations_bulk(request):
     ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", 0))
     default_state = 0 if ussp_network_enabled else 1
 
-    # Phase 1: validate and save all declarations
-    saved: dict[int, FlightDeclaration] = {}
-    results: list[dict] = []
-    failed_count = 0
+    # Both phases run inside a single transaction so that external queries
+    # never observe the intermediate state where declarations are saved with
+    # is_approved=True but have not yet been intersection-checked.
+    with transaction.atomic():
+        # Phase 1: validate and save all declarations
+        saved: dict[int, FlightDeclaration] = {}
+        results: list[dict] = []
+        failed_count = 0
 
-    for idx, item in enumerate(flight_declarations_list):
-        try:
-            flight_declaration, error = _validate_and_save_flight_declaration(item, default_state)
-            if error or flight_declaration is None:
+        for idx, item in enumerate(flight_declarations_list):
+            try:
+                flight_declaration, error = _validate_and_save_flight_declaration(item, default_state)
+                if error or flight_declaration is None:
+                    failed_count += 1
+                    error = error or {"message": "Unknown error"}
+                    results.append({"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")})
+                else:
+                    saved[idx] = flight_declaration
+            except Exception as e:
+                logger.error(f"Error validating flight declaration at index {idx}: {e}")
                 failed_count += 1
-                error = error or {"message": "Unknown error"}
-                results.append({"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")})
-            else:
-                saved[idx] = flight_declaration
-        except Exception as e:
-            logger.error(f"Error validating flight declaration at index {idx}: {e}")
-            failed_count += 1
-            results.append({"index": idx, "success": False, "message": str(e)})
+                results.append({"index": idx, "success": False, "message": str(e)})
 
-    # Phase 2: check all intersections at once, then process results
-    validator = FlightDeclarationRequestValidator()
-    intersection_results = validator.check_intersections(list(saved.values()), ussp_network_enabled)
+        # Phase 2: check all intersections at once, then process results
+        validator = FlightDeclarationRequestValidator()
+        intersection_results = validator.check_intersections(list(saved.values()), ussp_network_enabled)
 
-    submitted_count = 0
-    for idx, flight_declaration in saved.items():
-        fd_id = str(flight_declaration.id)
-        creation_response = _process_intersection_result(
-            flight_declaration, intersection_results[fd_id], ussp_network_enabled
-        )
-        submitted_count += 1
-        results.append(
-            {
-                "index": idx,
-                "success": True,
-                "id": creation_response.id,
-                "is_approved": creation_response.is_approved,
-                "state": creation_response.state,
-            }
-        )
+        submitted_count = 0
+        for idx, flight_declaration in saved.items():
+            fd_id = str(flight_declaration.id)
+            creation_response = _process_intersection_result(
+                flight_declaration, intersection_results[fd_id], ussp_network_enabled
+            )
+            submitted_count += 1
+            results.append(
+                {
+                    "index": idx,
+                    "success": True,
+                    "id": creation_response.id,
+                    "is_approved": creation_response.is_approved,
+                    "state": creation_response.state,
+                }
+            )
 
     results.sort(key=lambda r: r["index"])
 
@@ -592,45 +614,49 @@ def set_operational_intents_bulk(request):
     ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", 0))
     default_state = 0 if ussp_network_enabled else 1
 
-    # Phase 1: validate and save all operational intents
-    saved: dict[int, FlightDeclaration] = {}
-    results: list[dict] = []
-    failed_count = 0
+    # Both phases run inside a single transaction so that external queries
+    # never observe the intermediate state where declarations are saved with
+    # is_approved=True but have not yet been intersection-checked.
+    with transaction.atomic():
+        # Phase 1: validate and save all operational intents
+        saved: dict[int, FlightDeclaration] = {}
+        results: list[dict] = []
+        failed_count = 0
 
-    for idx, item in enumerate(operational_intents_list):
-        try:
-            flight_declaration, error = _validate_and_save_operational_intent(item, default_state)
-            if error or flight_declaration is None:
+        for idx, item in enumerate(operational_intents_list):
+            try:
+                flight_declaration, error = _validate_and_save_operational_intent(item, default_state)
+                if error or flight_declaration is None:
+                    failed_count += 1
+                    error = error or {"message": "Unknown error"}
+                    results.append({"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")})
+                else:
+                    saved[idx] = flight_declaration
+            except Exception as e:
+                logger.error(f"Error validating operational intent at index {idx}: {e}")
                 failed_count += 1
-                error = error or {"message": "Unknown error"}
-                results.append({"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")})
-            else:
-                saved[idx] = flight_declaration
-        except Exception as e:
-            logger.error(f"Error validating operational intent at index {idx}: {e}")
-            failed_count += 1
-            results.append({"index": idx, "success": False, "message": str(e)})
+                results.append({"index": idx, "success": False, "message": str(e)})
 
-    # Phase 2: check all intersections at once, then process results
-    validator = FlightDeclarationRequestValidator()
-    intersection_results = validator.check_intersections(list(saved.values()), ussp_network_enabled)
+        # Phase 2: check all intersections at once, then process results
+        validator = FlightDeclarationRequestValidator()
+        intersection_results = validator.check_intersections(list(saved.values()), ussp_network_enabled)
 
-    submitted_count = 0
-    for idx, flight_declaration in saved.items():
-        fd_id = str(flight_declaration.id)
-        creation_response = _process_intersection_result(
-            flight_declaration, intersection_results[fd_id], ussp_network_enabled
-        )
-        submitted_count += 1
-        results.append(
-            {
-                "index": idx,
-                "success": True,
-                "id": creation_response.id,
-                "is_approved": creation_response.is_approved,
-                "state": creation_response.state,
-            }
-        )
+        submitted_count = 0
+        for idx, flight_declaration in saved.items():
+            fd_id = str(flight_declaration.id)
+            creation_response = _process_intersection_result(
+                flight_declaration, intersection_results[fd_id], ussp_network_enabled
+            )
+            submitted_count += 1
+            results.append(
+                {
+                    "index": idx,
+                    "success": True,
+                    "id": creation_response.id,
+                    "is_approved": creation_response.is_approved,
+                    "state": creation_response.state,
+                }
+            )
 
     results.sort(key=lambda r: r["index"])
 
