@@ -396,12 +396,14 @@ def _process_intersection_result(
 
     # Update state if the intersection check rejected the declaration
     if not is_approved:
+        # Capture the original state before updating, so history reflects the true transition
+        original_state = flight_declaration.state
         flight_declaration.is_approved = False
         flight_declaration.state = declaration_state
         flight_declaration.save()
         flight_declaration.add_state_history_entry(
             new_state=declaration_state,
-            original_state=0,
+            original_state=original_state,
             notes="Rejected by Flight Blender because of time/space conflicts with existing operations",
         )
 
