@@ -69,29 +69,29 @@ services:
     # networks:
     #   - interop_ecosystem_network
 
-  flight-blender-celery-beat:
-    platform: linux/amd64
-    container_name: flight-blender-beat
-    image: openutm/flight-blender-dev
-    pull_policy: never
-    restart: on-failure
-    build:
-      context: "."
-    env_file:
-      - ".env"
-    hostname: celery-beat
-    command: ./entrypoints/with-database/entrypoint-beat.sh
-    # volumes:
-    #   - .:/app
-    depends_on:
-      redis-blender:
-        condition: service_started
-      db-blender:
-        condition: service_started
-      flight-blender-celery:
-        condition: service_started
-  #   networks:
-  #     - interop_ecosystem_network
+  # flight-blender-celery-beat:
+  #   platform: linux/amd64
+  #   container_name: flight-blender-beat
+  #   image: openutm/flight-blender-dev
+  #   pull_policy: never
+  #   restart: on-failure
+  #   build:
+  #     context: "."
+  #   env_file:
+  #     - ".env"
+  #   hostname: celery-beat
+  #   command: ./entrypoints/with-database/entrypoint-beat.sh
+  #   # volumes:
+  #   #   - .:/app
+  #   depends_on:
+  #     redis-blender:
+  #       condition: service_started
+  #     db-blender:
+  #       condition: service_started
+  #     flight-blender-celery:
+  #       condition: service_started
+  # #   networks:
+  # #     - interop_ecosystem_network
 
 volumes:
   app:

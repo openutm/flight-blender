@@ -62,6 +62,146 @@ paths:
               schema:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
 
+  /surveillance_monitoring_operations/service_metrics:
+    get:
+      summary: 'Retrieve surveillance monitoring service metrics'
+      description: 'This operation retrieves various metrics related to the surveillance monitoring service, such as uptime, response times, and error rates.'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      responses:
+        '200':
+          description: 'Surveillance monitoring service metrics retrieved successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurveillanceServiceMetrics'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
+
+
+  /surveillance_monitoring_operations/update_sensor_health/<uuid:sensor_id>:
+    put:
+      summary: 'Update sensor health status'
+      description: 'This operation updates the health status of a specific surveillance sensor.'
+      security:
+        - AuthFromPassport: [flightblender.write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [operational, degraded, outage]
+                  description: The new health status of the sensor.
+                recovery_type:
+                  type: string
+                  enum: [automatic, manual]
+                  description: The recovery type for the sensor.
+              required:
+                - status
+                - recovery_type
+      responses:
+        '200':
+          description: Sensor health status updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorHealthUpdateResponse'
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+
+  /surveillance_monitoring_operations/sensor_failure_notifications:
+    get:
+      summary: 'Retrieve sensor failure notifications'
+      description: 'This operation retrieves a list of sensor failure notifications for all surveillance sensors.'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      responses:
+        '200':
+          description: 'Sensor failure notifications retrieved successfully'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SurveillanceSensorFailureNotificationList'
+
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
+
   /surveillance_monitoring_operations/start_stop_surveillance_heartbeat_track:
     put:
       summary: 'Start or stop surveillance heartbeat track'
@@ -6249,6 +6389,82 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+
+    SurveillanceServiceMetrics:
+      type: object
+      properties:
+          heartbeat_rate:
+            type: number
+            description: The rate of heartbeats sent by the surveillance monitoring service.
+          heartbeat_delivery_probability:
+            type: number
+            description: The probability that a heartbeat is delivered successfully.
+          track_update_probability:
+            type: number
+            description: The probability that a track update is processed successfully.
+          per_sensor_health:
+            type: number
+            description: The health score for each individual sensor.
+          aggregate_health:
+            type: number
+            description: The overall health score for the surveillance monitoring service.
+          active_sessions:
+            type: integer
+            description: The number of active sessions in the surveillance monitoring service.
+          window_start:
+            type: string
+            format: date-time
+            description: The start of the time window for which metrics are being reported.
+          window_end:
+            type: string
+            format: date-time
+            description: The end of the time window for which metrics are being reported.
+    SurveillanceSensorFailureNotification:
+      type: object
+      properties:
+        id :
+          type: string
+          description: Unique identifier for the notification.
+        sensor_id:
+          type: string
+          description: Unique identifier for the sensor that experienced the failure.
+        sensor_identifier:
+          type: string
+          description: Human-readable identifier for the sensor (e.g., name or location).
+        previous_status:
+          type: string
+          description: The previous health status of the sensor before the failure was detected.
+        new_status:
+          type: string
+          description: The new health status of the sensor after the failure was detected.
+        recovery_type:
+          type: string
+          description: The type of recovery process initiated for the sensor (e.g., automatic, manual intervention required).
+        message:
+          type: string
+          description: A detailed message describing the failure and any relevant information.
+        created_at:
+          type: string
+          format: date-time
+          description: The timestamp when the failure notification was created.
+
+    SurveillanceSensorFailureNotificationList:
+      type: array
+      items:
+        $ref: '#/components/schemas/SurveillanceSensorFailureNotification'
+
+    SensorHealthUpdateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: A message indicating that the sensor health status has been updated.
+        sensor_id:
+          type: string
+          description: The unique identifier of the sensor whose health status was updated.
+        new_status:
+          type: string
+          description: The new health status of the sensor after the update.
 
 tags:
   - name: uss
