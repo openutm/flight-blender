@@ -85,6 +85,30 @@ class SurveillanceSensorHealth(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        is_new = self._state.adding
+        status_changed = False
+        if not is_new:
+            try:
+                previous = SurveillanceSensorHealth.objects.get(pk=self.pk)
+                if previous.status != self.status:
+                    status_changed = True
+            except SurveillanceSensorHealth.DoesNotExist:
+                pass
+        super().save(*args, **kwargs)
+        if is_new or status_changed:
+            SurveillanceSensortHealthTracking.objects.create(
+                sensor=self.sensor,
+                status=self.status,
+            )
+
+
+class SurveillanceSensortHealthTracking(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sensor = models.ForeignKey(SurveillanceSensor, on_delete=models.CASCADE, related_name="health_tracking_records")
+    status = models.CharField(max_length=12, choices=SURVEILLANCE_SENSOR_HEALTH_CHOICES)
+    recorded_at = models.DateTimeField(auto_now=True)
+
 
 class SurveillanceSensorMaintenance(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

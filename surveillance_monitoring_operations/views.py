@@ -111,9 +111,13 @@ def service_metrics(request):
     logger.info(f"Received request for service metrics with start_date: {start_date} and end_date: {end_date}")
     # TODO: Add logic to parse these dates and use them to filter metrics
     # Placeholder logic for service metrics
+    active_sessions = 42  # This would be calculated based on the database records
+    uptime_percent = 99.9  # This would be calculated based on the service uptime records
+    response_time_avg_ms = 120  # This w'ould be calculated based on the response time
+
     metric_response = SurveillanceMetrics(
-        uptime_percent=99.9,
-        response_time_avg_ms=120,
-        active_sessions=42,
+        uptime_percent=uptime_percent,
+        response_time_avg_ms=response_time_avg_ms,
+        active_sessions=active_sessions,
     )
     return JsonResponse(asdict(metric_response))

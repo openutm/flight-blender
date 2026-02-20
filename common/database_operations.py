@@ -56,6 +56,8 @@ from scd_operations.scd_data_definitions import (
 )
 from surveillance_monitoring_operations.models import (
     SurveillanceSensor,
+    SurveillanceSensorHealth,
+    SurveillanceSensorMaintenance,
     SurveillanceSession,
 )
 
