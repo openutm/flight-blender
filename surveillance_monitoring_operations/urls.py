@@ -19,4 +19,14 @@ urlpatterns = [
         surveillance_monitoring_views.service_metrics,
         name="service_metrics",
     ),
+    path(
+        "update_sensor_health/<uuid:sensor_id>/",
+        surveillance_monitoring_views.update_sensor_health,
+        name="update_sensor_health",
+    ),
+    path(
+        "sensor_failure_notifications/",
+        surveillance_monitoring_views.list_sensor_failure_notifications,
+        name="sensor_failure_notifications",
+    ),
 ]

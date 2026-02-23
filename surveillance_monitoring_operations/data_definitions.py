@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
 
 
 class SurveillanceStatus(str, Enum):
@@ -115,7 +116,94 @@ class ActiveTrack:
 
 
 @dataclass
+class HeartbeatRateMetric:
+    """Metric 1: Measured heartbeat delivery rate."""
+
+    measured_rate_hz: float
+    target_rate_hz: float
+    session_id: str
+    window_start: str
+    window_end: str
+    total_heartbeats_in_window: int
+
+
+@dataclass
+class HeartbeatDeliveryProbability:
+    """Metric 2a: Probability that heartbeats are delivered on time."""
+
+    probability: float
+    delivered_on_time: int
+    total_expected: int
+    session_id: str
+    window_start: str
+    window_end: str
+
+
+@dataclass
+class TrackUpdateProbability:
+    """Metric 2b: Probability that track task ticks produce active track data."""
+
+    probability: float
+    ticks_with_active_tracks: int
+    total_ticks: int
+    session_id: str
+    window_start: str
+    window_end: str
+
+
+@dataclass
+class SensorHealthMetrics:
+    """Metrics 3-6: Per-sensor MTTR, automatic recovery time, and MTBF values."""
+
+    sensor_id: str
+    sensor_identifier: str
+    mttr_seconds: Optional[float]
+    auto_recovery_time_seconds: Optional[float]
+    mtbf_with_auto_recovery_seconds: Optional[float]
+    mtbf_without_auto_recovery_seconds: Optional[float]
+    failure_count: int
+    auto_recovery_count: int
+    manual_recovery_count: int
+    window_start: str
+    window_end: str
+
+
+@dataclass
+class AggregateHealthMetrics:
+    """Service-level aggregate of health metrics across all sensors."""
+
+    avg_mttr_seconds: Optional[float]
+    avg_auto_recovery_time_seconds: Optional[float]
+    avg_mtbf_with_auto_recovery_seconds: Optional[float]
+    avg_mtbf_without_auto_recovery_seconds: Optional[float]
+    total_sensors: int
+    window_start: str
+    window_end: str
+
+
+@dataclass
+class SurveillanceSensorFailureNotificationDetail:
+    """Metric 7: Serialized failure notification for API responses."""
+
+    id: str
+    sensor_id: str
+    sensor_identifier: str
+    previous_status: str
+    new_status: str
+    recovery_type: Optional[str]
+    message: str
+    created_at: str
+
+
+@dataclass
 class SurveillanceMetrics:
-    uptime_percent: float
-    response_time_avg_ms: int
+    """Combined response for the service_metrics endpoint covering all seven SDSP metrics."""
+
+    heartbeat_rate: Optional[HeartbeatRateMetric]
+    heartbeat_delivery_probability: Optional[HeartbeatDeliveryProbability]
+    track_update_probability: Optional[TrackUpdateProbability]
+    per_sensor_health: list[SensorHealthMetrics]
+    aggregate_health: Optional[AggregateHealthMetrics]
     active_sessions: int
+    window_start: str
+    window_end: str
