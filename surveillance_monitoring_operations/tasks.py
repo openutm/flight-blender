@@ -13,6 +13,7 @@ from common.base_traffic_data_fuser import BaseTrafficDataFuser
 from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
 from flight_blender.settings import ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS, BROKER_URL
+from surveillance_monitoring_operations.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
 
 from .data_definitions import HeartbeatMessage
 
@@ -71,8 +72,8 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     expected_at = arrow.utcnow().datetime
 
     # Use the first active sensor's configured accuracy/latency, falling back to defaults
-    avg_latency_ms = 150
-    h_accuracy_m = 5
+    avg_latency_ms = 0
+    h_accuracy_m = 0
     active_sensors = db_reader.get_active_surveillance_sensors()
     if active_sensors.exists():
         primary_sensor = active_sensors.first()
@@ -118,7 +119,6 @@ def cleanup_old_heartbeat_events() -> None:
     At 1 Hz per session this prevents unbounded table growth.
     Schedule this task daily via django-celery-beat.
     """
-    from surveillance_monitoring_operations.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
 
     retention_days = int(os.getenv("HEARTBEAT_RETENTION_DAYS", "30"))
     cutoff = arrow.utcnow().shift(days=-retention_days).datetime

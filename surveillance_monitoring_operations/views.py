@@ -83,6 +83,7 @@ def start_stop_surveillance_heartbeat_track(request, session_id):
         database_writer.create_surveillance_session(session_id=session_id, valid_until=end_datetime)
         database_writer.create_surveillance_monitoring_heartbeat_periodic_task(session_id=str(session_id))
         database_writer.create_surveillance_monitoring_track_periodic_task(session_id=str(session_id))
+
         return JsonResponse({"status": "Surveillance monitoring heartbeat started"})
     else:
         # Stop the heartbeat task

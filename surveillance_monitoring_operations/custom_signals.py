@@ -2,7 +2,11 @@ import django.dispatch
 from django.dispatch import receiver
 from loguru import logger
 
+from common.database_operations import FlightBlenderDatabaseReader
+from surveillance_monitoring_operations.models import SurveillanceSensor, SurveillanceSensorFailureNotification
+
 surveillance_sensor_failure_signal = django.dispatch.Signal()
+from uuid import UUID
 
 
 @receiver(surveillance_sensor_failure_signal)
@@ -17,16 +21,15 @@ def process_sensor_status_change(sender, **kwargs):
         new_status (str): Status after the change
         recovery_type (str | None): "automatic" or "manual" for operational recoveries; None otherwise
     """
-    from surveillance_monitoring_operations.models import SurveillanceSensor, SurveillanceSensorFailureNotification
 
     sensor_id = kwargs["sensor_id"]
     previous_status = kwargs["previous_status"]
     new_status = kwargs["new_status"]
     recovery_type = kwargs.get("recovery_type")
+    my_database_reader = FlightBlenderDatabaseReader()
 
-    try:
-        sensor = SurveillanceSensor.objects.get(id=sensor_id)
-    except SurveillanceSensor.DoesNotExist:
+    sensor = my_database_reader.get_surveillance_sensor_by_id(sensor_id=UUID(sensor_id))
+    if not sensor:
         logger.error(f"surveillance signal: sensor {sensor_id} not found, skipping notification")
         return
 

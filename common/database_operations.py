@@ -404,6 +404,13 @@ class FlightBlenderDatabaseReader:
     def get_active_surveillance_sensors(self) -> QuerySet[SurveillanceSensor]:
         return SurveillanceSensor.objects.filter(is_active=True)
 
+    def get_surveillance_sensor_by_id(self, sensor_id: UUID) -> SurveillanceSensor | None:
+        sensor_exists = SurveillanceSensor.objects.filter(id=sensor_id).exists()
+        if not sensor_exists:
+            return None
+
+        return SurveillanceSensor.objects.get(id=sensor_id)
+
     def get_surveillance_session_by_id(self, session_id: str) -> None | SurveillanceSession:
         try:
             return SurveillanceSession.objects.get(id=session_id)
