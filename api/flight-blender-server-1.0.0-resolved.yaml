@@ -1733,6 +1733,54 @@ paths:
         - flight-declarations
 
 
+  /flight_declaration_ops/set_operational_intent_bulk:
+    post:
+      summary: 'Bulk Submit Operational Intent'
+      description: "Create multiple Flight Declarations in Flight Blender by submitting Operational Intents. \
+        \ Flight declarations can be added upto 24 hours in advance and follow the ASTM Operational Intent data format. In most cases, you can use Flight Spotlight Launchpad functionality to submit declarations."
+        
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutFlightDeclarationByOperationalIntentRequestList'
+
+      responses:
+        '200':
+          description: The flight declarations were successfully processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlightDeclarationCreationResponseBulk'
+
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+
+      tags:
+        - flight-declarations
   /flight_declaration_ops/set_operational_intent:
     post:
       summary: 'Submit Operational Intent to create Flight Declaration'
@@ -1806,6 +1854,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FlightDeclarationCreationResponse'
+
+        '400':
+          description: Bad request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+
+      tags:
+        - flight-declarations
+
+  /flight_declaration_ops/set_flight_declaration_bulk:
+    post:
+      summary: 'Bulk add new Flight Declarations'
+      description: "Submit multiple Flight Declarations into Flight Blender. \
+        \ Flight declarations can be added upto 24 hours in advance and follow the ASTM Operational Intent data format. In most cases, you can use Flight Spotlight Launchpad functionality to submit declarations."
+      security:
+        - AuthFromPassport: [flightblender.write]
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutFlightDeclarationRequestList'
+
+      responses:
+        '200':
+          description: The flight declaration was successfully processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlightDeclarationCreationResponseBulk'
 
         '400':
           description: Bad request submitted
@@ -3255,6 +3354,26 @@ components:
           type: string
           example: 'RemoteID data successfully submitted'
 
+
+
+    FlightDeclarationCreationResponseBulk:
+      description: A response when the UTM system processes multiple Flight Declarations
+      type: object
+      properties:
+        submitted:
+          type: integer
+          format: int32
+          readOnly: true
+        failed:
+          type: integer
+          format: int32
+          readOnly: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlightDeclarationCreationResponse'
+
+
     FlightDeclarationCreationResponse:
       description: A response when the UTM system processes a Flight Declaration
       type: object
@@ -3596,7 +3715,10 @@ components:
              * `1` - VLOS
              * `2` - BVLOS
              * `3` - CREWED
-
+    PutFlightDeclarationByOperationalIntentRequestList: 
+      type: array
+      items:
+        $ref: '#/components/schemas/PutFlightDeclarationByOperationalIntentRequest'
     PutFlightDeclarationByOperationalIntentRequest:
       type: object
       properties:
@@ -3632,6 +3754,12 @@ components:
           format: date-time
         operational_intent_volume4ds:
           $ref: "#/components/schemas/Volume4DArray"
+
+    PutFlightDeclarationRequestList: 
+      type: array
+      items:
+        $ref: '#/components/schemas/PutFlightDeclarationRequest'
+
 
     PutFlightDeclarationRequest:
       type: object
