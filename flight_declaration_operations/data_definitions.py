@@ -109,6 +109,15 @@ class FlightDeclarationCreateResponse:
 
 
 @dataclass
+class BulkFlightDeclarationCreateResponse:
+    """Hold data for bulk submission response"""
+
+    submitted: int
+    failed: int
+    results: list
+
+
+@dataclass
 class HTTP404Response:
     message: str
 
