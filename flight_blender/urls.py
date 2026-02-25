@@ -33,6 +33,7 @@ urlpatterns = [
     path("flight_declaration_ops/", include("flight_declaration_operations.urls")),
     path("weather_monitoring_ops/", include("weather_monitoring_operations.urls")),
     path("surveillance_monitoring_ops/", include("surveillance_monitoring_operations.urls")),
+    path("conformance_monitoring_ops/", include("conformance_monitoring_operations.urls")),
     # UTM Adapter endpoints
     # path("utm_adapter/", include("utm_adapter.urls")),
 ]

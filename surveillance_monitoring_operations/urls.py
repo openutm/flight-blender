@@ -10,23 +10,23 @@ urlpatterns = [
         name="start_stop_surveillance_heartbeat_track",
     ),
     path(
-        "list_surveillance_sensors/",
+        "list_surveillance_sensors",
         surveillance_monitoring_views.list_surveillance_sensors,
         name="list_surveillance_sensors",
     ),
     path(
-        "service_metrics/",
+        "service_metrics",
         surveillance_monitoring_views.service_metrics,
         name="service_metrics",
     ),
     path(
-        "update_sensor_health/<uuid:sensor_id>/",
+        "update_sensor_health/<uuid:sensor_id>",
         surveillance_monitoring_views.update_sensor_health,
         name="update_sensor_health",
     ),
     path(
-        "sensor_failure_notifications/",
-        surveillance_monitoring_views.list_sensor_failure_notifications,
-        name="sensor_failure_notifications",
+        "list_sensor_health_notifications",
+        surveillance_monitoring_views.list_sensor_health_notifications,
+        name="list_sensor_health_notifications",
     ),
 ]

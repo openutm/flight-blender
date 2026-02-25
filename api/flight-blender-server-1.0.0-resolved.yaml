@@ -200,7 +200,7 @@ paths:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
       tags:
         - surveillance-sdsp
-  /surveillance_monitoring_operations/metrics:
+  /surveillance_monitoring_operations/service_metrics:
     get:
       summary: 'Retrieve surveillance service metrics'
       description: 'Retrieve metrics related to the surveillance monitoring service.'
@@ -252,6 +252,149 @@ paths:
                 $ref: '#/components/schemas/Standard500ErrorResponse'
       tags:
         - surveillance-sdsp
+
+  /surveillance_monitoring_operations/list_sensor_failure_notifications:
+    get:
+      summary: 'List sensor failure and recovery notifications'
+      description: 'Retrieve a list of sensor failure and recovery notifications, optionally filtered by sensor and time window.'
+      security:
+        - AuthFromPassport: [flightblender.read]
+      parameters:
+        - name: sensor_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: 'Filter notifications by sensor UUID. If omitted, notifications for all sensors are returned.'
+          required: false
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: 'ISO 8601 start of the query window. Defaults to 7 days ago if omitted.'
+          required: false
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: 'ISO 8601 end of the query window. Defaults to now if omitted.'
+          required: false
+      responses:
+        '200':
+          description: 'Sensor failure and recovery notifications retrieved successfully.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorFailureNotificationListResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Unauthorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
+  /surveillance_monitoring_operations/update_sensor_health/{sensor_id}:
+    put:
+      summary: 'Update the health status of a surveillance sensor'
+      description: 'Change status of the specified surveillance sensor, optionally providing a recovery type when moving to operational from failure.'
+      security:
+        - AuthFromPassport: [flightblender.write]
+      parameters:
+        - name: sensor_id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: 'UUID of the sensor to update.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [operational, degraded, outage]
+                  description: 'New health status for the sensor.'
+                recovery_type:
+                  type: string
+                  enum: [automatic, manual]
+                  description: 'Indicates how the sensor recovered when status is set to operational following a failure. Optional unless status is operational.'
+              required:
+                - status
+      responses:
+        '200':
+          description: 'Sensor health updated successfully.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: 'Sensor health updated'
+                  sensor_id:
+                    type: string
+                    format: uuid
+                  new_status:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Unauthorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '404':
+          description: Sensor not found or update failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - surveillance-sdsp
+
+
   /signing_public_key:
     get:
       summary: 'Flight Blender Signing Public Key'
@@ -1738,7 +1881,7 @@ paths:
       summary: 'Bulk Submit Operational Intent'
       description: "Create multiple Flight Declarations in Flight Blender by submitting Operational Intents. \
         \ Flight declarations can be added upto 24 hours in advance and follow the ASTM Operational Intent data format. In most cases, you can use Flight Spotlight Launchpad functionality to submit declarations."
-        
+
       requestBody:
         required: true
         content:
@@ -3054,20 +3197,183 @@ components:
       description: >-
         Surveillance monitoring service performance metrics.
       required:
-        - uptime_percent
-        - response_time_avg_ms
+        - heartbeat_rate
+        - heartbeat_delivery_probability
+        - track_update_probability
+        - per_sensor_health
+        - aggregate_health
         - active_sessions
+        - window_start
+        - window_end
       properties:
-        uptime_percent:
-          type: number
-          format: float
-          description: Percentage of time the surveillance service was operational.
-        response_time_avg_ms:
-          type: integer
-          description: Average response time of the surveillance service in milliseconds.
-        active_sessions:
-          type: integer
-          description: Number of active surveillance sessions.
+        heartbeat_rate:
+          type: object
+          description: Detailed heartbeat rate information.
+          required:
+            - measured_rate_hz
+            - target_rate_hz
+            - session_id
+            - window_start
+            - window_end
+            - total_heartbeats_in_window
+          properties:
+            measured_rate_hz:
+              type: number
+              format: float
+              description: Actual measured heartbeat rate (Hz).
+            target_rate_hz:
+              type: number
+              format: float
+              description: Desired heartbeat rate (Hz).
+            session_id:
+              type: string
+              format: uuid
+              description: Identifier for the monitoring session.
+            window_start:
+              type: string
+              format: date-time
+              description: Start of the heartbeat measurement window.
+            window_end:
+              type: string
+              format: date-time
+              description: End of the heartbeat measurement window.
+            total_heartbeats_in_window:
+              type: integer
+              description: Total heartbeat messages counted in the window.
+        heartbeat_delivery_probability:
+          type: object
+          description: Probability metrics for heartbeat delivery.
+          required:
+            - probability
+            - delivered_on_time
+            - total_expected
+            - session_id
+            - window_start
+            - window_end
+          properties:
+            probability:
+              type: number
+              format: float
+              description: Estimated delivery probability.
+            delivered_on_time:
+              type: integer
+              description: Number of heartbeats delivered on time.
+            total_expected:
+              type: integer
+              description: Total expected heartbeat messages.
+            session_id:
+              type: string
+              format: uuid
+            window_start:
+              type: string
+              format: date-time
+            window_end:
+              type: string
+              format: date-time
+        track_update_probability:
+          type: object
+          description: Probability metrics for track updates.
+          required:
+            - probability
+            - ticks_with_active_tracks
+            - total_ticks
+            - session_id
+            - window_start
+            - window_end
+          properties:
+            probability:
+              type: number
+              format: float
+            ticks_with_active_tracks:
+              type: integer
+            total_ticks:
+              type: integer
+            session_id:
+              type: string
+              format: uuid
+            window_start:
+              type: string
+              format: date-time
+            window_end:
+              type: string
+              format: date-time
+        per_sensor_health:
+          type: array
+          description: Health status of individual sensors.
+          items:
+            type: object
+            required:
+              - sensor_id
+              - sensor_identifier
+              - mttr_seconds
+              - failure_count
+              - window_start
+              - window_end
+            properties:
+              sensor_id:
+                type: string
+                format: uuid
+              sensor_identifier:
+                type: string
+              mttr_seconds:
+                type: number
+                format: float
+              auto_recovery_time_seconds:
+                type: number
+                format: float
+                nullable: true
+              mtbf_with_auto_recovery_seconds:
+                type: number
+                format: float
+                nullable: true
+              mtbf_without_auto_recovery_seconds:
+                type: number
+                format: float
+                nullable: true
+              failure_count:
+                type: integer
+              auto_recovery_count:
+                type: integer
+              manual_recovery_count:
+                type: integer
+              window_start:
+                type: string
+                format: date-time
+              window_end:
+                type: string
+                format: date-time
+        aggregate_health:
+          type: object
+          description: Aggregated health metrics for all sensors.
+          required:
+            - avg_mttr_seconds
+            - total_sensors
+            - window_start
+            - window_end
+          properties:
+            avg_mttr_seconds:
+              type: number
+              format: float
+            avg_auto_recovery_time_seconds:
+              type: number
+              format: float
+              nullable: true
+            avg_mtbf_with_auto_recovery_seconds:
+              type: number
+              format: float
+              nullable: true
+            avg_mtbf_without_auto_recovery_seconds:
+              type: number
+              format: float
+              nullable: true
+            total_sensors:
+              type: integer
+            window_start:
+              type: string
+              format: date-time
+            window_end:
+              type: string
+              format: date-time
 
     SurveillanceStatus:
       type: string
@@ -3715,7 +4021,7 @@ components:
              * `1` - VLOS
              * `2` - BVLOS
              * `3` - CREWED
-    PutFlightDeclarationByOperationalIntentRequestList: 
+    PutFlightDeclarationByOperationalIntentRequestList:
       type: array
       items:
         $ref: '#/components/schemas/PutFlightDeclarationByOperationalIntentRequest'
@@ -3755,7 +4061,7 @@ components:
         operational_intent_volume4ds:
           $ref: "#/components/schemas/Volume4DArray"
 
-    PutFlightDeclarationRequestList: 
+    PutFlightDeclarationRequestList:
       type: array
       items:
         $ref: '#/components/schemas/PutFlightDeclarationRequest'
@@ -6377,6 +6683,49 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+
+    SurveillanceSensorFailureNotificationDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the notification
+        sensor_id:
+          type: string
+          format: uuid
+          description: UUID of the sensor that generated the notification
+        sensor_identifier:
+          type: string
+          description: Human-readable identifier of the sensor
+        previous_status:
+          type: string
+          enum: [operational, degraded, outage]
+          description: Sensor status before the transition
+        new_status:
+          type: string
+          enum: [operational, degraded, outage]
+          description: Sensor status after the transition
+        recovery_type:
+          type: string
+          enum: [automatic, manual]
+          nullable: true
+          description: How the sensor recovered, if applicable. Present only when new_status is 'operational'.
+        message:
+          type: string
+          description: Human-readable description of the failure or recovery event
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the notification was created
+
+    SensorFailureNotificationListResponse:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/SurveillanceSensorFailureNotificationDetail'
 
 tags:
   - name: uss

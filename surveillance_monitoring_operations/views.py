@@ -183,6 +183,7 @@ def update_sensor_health(request, sensor_id):
     """
     new_status = request.data.get("status")
     recovery_type = request.data.get("recovery_type", None)
+    logger.info(f"Received request to update health for sensor {sensor_id} with status {new_status} and recovery_type {recovery_type}")
 
     valid_statuses = {"operational", "degraded", "outage"}
     if new_status not in valid_statuses:
@@ -216,7 +217,7 @@ def update_sensor_health(request, sensor_id):
 
 @api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
-def list_sensor_failure_notifications(request):
+def list_sensor_health_notifications(request):
     """
     List sensor failure and recovery notifications.
 
