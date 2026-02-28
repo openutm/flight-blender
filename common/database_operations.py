@@ -138,6 +138,12 @@ class FlightBlenderDatabaseReader:
         )
         return observations
 
+    def get_all_flight_observations_in_window(self, start_time: datetime, end_time: datetime) -> QuerySet[FlightObservation]:
+        return FlightObservation.objects.filter(
+            created_at__gte=start_time,
+            created_at__lte=end_time,
+        )
+
     def get_latest_flight_observation_by_session(self, session_id: str):
         try:
             observation = FlightObservation.objects.filter(session_id=session_id).latest("created_at")
@@ -426,8 +432,8 @@ class FlightBlenderDatabaseReader:
 
     def get_surveillance_sessions_with_events_in_window(self, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceSession]:
         return SurveillanceSession.objects.filter(
-            surveillanceheartbeatevent__dispatched_at__gte=start_time,
-            surveillanceheartbeatevent__dispatched_at__lte=end_time,
+            created_at__lte=end_time,
+            valid_until__gte=start_time,
         ).distinct()
 
     def get_sensor_health_record(self, sensor_id: str) -> Optional[SurveillanceSensorHealth]:

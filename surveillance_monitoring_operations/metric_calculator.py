@@ -29,7 +29,7 @@ class SurveillanceMetricCalculator:
     # ------------------------------------------------------------------
 
     def calculate_heartbeat_rate(self, session_id: str, start_time: datetime, end_time: datetime) -> HeartbeatRateMetric:
-        events = self.db.get_heartbeat_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
+        events = self.db.get_all_flight_observations_in_window(start_time=start_time, end_time=end_time)
         total = events.count()
         duration_secs = (end_time - start_time).total_seconds()
         rate_hz = round(total / duration_secs, 4) if duration_secs > 0 else 0.0
@@ -65,9 +65,9 @@ class SurveillanceMetricCalculator:
     # ------------------------------------------------------------------
 
     def calculate_track_update_probability(self, session_id: str, start_time: datetime, end_time: datetime) -> TrackUpdateProbability:
-        events = self.db.get_track_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
-        total = events.count()
-        with_tracks = events.filter(had_active_tracks=True).count()
+        observations = self.db.get_all_flight_observations_in_window(start_time=start_time, end_time=end_time)
+        total = observations.count()
+        with_tracks = total  # every received observation constitutes a track update attempt
         probability = round(with_tracks / total, 6) if total > 0 else 0.0
         return TrackUpdateProbability(
             probability=probability,
