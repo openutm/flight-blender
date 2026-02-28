@@ -140,16 +140,22 @@ def service_metrics(request):
     active_sessions = database_reader.get_all_active_surveillance_sessions()
     active_session_count = active_sessions.count()
 
-    heartbeat_rate = None
-    heartbeat_delivery_probability = None
-    track_update_probability = None
+    heartbeat_rates = []
+    heartbeat_delivery_probabilities = []
+    track_update_probabilities = []
 
     if session_id:
-        heartbeat_rate = calculator.calculate_heartbeat_rate(session_id=session_id, start_time=start_date, end_time=end_date)
-        heartbeat_delivery_probability = calculator.calculate_heartbeat_delivery_probability(
-            session_id=session_id, start_time=start_date, end_time=end_date
+        sessions_to_process = [session_id]
+    else:
+        sessions_in_window = database_reader.get_surveillance_sessions_with_events_in_window(start_time=start_date, end_time=end_date)
+        sessions_to_process = [str(s.id) for s in sessions_in_window]
+
+    for sid in sessions_to_process:
+        heartbeat_rates.append(calculator.calculate_heartbeat_rate(session_id=sid, start_time=start_date, end_time=end_date))
+        heartbeat_delivery_probabilities.append(
+            calculator.calculate_heartbeat_delivery_probability(session_id=sid, start_time=start_date, end_time=end_date)
         )
-        track_update_probability = calculator.calculate_track_update_probability(session_id=session_id, start_time=start_date, end_time=end_date)
+        track_update_probabilities.append(calculator.calculate_track_update_probability(session_id=sid, start_time=start_date, end_time=end_date))
 
     active_sensors = database_reader.get_active_surveillance_sensors()
     per_sensor_health = []
@@ -159,9 +165,9 @@ def service_metrics(request):
     aggregate_health = calculator.calculate_aggregate_health_metrics(sensor_metrics_list=per_sensor_health, start_time=start_date, end_time=end_date)
 
     metric_response = SurveillanceMetrics(
-        heartbeat_rate=heartbeat_rate,
-        heartbeat_delivery_probability=heartbeat_delivery_probability,
-        track_update_probability=track_update_probability,
+        heartbeat_rates=heartbeat_rates,
+        heartbeat_delivery_probabilities=heartbeat_delivery_probabilities,
+        track_update_probabilities=track_update_probabilities,
         per_sensor_health=per_sensor_health,
         aggregate_health=aggregate_health,
         active_sessions=active_session_count,

@@ -424,6 +424,12 @@ class FlightBlenderDatabaseReader:
         now = arrow.now().datetime
         return SurveillanceSession.objects.filter(valid_until__gte=now)
 
+    def get_surveillance_sessions_with_events_in_window(self, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceSession]:
+        return SurveillanceSession.objects.filter(
+            surveillanceheartbeatevent__dispatched_at__gte=start_time,
+            surveillanceheartbeatevent__dispatched_at__lte=end_time,
+        ).distinct()
+
     def get_sensor_health_record(self, sensor_id: str) -> Optional[SurveillanceSensorHealth]:
         try:
             return SurveillanceSensorHealth.objects.get(sensor__id=sensor_id)

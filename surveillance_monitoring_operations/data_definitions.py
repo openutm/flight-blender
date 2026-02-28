@@ -199,9 +199,9 @@ class SurveillanceSensorFailureNotificationDetail:
 class SurveillanceMetrics:
     """Combined response for the service_metrics endpoint covering all seven SDSP metrics."""
 
-    heartbeat_rate: Optional[HeartbeatRateMetric]
-    heartbeat_delivery_probability: Optional[HeartbeatDeliveryProbability]
-    track_update_probability: Optional[TrackUpdateProbability]
+    heartbeat_rates: list[HeartbeatRateMetric]
+    heartbeat_delivery_probabilities: list[HeartbeatDeliveryProbability]
+    track_update_probabilities: list[TrackUpdateProbability]
     per_sensor_health: list[SensorHealthMetrics]
     aggregate_health: Optional[AggregateHealthMetrics]
     active_sessions: int

@@ -203,22 +203,36 @@ paths:
   /surveillance_monitoring_operations/service_metrics:
     get:
       summary: 'Retrieve surveillance service metrics'
-      description: 'Retrieve metrics related to the surveillance monitoring service.'
+      description: >-
+        Retrieve metrics related to the surveillance monitoring service.
+        If `session_id` is provided, metrics are calculated for that session only.
+        If omitted, metrics are calculated for all sessions that had activity within the time window.
       security:
         - AuthFromPassport: [flightblender.read]
       parameters:
+        - name: session_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            Filter metrics to a specific session UUID. If omitted, metrics for all
+            sessions with activity in the time window are returned.
         - name: start_date
           in: query
+          required: false
           schema:
             type: string
-            format: date
-            description: The start date for the report. Must be used together with `end_date`.
+            format: date-time
+          description: 'ISO 8601 start of the query window. Defaults to 7 days ago if omitted.'
         - name: end_date
           in: query
+          required: false
           schema:
             type: string
-            format: date
-            description: The end date for the report. Must be used together with `start_date`.
+            format: date-time
+          description: 'ISO 8601 end of the query window. Defaults to now if omitted.'
       responses:
         '200':
           description: 'Retrieve surveillance service metrics successfully.'
@@ -3196,107 +3210,118 @@ components:
       type: object
       description: >-
         Surveillance monitoring service performance metrics.
+        Session-based metrics (heartbeat_rates, heartbeat_delivery_probabilities,
+        track_update_probabilities) are arrays — one entry per session. When the
+        session_id query parameter is provided the arrays contain a single entry;
+        when omitted they contain one entry for every session that had activity in
+        the requested time window.
       required:
-        - heartbeat_rate
-        - heartbeat_delivery_probability
-        - track_update_probability
+        - heartbeat_rates
+        - heartbeat_delivery_probabilities
+        - track_update_probabilities
         - per_sensor_health
         - aggregate_health
         - active_sessions
         - window_start
         - window_end
       properties:
-        heartbeat_rate:
-          type: object
-          description: Detailed heartbeat rate information.
-          required:
-            - measured_rate_hz
-            - target_rate_hz
-            - session_id
-            - window_start
-            - window_end
-            - total_heartbeats_in_window
-          properties:
-            measured_rate_hz:
-              type: number
-              format: float
-              description: Actual measured heartbeat rate (Hz).
-            target_rate_hz:
-              type: number
-              format: float
-              description: Desired heartbeat rate (Hz).
-            session_id:
-              type: string
-              format: uuid
-              description: Identifier for the monitoring session.
-            window_start:
-              type: string
-              format: date-time
-              description: Start of the heartbeat measurement window.
-            window_end:
-              type: string
-              format: date-time
-              description: End of the heartbeat measurement window.
-            total_heartbeats_in_window:
-              type: integer
-              description: Total heartbeat messages counted in the window.
-        heartbeat_delivery_probability:
-          type: object
-          description: Probability metrics for heartbeat delivery.
-          required:
-            - probability
-            - delivered_on_time
-            - total_expected
-            - session_id
-            - window_start
-            - window_end
-          properties:
-            probability:
-              type: number
-              format: float
-              description: Estimated delivery probability.
-            delivered_on_time:
-              type: integer
-              description: Number of heartbeats delivered on time.
-            total_expected:
-              type: integer
-              description: Total expected heartbeat messages.
-            session_id:
-              type: string
-              format: uuid
-            window_start:
-              type: string
-              format: date-time
-            window_end:
-              type: string
-              format: date-time
-        track_update_probability:
-          type: object
-          description: Probability metrics for track updates.
-          required:
-            - probability
-            - ticks_with_active_tracks
-            - total_ticks
-            - session_id
-            - window_start
-            - window_end
-          properties:
-            probability:
-              type: number
-              format: float
-            ticks_with_active_tracks:
-              type: integer
-            total_ticks:
-              type: integer
-            session_id:
-              type: string
-              format: uuid
-            window_start:
-              type: string
-              format: date-time
-            window_end:
-              type: string
-              format: date-time
+        heartbeat_rates:
+          type: array
+          description: Heartbeat rate metrics per session.
+          items:
+            type: object
+            required:
+              - measured_rate_hz
+              - target_rate_hz
+              - session_id
+              - window_start
+              - window_end
+              - total_heartbeats_in_window
+            properties:
+              measured_rate_hz:
+                type: number
+                format: float
+                description: Actual measured heartbeat rate (Hz).
+              target_rate_hz:
+                type: number
+                format: float
+                description: Desired heartbeat rate (Hz).
+              session_id:
+                type: string
+                format: uuid
+                description: Identifier for the monitoring session.
+              window_start:
+                type: string
+                format: date-time
+                description: Start of the heartbeat measurement window.
+              window_end:
+                type: string
+                format: date-time
+                description: End of the heartbeat measurement window.
+              total_heartbeats_in_window:
+                type: integer
+                description: Total heartbeat messages counted in the window.
+        heartbeat_delivery_probabilities:
+          type: array
+          description: Heartbeat delivery probability metrics per session.
+          items:
+            type: object
+            required:
+              - probability
+              - delivered_on_time
+              - total_expected
+              - session_id
+              - window_start
+              - window_end
+            properties:
+              probability:
+                type: number
+                format: float
+                description: Estimated delivery probability.
+              delivered_on_time:
+                type: integer
+                description: Number of heartbeats delivered on time.
+              total_expected:
+                type: integer
+                description: Total expected heartbeat messages.
+              session_id:
+                type: string
+                format: uuid
+              window_start:
+                type: string
+                format: date-time
+              window_end:
+                type: string
+                format: date-time
+        track_update_probabilities:
+          type: array
+          description: Track update probability metrics per session.
+          items:
+            type: object
+            required:
+              - probability
+              - ticks_with_active_tracks
+              - total_ticks
+              - session_id
+              - window_start
+              - window_end
+            properties:
+              probability:
+                type: number
+                format: float
+              ticks_with_active_tracks:
+                type: integer
+              total_ticks:
+                type: integer
+              session_id:
+                type: string
+                format: uuid
+              window_start:
+                type: string
+                format: date-time
+              window_end:
+                type: string
+                format: date-time
         per_sensor_health:
           type: array
           description: Health status of individual sensors.
@@ -3374,6 +3399,17 @@ components:
             window_end:
               type: string
               format: date-time
+        active_sessions:
+          type: integer
+          description: Number of currently active surveillance sessions.
+        window_start:
+          type: string
+          format: date-time
+          description: Start of the metrics query window.
+        window_end:
+          type: string
+          format: date-time
+          description: End of the metrics query window.
 
     SurveillanceStatus:
       type: string
