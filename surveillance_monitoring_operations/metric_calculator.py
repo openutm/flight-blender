@@ -226,6 +226,29 @@ class SurveillanceMetricCalculator:
         start_time: datetime,
         end_time: datetime,
     ) -> AggregateHealthMetrics:
+        """
+        Calculate aggregate health metrics from a list of sensor health metrics.
+
+        Computes average values for Mean Time To Repair (MTTR), auto-recovery time,
+        and Mean Time Between Failures (MTBF) across all provided sensors within a
+        specified time window.
+
+        Args:
+            sensor_metrics_list: List of SensorHealthMetrics objects to aggregate.
+            start_time: The start time of the metrics collection window.
+            end_time: The end time of the metrics collection window.
+
+        Returns:
+            AggregateHealthMetrics: An object containing:
+                - avg_mttr_seconds: Average MTTR across sensors (None if no data).
+                - avg_auto_recovery_time_seconds: Average auto-recovery time (None if no data).
+                - avg_mtbf_with_auto_recovery_seconds: Average MTBF with auto-recovery (None if no data).
+                - avg_mtbf_without_auto_recovery_seconds: Average MTBF without auto-recovery (None if no data).
+                - total_sensors: Total number of sensors in the list.
+                - window_start: ISO format string of the start time.
+                - window_end: ISO format string of the end time.
+        """
+
         def _avg(values: list[float]) -> Optional[float]:
             return round(sum(values) / len(values), 2) if values else None
 

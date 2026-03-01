@@ -147,6 +147,7 @@ def service_metrics(request):
     if session_id:
         sessions_to_process = [session_id]
     else:
+        # We query the surveillance session since the heartbeat and track are only supplied when surveillance monitoring is active.
         sessions_in_window = database_reader.get_surveillance_sessions_with_events_in_window(start_time=start_date, end_time=end_date)
         sessions_to_process = [str(s.id) for s in sessions_in_window]
 
