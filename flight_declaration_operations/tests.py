@@ -166,7 +166,7 @@ _CONFLICTING_INTERSECTION = IntersectionCheckResult(
 )
 
 
-def _mock_check_intersections(result: IntersectionCheckResult):
+def _mock_run_deconfliction(result: IntersectionCheckResult):
     """Create a side_effect for check_intersections that returns *result* for every declaration."""
     def side_effect(flight_declarations, ussp_network_enabled):
         return {str(fd.id): result for fd in flight_declarations}
@@ -203,13 +203,13 @@ class SetFlightDeclarationTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_valid_payload_creates_declaration_and_returns_200(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -242,8 +242,8 @@ class SetFlightDeclarationTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(IntersectionCheckResult(
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
             all_relevant_fences=[],
             all_relevant_declarations=[],
             is_approved=True,
@@ -253,7 +253,7 @@ class SetFlightDeclarationTests(TestCase):
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_valid_payload_ussp_enabled_submits_to_dss(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -273,13 +273,13 @@ class SetFlightDeclarationTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_CONFLICTING_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_CONFLICTING_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_intersection_conflict_rejects_declaration(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -314,13 +314,13 @@ class SetFlightDeclarationTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_notification_task_called_on_creation(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -415,13 +415,13 @@ class SetFlightDeclarationTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_response_shape_matches_dataclass(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -463,13 +463,13 @@ class SetOperationalIntentTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_valid_payload_creates_declaration_and_returns_200(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -493,8 +493,8 @@ class SetOperationalIntentTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(IntersectionCheckResult(
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
             all_relevant_fences=[],
             all_relevant_declarations=[],
             is_approved=True,
@@ -504,7 +504,7 @@ class SetOperationalIntentTests(TestCase):
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_valid_payload_ussp_enabled_submits_to_dss(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -522,13 +522,13 @@ class SetOperationalIntentTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_CONFLICTING_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_CONFLICTING_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_intersection_conflict_rejects_declaration(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -612,13 +612,13 @@ class SetOperationalIntentTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_notification_task_called_on_creation(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -638,13 +638,13 @@ class SetOperationalIntentTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_response_shape_matches_dataclass(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -660,7 +660,7 @@ class SetOperationalIntentTests(TestCase):
 # Helpers for bulk intersection-check mocking
 # ---------------------------------------------------------------------------
 
-def _mock_check_intersections_alternating(approved_result, rejected_result):
+def _mock_run_deconfliction_alternating(approved_result, rejected_result):
     """Return a side_effect that approves even-indexed declarations and rejects odd-indexed ones.
 
     The declarations list order is used to determine the index.
@@ -704,13 +704,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_valid_returns_200_with_all_approved(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -739,8 +739,8 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(IntersectionCheckResult(
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
             all_relevant_fences=[],
             all_relevant_declarations=[],
             is_approved=True,
@@ -750,7 +750,7 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_valid_ussp_enabled_submits_each_to_dss(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -788,13 +788,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_empty_list_returns_200_with_zero_counts(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -811,13 +811,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_mixed_valid_invalid_returns_207(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -850,13 +850,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_invalid_returns_207_with_all_failed(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -876,20 +876,20 @@ class SetFlightDeclarationsBulkTests(TestCase):
 
         self.assertEqual(FlightDeclaration.objects.count(), 0)
         # No intersection check needed when nothing was saved
-        mock_check_intersections.assert_called_once()
+        mock_run_deconfliction.assert_called_once()
 
     # -- Intersection conflict for some items in batch ---------------------
 
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections_alternating(_NO_INTERSECTION, _CONFLICTING_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction_alternating(_NO_INTERSECTION, _CONFLICTING_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_partial_intersection_conflict_in_batch(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -925,13 +925,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_check_intersections_called_once_with_all_saved(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -940,8 +940,8 @@ class SetFlightDeclarationsBulkTests(TestCase):
         self._post(payloads)
 
         # check_intersections is called exactly once (batch call)
-        mock_check_intersections.assert_called_once()
-        args = mock_check_intersections.call_args
+        mock_run_deconfliction.assert_called_once()
+        args = mock_run_deconfliction.call_args
         # First positional arg is the list of saved declarations
         fds_arg = args[0][0]
         self.assertEqual(len(fds_arg), 3)
@@ -951,13 +951,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_notification_task_called_per_saved_declaration(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -984,13 +984,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_response_shape_matches_bulk_dataclass(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1012,13 +1012,13 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_results_ordered_by_index(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1065,13 +1065,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_valid_returns_200_with_all_approved(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1098,8 +1098,8 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(IntersectionCheckResult(
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
             all_relevant_fences=[],
             all_relevant_declarations=[],
             is_approved=True,
@@ -1109,7 +1109,7 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_valid_ussp_enabled_submits_each_to_dss(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1146,13 +1146,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_empty_list_returns_200_with_zero_counts(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1169,13 +1169,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_mixed_valid_invalid_returns_207(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1203,13 +1203,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_invalid_returns_207_with_all_failed(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1231,13 +1231,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections_alternating(_NO_INTERSECTION, _CONFLICTING_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction_alternating(_NO_INTERSECTION, _CONFLICTING_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_partial_intersection_conflict_in_batch(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1263,13 +1263,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_check_intersections_called_once_with_all_saved(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1277,8 +1277,8 @@ class SetOperationalIntentsBulkTests(TestCase):
 
         self._post(payloads)
 
-        mock_check_intersections.assert_called_once()
-        fds_arg = mock_check_intersections.call_args[0][0]
+        mock_run_deconfliction.assert_called_once()
+        fds_arg = mock_run_deconfliction.call_args[0][0]
         self.assertEqual(len(fds_arg), 3)
 
     # -- Wrong content type → 415 ------------------------------------------
@@ -1297,13 +1297,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_response_shape_matches_bulk_dataclass(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
@@ -1325,13 +1325,13 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
-        "flight_declaration_operations.views.FlightDeclarationRequestValidator.check_intersections",
-        side_effect=_mock_check_intersections(_NO_INTERSECTION),
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(_NO_INTERSECTION),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_results_ordered_by_index(
         self,
-        mock_check_intersections,
+        mock_run_deconfliction,
         mock_send_msg,
         mock_submit_dss,
     ):
