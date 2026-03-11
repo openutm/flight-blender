@@ -6,6 +6,11 @@ from django.utils import timezone
 
 from common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE, SURVEILLANCE_SENSOR_HEALTH_CHOICES, SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES
 
+RECOVERY_TYPE_CHOICES = [
+    ("automatic", "Automatic"),
+    ("manual", "Manual"),
+]
+
 
 def get_thirty_minutes_from_now():
     return timezone.now() + timedelta(minutes=30)
@@ -67,6 +72,9 @@ class SurveillanceSensor(models.Model):
     )
     refresh_rate_seconds = models.FloatField(default=1.0)
     is_active = models.BooleanField(default=True)
+    horizontal_accuracy_m = models.FloatField(default=5.0, help_text="95th percentile horizontal accuracy in meters")
+    vertical_accuracy_m = models.FloatField(default=5.0, help_text="95th percentile vertical accuracy in meters")
+    expected_latency_ms = models.IntegerField(default=150, help_text="Expected average data delivery latency in milliseconds")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -85,6 +93,23 @@ class SurveillanceSensorHealth(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+
+class SurveillanceSensortHealthTracking(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sensor = models.ForeignKey(SurveillanceSensor, on_delete=models.CASCADE, related_name="health_tracking_records")
+    status = models.CharField(max_length=12, choices=SURVEILLANCE_SENSOR_HEALTH_CHOICES)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    recovery_type = models.CharField(
+        max_length=12,
+        choices=RECOVERY_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Set when status='operational'. Null for failure transitions.",
+    )
+
 
 class SurveillanceSensorMaintenance(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -94,3 +119,44 @@ class SurveillanceSensorMaintenance(models.Model):
     planned_or_unplanned = models.CharField(max_length=12, choices=SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class SurveillanceHeartbeatEvent(models.Model):
+    """Records each heartbeat dispatch for heartbeat rate and delivery probability metrics."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(SurveillanceSession, on_delete=models.CASCADE, related_name="heartbeat_events")
+    dispatched_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    expected_at = models.DateTimeField(help_text="Scheduled dispatch time based on 1Hz cadence")
+    delivered_on_time = models.BooleanField(default=True, help_text="True if dispatch succeeded within the acceptable latency window")
+
+    def __str__(self):
+        return f"HeartbeatEvent session={self.session} at {self.dispatched_at}"
+
+
+class SurveillanceTrackEvent(models.Model):
+    """Records each track-task execution outcome for track update probability metrics."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(SurveillanceSession, on_delete=models.CASCADE, related_name="track_events")
+    dispatched_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    expected_at = models.DateTimeField(help_text="Scheduled dispatch time based on 1Hz cadence")
+    had_active_tracks = models.BooleanField(default=False, help_text="True if the fuser produced at least one track message this tick")
+
+    def __str__(self):
+        return f"TrackEvent session={self.session} at {self.dispatched_at}"
+
+
+class SurveillanceSensorFailureNotification(models.Model):
+    """Persists sensor failure and recovery events for audit and notification purposes."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sensor = models.ForeignKey(SurveillanceSensor, on_delete=models.CASCADE, related_name="failure_notifications")
+    previous_status = models.CharField(max_length=12)
+    new_status = models.CharField(max_length=12)
+    recovery_type = models.CharField(max_length=12, null=True, blank=True, help_text="Set only for operational recoveries")
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    def __str__(self):
+        return f"FailureNotification sensor={self.sensor} {self.previous_status}->{self.new_status}"

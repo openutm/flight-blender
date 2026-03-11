@@ -55,8 +55,14 @@ from scd_operations.scd_data_definitions import (
     SubscriberToNotify,
 )
 from surveillance_monitoring_operations.models import (
+    SurveillanceHeartbeatEvent,
     SurveillanceSensor,
+    SurveillanceSensorFailureNotification,
+    SurveillanceSensorHealth,
+    SurveillanceSensorMaintenance,
+    SurveillanceSensortHealthTracking,
     SurveillanceSession,
+    SurveillanceTrackEvent,
 )
 
 load_dotenv(find_dotenv())
@@ -131,6 +137,12 @@ class FlightBlenderDatabaseReader:
             .values()
         )
         return observations
+
+    def get_all_flight_observations_in_window(self, start_time: datetime, end_time: datetime) -> QuerySet[FlightObservation]:
+        return FlightObservation.objects.filter(
+            created_at__gte=start_time,
+            created_at__lte=end_time,
+        )
 
     def get_latest_flight_observation_by_session(self, session_id: str):
         try:
@@ -398,6 +410,13 @@ class FlightBlenderDatabaseReader:
     def get_active_surveillance_sensors(self) -> QuerySet[SurveillanceSensor]:
         return SurveillanceSensor.objects.filter(is_active=True)
 
+    def get_surveillance_sensor_by_id(self, sensor_id: UUID) -> SurveillanceSensor | None:
+        sensor_exists = SurveillanceSensor.objects.filter(id=sensor_id).exists()
+        if not sensor_exists:
+            return None
+
+        return SurveillanceSensor.objects.get(id=sensor_id)
+
     def get_surveillance_session_by_id(self, session_id: str) -> None | SurveillanceSession:
         try:
             return SurveillanceSession.objects.get(id=session_id)
@@ -406,6 +425,65 @@ class FlightBlenderDatabaseReader:
 
     def get_surveillance_periodic_tasks_by_session_id(self, session_id: str) -> QuerySet[TaskScheduler]:
         return TaskScheduler.objects.filter(session_id=session_id)
+
+    def get_all_active_surveillance_sessions(self) -> QuerySet[SurveillanceSession]:
+        now = arrow.now().datetime
+        return SurveillanceSession.objects.filter(valid_until__gte=now)
+
+    def get_surveillance_sessions_with_events_in_window(self, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceSession]:
+        return SurveillanceSession.objects.filter(
+            created_at__lte=end_time,
+            valid_until__gte=start_time,
+        ).distinct()
+
+    def get_sensor_health_record(self, sensor_id: str) -> Optional[SurveillanceSensorHealth]:
+        try:
+            return SurveillanceSensorHealth.objects.get(sensor__id=sensor_id)
+        except SurveillanceSensorHealth.DoesNotExist:
+            return None
+
+    def get_health_tracking_records_for_sensor(
+        self, sensor_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceSensortHealthTracking]:
+        return SurveillanceSensortHealthTracking.objects.filter(
+            sensor__id=sensor_id,
+            recorded_at__gte=start_time,
+            recorded_at__lte=end_time,
+        ).order_by("recorded_at")
+
+    def get_sensor_status_before_time(self, sensor_id: str, before_time: datetime) -> Optional[str]:
+        record = (
+            SurveillanceSensortHealthTracking.objects.filter(
+                sensor__id=sensor_id,
+                recorded_at__lt=before_time,
+            )
+            .order_by("-recorded_at")
+            .first()
+        )
+        return record.status if record else None
+
+    def get_heartbeat_events_for_session(self, session_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceHeartbeatEvent]:
+        return SurveillanceHeartbeatEvent.objects.filter(
+            session__id=session_id,
+            dispatched_at__gte=start_time,
+            dispatched_at__lte=end_time,
+        ).order_by("dispatched_at")
+
+    def get_track_events_for_session(self, session_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceTrackEvent]:
+        return SurveillanceTrackEvent.objects.filter(
+            session__id=session_id,
+            dispatched_at__gte=start_time,
+            dispatched_at__lte=end_time,
+        ).order_by("dispatched_at")
+
+    def get_failure_notifications_for_sensor(
+        self, sensor_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceSensorFailureNotification]:
+        return SurveillanceSensorFailureNotification.objects.filter(
+            sensor__id=sensor_id,
+            created_at__gte=start_time,
+            created_at__lte=end_time,
+        ).order_by("-created_at")
 
     def get_active_user_notifications_between_interval(
         self, start_time: datetime, end_time: datetime
@@ -1218,4 +1296,78 @@ class FlightBlenderDatabaseWriter:
             return True
         except Exception as e:
             logger.error(f"Error deleting all flight observations: {e}")
+            return False
+
+    def update_sensor_health_status(self, sensor_id: str, new_status: str, recovery_type: Optional[str] = None) -> bool:
+        """
+        Canonical method for all sensor health changes.
+        1. Updates SurveillanceSensorHealth.status
+        2. Creates SurveillanceSensortHealthTracking record (with recovery_type)
+        3. Fires surveillance_sensor_failure_signal for any status transition
+
+        recovery_type should be "automatic" or "manual" when new_status == "operational"
+        and the sensor is recovering from degraded/outage. Pass None for failure transitions.
+        """
+        from surveillance_monitoring_operations.custom_signals import surveillance_sensor_failure_signal
+
+        try:
+            sensor = SurveillanceSensor.objects.get(id=sensor_id)
+        except SurveillanceSensor.DoesNotExist:
+            logger.error(f"update_sensor_health_status: sensor {sensor_id} not found")
+            return False
+
+        health, created = SurveillanceSensorHealth.objects.get_or_create(sensor=sensor, defaults={"status": new_status})
+        previous_status = health.status if not created else new_status
+
+        if not created:
+            if previous_status == new_status:
+                return True
+            health.status = new_status
+            health.save(update_fields=["status", "updated_at"])
+
+        SurveillanceSensortHealthTracking.objects.create(
+            sensor=sensor,
+            status=new_status,
+            recovery_type=recovery_type,
+        )
+
+        surveillance_sensor_failure_signal.send(
+            sender="update_sensor_health_status",
+            sensor_id=sensor_id,
+            previous_status=previous_status,
+            new_status=new_status,
+            recovery_type=recovery_type,
+        )
+        return True
+
+    def record_heartbeat_event(self, session_id: str, expected_at: datetime, delivered_on_time: bool) -> bool:
+        try:
+            session = SurveillanceSession.objects.get(id=session_id)
+            SurveillanceHeartbeatEvent.objects.create(
+                session=session,
+                expected_at=expected_at,
+                delivered_on_time=delivered_on_time,
+            )
+            return True
+        except SurveillanceSession.DoesNotExist:
+            logger.error(f"record_heartbeat_event: session {session_id} not found")
+            return False
+        except Exception as e:
+            logger.error(f"record_heartbeat_event: {e}")
+            return False
+
+    def record_track_event(self, session_id: str, expected_at: datetime, had_active_tracks: bool) -> bool:
+        try:
+            session = SurveillanceSession.objects.get(id=session_id)
+            SurveillanceTrackEvent.objects.create(
+                session=session,
+                expected_at=expected_at,
+                had_active_tracks=had_active_tracks,
+            )
+            return True
+        except SurveillanceSession.DoesNotExist:
+            logger.error(f"record_track_event: session {session_id} not found")
+            return False
+        except Exception as e:
+            logger.error(f"record_track_event: {e}")
             return False
