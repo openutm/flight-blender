@@ -31,6 +31,11 @@ For this quick start, we will use the [sample .env](https://github.com/openutm/f
 | REDIS_BROKER_URL | string | Flight Blender has background jobs controlled via Redis. You can set up the Broker URL here. |
 | HEARTBEAT_RATE_SECS | integer | Generally set it to 1 or 2 seconds. This is used when querying data externally to other USSPs. |
 | DATABASE_URL | string | A full database URL with username and password as necessary. You can review various database [URL schema](https://github.com/jazzband/dj-database-url#url-schema). |
+| POSTGRES_USER | string | (Docker Compose) Set the user for the Flight Blender Database. |
+| POSTGRES_PASSWORD | string | (Docker Compose) Set a strong password for accessing PG in Docker. |
+| POSTGRES_DB | string | (Docker Compose) You can name an appropriate name. See the sample file. |
+| POSTGRES_HOST | string | (Docker Compose) You can name an appropriate name. See the sample file. |
+| PGDATA | string | (Docker Compose) This is where the data is stored. You can use `/var/lib/postgresql/data/pgdata` here. |
 
 If you are working in stand-alone mode, recommended initially, the above environment file should work. If you want to engage with a DSS and inter-operate with other USSes, then you will need additional variables below.
 
@@ -41,11 +46,6 @@ If you are working in stand-alone mode, recommended initially, the above environ
 | AUTH_DSS_CLIENT_ID | string | (optional) Sometimes authorities will provide special tokens for accessing the DSS. If you are using it locally via `/build/dev/run_locally.sh` via the InterUSS/DSS repository, you can just use a random long string. |
 | AUTH_DSS_CLIENT_SECRET | string | (optional) Similar to above, sometimes authorities provide. |
 | DSS_BASE_URL | string | Set the URL for DSS. If you are using it, it can be something like `http://host.docker.internal:8082/` if you are using the InterUSS/DSS build locally stack. |
-| POSTGRES_USER | string | Set the user for the Flight Blender Database. |
-| POSTGRES_PASSWORD | string | Set a strong password for accessing PG in Docker. |
-| POSTGRES_DB | string | You can name an appropriate name. See the sample file. |
-| POSTGRES_HOST | string | You can name an appropriate name. See the sample file. |
-| PGDATA | string | This is where the data is stored. You can use `/var/lib/postgresql/data/pgdata` here. |
 | FLIGHTBLENDER_FQDN | string | This is the domain name of a Flight Blender deployment, e.g., `https://beta.flightblender.com`. |
 
 ### 2. Use Docker Compose to stand up Flight Blender
