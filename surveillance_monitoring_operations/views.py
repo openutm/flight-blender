@@ -128,12 +128,21 @@ def service_metrics(request):
     end_date_str = request.query_params.get("end_date", None)
     session_id = request.query_params.get("session_id", None)
 
+    logger.info(f"Received request for service metrics with start_date: {start_date_str} and end_date: {end_date_str}")
+
     now = arrow.now()
     one_week_ago = now.shift(weeks=-1)
-    start_date = arrow.get(start_date_str).datetime if start_date_str else one_week_ago.datetime
-    end_date = arrow.get(end_date_str).datetime if end_date_str else now.datetime
-    logger.info(f"Received request for service metrics with start_date: {start_date} and end_date: {end_date}")
 
+    try:
+        if start_date_str:
+            start_date_str = start_date_str.replace(" ", "+")
+        if end_date_str:
+            end_date_str = end_date_str.replace(" ", "+")
+        start_date = arrow.get(start_date_str).datetime if start_date_str else one_week_ago.datetime
+        end_date = arrow.get(end_date_str).datetime if end_date_str else now.datetime
+    except arrow.parser.ParserError as e:
+        logger.error(f"Error parsing dates: {e}")
+        return JsonResponse({"error": "Invalid date format. Use ISO8601 format."}, status=400)
     database_reader = FlightBlenderDatabaseReader()
     calculator = SurveillanceMetricCalculator(database_reader=database_reader)
 
@@ -151,12 +160,17 @@ def service_metrics(request):
         sessions_in_window = database_reader.get_surveillance_sessions_with_events_in_window(start_time=start_date, end_time=end_date)
         sessions_to_process = [str(s.id) for s in sessions_in_window]
 
+    logger.debug(f"Calculating metrics for sessions: {sessions_to_process}")
+
     for sid in sessions_to_process:
         heartbeat_rates.append(calculator.calculate_heartbeat_rate(session_id=sid, start_time=start_date, end_time=end_date))
         heartbeat_delivery_probabilities.append(
             calculator.calculate_heartbeat_delivery_probability(session_id=sid, start_time=start_date, end_time=end_date)
         )
         track_update_probabilities.append(calculator.calculate_track_update_probability(session_id=sid, start_time=start_date, end_time=end_date))
+        logger.debug(
+            f"Calculated metrics for session {sid} - Heartbeat Rate: {heartbeat_rates[-1]}, Heartbeat Delivery Probability: {heartbeat_delivery_probabilities[-1]}, Track Update Probability: {track_update_probabilities[-1]}"
+        )
 
     active_sensors = database_reader.get_active_surveillance_sensors()
     per_sensor_health = []
@@ -219,7 +233,13 @@ def update_sensor_health(request, sensor_id):
     if not success:
         return JsonResponse({"error": f"Sensor {sensor_id} not found or update failed"}, status=404)
 
-    return JsonResponse({"status": "Sensor health updated", "sensor_id": str(sensor_id), "new_status": new_status})
+    return JsonResponse(
+        {
+            "status": "Sensor health updated",
+            "sensor_id": str(sensor_id),
+            "new_status": new_status,
+        }
+    )
 
 
 @api_view(["GET"])
@@ -239,6 +259,10 @@ def list_sensor_health_notifications(request):
 
     now = arrow.now()
     one_week_ago = now.shift(weeks=-1)
+    if start_date_str:
+        start_date_str = start_date_str.replace(" ", "+")
+    if end_date_str:
+        end_date_str = end_date_str.replace(" ", "+")
     start_date = arrow.get(start_date_str).datetime if start_date_str else one_week_ago.datetime
     end_date = arrow.get(end_date_str).datetime if end_date_str else now.datetime
 
@@ -247,7 +271,9 @@ def list_sensor_health_notifications(request):
     if sensor_id:
         notifications = database_reader.get_failure_notifications_for_sensor(sensor_id=sensor_id, start_time=start_date, end_time=end_date)
     else:
-        from surveillance_monitoring_operations.models import SurveillanceSensorFailureNotification
+        from surveillance_monitoring_operations.models import (
+            SurveillanceSensorFailureNotification,
+        )
 
         notifications = SurveillanceSensorFailureNotification.objects.filter(
             created_at__gte=start_date,

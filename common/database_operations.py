@@ -7,7 +7,7 @@ from typing import Never, Optional
 from uuid import UUID
 
 import arrow
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.db.utils import IntegrityError
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
@@ -432,8 +432,8 @@ class FlightBlenderDatabaseReader:
 
     def get_surveillance_sessions_with_events_in_window(self, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceSession]:
         return SurveillanceSession.objects.filter(
-            created_at__lte=end_time,
-            valid_until__gte=start_time,
+            Q(heartbeat_events__dispatched_at__gte=start_time, heartbeat_events__dispatched_at__lte=end_time)
+            | Q(track_events__dispatched_at__gte=start_time, track_events__dispatched_at__lte=end_time)
         ).distinct()
 
     def get_sensor_health_record(self, sensor_id: str) -> Optional[SurveillanceSensorHealth]:
@@ -461,6 +461,12 @@ class FlightBlenderDatabaseReader:
             .first()
         )
         return record.status if record else None
+
+    def get_heartbeat_events_in_window(self, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceHeartbeatEvent]:
+        return SurveillanceHeartbeatEvent.objects.filter(
+            dispatched_at__gte=start_time,
+            dispatched_at__lte=end_time,
+        ).order_by("dispatched_at")
 
     def get_heartbeat_events_for_session(self, session_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceHeartbeatEvent]:
         return SurveillanceHeartbeatEvent.objects.filter(

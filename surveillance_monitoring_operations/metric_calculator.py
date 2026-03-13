@@ -29,10 +29,20 @@ class SurveillanceMetricCalculator:
     # ------------------------------------------------------------------
 
     def calculate_heartbeat_rate(self, session_id: str, start_time: datetime, end_time: datetime) -> HeartbeatRateMetric:
-        events = self.db.get_all_flight_observations_in_window(start_time=start_time, end_time=end_time)
+        events = self.db.get_heartbeat_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
         total = events.count()
-        duration_secs = (end_time - start_time).total_seconds()
-        rate_hz = round(total / duration_secs, 4) if duration_secs > 0 else 0.0
+        logger.debug(f"calculate_heartbeat_rate: session_id={session_id}, total_heartbeats={total}, start_time={start_time}, end_time={end_time}")
+
+        if total >= 2:
+            first_event = events.first()
+            last_event = events.last()
+            assert first_event is not None and last_event is not None
+            span_seconds = (last_event.dispatched_at - first_event.dispatched_at).total_seconds()
+            rate_hz = round((total - 1) / span_seconds, 2) if span_seconds > 0 else 0.0
+        else:
+            rate_hz = 0.0
+
+        logger.debug(f"calculate_heartbeat_rate: session_id={session_id}, rate_hz={rate_hz}")
         return HeartbeatRateMetric(
             measured_rate_hz=rate_hz,
             target_rate_hz=1.0,
@@ -148,7 +158,12 @@ class SurveillanceMetricCalculator:
                         # The recovery type that started this operational period is stored
                         # in the variable below — we'll attach it when we find the recovery
                         # For now, store None; we update once we know the preceding recovery
-                        operational_intervals.append((interval_secs, getattr(record, "_preceding_recovery_type", None)))
+                        operational_intervals.append(
+                            (
+                                interval_secs,
+                                getattr(record, "_preceding_recovery_type", None),
+                            )
+                        )
                     current_failure_onset = rec_time
                     operational_start = None
 
@@ -171,7 +186,10 @@ class SurveillanceMetricCalculator:
                     # (this is in-memory only, not persisted)
                     if operational_intervals:
                         last_interval = operational_intervals[-1]
-                        operational_intervals[-1] = (last_interval[0], record.recovery_type)
+                        operational_intervals[-1] = (
+                            last_interval[0],
+                            record.recovery_type,
+                        )
                 else:
                     # Operational without a preceding tracked failure (e.g., first record)
                     if operational_start is None:
