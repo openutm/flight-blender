@@ -5,7 +5,6 @@ from os import environ as env
 
 import arrow
 from django.db import transaction
-from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from dotenv import find_dotenv, load_dotenv
@@ -17,20 +16,17 @@ from shapely.geometry import shape
 
 from auth_helper.utils import requires_scopes
 from common.data_definitions import (
-    ACTIVE_OPERATIONAL_STATES,
-    FLIGHT_DECLARATION_INDEX_BASEPATH,
     FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH,
     FLIGHTBLENDER_READ_SCOPE,
     FLIGHTBLENDER_WRITE_SCOPE,
-    GEOFENCE_INDEX_BASEPATH,
     RESPONSE_CONTENT_TYPE,
 )
 from common.database_operations import (
     FlightBlenderDatabaseReader,
     FlightBlenderDatabaseWriter,
 )
-from geo_fence_operations import rtree_geo_fence_helper
-from geo_fence_operations.models import GeoFence
+from common.plugin_loader import load_plugin
+from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE
 from rid_operations import view_port_ops
 from scd_operations.dss_scd_helper import (
     OperationalIntentReferenceHelper,
@@ -42,11 +38,13 @@ from .data_definitions import (
     BulkFlightDeclarationCreateResponse,
     CreateFlightDeclarationRequestSchema,
     CreateFlightDeclarationViaOperationalIntentRequestSchema,
+    DeconflictionRequest,
     FlightDeclarationCreateResponse,
     HTTP400Response,
     HTTP404Response,
     IntersectionCheckResult,
 )
+from .deconfliction_protocol import DeconflictionEngine
 from .flight_declarations_rtree_helper import FlightDeclarationRTreeIndexFactory
 from .models import FlightDeclaration
 from .pagination import StandardResultsSetPagination
@@ -62,6 +60,14 @@ from .tasks import (
 from .utils import OperationalIntentsConverter
 
 load_dotenv(find_dotenv())
+
+# ── Plugin-loaded de-confliction engine ──────────────────────────────────
+# The class is loaded once at module import time (cached by load_plugin).
+# An instance is created per call since engines may hold request-specific state.
+_DeconflictionEngineClass = load_plugin(
+    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE,
+    expected_protocol=DeconflictionEngine,
+)
 
 
 class FlightDeclarationRequestValidator:
@@ -130,120 +136,6 @@ class FlightDeclarationRequestValidator:
         if s_datetime < now or e_datetime < now or e_datetime > two_days_from_now or s_datetime > two_days_from_now:
             return {"message": "A flight declaration cannot have a start / end time in the past or after two days from current time."}, 400
         return None, None
-
-    def check_intersections(
-        self,
-        flight_declarations: list[FlightDeclaration],
-        ussp_network_enabled: int,
-    ) -> dict[str, IntersectionCheckResult]:
-        """Check intersections for a batch of flight declarations.
-
-        Each declaration's own ID is automatically excluded from the
-        flight-declaration intersection check so it does not conflict with
-        itself.
-
-        No state updates are performed; the caller is responsible for acting
-        on the results.
-
-        The GeoFence queryset and RTree index are built once for the entire
-        batch and reused for every declaration, avoiding O(batch_size) index
-        rebuilds.
-
-        Returns:
-            A dict mapping declaration ID (str) to IntersectionCheckResult.
-        """
-        if not flight_declarations:
-            return {}
-
-        results: dict[str, IntersectionCheckResult] = {}
-        approved_ids: set = set()
-        batch_ids = {fd.pk for fd in flight_declarations}
-
-        # ── GeoFence: query and index once for the entire batch ──────────
-        #
-        # A geofence is relevant to declaration d iff:
-        #   fence.start <= d.start  AND  fence.end >= d.end
-        #
-        # The superset across all declarations in the batch is:
-        #   fence.start <= max(d.start)  AND  fence.end >= min(d.end)
-        #
-        # We build the spatial index from this superset and post-filter
-        # temporally per declaration.
-        batch_max_start = max(fd.start_datetime for fd in flight_declarations)
-        batch_min_end = min(fd.end_datetime for fd in flight_declarations)
-
-        all_batch_fences = list(
-            GeoFence.objects.filter(
-                start_datetime__lte=batch_max_start,
-                end_datetime__gte=batch_min_end,
-            )
-        )
-
-        geo_fence_index = None
-        geo_fence_lookup: dict[str, GeoFence] = {}
-        if all_batch_fences:
-            geo_fence_index = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(
-                index_name=GEOFENCE_INDEX_BASEPATH,
-            )
-            geo_fence_index.generate_geo_fence_index(all_fences=all_batch_fences)
-            geo_fence_lookup = {str(f.id): f for f in all_batch_fences}
-
-        try:
-            for fd in flight_declarations:
-                view_box = [float(i) for i in fd.bounds.split(",")]
-                start_datetime = fd.start_datetime
-                end_datetime = fd.end_datetime
-                all_relevant_fences = []
-                all_relevant_declarations = []
-                is_approved = True
-                declaration_state = 0 if ussp_network_enabled else 1
-
-                # ── GeoFence spatial check + temporal post-filter ────────
-                if geo_fence_index is not None:
-                    spatial_hits = geo_fence_index.check_box_intersection(view_box=view_box)
-                    for hit in spatial_hits:
-                        fence = geo_fence_lookup.get(hit["geo_fence_id"])
-                        if fence and fence.start_datetime <= start_datetime and fence.end_datetime >= end_datetime:
-                            all_relevant_fences.append(hit)
-                    if all_relevant_fences:
-                        is_approved = False
-                        declaration_state = 8
-
-                # ── Flight declaration intersection ──────────────────────
-                # The approved_ids set grows as declarations are approved,
-                # so the queryset must be evaluated per declaration.
-                # Materialise directly instead of exists() + re-query.
-                declaration_list = list(
-                    FlightDeclaration.objects.filter(
-                        Q(state__in=ACTIVE_OPERATIONAL_STATES) | Q(pk__in=approved_ids),
-                        start_datetime__lte=end_datetime,
-                        end_datetime__gte=start_datetime,
-                    ).exclude(pk__in=batch_ids - approved_ids)
-                )
-
-                if declaration_list:
-                    my_fd_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_INDEX_BASEPATH)
-                    my_fd_rtree_helper.generate_flight_declaration_index(all_flight_declarations=declaration_list)
-                    all_relevant_declarations = my_fd_rtree_helper.check_flight_declaration_box_intersection(view_box=view_box)
-                    my_fd_rtree_helper.clear_rtree_index()
-                    if all_relevant_declarations:
-                        is_approved = False
-                        declaration_state = 8
-
-                if is_approved:
-                    approved_ids.add(fd.pk)
-
-                results[str(fd.id)] = IntersectionCheckResult(
-                    all_relevant_fences=all_relevant_fences,
-                    all_relevant_declarations=all_relevant_declarations,
-                    is_approved=is_approved,
-                    declaration_state=declaration_state,
-                )
-        finally:
-            if geo_fence_index is not None:
-                geo_fence_index.clear_rtree_index()
-
-        return results
 
 
 @method_decorator(requires_scopes([FLIGHTBLENDER_WRITE_SCOPE]), name="dispatch")
@@ -452,6 +344,45 @@ def _process_intersection_result(
     )
 
 
+def _run_deconfliction(
+    flight_declarations: list[FlightDeclaration],
+    ussp_network_enabled: int,
+) -> dict[str, IntersectionCheckResult]:
+    """Run the plugin-loaded de-confliction engine for a batch of declarations.
+
+    Each declaration is evaluated individually via the engine's
+    ``check_deconfliction`` method. The engine class is loaded once at module
+    import time and a fresh instance is created per call.
+
+    Returns:
+        A dict mapping declaration ID (str) to ``IntersectionCheckResult``
+        (which is an alias for ``DeconflictionResult``).
+    """
+    if not flight_declarations:
+        return {}
+
+    results: dict[str, IntersectionCheckResult] = {}
+    for fd in flight_declarations:
+        view_box = [float(i) for i in fd.bounds.split(",")]
+        raw_geojson = fd.flight_declaration_raw_geojson
+        flight_declaration_geo_json = json.loads(raw_geojson) if raw_geojson else None
+
+        request = DeconflictionRequest(
+            start_datetime=str(fd.start_datetime),
+            end_datetime=str(fd.end_datetime),
+            view_box=view_box,
+            ussp_network_enabled=ussp_network_enabled,
+            flight_declaration_geo_json=flight_declaration_geo_json,
+            type_of_operation=fd.type_of_operation,
+            priority=0,
+        )
+        engine = _DeconflictionEngineClass()
+        result = engine.check_deconfliction(request)
+        results[str(fd.id)] = result
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Single-item endpoints
 # ---------------------------------------------------------------------------
@@ -467,8 +398,7 @@ def set_operational_intent(request):
     if error or flight_declaration is None:
         return JsonResponse(error or {"message": "Unknown error"}, status=400)
 
-    validator = FlightDeclarationRequestValidator()
-    intersection_results = validator.check_intersections([flight_declaration], ussp_network_enabled)
+    intersection_results = _run_deconfliction([flight_declaration], ussp_network_enabled)
     creation_response = _process_intersection_result(
         flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled
     )
@@ -489,8 +419,7 @@ def set_flight_declaration(request):
     if error or flight_declaration is None:
         return JsonResponse(error or {"message": "Unknown error"}, status=400)
 
-    validator = FlightDeclarationRequestValidator()
-    intersection_results = validator.check_intersections([flight_declaration], ussp_network_enabled)
+    intersection_results = _run_deconfliction([flight_declaration], ussp_network_enabled)
     creation_response = _process_intersection_result(
         flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled
     )
@@ -555,9 +484,8 @@ def set_flight_declarations_bulk(request):
                 failed_count += 1
                 results.append({"index": idx, "success": False, "message": str(e)})
 
-        # Phase 2: check all intersections at once, then process results
-        validator = FlightDeclarationRequestValidator()
-        intersection_results = validator.check_intersections(list(saved.values()), ussp_network_enabled)
+        # Phase 2: run de-confliction via plugin engine, then process results
+        intersection_results = _run_deconfliction(list(saved.values()), ussp_network_enabled)
 
         submitted_count = 0
         for idx, flight_declaration in saved.items():
@@ -637,9 +565,8 @@ def set_operational_intents_bulk(request):
                 failed_count += 1
                 results.append({"index": idx, "success": False, "message": str(e)})
 
-        # Phase 2: check all intersections at once, then process results
-        validator = FlightDeclarationRequestValidator()
-        intersection_results = validator.check_intersections(list(saved.values()), ussp_network_enabled)
+        # Phase 2: run de-confliction via plugin engine, then process results
+        intersection_results = _run_deconfliction(list(saved.values()), ussp_network_enabled)
 
         submitted_count = 0
         for idx, flight_declaration in saved.items():
@@ -868,8 +795,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         my_database_writer = FlightBlenderDatabaseWriter()
         my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(flight_declaration=flight_declaration)
 
-        validator = FlightDeclarationRequestValidator()
-        intersection_results = validator.check_intersections([flight_declaration], ussp_network_enabled)
+        intersection_results = _run_deconfliction([flight_declaration], ussp_network_enabled)
         creation_response = _process_intersection_result(
             flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled
         )
