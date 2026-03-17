@@ -58,7 +58,7 @@ def write_incoming_air_traffic_data(observation: str):
 
     my_database_writer.write_flight_observation(single_air_traffic_observation)
     logger.info("Writing to Redis stream..")
-    message_id = my_redis_helper.add_air_traffic_data(stream_name="air_traffic_stream", observation=asdict(single_air_traffic_observation))
+    my_redis_helper.add_air_traffic_data(stream_name="air_traffic_stream", observation=asdict(single_air_traffic_observation))
 
 
 lonlat_to_webmercator = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)

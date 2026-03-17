@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from typing import List, Optional
 
@@ -14,6 +15,9 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
+
+# Read TTL for air traffic stream data from environment, default to 4000ms
+AIR_TRAFFIC_STREAM_TTL_MS = int(os.getenv("AIR_TRAFFIC_STREAM_TTL_MS", "4000"))
 
 
 class RedisStreamOperations:
@@ -51,6 +55,8 @@ class RedisStreamOperations:
                 observation["metadata"] = json.dumps(observation["metadata"])
 
             self.redis.xadd(stream_name, observation)
+            if AIR_TRAFFIC_STREAM_TTL_MS is not None:
+                self.redis.pexpire(stream_name, AIR_TRAFFIC_STREAM_TTL_MS)  # TTL is already in milliseconds
             logger.info(f"Data added to Redis stream '{stream_name}' successfully.")
             logger.debug(f"Data added to Redis stream '{stream_name}': {observation}")
         except Exception as e:
