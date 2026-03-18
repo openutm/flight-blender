@@ -368,10 +368,11 @@ def _run_deconfliction(
         flight_declaration_geo_json = json.loads(raw_geojson) if raw_geojson else None
 
         request = DeconflictionRequest(
-            start_datetime=str(fd.start_datetime),
-            end_datetime=str(fd.end_datetime),
+            start_datetime=fd.start_datetime,
+            end_datetime=fd.end_datetime,
             view_box=view_box,
             ussp_network_enabled=ussp_network_enabled,
+            declaration_id=str(fd.id),
             flight_declaration_geo_json=flight_declaration_geo_json,
             type_of_operation=fd.type_of_operation,
             priority=0,

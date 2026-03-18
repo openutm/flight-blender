@@ -9,6 +9,7 @@ Covers:
 - Plugin settings (new prefix, backward-compat fallback)
 """
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -173,8 +174,8 @@ class ExampleDeconflictionEngineTests(SimpleTestCase):
 
     def _make_request(self, **overrides) -> DeconflictionRequest:
         defaults = dict(
-            start_datetime="2026-01-01T00:00:00Z",
-            end_datetime="2026-01-01T01:00:00Z",
+            start_datetime=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+            end_datetime=datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
             view_box=[0.0, 0.0, 1.0, 1.0],
             ussp_network_enabled=0,
         )
@@ -230,8 +231,8 @@ class DefaultDeconflictionEngineTests(SimpleTestCase):
 
     def _make_request(self, **overrides) -> DeconflictionRequest:
         defaults = dict(
-            start_datetime="2026-01-01T00:00:00Z",
-            end_datetime="2026-01-01T01:00:00Z",
+            start_datetime=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+            end_datetime=datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
             view_box=[0.0, 0.0, 1.0, 1.0],
             ussp_network_enabled=0,
         )
@@ -384,24 +385,27 @@ class DeconflictionDataClassTests(SimpleTestCase):
     """Tests for DeconflictionRequest and DeconflictionResult dataclasses."""
 
     def test_request_required_fields(self):
+        start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc)
         req = DeconflictionRequest(
-            start_datetime="2026-01-01T00:00:00Z",
-            end_datetime="2026-01-01T01:00:00Z",
+            start_datetime=start,
+            end_datetime=end,
             view_box=[0.0, 0.0, 1.0, 1.0],
             ussp_network_enabled=0,
         )
-        self.assertEqual(req.start_datetime, "2026-01-01T00:00:00Z")
-        self.assertEqual(req.end_datetime, "2026-01-01T01:00:00Z")
+        self.assertEqual(req.start_datetime, start)
+        self.assertEqual(req.end_datetime, end)
         self.assertEqual(req.view_box, [0.0, 0.0, 1.0, 1.0])
         self.assertEqual(req.ussp_network_enabled, 0)
 
     def test_request_defaults(self):
         req = DeconflictionRequest(
-            start_datetime="2026-01-01T00:00:00Z",
-            end_datetime="2026-01-01T01:00:00Z",
+            start_datetime=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+            end_datetime=datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
             view_box=[0.0, 0.0, 1.0, 1.0],
             ussp_network_enabled=0,
         )
+        self.assertIsNone(req.declaration_id)
         self.assertIsNone(req.flight_declaration_geo_json)
         self.assertEqual(req.type_of_operation, 0)
         self.assertEqual(req.priority, 0)
@@ -409,14 +413,16 @@ class DeconflictionDataClassTests(SimpleTestCase):
     def test_request_all_fields(self):
         geo = {"type": "FeatureCollection", "features": []}
         req = DeconflictionRequest(
-            start_datetime="2026-01-01T00:00:00Z",
-            end_datetime="2026-01-01T01:00:00Z",
+            start_datetime=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+            end_datetime=datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
             view_box=[1.0, 2.0, 3.0, 4.0],
             ussp_network_enabled=1,
+            declaration_id="decl-123",
             flight_declaration_geo_json=geo,
             type_of_operation=2,
             priority=5,
         )
+        self.assertEqual(req.declaration_id, "decl-123")
         self.assertEqual(req.flight_declaration_geo_json, geo)
         self.assertEqual(req.type_of_operation, 2)
         self.assertEqual(req.priority, 5)
@@ -460,8 +466,8 @@ class RunDeconflictionTests(SimpleTestCase):
         fd.id = fd_id
         fd.bounds = bounds
         fd.flight_declaration_raw_geojson = geojson
-        fd.start_datetime = "2026-01-01T00:00:00Z"
-        fd.end_datetime = "2026-01-01T01:00:00Z"
+        fd.start_datetime = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        fd.end_datetime = datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc)
         fd.type_of_operation = 1
         return fd
 

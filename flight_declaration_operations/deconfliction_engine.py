@@ -11,8 +11,6 @@ This class satisfies :class:`~flight_declaration_operations.deconfliction_protoc
 without inheriting from it (structural subtyping).
 """
 
-from django.db.models import Q
-
 from common.data_definitions import (
     ACTIVE_OPERATIONAL_STATES,
     FLIGHT_DECLARATION_INDEX_BASEPATH,
@@ -82,13 +80,15 @@ class DefaultDeconflictionEngine:
                 geo_fence_index.clear_rtree_index()
 
         # ── Flight declaration intersection ──────────────────────────────
-        declaration_list = list(
-            FlightDeclaration.objects.filter(
-                state__in=ACTIVE_OPERATIONAL_STATES,
-                start_datetime__lte=end_datetime,
-                end_datetime__gte=start_datetime,
-            )
+        declaration_qs = FlightDeclaration.objects.filter(
+            state__in=ACTIVE_OPERATIONAL_STATES,
+            start_datetime__lte=end_datetime,
+            end_datetime__gte=start_datetime,
         )
+        current_declaration_id = request.declaration_id
+        if current_declaration_id is not None:
+            declaration_qs = declaration_qs.exclude(id=current_declaration_id)
+        declaration_list = list(declaration_qs)
 
         if declaration_list:
             fd_rtree_helper = FlightDeclarationRTreeIndexFactory(

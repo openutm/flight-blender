@@ -2,9 +2,9 @@
 # Run the Flight Blender test suite.
 #
 # Usage:
-#   ./run_tests.sh              # run all tests
-#   ./run_tests.sh -v           # verbose output
-#   ./run_tests.sh -k <pattern> # run only tests matching pattern
+#   ./run_tests.sh                    # run all tests
+#   ./run_tests.sh -v                 # verbose output
+#   ./run_tests.sh <test_label> ...   # run only specified test labels
 #
 # Requires: a Python virtualenv at .venv with all dependencies installed.
 
@@ -32,9 +32,9 @@ while [[ $# -gt 0 ]]; do
             VERBOSITY=2
             shift
             ;;
-        -k)
-            TEST_ARGS+=("$2")
-            shift 2
+        -h|--help)
+            head -n 6 "$0" | tail -n +2 | sed 's/^# \?//'
+            exit 0
             ;;
         *)
             TEST_ARGS+=("$1")

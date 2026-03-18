@@ -65,8 +65,26 @@ def load_plugin(
                 )
         except TypeError as exc:
             if "does not satisfy" in str(exc):
+                # This is an explicit protocol validation failure; re-raise.
                 raise
-            # __new__ failed for some reason – fall through and trust
-            # the caller.
+
+            # __new__ failed for some other reason (e.g., custom metaclass or
+            # unusual __new__ signature). Fall back to a simple duck-typing
+            # check based on the public members of the expected protocol.
+            missing_members: list[str] = []
+            for name in dir(expected_protocol):
+                if name.startswith("_"):
+                    continue
+                proto_attr = getattr(expected_protocol, name, None)
+                if callable(proto_attr) or isinstance(proto_attr, property):
+                    if not hasattr(cls, name):
+                        missing_members.append(name)
+
+            if missing_members:
+                missing_str = ", ".join(sorted(missing_members))
+                raise TypeError(
+                    f"Plugin class {dotted_path!r} is missing required protocol "
+                    f"members: {missing_str}"
+                ) from exc
 
     return cls

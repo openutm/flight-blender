@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from marshmallow import Schema, fields
 
@@ -85,10 +86,11 @@ class CreateFlightDeclarationRequestSchema(Schema):
 class DeconflictionRequest:
     """Input data for a de-confliction check."""
 
-    start_datetime: str
-    end_datetime: str
+    start_datetime: datetime
+    end_datetime: datetime
     view_box: list[float]  # [minx, miny, maxx, maxy]
     ussp_network_enabled: int
+    declaration_id: str | None = None  # ID of the declaration being evaluated (to exclude self)
     flight_declaration_geo_json: dict | None = None  # full GeoJSON FC for advanced engines
     type_of_operation: int = 0
     priority: int = 0
