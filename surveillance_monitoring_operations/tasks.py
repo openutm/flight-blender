@@ -1,7 +1,6 @@
 import os
 from dataclasses import asdict
 from datetime import timedelta
-from importlib import import_module
 
 import arrow
 from asgiref.sync import async_to_sync
@@ -9,11 +8,12 @@ from channels_redis.core import RedisChannelLayer
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from common.base_traffic_data_fuser import BaseTrafficDataFuser
+from common.plugin_loader import load_plugin
 from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
-from flight_blender.settings import ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS, BROKER_URL
+from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER, BROKER_URL
 from surveillance_monitoring_operations.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
+from surveillance_monitoring_operations.traffic_data_fuser_protocol import TrafficDataFuser as TrafficDataFuserProtocol
 
 from .data_definitions import HeartbeatMessage
 
@@ -38,11 +38,9 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     raw_observations = stream_ops.read_latest_air_traffic_data(stream_name="air_traffic_stream", consumer_id=consumer_id, count=20)
     logger.info(f"Received {len(raw_observations)} observations for session_id: {session_id}")
 
-    module_name, class_name = ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS.rsplit(".", 1)
-    module = import_module(module_name)
-    TrafficDataFuser: type[BaseTrafficDataFuser] = getattr(module, class_name)
+    FuserClass = load_plugin(FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER, expected_protocol=TrafficDataFuserProtocol)
 
-    traffic_data_fuser = TrafficDataFuser(session_id=session_id, raw_observations=raw_observations)
+    traffic_data_fuser = FuserClass(session_id=session_id, raw_observations=raw_observations)
     track_messages = traffic_data_fuser.generate_track_messages()
 
     all_track_data = []

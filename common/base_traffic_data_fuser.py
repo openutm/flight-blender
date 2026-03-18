@@ -1,11 +1,17 @@
 """Base class for traffic data fusion operations.
 
-This module provides an abstract base class for implementing traffic data fusion
-algorithms. Data fusers process raw air traffic observations and generate track messages
-for surveillance display service providers (SDSP).
+This module provides an optional base class with shared helper methods for
+implementing traffic data fusion algorithms. Data fusers process raw air traffic
+observations and generate track messages for surveillance display service
+providers (SDSP).
+
+The contract for a traffic data fuser is defined by
+:class:`~surveillance_monitoring_operations.traffic_data_fuser_protocol.TrafficDataFuser`
+(a ``typing.Protocol``). Implementations **may** extend this base class for
+convenience (speed/bearing calculation, track-message generation) but are not
+required to — any class that provides ``generate_track_messages()`` is valid.
 """
 
-from abc import ABC, abstractmethod
 from typing import List
 
 import arrow
@@ -24,16 +30,22 @@ from surveillance_monitoring_operations.data_definitions import (
 )
 
 
-class BaseTrafficDataFuser(ABC):
-    """Abstract base class for traffic data fusion implementations.
+class BaseTrafficDataFuser:
+    """Optional convenience base class for traffic data fusion implementations.
     
     This class implements a template method pattern for traffic data fusion workflows.
     It provides concrete methods for common operations (speed/bearing calculation,
-    track message generation) while requiring subclasses to implement specific fusion
+    track message generation) while expecting subclasses to implement specific fusion
     algorithms and track management logic.
     
     Implementations can range from simple pass-through fusers to sophisticated
     multi-sensor fusion algorithms using Kalman filters or other estimation techniques.
+    
+    .. note::
+    
+        The canonical interface is the ``TrafficDataFuser`` Protocol defined in
+        ``surveillance_monitoring_operations.traffic_data_fuser_protocol``.
+        Extending this base class is optional.
     
     Attributes:
         session_id: Unique identifier for the surveillance session
@@ -215,11 +227,10 @@ class BaseTrafficDataFuser(ABC):
         """
         return True
 
-    @abstractmethod
     def _fuse_raw_observations(self) -> List[SingleAirtrafficObservation]:
-        """Abstract method: Fuse raw observations from multiple sources.
+        """Fuse raw observations from multiple sources.
         
-        Subclasses must implement this method to define their fusion algorithm.
+        Subclasses should override this method to define their fusion algorithm.
         This method applies data fusion algorithms to combine observations from
         multiple sensors or sources. Implementations may use techniques such as:
         - Simple deduplication (return raw observations as-is)
@@ -233,11 +244,10 @@ class BaseTrafficDataFuser(ABC):
         """
         raise NotImplementedError("Subclasses must implement _fuse_raw_observations()")
 
-    @abstractmethod
     def _generate_active_tracks(self, fused_observations: List[SingleAirtrafficObservation]) -> None:
-        """Abstract method: Generate and maintain active tracks for the session.
+        """Generate and maintain active tracks for the session.
         
-        Subclasses must implement this method to define their track management
+        Subclasses should override this method to define their track management
         strategy. This method creates or updates active track objects for each
         aircraft being monitored in the session. Tracks are typically stored in
         Redis for persistence across task invocations.

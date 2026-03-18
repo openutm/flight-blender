@@ -133,6 +133,28 @@ ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS = os.getenv(
 )
 CUSTOM_VOLUME_4D_GENERATION_CLASS = os.getenv("CUSTOM_VOLUME_4D_GENERATION_CLASS", "")
 
+# ── Plugin extension points ──────────────────────────────────────────────
+# Each setting is a dotted Python class path loaded at runtime via
+# common.plugin_loader.load_plugin().  Set via environment variables.
+#
+# The new canonical env var names use the FLIGHT_BLENDER_PLUGIN_ prefix.
+# The old env var names are kept as fallbacks for backward compatibility.
+
+FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = os.getenv(
+    "FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER",
+    ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS,
+)
+
+FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = os.getenv(
+    "FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR",
+    CUSTOM_VOLUME_4D_GENERATION_CLASS,
+)
+
+FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE = os.getenv(
+    "FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE",
+    "flight_declaration_operations.deconfliction_engine.DefaultDeconflictionEngine",
+)
+
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 

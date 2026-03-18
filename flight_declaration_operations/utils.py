@@ -1,6 +1,5 @@
 import json
 from dataclasses import asdict
-from importlib import import_module
 from os import environ as env
 
 import arrow
@@ -17,7 +16,8 @@ from common.data_definitions import (
     DEFAULT_UAV_DESCENT_RATE_M_PER_S,
     DEFAULT_UAV_SPEED_M_PER_S,
 )
-from flight_blender.settings import CUSTOM_VOLUME_4D_GENERATION_CLASS
+from common.plugin_loader import load_plugin
+from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
 from scd_operations.scd_data_definitions import (
     Altitude,
     LatLngPoint,
@@ -257,10 +257,8 @@ class OperationalIntentsConverter:
             List[Volume4D]: A list of Volume4D objects.
         """
 
-        if CUSTOM_VOLUME_4D_GENERATION_CLASS:
-            module_name, class_name = CUSTOM_VOLUME_4D_GENERATION_CLASS.rsplit(".", 1)
-            module = import_module(module_name)
-            CustomVolumeGenerator = getattr(module, class_name)
+        if FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR:
+            CustomVolumeGenerator = load_plugin(FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR)
             custom_volume_generator = CustomVolumeGenerator(
                 default_uav_speed_m_per_s=DEFAULT_UAV_SPEED_M_PER_S,
                 default_uav_climb_rate_m_per_s=DEFAULT_UAV_CLIMB_RATE_M_PER_S,

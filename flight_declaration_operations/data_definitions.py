@@ -1,9 +1,7 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from marshmallow import Schema, fields
-
-from flight_declaration_operations.models import FlightDeclaration
-from geo_fence_operations.models import GeoFence
 
 
 class CreateFlightDeclarationViaOperationalIntentRequestSchema(Schema):
@@ -85,11 +83,31 @@ class CreateFlightDeclarationRequestSchema(Schema):
 
 
 @dataclass
-class IntersectionCheckResult:
-    all_relevant_fences: list[GeoFence]
-    all_relevant_declarations: list[FlightDeclaration]
+class DeconflictionRequest:
+    """Input data for a de-confliction check."""
+
+    start_datetime: datetime
+    end_datetime: datetime
+    view_box: list[float]  # [minx, miny, maxx, maxy]
+    ussp_network_enabled: int
+    declaration_id: str | None = None  # ID of the declaration being evaluated (to exclude self)
+    flight_declaration_geo_json: dict | None = None  # full GeoJSON FC for advanced engines
+    type_of_operation: int = 0
+    priority: int = 0
+
+
+@dataclass
+class DeconflictionResult:
+    """Output of a de-confliction check."""
+
+    all_relevant_fences: list  # list of GeoFence-related metadata
+    all_relevant_declarations: list  # list of FlightDeclaration-related metadata
     is_approved: bool
-    declaration_state: int
+    declaration_state: int  # OPERATION_STATES value (0, 1, or 8 typically)
+
+
+# Backward compatibility alias
+IntersectionCheckResult = DeconflictionResult
 
 
 @dataclass
