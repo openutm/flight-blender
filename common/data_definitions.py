@@ -71,7 +71,7 @@ VALID_OPERATIONAL_INTENT_STATES = [
 
 RESPONSE_CONTENT_TYPE = "application/json"
 
-
+# These mainly apply for manned aviation but there are some cases where they are relevant for drones as well, e.g. when a drone is observed by a radar or by another means
 FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (0, _("1090ES")),
     (1, _("UAT")),
@@ -86,6 +86,9 @@ FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (10, _("FLARM")),
     (11, _("Network Remote-ID")),
     (12, _("Other")),
+    (13, _("Broadcast Remote-ID")),
+    (14, _("ADS-L")),
+    (15, _("Drone sensed by another means")),
 )
 
 
