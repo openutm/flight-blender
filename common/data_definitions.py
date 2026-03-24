@@ -88,7 +88,10 @@ FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (12, _("Other")),
     (13, _("Broadcast Remote-ID")),
     (14, _("ADS-L")),
-    (15, _("Drone sensed by another means")),
+    (
+        15,
+        _("Drone sensed by another means"),
+    ),  # This can be used for example when air-traffic feeds are used to detect drones, or when a drone is observed by a radar, or when a drone is observed visually and reported by a person, etc. but we dont have more details on the source of the observation
 )
 
 
