@@ -85,7 +85,10 @@ FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (9, _("ADS-B")),
     (10, _("FLARM")),
     (11, _("Network Remote-ID")),
-    (12, _("Other")),
+    (
+        12,
+        _("Other"),
+    ),  # Mainly used when the source of the observation is not known, it assumes a manned aircraft. Use 15 if you are sure that the observation is of a drone
     (13, _("Broadcast Remote-ID")),
     (14, _("ADS-L")),
     (
