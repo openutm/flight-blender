@@ -17,7 +17,8 @@ app = Celery(
 app.config_from_object("django.conf:settings", namespace="")
 
 # Load task modules from all registered Django app configs.
-app.autodiscover_tasks()
+app.autodiscover_tasks(related_name="tasks")
+app.autodiscover_tasks(related_name="custom_tasks")
 
 
 @app.task(bind=True)
