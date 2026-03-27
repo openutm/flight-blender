@@ -77,9 +77,6 @@ def start_stop_surveillance_heartbeat_track(request, surveillance_session_id):
                 status=400,
             )
         end_datetime = (timezone.now() + timedelta(minutes=30)).isoformat()
-        if not surveillance_session_id:
-            surveillance_session_id = str(uuid.uuid4())
-
         database_writer.create_surveillance_session(surveillance_session_id=surveillance_session_id, valid_until=end_datetime)
         database_writer.create_surveillance_monitoring_heartbeat_periodic_task(surveillance_session_id=str(surveillance_session_id))
         database_writer.create_surveillance_monitoring_track_periodic_task(surveillance_session_id=str(surveillance_session_id))
