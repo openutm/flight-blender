@@ -417,14 +417,14 @@ class FlightBlenderDatabaseReader:
 
         return SurveillanceSensor.objects.get(id=sensor_id)
 
-    def get_surveillance_session_by_id(self, session_id: str) -> None | SurveillanceSession:
+    def get_surveillance_session_by_id(self, surveillance_session_id: str) -> None | SurveillanceSession:
         try:
-            return SurveillanceSession.objects.get(id=session_id)
+            return SurveillanceSession.objects.get(id=surveillance_session_id)
         except SurveillanceSession.DoesNotExist:
             return None
 
-    def get_surveillance_periodic_tasks_by_session_id(self, session_id: str) -> QuerySet[TaskScheduler]:
-        return TaskScheduler.objects.filter(session_id=session_id)
+    def get_surveillance_periodic_tasks_by_session_id(self, surveillance_session_id: str) -> QuerySet[TaskScheduler]:
+        return TaskScheduler.objects.filter(session_id=surveillance_session_id)
 
     def get_all_active_surveillance_sessions(self) -> QuerySet[SurveillanceSession]:
         now = arrow.now().datetime
@@ -468,16 +468,20 @@ class FlightBlenderDatabaseReader:
             dispatched_at__lte=end_time,
         ).order_by("dispatched_at")
 
-    def get_heartbeat_events_for_session(self, session_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceHeartbeatEvent]:
+    def get_heartbeat_events_for_session(
+        self, surveillance_session_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceHeartbeatEvent]:
         return SurveillanceHeartbeatEvent.objects.filter(
-            session__id=session_id,
+            session__id=surveillance_session_id,
             dispatched_at__gte=start_time,
             dispatched_at__lte=end_time,
         ).order_by("dispatched_at")
 
-    def get_track_events_for_session(self, session_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceTrackEvent]:
+    def get_track_events_for_session(
+        self, surveillance_session_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceTrackEvent]:
         return SurveillanceTrackEvent.objects.filter(
-            session__id=session_id,
+            session__id=surveillance_session_id,
             dispatched_at__gte=start_time,
             dispatched_at__lte=end_time,
         ).order_by("dispatched_at")
@@ -951,10 +955,10 @@ class FlightBlenderDatabaseWriter:
         except Exception:
             return False
 
-    def create_surveillance_session(self, session_id: str, valid_until: str) -> bool:
+    def create_surveillance_session(self, surveillance_session_id: str, valid_until: str) -> bool:
         try:
             surveillance_session = SurveillanceSession(
-                id=session_id,
+                id=surveillance_session_id,
                 valid_until=valid_until,
             )
             surveillance_session.save()
@@ -962,11 +966,11 @@ class FlightBlenderDatabaseWriter:
         except IntegrityError:
             return False
 
-    def create_surveillance_monitoring_heartbeat_periodic_task(self, session_id: str) -> bool:
+    def create_surveillance_monitoring_heartbeat_periodic_task(self, surveillance_session_id: str) -> bool:
         surveillance_monitoring_job = TaskScheduler()
         every = 1
         now = arrow.now()
-        session_id = session_id if session_id else str(uuid.uuid4())
+        surveillance_session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
 
         expires = now.shift(minutes=1)
         task_name = "send_heartbeat_to_consumer"
@@ -977,7 +981,7 @@ class FlightBlenderDatabaseWriter:
                 period="seconds",
                 every=every,
                 expires=expires.isoformat(),
-                session_id=session_id,
+                session_id=surveillance_session_id,
                 flight_declaration=None,
             )
             p_task.start()
@@ -987,11 +991,11 @@ class FlightBlenderDatabaseWriter:
             logger.error("Could not create surveillance monitoring heartbeat periodic task")
             return False
 
-    def create_surveillance_monitoring_track_periodic_task(self, session_id: str) -> bool:
+    def create_surveillance_monitoring_track_periodic_task(self, surveillance_session_id: str) -> bool:
         surveillance_monitoring_job = TaskScheduler()
         every = 1
         now = arrow.now()
-        session_id = session_id if session_id else str(uuid.uuid4())
+        surveillance_session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
 
         expires = now.shift(minutes=1)
         task_name = "send_and_generate_track_to_consumer"
@@ -1002,7 +1006,7 @@ class FlightBlenderDatabaseWriter:
                 period="seconds",
                 every=every,
                 expires=expires.isoformat(),
-                session_id=session_id,
+                session_id=surveillance_session_id,
                 flight_declaration=None,
             )
             p_task.start()
