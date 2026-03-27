@@ -67,7 +67,7 @@ paths:
       parameters:
         - in: path
           name: surveillance_session_id
-          description: 'This is a ID of the surveillance session for which the heartbeat track needs to be started or stopped'
+          description: 'This is an ID of the surveillance session for which the heartbeat track needs to be started or stopped'
           schema:
             type: string
             format: uuid
