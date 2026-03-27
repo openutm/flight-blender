@@ -955,7 +955,7 @@ class FlightBlenderDatabaseWriter:
         except Exception:
             return False
 
-    def create_surveillance_session(self, surveillance_session_id: str, valid_until: str) -> bool:
+    def create_surveillance_session(self, surveillance_session_id: UUID | str, valid_until: str) -> bool:
         try:
             surveillance_session = SurveillanceSession(
                 id=surveillance_session_id,
@@ -966,7 +966,7 @@ class FlightBlenderDatabaseWriter:
         except IntegrityError:
             return False
 
-    def create_surveillance_monitoring_heartbeat_periodic_task(self, surveillance_session_id: str) -> bool:
+    def create_surveillance_monitoring_heartbeat_periodic_task(self, surveillance_session_id: UUID | str) -> bool:
         surveillance_monitoring_job = TaskScheduler()
         every = 1
         now = arrow.now()
