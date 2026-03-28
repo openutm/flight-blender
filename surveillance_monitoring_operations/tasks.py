@@ -37,7 +37,7 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     stream_ops = RedisStreamOperations()
     consumer_id = stream_ops.create_consumer_reader()
     raw_observations = stream_ops.read_latest_air_traffic_data(stream_name="air_traffic_stream", consumer_id=consumer_id, count=20)
-    logger.info(f"Received {len(raw_observations)} observations for session_id: {surveillance_session_id}")
+    logger.info(f"Received {len(raw_observations)} observations for surveillance session id: {surveillance_session_id}")
 
     FuserClass = load_plugin(FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER, expected_protocol=TrafficDataFuserProtocol)
 
@@ -52,7 +52,7 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     async_to_sync(channel_layer.group_send)("track_" + surveillance_session_id, {"type": "track.message", "data": all_track_data})
 
     db_writer.record_track_event(
-        session_id=surveillance_session_id,
+        surveillance_session_id=surveillance_session_id,
         expected_at=expected_at,
         had_active_tracks=len(track_messages) > 0,
     )
@@ -67,7 +67,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     db_reader = FlightBlenderDatabaseReader()
     db_writer = FlightBlenderDatabaseWriter()
 
-    logger.info(f"Preparing to send heartbeat for session_id: {surveillance_session_id}")
+    logger.info(f"Preparing to send heartbeat for surveillance session with id: {surveillance_session_id}")
 
     expected_at = arrow.utcnow().datetime
 
@@ -97,7 +97,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
             {"type": "heartbeat.message", "data": asdict(heartbeat_data)},
         )
     except Exception as e:
-        logger.error(f"Failed to send heartbeat for session {surveillance_session_id}: {e}")
+        logger.error(f"Failed to send heartbeat for surveillance session {surveillance_session_id}: {e}")
         dispatch_succeeded = False
 
     dispatch_at = arrow.utcnow().datetime
@@ -105,7 +105,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     delivered_on_time = dispatch_succeeded and latency_secs <= _MAX_ACCEPTABLE_LATENCY_SECS
 
     db_writer.record_heartbeat_event(
-        session_id=surveillance_session_id,
+        surveillance_session_id=surveillance_session_id,
         expected_at=expected_at,
         delivered_on_time=delivered_on_time,
     )
