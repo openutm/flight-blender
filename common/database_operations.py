@@ -423,7 +423,7 @@ class FlightBlenderDatabaseReader:
         except SurveillanceSession.DoesNotExist:
             return None
 
-    def get_surveillance_periodic_tasks_by_session_id(self, surveillance_session_id: str) -> QuerySet[TaskScheduler]:
+    def get_surveillance_periodic_tasks_by_session_id(self, surveillance_session_id: UUID | str) -> QuerySet[TaskScheduler]:
         return TaskScheduler.objects.filter(session_id=surveillance_session_id)
 
     def get_all_active_surveillance_sessions(self) -> QuerySet[SurveillanceSession]:
