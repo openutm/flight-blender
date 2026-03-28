@@ -1350,9 +1350,9 @@ class FlightBlenderDatabaseWriter:
         )
         return True
 
-    def record_heartbeat_event(self, session_id: str, expected_at: datetime, delivered_on_time: bool) -> bool:
+    def record_heartbeat_event(self, surveillance_session_id: str, expected_at: datetime, delivered_on_time: bool) -> bool:
         try:
-            session = SurveillanceSession.objects.get(id=session_id)
+            session = SurveillanceSession.objects.get(id=surveillance_session_id)
             SurveillanceHeartbeatEvent.objects.create(
                 session=session,
                 expected_at=expected_at,
@@ -1360,15 +1360,15 @@ class FlightBlenderDatabaseWriter:
             )
             return True
         except SurveillanceSession.DoesNotExist:
-            logger.error(f"record_heartbeat_event: session {session_id} not found")
+            logger.error(f"record_heartbeat_event: session {surveillance_session_id} not found")
             return False
         except Exception as e:
             logger.error(f"record_heartbeat_event: {e}")
             return False
 
-    def record_track_event(self, session_id: str, expected_at: datetime, had_active_tracks: bool) -> bool:
+    def record_track_event(self, surveillance_session_id: str, expected_at: datetime, had_active_tracks: bool) -> bool:
         try:
-            session = SurveillanceSession.objects.get(id=session_id)
+            session = SurveillanceSession.objects.get(id=surveillance_session_id)
             SurveillanceTrackEvent.objects.create(
                 session=session,
                 expected_at=expected_at,
@@ -1376,7 +1376,7 @@ class FlightBlenderDatabaseWriter:
             )
             return True
         except SurveillanceSession.DoesNotExist:
-            logger.error(f"record_track_event: session {session_id} not found")
+            logger.error(f"record_track_event: session {surveillance_session_id} not found")
             return False
         except Exception as e:
             logger.error(f"record_track_event: {e}")
