@@ -11,7 +11,7 @@ from loguru import logger
 from common.plugin_loader import load_plugin
 from common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
-from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER, BROKER_URL
+from flight_blender.settings import BROKER_URL, FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
 from surveillance_monitoring_operations.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
 from surveillance_monitoring_operations.traffic_data_fuser_protocol import TrafficDataFuser as TrafficDataFuserProtocol
 
@@ -28,6 +28,7 @@ _MAX_ACCEPTABLE_LATENCY_SECS = float(os.getenv("HEARTBEAT_MAX_LATENCY_SECS", "1.
 def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
     from common.database_operations import FlightBlenderDatabaseWriter
 
+    surveillance_session_id = session_id  # For clarity in variable naming
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
     db_writer = FlightBlenderDatabaseWriter()
 
@@ -36,11 +37,11 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
     stream_ops = RedisStreamOperations()
     consumer_id = stream_ops.create_consumer_reader()
     raw_observations = stream_ops.read_latest_air_traffic_data(stream_name="air_traffic_stream", consumer_id=consumer_id, count=20)
-    logger.info(f"Received {len(raw_observations)} observations for session_id: {session_id}")
+    logger.info(f"Received {len(raw_observations)} observations for session_id: {surveillance_session_id}")
 
     FuserClass = load_plugin(FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER, expected_protocol=TrafficDataFuserProtocol)
 
-    traffic_data_fuser = FuserClass(session_id=session_id, raw_observations=raw_observations)
+    traffic_data_fuser = FuserClass(session_id=surveillance_session_id, raw_observations=raw_observations)
     track_messages = traffic_data_fuser.generate_track_messages()
 
     all_track_data = []
@@ -48,10 +49,10 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
         all_track_data.append(asdict(track_message))
         logger.debug(f"Fused track message: {asdict(track_message)}")
 
-    async_to_sync(channel_layer.group_send)("track_" + session_id, {"type": "track.message", "data": all_track_data})
+    async_to_sync(channel_layer.group_send)("track_" + surveillance_session_id, {"type": "track.message", "data": all_track_data})
 
     db_writer.record_track_event(
-        session_id=session_id,
+        session_id=surveillance_session_id,
         expected_at=expected_at,
         had_active_tracks=len(track_messages) > 0,
     )
@@ -61,11 +62,12 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
 def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
     from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 
+    surveillance_session_id = session_id  # For clarity in variable naming
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
     db_reader = FlightBlenderDatabaseReader()
     db_writer = FlightBlenderDatabaseWriter()
 
-    logger.info(f"Preparing to send heartbeat for session_id: {session_id}")
+    logger.info(f"Preparing to send heartbeat for session_id: {surveillance_session_id}")
 
     expected_at = arrow.utcnow().datetime
 
@@ -79,7 +81,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
         h_accuracy_m = int(primary_sensor.horizontal_accuracy_m)
 
     heartbeat_data = HeartbeatMessage(
-        surveillance_sdsp_name=session_id,
+        surveillance_sdsp_name=surveillance_session_id,
         meets_sla_surveillance_requirements=True,
         meets_sla_rr_lr_requirements=True,
         average_latency_or_95_percentile_latency_ms=avg_latency_ms,
@@ -91,11 +93,11 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     dispatch_succeeded = True
     try:
         async_to_sync(channel_layer.group_send)(
-            "heartbeat_" + session_id,
+            "heartbeat_" + surveillance_session_id,
             {"type": "heartbeat.message", "data": asdict(heartbeat_data)},
         )
     except Exception as e:
-        logger.error(f"Failed to send heartbeat for session {session_id}: {e}")
+        logger.error(f"Failed to send heartbeat for session {surveillance_session_id}: {e}")
         dispatch_succeeded = False
 
     dispatch_at = arrow.utcnow().datetime
@@ -103,7 +105,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     delivered_on_time = dispatch_succeeded and latency_secs <= _MAX_ACCEPTABLE_LATENCY_SECS
 
     db_writer.record_heartbeat_event(
-        session_id=session_id,
+        session_id=surveillance_session_id,
         expected_at=expected_at,
         delivered_on_time=delivered_on_time,
     )
