@@ -1,5 +1,5 @@
 name: Security
-on: [push, pull_request]
+on: [push]
 jobs:
   bandit:
     runs-on: ubuntu-latest
@@ -26,6 +26,6 @@ jobs:
         run: |
           pip install uv
           uv export --no-hashes --no-dev > requirements.txt
-      - uses: pypa/gh-action-pip-audit@v1
+      - uses: pypa/gh-action-pip-audit@v1.1.0
         with:
           inputs: requirements.txt
