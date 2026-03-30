@@ -179,20 +179,43 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION="8.24.3"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
       - name: Run gitleaks
         id: gitleaks
-        uses: gitleaks/gitleaks-action@v2.3.9
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          gitleaks detect --source . --verbose --report-format sarif --report-path gitleaks-results.sarif 2>&1 | tee gitleaks-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Upload gitleaks SARIF
+        if: always() && hashFiles('gitleaks-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gitleaks-results.sarif
+          category: gitleaks
       - name: Write Job Summary
         if: always()
         run: |
           echo "## :key: Gitleaks results" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
+          if [ "${{ steps.gitleaks.outputs.exit_code }}" = "0" ]; then
             echo ":white_check_mark: No secrets detected." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo ":rotating_light: Potential secrets detected! Check the job logs for details." >> "$GITHUB_STEP_SUMMARY"
+            echo ":rotating_light: Potential secrets detected!" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '<details><summary>Show details</summary>' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat gitleaks-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo '</details>' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Fail if secrets detected
+        if: steps.gitleaks.outputs.exit_code != '0'
+        run: exit 1
   license-check:
     runs-on: ubuntu-latest
     steps:
