@@ -2,9 +2,9 @@
 
 A simple but functional de-confliction engine that rejects flight
 declarations whose time windows overlap with existing active
-declarations in the same bounding box.  Unlike the built-in RTree
-engine this implementation does a straightforward database query
-without spatial indexing — easy to understand and extend.
+declarations.  Unlike the built-in RTree engine this implementation
+does a straightforward database query without spatial indexing —
+easy to understand and extend.
 
 To activate, set the environment variable::
 
@@ -66,6 +66,6 @@ class HelloWorldEngine:
             all_relevant_declarations=conflicting_ids,
             is_approved=not has_conflicts,
             declaration_state=_STATE_REJECTED if has_conflicts else (
-                _STATE_ACCEPTED if not request.ussp_network_enabled else _STATE_ACCEPTED_WITH_CONDITIONS
+                _STATE_ACCEPTED if request.ussp_network_enabled else _STATE_ACCEPTED_WITH_CONDITIONS
             ),
         )

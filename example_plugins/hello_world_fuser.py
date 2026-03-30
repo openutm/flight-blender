@@ -14,7 +14,6 @@ See PLUGINS.md for the full guide.
 """
 
 import logging
-from collections import defaultdict
 from typing import List
 
 import arrow
@@ -51,19 +50,23 @@ class HelloWorldFuser:
 
         # Group observations by aircraft, keeping only the latest per ICAO.
         latest_by_icao: dict[str, SingleAirtrafficObservation] = {}
+        stale_count = 0
         for obs in self.raw_observations:
             if obs.timestamp < cutoff_ts:
+                stale_count += 1
                 continue  # discard stale observations
             existing = latest_by_icao.get(obs.icao_address)
             if existing is None or obs.timestamp > existing.timestamp:
                 latest_by_icao[obs.icao_address] = obs
 
+        duplicate_count = len(self.raw_observations) - stale_count - len(latest_by_icao)
         logger.info(
-            "Session %s: %d raw observations → %d active aircraft (dropped %d stale)",
+            "Session %s: %d raw observations → %d active aircraft (dropped %d stale, %d duplicates)",
             self.session_id,
             len(self.raw_observations),
             len(latest_by_icao),
-            len(self.raw_observations) - len(latest_by_icao),
+            stale_count,
+            duplicate_count,
         )
 
         track_messages: list[TrackMessage] = []

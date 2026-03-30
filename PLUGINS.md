@@ -218,27 +218,30 @@ MyEngine = load_plugin(
 print(f"Loaded: {MyEngine}")  # <class 'example_plugins.hello_world_engine.HelloWorldEngine'>
 ```
 
-Write a Django `SimpleTestCase` to verify behavior:
+Write a Django `TestCase` to verify behavior (the example engine queries the database, so use `TestCase` instead of `SimpleTestCase`):
 
 ```python
-from django.test import SimpleTestCase
-from datetime import datetime, timezone
+from django.test import TestCase
+from datetime import datetime, timezone, timedelta
 from flight_declaration_operations.data_definitions import DeconflictionRequest, DeconflictionResult
 from example_plugins.hello_world_engine import HelloWorldEngine
 
 
-class HelloWorldEngineTests(SimpleTestCase):
-    def test_always_approves(self):
+class HelloWorldEngineTests(TestCase):
+    def test_approves_when_no_conflicts(self):
+        """With an empty database, every declaration is approved."""
         engine = HelloWorldEngine()
+        now = datetime.now(tz=timezone.utc)
         request = DeconflictionRequest(
-            start_datetime=datetime.now(tz=timezone.utc),
-            end_datetime=datetime.now(tz=timezone.utc),
+            start_datetime=now,
+            end_datetime=now + timedelta(hours=1),
             view_box=[0.0, 0.0, 1.0, 1.0],
             ussp_network_enabled=0,
         )
         result = engine.check_deconfliction(request)
         self.assertIsInstance(result, DeconflictionResult)
         self.assertTrue(result.is_approved)
+        self.assertEqual(result.all_relevant_declarations, [])
 ```
 
 ## Checklist

@@ -93,10 +93,13 @@ class HelloWorldVolumeGenerator:
         all_v4d: list[Volume4D] = []
         cursor = start
 
-        for feature, length_m in zip(features, lengths):
+        for idx, (feature, length_m) in enumerate(zip(features, lengths)):
             fraction = length_m / total_length
             duration_secs = max(total_secs * fraction, 1.0)
             segment_end = cursor.shift(seconds=duration_secs)
+            # Clamp the last segment so it never overshoots end_datetime.
+            if idx == len(features) - 1 or segment_end > end:
+                segment_end = end
 
             max_altitude = feature["properties"]["max_altitude"]["meters"]
             min_altitude = feature["properties"]["min_altitude"]["meters"]
