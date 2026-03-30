@@ -1,0 +1,304 @@
+name: Security
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  security-events: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv sync --dev
+      - name: Run bandit
+        id: bandit
+        run: |
+          set +e
+          uv run bandit -r . -x ./.venv -c pyproject.toml -f sarif -o bandit-results.sarif
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+          if [ ! -f bandit-results.sarif ]; then
+            echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"Bandit","rules":[]}},"results":[]}]}' > bandit-results.sarif
+          fi
+          uv run bandit -r . -x ./.venv -c pyproject.toml -f txt -o bandit-report.txt || true
+      - name: Upload bandit SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## Bandit results" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s bandit-report.txt ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat bandit-report.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No issues found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## :rotating_light: Bandit results\n\n';
+            const reportExists = fs.existsSync('bandit-report.txt') && fs.readFileSync('bandit-report.txt', 'utf8').trim();
+            if (reportExists) {
+              // Parse SARIF for summary counts
+              let summary = '';
+              try {
+                const sarif = JSON.parse(fs.readFileSync('bandit-results.sarif', 'utf8'));
+                const results = sarif.runs?.[0]?.results || [];
+                const sev = { error: 0, warning: 0, note: 0 };
+                for (const r of results) {
+                  const level = r.level || 'warning';
+                  sev[level] = (sev[level] || 0) + 1;
+                }
+                const total = results.length;
+                const parts = [];
+                if (sev.error) parts.push(`${sev.error} high`);
+                if (sev.warning) parts.push(`${sev.warning} medium`);
+                if (sev.note) parts.push(`${sev.note} low`);
+                summary = `**${total} issue${total !== 1 ? 's' : ''} found** (${parts.join(', ')})\n\n`;
+              } catch {
+                summary = '';
+              }
+              body += summary;
+              body += '<details><summary>Show details</summary>\n\n';
+              body += '```\n' + fs.readFileSync('bandit-report.txt', 'utf8') + '\n```\n';
+              body += '</details>';
+            } else {
+              body += ':white_check_mark: No issues found.';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':rotating_light: Bandit results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Fail if issues found
+        if: steps.bandit.outputs.exit_code != '0'
+        run: exit 1
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install uv and export requirements
+        run: |
+          pip install uv pip-audit
+          uv export --no-hashes --no-dev --no-emit-project > requirements.txt
+      - name: Run pip-audit
+        id: audit
+        run: |
+          set +e
+          pip-audit -r requirements.txt --format markdown --output pip-audit-report.md 2>pip-audit-stderr.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Write Job Summary
+        if: always()
+        run: |
+          if [ -s pip-audit-report.md ]; then
+            echo "## pip-audit results" >> "$GITHUB_STEP_SUMMARY"
+            cat pip-audit-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## pip-audit results" >> "$GITHUB_STEP_SUMMARY"
+            echo "No vulnerabilities found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## :shield: pip-audit results\n\n';
+            if (fs.existsSync('pip-audit-report.md') && fs.readFileSync('pip-audit-report.md', 'utf8').trim()) {
+              body += fs.readFileSync('pip-audit-report.md', 'utf8');
+            } else {
+              body += ':white_check_mark: No vulnerabilities found.';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':shield: pip-audit results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Fail if vulnerabilities found
+        if: steps.audit.outputs.exit_code != '0'
+        run: exit 1
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION="8.24.3"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: Run gitleaks
+        id: gitleaks
+        run: |
+          set +e
+          gitleaks detect --source . --verbose --report-format sarif --report-path gitleaks-results.sarif 2>&1 | tee gitleaks-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Upload gitleaks SARIF
+        if: always() && hashFiles('gitleaks-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gitleaks-results.sarif
+          category: gitleaks
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :key: Gitleaks results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.gitleaks.outputs.exit_code }}" = "0" ]; then
+            echo ":white_check_mark: No secrets detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo ":rotating_light: Potential secrets detected!" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '<details><summary>Show details</summary>' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat gitleaks-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo '</details>' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Fail if secrets detected
+        if: steps.gitleaks.outputs.exit_code != '0'
+        run: exit 1
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv pip-licenses
+          uv sync --no-dev
+      - name: Run pip-licenses
+        id: licenses
+        run: |
+          pip-licenses --python="$(uv run python -c 'import sys; print(sys.executable)')" \
+            --format=markdown --order=license --with-urls > licenses-report.md
+          # Check for copyleft licenses that may be incompatible
+          set +e
+          pip-licenses --python="$(uv run python -c 'import sys; print(sys.executable)')" \
+            --format=csv --order=license | grep -iE 'GPL|AGPL|SSPL|EUPL' | grep -viE 'LGPL' > copyleft-found.txt
+          COPYLEFT_COUNT=$(wc -l < copyleft-found.txt | tr -d ' ')
+          echo "copyleft_count=$COPYLEFT_COUNT" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :scroll: License Compliance" >> "$GITHUB_STEP_SUMMARY"
+          COPYLEFT="${{ steps.licenses.outputs.copyleft_count }}"
+          if [ "$COPYLEFT" = "0" ]; then
+            echo ":white_check_mark: No copyleft license issues detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo ":warning: **${COPYLEFT} dependencies with copyleft licenses found.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat copyleft-found.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "<details><summary>Full license report</summary>" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat licenses-report.md >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const copyleftCount = parseInt('${{ steps.licenses.outputs.copyleft_count }}' || '0');
+            let body = '## :scroll: License Compliance\n\n';
+            if (copyleftCount === 0) {
+              body += ':white_check_mark: No copyleft license issues detected.\n\n';
+            } else {
+              body += `:warning: **${copyleftCount} dependencies with copyleft licenses found.**\n\n`;
+              if (fs.existsSync('copyleft-found.txt')) {
+                body += '```\n' + fs.readFileSync('copyleft-found.txt', 'utf8') + '```\n\n';
+              }
+            }
+            if (fs.existsSync('licenses-report.md')) {
+              body += '<details><summary>Full license report</summary>\n\n';
+              body += fs.readFileSync('licenses-report.md', 'utf8') + '\n';
+              body += '</details>';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':scroll: License Compliance'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

@@ -1,7 +1,6 @@
-from os import environ as env
-
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
@@ -15,8 +14,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-from loguru import logger
 
 
 class Command(BaseCommand):
@@ -71,7 +68,7 @@ class Command(BaseCommand):
         stored_operational_intent = my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
 
         reference_full = stored_operational_intent.success_response.operational_intent_reference
-        dss_response_subscribers = stored_operational_intent.success_response.subscribers
+        _dss_response_subscribers = stored_operational_intent.success_response.subscribers
         details_full = stored_operational_intent.operational_intent_details
         # Load existing opint details
 
@@ -116,8 +113,6 @@ class Command(BaseCommand):
             subscription_id=stored_subscription_id,
         )
         if not dry_run:
-            flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
-
             operational_update_response = my_scd_dss_helper.update_specified_operational_intent_reference(
                 subscription_id=stored_subscription_id,
                 operational_intent_ref_id=str(reference.id),
@@ -130,35 +125,22 @@ class Command(BaseCommand):
             )
 
             if operational_update_response.status == 200:
-                # Update was successful
-                new_operational_intent_details = operational_update_response.dss_response
-                op_int_details["success_response"]["operational_intent_details"] = new_operational_intent_details
-                # TODO: Update the intent reference and intent details in the database
-
-                my_database_writer.update_flight_operational_intent_reference(
-                    flight_operational_intent_reference=flight_operational_intent_reference,
-                    update_operational_intent_reference=operational_intent_update_job.dss_response.operational_intent_reference,
-                )
-                updated_flight_operational_intent_details = OperationalIntentUSSDetails(
-                    volumes=flight_planning_volumes, off_nominal_volumes=flight_planning_off_nominal_volumes, priority=flight_planning_priority
-                )
-
-                my_database_writer.update_flight_operational_intent_details(
-                    flight_operational_intent_detail=flight_operational_intent_details,
-                    operational_intent_details=updated_flight_operational_intent_details,
-                )
-
-                my_scd_dss_helper.process_peer_uss_notifications(
-                    all_subscribers=operational_intent_update_job.dss_response.subscribers,
-                    operational_intent_details=flight_planning_notification_payload,
-                    operational_intent_reference=operational_intent_update_job.dss_response.operational_intent_reference,
-                    operational_intent_id=dss_operational_intent_reference_id,
-                )
-
                 logger.info(
                     "Successfully updated operational intent status for {operational_intent_id} on the DSS".format(
                         operational_intent_id=operational_intent_id
                     )
+                )
+
+                my_database_writer.update_flight_operational_intent_reference(
+                    flight_operational_intent_reference=flight_operational_intent_reference,
+                    update_operational_intent_reference=operational_update_response.dss_response.operational_intent_reference,
+                )
+
+                my_scd_dss_helper.process_peer_uss_notifications(
+                    all_subscribers=operational_update_response.dss_response.subscribers,
+                    operational_intent_details=stored_operational_intent.operational_intent_details,
+                    operational_intent_reference=operational_update_response.dss_response.operational_intent_reference,
+                    operational_intent_id=operational_intent_id,
                 )
 
             else:

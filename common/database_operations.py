@@ -59,7 +59,6 @@ from surveillance_monitoring_operations.models import (
     SurveillanceSensor,
     SurveillanceSensorFailureNotification,
     SurveillanceSensorHealth,
-    SurveillanceSensorMaintenance,
     SurveillanceSensortHealthTracking,
     SurveillanceSession,
     SurveillanceTrackEvent,

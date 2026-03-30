@@ -1,12 +1,11 @@
 from os import environ as env
 
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from flight_declaration_operations.tasks import send_operational_update_message
 
 load_dotenv(find_dotenv())
-
-from loguru import logger
 
 
 class OperationConformanceNotification:

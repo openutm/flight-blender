@@ -7,6 +7,7 @@ import requests
 import urllib3
 from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from auth_helper import dss_auth_helper
 from auth_helper.common import get_redis
@@ -21,8 +22,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-from loguru import logger
 
 
 class USSConstraintsOperations:

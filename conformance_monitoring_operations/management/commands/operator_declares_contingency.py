@@ -4,6 +4,7 @@ from os import environ as env
 from dacite import from_dict
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
@@ -23,8 +24,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-from loguru import logger
 
 
 class Command(BaseCommand):

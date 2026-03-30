@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import (
@@ -19,7 +20,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-from loguru import logger
 
 
 class Command(BaseCommand):
@@ -76,7 +76,7 @@ class Command(BaseCommand):
         stored_operational_intent = my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
 
         reference_full = stored_operational_intent.success_response.operational_intent_reference
-        dss_response_subscribers = stored_operational_intent.success_response.subscribers
+        _dss_response_subscribers = stored_operational_intent.success_response.subscribers
         details_full = stored_operational_intent.operational_intent_details
         # Load existing opint details
 

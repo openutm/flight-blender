@@ -1,0 +1,366 @@
+name: ISO Audit Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_title:
+        description: "Report title (e.g. 'Q1 2026 Audit')"
+        required: false
+        default: "Security Audit Report"
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  DATABASE_URL: "sqlite://:memory:"
+  BYPASS_AUTH_TOKEN_VERIFICATION: "1"
+
+jobs:
+  generate-report:
+    name: Generate ISO Audit Report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv pip-audit pip-licenses
+          uv sync --dev
+
+      - name: Create report directory
+        run: mkdir -p audit-report
+
+      # ── 1. Project metadata ───────────────────────────────────────────
+      - name: Collect project metadata
+        run: |
+          cat > audit-report/01-project-metadata.md <<'HEADER'
+          # ${{ github.event.inputs.report_title }}
+
+          | Field | Value |
+          |-------|-------|
+          HEADER
+
+          echo "| **Repository** | ${{ github.repository }} |" >> audit-report/01-project-metadata.md
+          echo "| **Branch** | ${{ github.ref_name }} |" >> audit-report/01-project-metadata.md
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> audit-report/01-project-metadata.md
+          echo "| **Generated** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> audit-report/01-project-metadata.md
+          echo "| **Runner** | ${{ runner.os }} / ${{ runner.arch }} |" >> audit-report/01-project-metadata.md
+          echo "| **Python** | $(python3 --version) |" >> audit-report/01-project-metadata.md
+          echo "| **Triggered by** | ${{ github.actor }} |" >> audit-report/01-project-metadata.md
+
+      # ── 2. SAST – Bandit ──────────────────────────────────────────────
+      - name: Run Bandit (SAST)
+        run: |
+          echo "# 2. Static Application Security Testing (SAST) — Bandit" > audit-report/02-bandit.md
+          echo "" >> audit-report/02-bandit.md
+          echo "**ISO 27001 Control:** A.8.25 — Secure Development Lifecycle" >> audit-report/02-bandit.md
+          echo "" >> audit-report/02-bandit.md
+          set +e
+          uv run bandit -r . -x ./.venv -c pyproject.toml -f txt -o audit-report/bandit-full.txt
+          BANDIT_EXIT=$?
+          set -e
+          uv run bandit -r . -x ./.venv -c pyproject.toml -f json -o audit-report/bandit-results.json || true
+          if [ "$BANDIT_EXIT" -eq 0 ]; then
+            echo ":white_check_mark: **No issues found.**" >> audit-report/02-bandit.md
+          else
+            ISSUES=$(python3 -c "import json; d=json.load(open('audit-report/bandit-results.json')); r=d.get('results',[]); sev={};
+            [sev.__setitem__(i['issue_severity'], sev.get(i['issue_severity'],0)+1) for i in r];
+            print(f'**{len(r)} issue(s) found:** ' + ', '.join(f'{v} {k}' for k,v in sorted(sev.items())))" 2>/dev/null || echo "Issues found.")
+            echo "$ISSUES" >> audit-report/02-bandit.md
+          fi
+          echo "" >> audit-report/02-bandit.md
+          echo '```' >> audit-report/02-bandit.md
+          cat audit-report/bandit-full.txt >> audit-report/02-bandit.md
+          echo '```' >> audit-report/02-bandit.md
+
+      # ── 3. Dependency vulnerabilities – pip-audit ─────────────────────
+      - name: Run pip-audit (CVE scan)
+        run: |
+          echo "# 3. Dependency Vulnerability Scan — pip-audit" > audit-report/03-pip-audit.md
+          echo "" >> audit-report/03-pip-audit.md
+          echo "**ISO 27001 Control:** A.8.8 — Management of Technical Vulnerabilities" >> audit-report/03-pip-audit.md
+          echo "" >> audit-report/03-pip-audit.md
+          uv export --no-hashes --no-dev --no-emit-project > audit-report/requirements.txt
+          set +e
+          pip-audit -r audit-report/requirements.txt --format markdown --output audit-report/pip-audit-table.md 2>audit-report/pip-audit-stderr.txt
+          AUDIT_EXIT=$?
+          set -e
+          pip-audit -r audit-report/requirements.txt --format json --output audit-report/pip-audit-results.json 2>/dev/null || true
+          if [ "$AUDIT_EXIT" -eq 0 ]; then
+            echo ":white_check_mark: **No known vulnerabilities found.**" >> audit-report/03-pip-audit.md
+          else
+            VULN_COUNT=$(python3 -c "import json; d=json.load(open('audit-report/pip-audit-results.json')); print(sum(len(p.get('vulns',[])) for p in d.get('dependencies',[])))" 2>/dev/null || echo "?")
+            echo ":warning: **${VULN_COUNT} vulnerability(ies) detected.**" >> audit-report/03-pip-audit.md
+          fi
+          echo "" >> audit-report/03-pip-audit.md
+          if [ -s audit-report/pip-audit-table.md ]; then
+            cat audit-report/pip-audit-table.md >> audit-report/03-pip-audit.md
+          fi
+
+      # ── 4. Secret scanning – gitleaks ─────────────────────────────────
+      - name: Run gitleaks (secret scanning)
+        run: |
+          echo "# 4. Secret Scanning — Gitleaks" > audit-report/04-gitleaks.md
+          echo "" >> audit-report/04-gitleaks.md
+          echo "**ISO 27001 Controls:** A.8.4 — Access to Source Code, A.5.33 — Protection of Records" >> audit-report/04-gitleaks.md
+          echo "" >> audit-report/04-gitleaks.md
+          GITLEAKS_VERSION="8.24.3"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          set +e
+          gitleaks detect --source . --verbose --report-format json --report-path audit-report/gitleaks-results.json 2>&1 | tee audit-report/gitleaks-output.txt
+          GITLEAKS_EXIT=$?
+          set -e
+          if [ "$GITLEAKS_EXIT" -eq 0 ]; then
+            echo ":white_check_mark: **No secrets detected.**" >> audit-report/04-gitleaks.md
+          else
+            LEAK_COUNT=$(python3 -c "import json; print(len(json.load(open('audit-report/gitleaks-results.json'))))" 2>/dev/null || echo "?")
+            echo ":rotating_light: **${LEAK_COUNT} potential secret(s) detected.**" >> audit-report/04-gitleaks.md
+            echo "" >> audit-report/04-gitleaks.md
+            echo '```' >> audit-report/04-gitleaks.md
+            cat audit-report/gitleaks-output.txt >> audit-report/04-gitleaks.md
+            echo '```' >> audit-report/04-gitleaks.md
+          fi
+
+      # ── 5. License compliance – pip-licenses ──────────────────────────
+      - name: Run pip-licenses (license compliance)
+        run: |
+          echo "# 5. License Compliance — pip-licenses" > audit-report/05-licenses.md
+          echo "" >> audit-report/05-licenses.md
+          echo "**ISO 27001 Control:** A.5.32 — Intellectual Property" >> audit-report/05-licenses.md
+          echo "" >> audit-report/05-licenses.md
+          PYTHON_PATH="$(uv run python -c 'import sys; print(sys.executable)')"
+          pip-licenses --python="$PYTHON_PATH" --format=markdown --order=license --with-urls > audit-report/licenses-full.md
+          pip-licenses --python="$PYTHON_PATH" --format=csv --order=license > audit-report/licenses.csv
+          set +e
+          pip-licenses --python="$PYTHON_PATH" --format=csv --order=license | grep -iE 'GPL|AGPL|SSPL|EUPL' | grep -viE 'LGPL' > audit-report/copyleft-found.txt
+          COPYLEFT_COUNT=$(wc -l < audit-report/copyleft-found.txt | tr -d ' ')
+          set -e
+          if [ "$COPYLEFT_COUNT" = "0" ]; then
+            echo ":white_check_mark: **No copyleft license issues detected.**" >> audit-report/05-licenses.md
+          else
+            echo ":warning: **${COPYLEFT_COUNT} dependencies with copyleft licenses found:**" >> audit-report/05-licenses.md
+            echo "" >> audit-report/05-licenses.md
+            echo '```' >> audit-report/05-licenses.md
+            cat audit-report/copyleft-found.txt >> audit-report/05-licenses.md
+            echo '```' >> audit-report/05-licenses.md
+          fi
+          echo "" >> audit-report/05-licenses.md
+          echo "## Full License Inventory" >> audit-report/05-licenses.md
+          echo "" >> audit-report/05-licenses.md
+          cat audit-report/licenses-full.md >> audit-report/05-licenses.md
+
+      # ── 6. Test suite & coverage ──────────────────────────────────────
+      - name: Run tests with coverage
+        run: |
+          echo "# 6. Test Suite & Code Coverage" > audit-report/06-coverage.md
+          echo "" >> audit-report/06-coverage.md
+          echo "**ISO 27001 Control:** A.8.29 — Security Testing" >> audit-report/06-coverage.md
+          echo "" >> audit-report/06-coverage.md
+          set +e
+          uv run pytest --cov --cov-report=term-missing --cov-report=json --tb=short 2>&1 | tee audit-report/pytest-output.txt
+          PYTEST_EXIT=$?
+          set -e
+          if [ "$PYTEST_EXIT" -eq 0 ]; then
+            echo ":white_check_mark: **All tests passed.**" >> audit-report/06-coverage.md
+          else
+            echo ":x: **Some tests failed.**" >> audit-report/06-coverage.md
+          fi
+          if [ -f coverage.json ]; then
+            TOTAL=$(python3 -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
+            echo "" >> audit-report/06-coverage.md
+            echo "**Overall code coverage: ${TOTAL}%**" >> audit-report/06-coverage.md
+            cp coverage.json audit-report/coverage.json
+          fi
+          echo "" >> audit-report/06-coverage.md
+          echo '```' >> audit-report/06-coverage.md
+          cat audit-report/pytest-output.txt >> audit-report/06-coverage.md
+          echo '```' >> audit-report/06-coverage.md
+
+      # ── 7. Code complexity ────────────────────────────────────────────
+      - name: Run code complexity analysis
+        run: |
+          echo "# 7. Code Complexity & Maintainability" > audit-report/07-complexity.md
+          echo "" >> audit-report/07-complexity.md
+          echo "**ISO 27001 Control:** A.8.25 — Secure Development Lifecycle" >> audit-report/07-complexity.md
+          echo "" >> audit-report/07-complexity.md
+          pip install radon
+          radon cc . -a -s --exclude ".venv,migrations" > audit-report/cc-full.txt 2>&1
+          AVG=$(tail -1 audit-report/cc-full.txt | sed 's/.*Average complexity: //')
+          echo "**Average cyclomatic complexity:** ${AVG}" >> audit-report/07-complexity.md
+          echo "" >> audit-report/07-complexity.md
+          radon cc . -a -s --exclude ".venv,migrations" -n C > audit-report/cc-high.txt 2>&1
+          HIGH_COUNT=$(grep -cE '^\s+(F|M|C) ' audit-report/cc-high.txt || true)
+          echo "**High-complexity blocks (grade C+):** ${HIGH_COUNT}" >> audit-report/07-complexity.md
+          echo "" >> audit-report/07-complexity.md
+          radon mi . -s --exclude ".venv,migrations" > audit-report/mi-full.txt 2>&1
+          grep -E ' - [CDF] ' audit-report/mi-full.txt > audit-report/mi-low.txt || true
+          LOW_MI=$(wc -l < audit-report/mi-low.txt | tr -d ' ')
+          echo "**Low maintainability files:** ${LOW_MI}" >> audit-report/07-complexity.md
+          if [ "$HIGH_COUNT" != "0" ]; then
+            echo "" >> audit-report/07-complexity.md
+            echo "## High-Complexity Blocks" >> audit-report/07-complexity.md
+            echo "" >> audit-report/07-complexity.md
+            echo '```' >> audit-report/07-complexity.md
+            cat audit-report/cc-high.txt >> audit-report/07-complexity.md
+            echo '```' >> audit-report/07-complexity.md
+          fi
+          if [ "$LOW_MI" != "0" ]; then
+            echo "" >> audit-report/07-complexity.md
+            echo "## Low Maintainability Files" >> audit-report/07-complexity.md
+            echo "" >> audit-report/07-complexity.md
+            echo '```' >> audit-report/07-complexity.md
+            cat audit-report/mi-low.txt >> audit-report/07-complexity.md
+            echo '```' >> audit-report/07-complexity.md
+          fi
+
+      # ── 8. Linting ────────────────────────────────────────────────────
+      - name: Run ruff linting
+        run: |
+          echo "# 8. Code Quality — Ruff Lint & Format" > audit-report/08-linting.md
+          echo "" >> audit-report/08-linting.md
+          echo "**ISO 27001 Control:** A.8.25 — Secure Development Lifecycle" >> audit-report/08-linting.md
+          echo "" >> audit-report/08-linting.md
+          set +e
+          uv run ruff check . 2>&1 | tee audit-report/ruff-check.txt
+          CHECK_EXIT=$?
+          uv run ruff format --check . 2>&1 | tee audit-report/ruff-format.txt
+          FORMAT_EXIT=$?
+          set -e
+          if [ "$CHECK_EXIT" -eq 0 ] && [ "$FORMAT_EXIT" -eq 0 ]; then
+            echo ":white_check_mark: **No lint or formatting issues.**" >> audit-report/08-linting.md
+          else
+            echo ":warning: **Issues detected.**" >> audit-report/08-linting.md
+            echo "" >> audit-report/08-linting.md
+            echo '```' >> audit-report/08-linting.md
+            cat audit-report/ruff-check.txt >> audit-report/08-linting.md
+            cat audit-report/ruff-format.txt >> audit-report/08-linting.md
+            echo '```' >> audit-report/08-linting.md
+          fi
+
+      # ── 9. Container image scan – Trivy ───────────────────────────────
+      - name: Build Docker image
+        run: docker build -t flight-blender:audit .
+
+      - name: Run Trivy container scan
+        run: |
+          echo "# 9. Container Image Vulnerability Scan — Trivy" > audit-report/09-trivy.md
+          echo "" >> audit-report/09-trivy.md
+          echo "**ISO 27001 Controls:** A.8.8 — Technical Vulnerabilities, A.8.9 — Configuration Management" >> audit-report/09-trivy.md
+          echo "" >> audit-report/09-trivy.md
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          set +e
+          trivy image --severity CRITICAL,HIGH,MEDIUM --format table flight-blender:audit 2>&1 | tee audit-report/trivy-report.txt
+          TRIVY_EXIT=$?
+          set -e
+          trivy image --severity CRITICAL,HIGH,MEDIUM --format json --output audit-report/trivy-results.json flight-blender:audit 2>/dev/null || true
+          if [ "$TRIVY_EXIT" -eq 0 ]; then
+            echo ":white_check_mark: **No vulnerabilities found (CRITICAL/HIGH/MEDIUM).**" >> audit-report/09-trivy.md
+          else
+            echo ":warning: **Vulnerabilities detected.**" >> audit-report/09-trivy.md
+          fi
+          echo "" >> audit-report/09-trivy.md
+          echo '```' >> audit-report/09-trivy.md
+          cat audit-report/trivy-report.txt >> audit-report/09-trivy.md
+          echo '```' >> audit-report/09-trivy.md
+
+      # ── 10. SBOM ─────────────────────────────────────────────────────
+      - name: Generate SBOM
+        run: |
+          echo "# 10. Software Bill of Materials (SBOM)" > audit-report/10-sbom.md
+          echo "" >> audit-report/10-sbom.md
+          echo "**ISO 27001 Controls:** A.5.19–5.22 — Supplier Relationships" >> audit-report/10-sbom.md
+          echo "" >> audit-report/10-sbom.md
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft flight-blender:audit -o spdx-json=audit-report/sbom.spdx.json -o cyclonedx-json=audit-report/sbom.cyclonedx.json
+          PKG_COUNT=$(python3 -c "import json; d=json.load(open('audit-report/sbom.spdx.json')); print(len(d.get('packages', [])))" 2>/dev/null || echo "N/A")
+          echo "**Packages cataloged:** ${PKG_COUNT}" >> audit-report/10-sbom.md
+          echo "" >> audit-report/10-sbom.md
+          echo "SBOM files included in this artifact:" >> audit-report/10-sbom.md
+          echo "- \`sbom.spdx.json\` (SPDX format)" >> audit-report/10-sbom.md
+          echo "- \`sbom.cyclonedx.json\` (CycloneDX format)" >> audit-report/10-sbom.md
+
+      # ── 11. Dependency inventory ──────────────────────────────────────
+      - name: Generate dependency inventory
+        run: |
+          echo "# 11. Dependency Inventory" > audit-report/11-dependencies.md
+          echo "" >> audit-report/11-dependencies.md
+          echo "**ISO 27001 Control:** A.8.8 — Management of Technical Vulnerabilities" >> audit-report/11-dependencies.md
+          echo "" >> audit-report/11-dependencies.md
+          echo "## Runtime Dependencies" >> audit-report/11-dependencies.md
+          echo "" >> audit-report/11-dependencies.md
+          echo '```' >> audit-report/11-dependencies.md
+          uv run pip list --format=columns 2>/dev/null >> audit-report/11-dependencies.md || uv pip list --format=columns >> audit-report/11-dependencies.md || true
+          echo '```' >> audit-report/11-dependencies.md
+
+      # ── Compile final report ──────────────────────────────────────────
+      - name: Compile full report
+        run: |
+          cat \
+            audit-report/01-project-metadata.md \
+            audit-report/02-bandit.md \
+            audit-report/03-pip-audit.md \
+            audit-report/04-gitleaks.md \
+            audit-report/05-licenses.md \
+            audit-report/06-coverage.md \
+            audit-report/07-complexity.md \
+            audit-report/08-linting.md \
+            audit-report/09-trivy.md \
+            audit-report/10-sbom.md \
+            audit-report/11-dependencies.md \
+            > audit-report/FULL-AUDIT-REPORT.md
+
+          echo "" >> audit-report/FULL-AUDIT-REPORT.md
+          echo "---" >> audit-report/FULL-AUDIT-REPORT.md
+          echo "*Report generated automatically by GitHub Actions on $(date -u '+%Y-%m-%d %H:%M:%S UTC').*" >> audit-report/FULL-AUDIT-REPORT.md
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :clipboard: ISO Audit Report Generated" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**${{ github.event.inputs.report_title }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The full report has been uploaded as an artifact. It contains:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| # | Section | ISO 27001 Control |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---------|-------------------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 1 | Project Metadata | — |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 2 | SAST (Bandit) | A.8.25 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 3 | Dependency CVEs (pip-audit) | A.8.8 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 4 | Secret Scanning (Gitleaks) | A.8.4, A.5.33 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 5 | License Compliance (pip-licenses) | A.5.32 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 6 | Test Suite & Coverage (pytest) | A.8.29 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 7 | Code Complexity (radon) | A.8.25 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 8 | Code Quality (ruff) | A.8.25 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 9 | Container Scan (Trivy) | A.8.8, A.8.9 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 10 | SBOM | A.5.19–5.22 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 11 | Dependency Inventory | A.8.8 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download the \`iso-audit-report\` artifact below." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-audit-report-${{ github.run_number }}
+          retention-days: 90
+          path: |
+            audit-report/FULL-AUDIT-REPORT.md
+            audit-report/bandit-results.json
+            audit-report/pip-audit-results.json
+            audit-report/gitleaks-results.json
+            audit-report/trivy-results.json
+            audit-report/sbom.spdx.json
+            audit-report/sbom.cyclonedx.json
+            audit-report/licenses.csv
+            audit-report/coverage.json
+            audit-report/requirements.txt

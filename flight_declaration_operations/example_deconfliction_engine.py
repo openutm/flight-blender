@@ -5,7 +5,7 @@ de-confliction engine for Flight Blender.
 
 To use, set the environment variable::
 
-    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=flight_declaration_operations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine
+    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE = flight_declaration_operations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine
 
 The class must satisfy the
 :class:`~flight_declaration_operations.deconfliction_protocol.DeconflictionEngine`

@@ -1,0 +1,119 @@
+name: Docker Build
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build Docker image
+        run: docker build -t flight-blender:test .
+      - name: Run Trivy vulnerability scanner
+        id: trivy
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: flight-blender:test
+          format: table
+          output: trivy-report.txt
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "1"
+        continue-on-error: true
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: flight-blender:test
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+      - name: Write Trivy Job Summary
+        if: always()
+        run: |
+          echo "## :whale: Trivy Container Scan" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.trivy.outcome }}" = "success" ]; then
+            echo ":white_check_mark: No vulnerabilities found (CRITICAL/HIGH/MEDIUM)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo ":rotating_light: Vulnerabilities detected:" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "<details><summary>Show details</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat trivy-report.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const outcome = '${{ steps.trivy.outcome }}';
+            let body = '## :whale: Trivy Container Scan\n\n';
+            if (outcome === 'success') {
+              body += ':white_check_mark: No vulnerabilities found (CRITICAL/HIGH/MEDIUM).';
+            } else {
+              const report = fs.existsSync('trivy-report.txt') ? fs.readFileSync('trivy-report.txt', 'utf8').trim() : '';
+              const lines = report.split('\n');
+              const summary = lines.filter(l => l.includes('Total:')).join('\n') || `Vulnerabilities detected.`;
+              body += `:rotating_light: ${summary}\n\n`;
+              body += '<details><summary>Show details</summary>\n\n';
+              body += '```\n' + report + '\n```\n';
+              body += '</details>';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':whale: Trivy Container Scan'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Generate SBOM
+        if: always()
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          image: flight-blender:test
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom-flight-blender
+      - name: Write SBOM Job Summary
+        if: always()
+        run: |
+          echo "## :package: SBOM (Software Bill of Materials)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f sbom.spdx.json ]; then
+            PKG_COUNT=$(python3 -c "import json; d=json.load(open('sbom.spdx.json')); print(len(d.get('packages', [])))" 2>/dev/null || echo "N/A")
+            echo ":white_check_mark: SBOM generated successfully (SPDX format)." >> "$GITHUB_STEP_SUMMARY"
+            echo "**Packages cataloged:** ${PKG_COUNT}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The SBOM artifact is available for download from the Actions run." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo ":warning: SBOM generation failed." >> "$GITHUB_STEP_SUMMARY"
+          fi

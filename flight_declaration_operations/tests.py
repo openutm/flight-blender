@@ -39,6 +39,7 @@ from .models import FlightDeclaration, FlightOperationTracking
 # Test-payload helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_geojson_feature_collection(
     lng: float = 8.55,
     lat: float = 47.36,
@@ -168,14 +169,17 @@ _CONFLICTING_INTERSECTION = IntersectionCheckResult(
 
 def _mock_run_deconfliction(result: IntersectionCheckResult):
     """Create a side_effect for check_intersections that returns *result* for every declaration."""
+
     def side_effect(flight_declarations, ussp_network_enabled):
         return {str(fd.id): result for fd in flight_declarations}
+
     return side_effect
 
 
 # ---------------------------------------------------------------------------
 # set_flight_declaration tests
 # ---------------------------------------------------------------------------
+
 
 @override_settings(
     DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
@@ -243,12 +247,14 @@ class SetFlightDeclarationTests(TestCase):
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
         "flight_declaration_operations.views._run_deconfliction",
-        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=0,
-        )),
+        side_effect=_mock_run_deconfliction(
+            IntersectionCheckResult(
+                all_relevant_fences=[],
+                all_relevant_declarations=[],
+                is_approved=True,
+                declaration_state=0,
+            )
+        ),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_valid_payload_ussp_enabled_submits_to_dss(
@@ -437,6 +443,7 @@ class SetFlightDeclarationTests(TestCase):
 # set_operational_intent tests
 # ---------------------------------------------------------------------------
 
+
 @override_settings(
     DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
     CELERY_TASK_ALWAYS_EAGER=True,
@@ -494,12 +501,14 @@ class SetOperationalIntentTests(TestCase):
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
         "flight_declaration_operations.views._run_deconfliction",
-        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=0,
-        )),
+        side_effect=_mock_run_deconfliction(
+            IntersectionCheckResult(
+                all_relevant_fences=[],
+                all_relevant_declarations=[],
+                is_approved=True,
+                declaration_state=0,
+            )
+        ),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_valid_payload_ussp_enabled_submits_to_dss(
@@ -660,16 +669,19 @@ class SetOperationalIntentTests(TestCase):
 # Helpers for bulk intersection-check mocking
 # ---------------------------------------------------------------------------
 
+
 def _mock_run_deconfliction_alternating(approved_result, rejected_result):
     """Return a side_effect that approves even-indexed declarations and rejects odd-indexed ones.
 
     The declarations list order is used to determine the index.
     """
+
     def side_effect(flight_declarations, ussp_network_enabled):
         results = {}
         for i, fd in enumerate(flight_declarations):
             results[str(fd.id)] = approved_result if i % 2 == 0 else rejected_result
         return results
+
     return side_effect
 
 
@@ -740,12 +752,14 @@ class SetFlightDeclarationsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
         "flight_declaration_operations.views._run_deconfliction",
-        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=0,
-        )),
+        side_effect=_mock_run_deconfliction(
+            IntersectionCheckResult(
+                all_relevant_fences=[],
+                all_relevant_declarations=[],
+                is_approved=True,
+                declaration_state=0,
+            )
+        ),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_valid_ussp_enabled_submits_each_to_dss(
@@ -1099,12 +1113,14 @@ class SetOperationalIntentsBulkTests(TestCase):
     @patch("flight_declaration_operations.views.send_operational_update_message")
     @patch(
         "flight_declaration_operations.views._run_deconfliction",
-        side_effect=_mock_run_deconfliction(IntersectionCheckResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=0,
-        )),
+        side_effect=_mock_run_deconfliction(
+            IntersectionCheckResult(
+                all_relevant_fences=[],
+                all_relevant_declarations=[],
+                is_approved=True,
+                declaration_state=0,
+            )
+        ),
     )
     @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
     def test_all_valid_ussp_enabled_submits_each_to_dss(

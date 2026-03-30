@@ -217,11 +217,7 @@ class CustomVolumeGenerator:
 
             broken_down_features = self._break_linestring_to_smaller_pieces(line_feature=feature, piece_length_m=self.default_uav_speed_m_per_s * 3)
 
-            num_pieces = len(broken_down_features)
-            total_flight_time_s = num_pieces * 3  # Assuming each piece takes 3 seconds
             climb_time_s = abs(max_altitude - min_altitude) / self.default_uav_climb_rate_m_per_s
-            descent_time_s = abs(max_altitude - min_altitude) / self.default_uav_descent_rate_m_per_s
-            adjusted_flight_time_s = total_flight_time_s + climb_time_s + descent_time_s
 
             for idx, piece in enumerate(broken_down_features):
                 piece_start_time = arrow.get(_takeoff_start).shift(seconds=int(idx * 3 + climb_time_s)).isoformat()

@@ -1,6 +1,5 @@
 import os
 from dataclasses import asdict
-from datetime import timedelta
 
 import arrow
 from asgiref.sync import async_to_sync

@@ -32,21 +32,21 @@ from surveillance_monitoring_operations.data_definitions import (
 
 class BaseTrafficDataFuser:
     """Optional convenience base class for traffic data fusion implementations.
-    
+
     This class implements a template method pattern for traffic data fusion workflows.
     It provides concrete methods for common operations (speed/bearing calculation,
     track message generation) while expecting subclasses to implement specific fusion
     algorithms and track management logic.
-    
+
     Implementations can range from simple pass-through fusers to sophisticated
     multi-sensor fusion algorithms using Kalman filters or other estimation techniques.
-    
+
     .. note::
-    
+
         The canonical interface is the ``TrafficDataFuser`` Protocol defined in
         ``surveillance_monitoring_operations.traffic_data_fuser_protocol``.
         Extending this base class is optional.
-    
+
     Attributes:
         session_id: Unique identifier for the surveillance session
         raw_observations: List of raw air traffic observations to be processed
@@ -57,11 +57,11 @@ class BaseTrafficDataFuser:
 
     def __init__(self, session_id: str, raw_observations: List[SingleAirtrafficObservation]):
         """Initialize the traffic data fuser.
-        
+
         Args:
             session_id: Unique identifier for the surveillance session
             raw_observations: List of raw air traffic observations from various sources
-            
+
         Note:
             Subclasses must initialize redis_stream_helper and SDSP_IDENTIFIER attributes.
         """
@@ -71,10 +71,9 @@ class BaseTrafficDataFuser:
         self.redis_stream_helper: RedisStreamOperations
         self.SDSP_IDENTIFIER: str = "FLIGHT_BLENDER_SDSP"
 
-
     def generate_track_messages(self) -> List[TrackMessage]:
         """Orchestrate the complete data fusion and track generation workflow.
-        
+
         This template method coordinates the entire fusion process by calling:
         1. _pre_process_raw_data() - Optional pre-processing hook
         2. _fuse_raw_observations() - Abstract method for sensor fusion
@@ -82,7 +81,7 @@ class BaseTrafficDataFuser:
         4. Retrieve active tracks from Redis
         5. _post_process_fused_data() - Optional post-processing hook
         6. _generate_track_messages_impl() - Convert tracks to messages
-        
+
         Returns:
             List of track messages ready for distribution to consumers
         """
@@ -95,14 +94,14 @@ class BaseTrafficDataFuser:
 
     def _generate_flight_speed_bearing(self, adjacent_points: List[LatLangAltPoint], delta_time_secs: float = 1.0) -> List[float]:
         """Calculate speed, bearing, and vertical speed between two points.
-        
+
         Uses geodetic calculations on the WGS84 ellipsoid to compute accurate
         distance, bearing, and rates of change between consecutive observations.
-        
+
         Args:
             adjacent_points: List containing exactly 2 LatLangAltPoint objects (first and second positions)
             delta_time_secs: Time difference in seconds between the two points (default: 1.0)
-            
+
         Returns:
             List of [horizontal_speed_m/s, bearing_degrees, vertical_speed_m/s]
         """
@@ -124,23 +123,23 @@ class BaseTrafficDataFuser:
         vertical_speed_mps = float("{:.2f}".format(vertical_speed_mps))
 
         return [speed_mts_per_sec, fwd_azimuth, vertical_speed_mps]
-    
+
     def _generate_track_messages_impl(self, active_tracks: List[ActiveTrack]) -> List[TrackMessage]:
         """Internal implementation for converting active tracks to track messages.
-        
+
         This concrete method processes each active track to generate standardized
         ASTM F3411 compliant track messages. For each track, it:
         - Extracts the latest and previous observations
         - Calculates speed, bearing, and vertical speed using geodetic methods
         - Creates position and state objects with accuracy estimates
         - Assembles complete track messages with timestamps and identifiers
-        
+
         Subclasses can override this method to customize track message generation,
         but the default implementation handles standard surveillance scenarios.
-        
+
         Args:
             active_tracks: List of active tracks for the current session
-            
+
         Returns:
             List of track messages ready for distribution to consumers
         """
@@ -198,30 +197,29 @@ class BaseTrafficDataFuser:
 
         return all_track_data
 
-    
     def _pre_process_raw_data(self) -> bool:
         """Optional hook for pre-processing raw observations before fusion.
-        
+
         This method is called before _fuse_raw_observations() and provides an
         extension point for subclasses to implement filtering, validation,
         or transformation of raw observations.
-        
+
         The default implementation does nothing and returns True.
-        
+
         Returns:
             True if pre-processing was successful, False otherwise
         """
         return True
-    
+
     def _post_process_fused_data(self) -> bool:
         """Optional hook for post-processing after track generation.
-        
+
         This method is called after _generate_active_tracks() but before final
         track message generation. It provides an extension point for subclasses
         to implement cleanup, validation, or additional processing.
-        
+
         The default implementation does nothing and returns True.
-        
+
         Returns:
             True if post-processing was successful, False otherwise
         """
@@ -229,7 +227,7 @@ class BaseTrafficDataFuser:
 
     def _fuse_raw_observations(self) -> List[SingleAirtrafficObservation]:
         """Fuse raw observations from multiple sources.
-        
+
         Subclasses should override this method to define their fusion algorithm.
         This method applies data fusion algorithms to combine observations from
         multiple sensors or sources. Implementations may use techniques such as:
@@ -238,7 +236,7 @@ class BaseTrafficDataFuser:
         - Kalman filtering
         - Interacting Multiple Model (IMM) estimation
         - Multi-hypothesis tracking
-        
+
         Returns:
             List of fused air traffic observations
         """
@@ -246,12 +244,12 @@ class BaseTrafficDataFuser:
 
     def _generate_active_tracks(self, fused_observations: List[SingleAirtrafficObservation]) -> None:
         """Generate and maintain active tracks for the session.
-        
+
         Subclasses should override this method to define their track management
         strategy. This method creates or updates active track objects for each
         aircraft being monitored in the session. Tracks are typically stored in
         Redis for persistence across task invocations.
-        
+
         Implementations should:
         - Group fused observations by unique aircraft identifier (e.g., ICAO address)
         - Create new tracks for newly detected aircraft

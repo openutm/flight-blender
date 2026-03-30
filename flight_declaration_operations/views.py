@@ -400,9 +400,7 @@ def set_operational_intent(request):
         return JsonResponse(error or {"message": "Unknown error"}, status=400)
 
     intersection_results = _run_deconfliction([flight_declaration], ussp_network_enabled)
-    creation_response = _process_intersection_result(
-        flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled
-    )
+    creation_response = _process_intersection_result(flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled)
     return HttpResponse(
         json.dumps(asdict(creation_response)),
         status=200,
@@ -421,9 +419,7 @@ def set_flight_declaration(request):
         return JsonResponse(error or {"message": "Unknown error"}, status=400)
 
     intersection_results = _run_deconfliction([flight_declaration], ussp_network_enabled)
-    creation_response = _process_intersection_result(
-        flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled
-    )
+    creation_response = _process_intersection_result(flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled)
     return HttpResponse(
         json.dumps(asdict(creation_response)),
         status=200,
@@ -477,7 +473,9 @@ def set_flight_declarations_bulk(request):
                 if error or flight_declaration is None:
                     failed_count += 1
                     error = error or {"message": "Unknown error"}
-                    results.append({"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")})
+                    results.append(
+                        {"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")}
+                    )
                 else:
                     saved[idx] = flight_declaration
             except Exception as e:
@@ -491,9 +489,7 @@ def set_flight_declarations_bulk(request):
         submitted_count = 0
         for idx, flight_declaration in saved.items():
             fd_id = str(flight_declaration.id)
-            creation_response = _process_intersection_result(
-                flight_declaration, intersection_results[fd_id], ussp_network_enabled
-            )
+            creation_response = _process_intersection_result(flight_declaration, intersection_results[fd_id], ussp_network_enabled)
             submitted_count += 1
             results.append(
                 {
@@ -558,7 +554,9 @@ def set_operational_intents_bulk(request):
                 if error or flight_declaration is None:
                     failed_count += 1
                     error = error or {"message": "Unknown error"}
-                    results.append({"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")})
+                    results.append(
+                        {"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")}
+                    )
                 else:
                     saved[idx] = flight_declaration
             except Exception as e:
@@ -572,9 +570,7 @@ def set_operational_intents_bulk(request):
         submitted_count = 0
         for idx, flight_declaration in saved.items():
             fd_id = str(flight_declaration.id)
-            creation_response = _process_intersection_result(
-                flight_declaration, intersection_results[fd_id], ussp_network_enabled
-            )
+            creation_response = _process_intersection_result(flight_declaration, intersection_results[fd_id], ussp_network_enabled)
             submitted_count += 1
             results.append(
                 {
@@ -797,9 +793,7 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         my_database_writer.create_flight_operational_intent_reference_from_flight_declaration_obj(flight_declaration=flight_declaration)
 
         intersection_results = _run_deconfliction([flight_declaration], ussp_network_enabled)
-        creation_response = _process_intersection_result(
-            flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled
-        )
+        creation_response = _process_intersection_result(flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled)
         return HttpResponse(
             json.dumps(asdict(creation_response)),
             status=200,

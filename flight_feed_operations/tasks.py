@@ -9,6 +9,7 @@ import requests
 from dacite import from_dict
 from dacite.exceptions import DaciteError, WrongTypeError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from pyproj import Transformer
 
 from common.database_operations import FlightBlenderDatabaseWriter
@@ -22,9 +23,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-
-from loguru import logger
 
 #### Airtraffic Endpoint
 

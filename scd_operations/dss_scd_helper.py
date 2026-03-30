@@ -10,6 +10,7 @@ import shapely.geometry
 import tldextract
 import urllib3
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from pyproj import Proj
 from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
@@ -78,8 +79,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-from loguru import logger
 
 
 def is_time_within_time_period(start_time: datetime, end_time: datetime, time_to_check: datetime):

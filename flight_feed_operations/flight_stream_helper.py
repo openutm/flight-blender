@@ -4,6 +4,7 @@ from itertools import zip_longest
 import arrow
 import shapely
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 from shapely.geometry import Point
 from shapely.geometry import box as shapely_box
 
@@ -13,7 +14,6 @@ from common.database_operations import FlightBlenderDatabaseReader
 from .data_definitions import FlightObservationSchema
 
 load_dotenv(find_dotenv())
-from loguru import logger
 
 
 # iterate a list in batches of size n

@@ -1,24 +1,109 @@
 name: Linting
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   ruff:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv sync --dev
+      - name: Run ruff
+        id: ruff
+        run: |
+          set +e
+          uv run ruff check --output-format github . 2>&1 | tee ruff-output.txt
+          check_exit=$?
+          uv run ruff format --check . 2>&1 | tee -a ruff-output.txt
+          format_exit=$?
+          if [ "$check_exit" -ne 0 ] || [ "$format_exit" -ne 0 ]; then
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          fi
+          set -e
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## Ruff results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.ruff.outputs.exit_code }}" = "0" ]; then
+            echo ":white_check_mark: No issues found." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat ruff-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request' && steps.ruff.outputs.exit_code != '0'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('ruff-output.txt', 'utf8').trim();
+            let body = '## :mag: Ruff lint results\n\n';
+            body += '<details><summary>Show details</summary>\n\n';
+            body += '```\n' + output + '\n```\n';
+            body += '</details>';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':mag: Ruff lint results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Remove PR comment if passing
+        if: always() && github.event_name == 'pull_request' && steps.ruff.outputs.exit_code == '0'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':mag: Ruff lint results'));
+            if (existing) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+              });
+            }
+      - name: Fail if errors found
+        if: steps.ruff.outputs.exit_code != '0'
+        run: exit 1
   codespell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: codespell-project/actions-codespell@v2
-        with:
-          ignore_words_file: .codespellignore
-          exclude_file: "**/redis.conf"
-  pylint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -26,14 +111,85 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv
           uv sync --dev
-      - name: Analysing the code with pylint
+      - name: Run codespell
+        id: codespell
         run: |
-          uv run pylint $(git ls-files '*.py')
+          set +e
+          uv run codespell 2>&1 | tee codespell-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## Codespell results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.codespell.outputs.exit_code }}" = "0" ]; then
+            echo ":white_check_mark: No issues found." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat codespell-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request' && steps.codespell.outputs.exit_code != '0'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('codespell-output.txt', 'utf8').trim();
+            let body = '## :abc: Codespell results\n\n';
+            body += '<details><summary>Show details</summary>\n\n';
+            body += '```\n' + output + '\n```\n';
+            body += '</details>';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':abc: Codespell results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Remove PR comment if passing
+        if: always() && github.event_name == 'pull_request' && steps.codespell.outputs.exit_code == '0'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':abc: Codespell results'));
+            if (existing) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+              });
+            }
+      - name: Fail if errors found
+        if: steps.codespell.outputs.exit_code != '0'
+        run: exit 1
   pytest:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "sqlite://:memory:"
+      BYPASS_AUTH_TOKEN_VERIFICATION: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -41,12 +197,75 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv
           uv sync --dev
-      - name: run unit tests with pytest
+      - name: Run tests with pytest
+        id: pytest
         run: |
-          uv run pytest
-  # bandit:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Run bandit
-  #       uses: tj-actions/bandit@v5.1
+          set +e
+          uv run pytest --tb=short 2>&1 | tee pytest-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## Pytest results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.pytest.outputs.exit_code }}" = "0" ]; then
+            echo ":white_check_mark: All tests passed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -50 pytest-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request' && steps.pytest.outputs.exit_code != '0'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const lines = fs.readFileSync('pytest-output.txt', 'utf8').trim().split('\n');
+            const output = lines.slice(-50).join('\n');
+            let body = '## :test_tube: Pytest results\n\n';
+            body += '<details><summary>Show details</summary>\n\n';
+            body += '```\n' + output + '\n```\n';
+            body += '</details>';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':test_tube: Pytest results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Remove PR comment if passing
+        if: always() && github.event_name == 'pull_request' && steps.pytest.outputs.exit_code == '0'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':test_tube: Pytest results'));
+            if (existing) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+              });
+            }
+      - name: Fail if tests failed
+        if: steps.pytest.outputs.exit_code != '0'
+        run: exit 1

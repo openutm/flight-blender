@@ -1,0 +1,42 @@
+name: Dependency Update
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Every Monday at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Update dependencies
+        run: uv lock --upgrade
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet uv.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create Pull Request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: update Python dependencies"
+          title: "chore: update Python dependencies"
+          body: |
+            Automated dependency update via `uv lock --upgrade`.
+
+            Please review the changes to `uv.lock` and verify CI passes before merging.
+          branch: deps/uv-lock-upgrade
+          delete-branch: true
