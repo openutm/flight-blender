@@ -1,9 +1,10 @@
 name: Security
-on: [push]
+on: [push, pull_request]
 
 permissions:
   security-events: write
   contents: read
+  pull-requests: write
 
 jobs:
   bandit:
@@ -19,16 +20,64 @@ jobs:
           pip install uv
           uv sync --dev
       - name: Run bandit
+        id: bandit
         run: |
-          uv run bandit -r . -x ./.venv -c pyproject.toml -f sarif -o bandit-results.sarif || true
+          set +e
+          uv run bandit -r . -x ./.venv -c pyproject.toml -f sarif -o bandit-results.sarif
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
           if [ ! -f bandit-results.sarif ]; then
             echo '{"version":"2.1.0","$schema":"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json","runs":[{"tool":{"driver":{"name":"Bandit","rules":[]}},"results":[]}]}' > bandit-results.sarif
           fi
+          uv run bandit -r . -x ./.venv -c pyproject.toml -f md -o bandit-report.md || true
       - name: Upload bandit SARIF
+        if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: bandit-results.sarif
           category: bandit
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## Bandit results" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s bandit-report.md ]; then
+            cat bandit-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No issues found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## :rotating_light: Bandit results\n\n';
+            if (fs.existsSync('bandit-report.md') && fs.readFileSync('bandit-report.md', 'utf8').trim()) {
+              body += fs.readFileSync('bandit-report.md', 'utf8');
+            } else {
+              body += ':white_check_mark: No issues found.';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':rotating_light: Bandit results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
   pip-audit:
     runs-on: ubuntu-latest
     steps:
@@ -38,17 +87,58 @@ jobs:
           python-version: "3.12"
       - name: Install uv and export requirements
         run: |
-          pip install uv
+          pip install uv pip-audit
           uv export --no-hashes --no-dev --no-emit-project > requirements.txt
       - name: Run pip-audit
-        id: pip-audit
-        uses: pypa/gh-action-pip-audit@v1.1.0
-        continue-on-error: true
-        with:
-          inputs: requirements.txt
-          summary: true
-      - name: Fail if vulnerabilities found
-        if: steps.pip-audit.outcome == 'failure'
+        id: audit
         run: |
-          echo "::warning::pip-audit found vulnerabilities — see the Job Summary above for details."
-          exit 1
+          set +e
+          pip-audit -r requirements.txt --format markdown --output pip-audit-report.md 2>pip-audit-stderr.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Write Job Summary
+        if: always()
+        run: |
+          if [ -s pip-audit-report.md ]; then
+            echo "## pip-audit results" >> "$GITHUB_STEP_SUMMARY"
+            cat pip-audit-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## pip-audit results" >> "$GITHUB_STEP_SUMMARY"
+            echo "No vulnerabilities found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## :shield: pip-audit results\n\n';
+            if (fs.existsSync('pip-audit-report.md') && fs.readFileSync('pip-audit-report.md', 'utf8').trim()) {
+              body += fs.readFileSync('pip-audit-report.md', 'utf8');
+            } else {
+              body += ':white_check_mark: No vulnerabilities found.';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':shield: pip-audit results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+      - name: Fail if vulnerabilities found
+        if: steps.audit.outputs.exit_code != '0'
+        run: exit 1
