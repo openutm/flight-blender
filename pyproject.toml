@@ -62,8 +62,6 @@ dev = [
     "bandit>=1.8.3",
     "codespell>=2.4.1",
     "pre-commit>=4.2.0",
-    "pylint-django>=2.6.1",
-    "pylint-pytest>=1.1.8",
     "pyright>=1.1.398",
     "pytest-django>=4.11.1",
     "pyupgrade>=3.19.1",
@@ -87,17 +85,54 @@ skip = ["**/redis.conf", "uv.lock"]
 ignore-words = ".codespellignore"
 quiet-level = 2
 
-[tool.pylint]
-load-plugins = "pylint_pytest"
+[tool.bandit]
+exclude_dirs = [".venv", "*/migrations/*", "*/tests/*"]
 
-[tool.pylint.format]
-max-line-length = 150
-
-[tool.pylint."messages control"]
-disable = [
-    "missing-module-docstring",
-    "missing-function-docstring",
-    "missing-class-docstring",
-    "unused-import",
-    "useless-import-alias",
+[tool.ruff]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "migrations",
 ]
+line-length = 150
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E402"]
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
