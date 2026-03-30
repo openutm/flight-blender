@@ -57,7 +57,28 @@ jobs:
           script: |
             const fs = require('fs');
             let body = '## :rotating_light: Bandit results\n\n';
-            if (fs.existsSync('bandit-report.txt') && fs.readFileSync('bandit-report.txt', 'utf8').trim()) {
+            const reportExists = fs.existsSync('bandit-report.txt') && fs.readFileSync('bandit-report.txt', 'utf8').trim();
+            if (reportExists) {
+              // Parse SARIF for summary counts
+              let summary = '';
+              try {
+                const sarif = JSON.parse(fs.readFileSync('bandit-results.sarif', 'utf8'));
+                const results = sarif.runs?.[0]?.results || [];
+                const sev = { error: 0, warning: 0, note: 0 };
+                for (const r of results) {
+                  const level = r.level || 'warning';
+                  sev[level] = (sev[level] || 0) + 1;
+                }
+                const total = results.length;
+                const parts = [];
+                if (sev.error) parts.push(`${sev.error} high`);
+                if (sev.warning) parts.push(`${sev.warning} medium`);
+                if (sev.note) parts.push(`${sev.note} low`);
+                summary = `**${total} issue${total !== 1 ? 's' : ''} found** (${parts.join(', ')})\n\n`;
+              } catch {
+                summary = '';
+              }
+              body += summary;
               body += '<details><summary>Show details</summary>\n\n';
               body += '```\n' + fs.readFileSync('bandit-report.txt', 'utf8') + '\n```\n';
               body += '</details>';
@@ -124,9 +145,7 @@ jobs:
             const fs = require('fs');
             let body = '## :shield: pip-audit results\n\n';
             if (fs.existsSync('pip-audit-report.md') && fs.readFileSync('pip-audit-report.md', 'utf8').trim()) {
-              body += '<details><summary>Show details</summary>\n\n';
-              body += fs.readFileSync('pip-audit-report.md', 'utf8') + '\n';
-              body += '</details>';
+              body += fs.readFileSync('pip-audit-report.md', 'utf8');
             } else {
               body += ':white_check_mark: No vulnerabilities found.';
             }
