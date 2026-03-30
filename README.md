@@ -42,6 +42,13 @@ Blender conforms to the requirements for Surveillance supplemental data service 
 ### Detect, Alert and Avoid
 Flight Blender implements the Detect Alert and Avoid standard F3442
 
+### Plugin System
+Flight Blender has a plugin architecture that lets you swap core components — de-confliction engines, traffic data fusers, and volume 4D generators — with your own implementations via environment variables. No forking required. Additional extension points for other parts of the system (e.g. conformance monitoring, operator notifications, geofence evaluation) are planned for future releases.
+
+📖 [Read the Plugin Guide](PLUGINS.md) for the full documentation and working examples in `example_plugins/`.
+
+---
+
 ## Roadmap
 
 ![roadmap](images/oss-roadmap.png)
