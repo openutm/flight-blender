@@ -54,7 +54,9 @@ jobs:
             const fs = require('fs');
             const output = fs.readFileSync('ruff-output.txt', 'utf8').trim();
             let body = '## :mag: Ruff lint results\n\n';
-            body += '```\n' + output + '\n```';
+            body += '<details><summary>Show details</summary>\n\n';
+            body += '```\n' + output + '\n```\n';
+            body += '</details>';
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -135,7 +137,9 @@ jobs:
             const fs = require('fs');
             const output = fs.readFileSync('codespell-output.txt', 'utf8').trim();
             let body = '## :abc: Codespell results\n\n';
-            body += '```\n' + output + '\n```';
+            body += '<details><summary>Show details</summary>\n\n';
+            body += '```\n' + output + '\n```\n';
+            body += '</details>';
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -220,7 +224,9 @@ jobs:
             const lines = fs.readFileSync('pytest-output.txt', 'utf8').trim().split('\n');
             const output = lines.slice(-50).join('\n');
             let body = '## :test_tube: Pytest results\n\n';
-            body += '```\n' + output + '\n```';
+            body += '<details><summary>Show details</summary>\n\n';
+            body += '```\n' + output + '\n```\n';
+            body += '</details>';
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,

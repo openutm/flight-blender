@@ -58,7 +58,9 @@ jobs:
             const fs = require('fs');
             let body = '## :rotating_light: Bandit results\n\n';
             if (fs.existsSync('bandit-report.txt') && fs.readFileSync('bandit-report.txt', 'utf8').trim()) {
-              body += '```\n' + fs.readFileSync('bandit-report.txt', 'utf8') + '\n```';
+              body += '<details><summary>Show details</summary>\n\n';
+              body += '```\n' + fs.readFileSync('bandit-report.txt', 'utf8') + '\n```\n';
+              body += '</details>';
             } else {
               body += ':white_check_mark: No issues found.';
             }
@@ -122,7 +124,9 @@ jobs:
             const fs = require('fs');
             let body = '## :shield: pip-audit results\n\n';
             if (fs.existsSync('pip-audit-report.md') && fs.readFileSync('pip-audit-report.md', 'utf8').trim()) {
-              body += fs.readFileSync('pip-audit-report.md', 'utf8');
+              body += '<details><summary>Show details</summary>\n\n';
+              body += fs.readFileSync('pip-audit-report.md', 'utf8') + '\n';
+              body += '</details>';
             } else {
               body += ':white_check_mark: No vulnerabilities found.';
             }
