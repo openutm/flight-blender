@@ -1,5 +1,8 @@
 name: Docker Build
-on: [pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 jobs:
   build:
     runs-on: ubuntu-latest
