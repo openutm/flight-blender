@@ -1,6 +1,5 @@
 # Create your views here.
 
-import uuid
 from dataclasses import asdict
 from datetime import timedelta
 

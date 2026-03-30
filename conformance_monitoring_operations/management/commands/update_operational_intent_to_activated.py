@@ -76,7 +76,7 @@ class Command(BaseCommand):
         stored_operational_intent = my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
 
         reference_full = stored_operational_intent.success_response.operational_intent_reference
-        dss_response_subscribers = stored_operational_intent.success_response.subscribers
+        _dss_response_subscribers = stored_operational_intent.success_response.subscribers
         details_full = stored_operational_intent.operational_intent_details
         # Load existing opint details
 

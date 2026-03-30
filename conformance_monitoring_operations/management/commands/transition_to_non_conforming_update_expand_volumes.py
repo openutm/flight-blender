@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
 
 from common.data_definitions import OPERATION_STATES
-from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from common.database_operations import FlightBlenderDatabaseReader
 from flight_declaration_operations.utils import OperationalIntentsConverter
 from flight_feed_operations import flight_stream_helper
 from scd_operations.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations
@@ -43,7 +43,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # This command declares an operation as non-conforming and updates the state to the DSS (and notifies subscribers)
         my_database_reader = FlightBlenderDatabaseReader()
-        my_database_writer = FlightBlenderDatabaseWriter()
         my_operational_intents_helper = OperationalIntentReferenceHelper()
         my_scd_dss_helper = SCDOperations()
         dry_run = options["dry_run"]
@@ -62,7 +61,7 @@ class Command(BaseCommand):
         if not flight_declaration:
             raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
 
-        flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+        _flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
             flight_declaration_id=flight_declaration_id
         )
 
@@ -82,7 +81,7 @@ class Command(BaseCommand):
         current_state_str = OPERATION_STATES[current_state][1]
 
         reference_full = stored_operational_intent.success_response.operational_intent_reference
-        dss_response_subscribers = stored_operational_intent.success_response.subscribers
+        _dss_response_subscribers = stored_operational_intent.success_response.subscribers
         details_full = stored_operational_intent.operational_intent_details
         # Load existing opint details
 

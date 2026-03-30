@@ -3,7 +3,7 @@ from django.dispatch import receiver
 from loguru import logger
 
 from common.database_operations import FlightBlenderDatabaseReader
-from surveillance_monitoring_operations.models import SurveillanceSensor, SurveillanceSensorFailureNotification
+from surveillance_monitoring_operations.models import SurveillanceSensorFailureNotification
 
 surveillance_sensor_failure_signal = django.dispatch.Signal()
 from uuid import UUID

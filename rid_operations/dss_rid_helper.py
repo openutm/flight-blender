@@ -598,7 +598,7 @@ class RemoteIDOperations:
 
             else:
                 logs_dict = {
-                    "url": cur_flight_url,
+                    "url": rid_query_url,
                     "status_code": flights_request.status_code,
                 }
                 logger.info("Received a non 200 error from {url} : {status_code} ".format(**logs_dict))

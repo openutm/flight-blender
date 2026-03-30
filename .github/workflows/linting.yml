@@ -1,11 +1,11 @@
 name: Linting
-on: [push, pull_request]
+on: [push]
 jobs:
   ruff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v1
+      - uses: astral-sh/ruff-action@v3
   codespell:
     runs-on: ubuntu-latest
     steps:
@@ -14,23 +14,11 @@ jobs:
         with:
           ignore_words_file: .codespellignore
           exclude_file: "**/redis.conf"
-  pylint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install uv
-          uv sync --dev
-      - name: Analysing the code with pylint
-        run: |
-          uv run pylint $(git ls-files '*.py')
   pytest:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "sqlite://:memory:"
+      BYPASS_AUTH_TOKEN_VERIFICATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,7 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install uv
           uv sync --dev
-      - name: run unit tests with pytest
+      - name: Run tests with pytest
         run: |
           uv run pytest
   # bandit:

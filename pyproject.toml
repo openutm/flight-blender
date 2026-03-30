@@ -65,6 +65,7 @@ dev = [
     "pylint-django>=2.6.1",
     "pylint-pytest>=1.1.8",
     "pyright>=1.1.398",
+    "pytest-django>=4.11.1",
     "pyupgrade>=3.19.1",
     "ruff>=0.11.4",
     "python-lsp-server>=1.12.2",
@@ -72,6 +73,10 @@ dev = [
     "uritemplate>=4.2.0",
     "inflection>=0.5.1",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "flight_blender.settings"
+python_files = ["test_*.py", "tests.py", "tests_*.py"]
 
 [build-system]
 requires = ["hatchling"]
