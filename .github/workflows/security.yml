@@ -173,3 +173,109 @@ jobs:
       - name: Fail if vulnerabilities found
         if: steps.audit.outputs.exit_code != '0'
         run: exit 1
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        id: gitleaks
+        uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :key: Gitleaks results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.gitleaks.outcome }}" = "success" ]; then
+            echo ":white_check_mark: No secrets detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo ":rotating_light: Potential secrets detected! Check the job logs for details." >> "$GITHUB_STEP_SUMMARY"
+          fi
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv pip-licenses
+          uv sync --no-dev
+      - name: Run pip-licenses
+        id: licenses
+        run: |
+          pip-licenses --python="$(uv run python -c 'import sys; print(sys.executable)')" \
+            --format=markdown --order=license --with-urls > licenses-report.md
+          # Check for copyleft licenses that may be incompatible
+          set +e
+          pip-licenses --python="$(uv run python -c 'import sys; print(sys.executable)')" \
+            --format=csv --order=license | grep -iE 'GPL|AGPL|SSPL|EUPL' | grep -viE 'LGPL' > copyleft-found.txt
+          COPYLEFT_COUNT=$(wc -l < copyleft-found.txt | tr -d ' ')
+          echo "copyleft_count=$COPYLEFT_COUNT" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :scroll: License Compliance" >> "$GITHUB_STEP_SUMMARY"
+          COPYLEFT="${{ steps.licenses.outputs.copyleft_count }}"
+          if [ "$COPYLEFT" = "0" ]; then
+            echo ":white_check_mark: No copyleft license issues detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo ":warning: **${COPYLEFT} dependencies with copyleft licenses found.**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat copyleft-found.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "<details><summary>Full license report</summary>" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat licenses-report.md >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const copyleftCount = parseInt('${{ steps.licenses.outputs.copyleft_count }}' || '0');
+            let body = '## :scroll: License Compliance\n\n';
+            if (copyleftCount === 0) {
+              body += ':white_check_mark: No copyleft license issues detected.\n\n';
+            } else {
+              body += `:warning: **${copyleftCount} dependencies with copyleft licenses found.**\n\n`;
+              if (fs.existsSync('copyleft-found.txt')) {
+                body += '```\n' + fs.readFileSync('copyleft-found.txt', 'utf8') + '```\n\n';
+              }
+            }
+            if (fs.existsSync('licenses-report.md')) {
+              body += '<details><summary>Full license report</summary>\n\n';
+              body += fs.readFileSync('licenses-report.md', 'utf8') + '\n';
+              body += '</details>';
+            }
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':scroll: License Compliance'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
