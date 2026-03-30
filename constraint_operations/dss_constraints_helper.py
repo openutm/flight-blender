@@ -8,6 +8,7 @@ import requests
 import urllib3
 from dacite import Config, from_dict
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from auth_helper import dss_auth_helper
 from common.auth_token_audience_helper import generate_audience_from_base_url
@@ -29,8 +30,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-from loguru import logger
 
 
 class ConstraintOperations:

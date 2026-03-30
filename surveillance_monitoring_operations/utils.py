@@ -11,7 +11,7 @@ from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from .data_definitions import ActiveTrack
 
 
-class TrafficDataFuser (BaseTrafficDataFuser):
+class TrafficDataFuser(BaseTrafficDataFuser):
     """A default data fuser to generate track messages"""
 
     def __init__(self, session_id: str, raw_observations: List[SingleAirtrafficObservation]):

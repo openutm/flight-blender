@@ -81,6 +81,9 @@ jobs:
                 body,
               });
             }
+      - name: Fail if issues found
+        if: steps.bandit.outputs.exit_code != '0'
+        run: exit 1
   pip-audit:
     runs-on: ubuntu-latest
     steps:

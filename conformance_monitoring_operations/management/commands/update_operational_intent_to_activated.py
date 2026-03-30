@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import (
@@ -19,7 +20,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-from loguru import logger
 
 
 class Command(BaseCommand):

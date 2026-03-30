@@ -47,17 +47,12 @@ class LoadPluginTests(SimpleTestCase):
     # -- valid path --------------------------------------------------------
 
     def test_valid_path_returns_correct_class(self):
-        cls = load_plugin(
-            "flight_declaration_operations.deconfliction_engine.DefaultDeconflictionEngine"
-        )
+        cls = load_plugin("flight_declaration_operations.deconfliction_engine.DefaultDeconflictionEngine")
         self.assertIs(cls, DefaultDeconflictionEngine)
 
     def test_valid_path_different_module(self):
         """load_plugin works across modules."""
-        cls = load_plugin(
-            "flight_declaration_operations.example_deconfliction_engine."
-            "AltitudeAwareDeconflictionEngine"
-        )
+        cls = load_plugin("flight_declaration_operations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine")
         self.assertIs(cls, AltitudeAwareDeconflictionEngine)
 
     # -- invalid paths -----------------------------------------------------
@@ -68,9 +63,7 @@ class LoadPluginTests(SimpleTestCase):
 
     def test_invalid_class_raises_attribute_error(self):
         with self.assertRaises(AttributeError):
-            load_plugin(
-                "flight_declaration_operations.deconfliction_engine.NonExistentClass"
-            )
+            load_plugin("flight_declaration_operations.deconfliction_engine.NonExistentClass")
 
     def test_no_dot_in_path_raises_value_error(self):
         """A path without a dot cannot be split into module + class."""
@@ -101,17 +94,14 @@ class LoadPluginTests(SimpleTestCase):
 
     def test_example_engine_passes_protocol_check(self):
         cls = load_plugin(
-            "flight_declaration_operations.example_deconfliction_engine."
-            "AltitudeAwareDeconflictionEngine",
+            "flight_declaration_operations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine",
             expected_protocol=DeconflictionEngine,
         )
         self.assertIs(cls, AltitudeAwareDeconflictionEngine)
 
     def test_no_protocol_skips_validation(self):
         """Without expected_protocol any class is accepted."""
-        cls = load_plugin(
-            "flight_declaration_operations.data_definitions.DeconflictionRequest"
-        )
+        cls = load_plugin("flight_declaration_operations.data_definitions.DeconflictionRequest")
         self.assertIs(cls, DeconflictionRequest)
 
     # -- caching -----------------------------------------------------------
@@ -292,7 +282,10 @@ class DefaultDeconflictionEngineTests(SimpleTestCase):
     @patch("flight_declaration_operations.deconfliction_engine.FlightDeclaration.objects")
     @patch("flight_declaration_operations.deconfliction_engine.GeoFence.objects")
     def test_flight_declaration_intersection_rejects(
-        self, mock_gf_objects, mock_fd_objects, mock_fd_index_cls,
+        self,
+        mock_gf_objects,
+        mock_fd_objects,
+        mock_fd_index_cls,
     ):
         """Active flight declaration bbox conflict → rejected (state=8)."""
         mock_gf_objects.filter.return_value = []
@@ -317,7 +310,11 @@ class DefaultDeconflictionEngineTests(SimpleTestCase):
     @patch("flight_declaration_operations.deconfliction_engine.GeoFence.objects")
     @patch("flight_declaration_operations.deconfliction_engine.rtree_geo_fence_helper.GeoFenceRTreeIndexFactory")
     def test_both_fence_and_declaration_conflict(
-        self, mock_gf_index_cls, mock_gf_objects, mock_fd_objects, mock_fd_index_cls,
+        self,
+        mock_gf_index_cls,
+        mock_gf_objects,
+        mock_fd_objects,
+        mock_fd_index_cls,
     ):
         """When both geofence AND declaration conflicts exist, both are reported."""
         fence = MagicMock()
@@ -344,7 +341,10 @@ class DefaultDeconflictionEngineTests(SimpleTestCase):
     @patch("flight_declaration_operations.deconfliction_engine.GeoFence.objects")
     @patch("flight_declaration_operations.deconfliction_engine.rtree_geo_fence_helper.GeoFenceRTreeIndexFactory")
     def test_geofence_no_intersection_still_approved(
-        self, mock_index_cls, mock_gf_objects, mock_fd_objects,
+        self,
+        mock_index_cls,
+        mock_gf_objects,
+        mock_fd_objects,
     ):
         """Geofences exist but no bbox overlap → still approved."""
         fence = MagicMock()
@@ -364,8 +364,10 @@ class DefaultDeconflictionEngineTests(SimpleTestCase):
 
     def test_returns_deconfliction_result_type(self):
         """Result type is DeconflictionResult (and hence IntersectionCheckResult)."""
-        with patch("flight_declaration_operations.deconfliction_engine.GeoFence.objects") as mock_gf, \
-             patch("flight_declaration_operations.deconfliction_engine.FlightDeclaration.objects") as mock_fd:
+        with (
+            patch("flight_declaration_operations.deconfliction_engine.GeoFence.objects") as mock_gf,
+            patch("flight_declaration_operations.deconfliction_engine.FlightDeclaration.objects") as mock_fd,
+        ):
             mock_gf.filter.return_value = []
             mock_fd.filter.return_value = []
 
@@ -510,12 +512,16 @@ class RunDeconflictionTests(SimpleTestCase):
         from flight_declaration_operations.views import _run_deconfliction
 
         approved_result = DeconflictionResult(
-            all_relevant_fences=[], all_relevant_declarations=[],
-            is_approved=True, declaration_state=1,
+            all_relevant_fences=[],
+            all_relevant_declarations=[],
+            is_approved=True,
+            declaration_state=1,
         )
         rejected_result = DeconflictionResult(
-            all_relevant_fences=[{"id": "f1"}], all_relevant_declarations=[],
-            is_approved=False, declaration_state=8,
+            all_relevant_fences=[{"id": "f1"}],
+            all_relevant_declarations=[],
+            is_approved=False,
+            declaration_state=8,
         )
 
         mock_engine = MagicMock()
@@ -535,8 +541,10 @@ class RunDeconflictionTests(SimpleTestCase):
         from flight_declaration_operations.views import _run_deconfliction
 
         result = DeconflictionResult(
-            all_relevant_fences=[], all_relevant_declarations=[],
-            is_approved=True, declaration_state=1,
+            all_relevant_fences=[],
+            all_relevant_declarations=[],
+            is_approved=True,
+            declaration_state=1,
         )
         mock_engine = MagicMock()
         mock_engine.check_deconfliction.return_value = result
@@ -554,8 +562,10 @@ class RunDeconflictionTests(SimpleTestCase):
         from flight_declaration_operations.views import _run_deconfliction
 
         result = DeconflictionResult(
-            all_relevant_fences=[], all_relevant_declarations=[],
-            is_approved=True, declaration_state=1,
+            all_relevant_fences=[],
+            all_relevant_declarations=[],
+            is_approved=True,
+            declaration_state=1,
         )
         mock_engine = MagicMock()
         mock_engine.check_deconfliction.return_value = result

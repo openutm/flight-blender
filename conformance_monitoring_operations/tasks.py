@@ -1,4 +1,5 @@
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from flight_blender.celery import app
 from flight_feed_operations import flight_stream_helper
@@ -12,8 +13,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-from loguru import logger
 
 
 # This method conducts flight conformance checks as a async tasks

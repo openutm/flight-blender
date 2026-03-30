@@ -18,7 +18,7 @@ Key rules:
 - Indent: 4 spaces
 - Quote style: double quotes
 - Target: Python 3.12
-- Lint rules: E4, E7, E9, F (with E402 ignored)
+- Lint rules: E4, E7, E9, F
 
 **Before finishing any code change, always run `ruff check` and `ruff format` on modified files and fix all issues.**
 

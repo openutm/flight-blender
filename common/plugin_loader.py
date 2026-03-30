@@ -59,10 +59,7 @@ def load_plugin(
         try:
             instance = cls.__new__(cls)
             if not isinstance(instance, expected_protocol):
-                raise TypeError(
-                    f"Plugin class {dotted_path!r} does not satisfy "
-                    f"the {expected_protocol.__name__} protocol."
-                )
+                raise TypeError(f"Plugin class {dotted_path!r} does not satisfy the {expected_protocol.__name__} protocol.")
         except TypeError as exc:
             if "does not satisfy" in str(exc):
                 # This is an explicit protocol validation failure; re-raise.
@@ -82,9 +79,6 @@ def load_plugin(
 
             if missing_members:
                 missing_str = ", ".join(sorted(missing_members))
-                raise TypeError(
-                    f"Plugin class {dotted_path!r} is missing required protocol "
-                    f"members: {missing_str}"
-                ) from exc
+                raise TypeError(f"Plugin class {dotted_path!r} is missing required protocol members: {missing_str}") from exc
 
     return cls

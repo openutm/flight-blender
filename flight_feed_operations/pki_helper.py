@@ -18,15 +18,13 @@ from http_message_signatures import (
 )
 from jwcrypto import jwk, jws
 from jwcrypto.common import json_encode
+from loguru import logger
 
 from auth_helper.common import get_redis
 
 from .models import SignedTelmetryPublicKey
 
 load_dotenv(find_dotenv())
-
-
-from loguru import logger
 
 
 class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):

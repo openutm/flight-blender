@@ -125,6 +125,9 @@ jobs:
                 body,
               });
             }
+      - name: Fail if tests failed
+        if: steps.coverage.outputs.exit_code != '0'
+        run: exit 1
 
   complexity:
     name: Code Complexity

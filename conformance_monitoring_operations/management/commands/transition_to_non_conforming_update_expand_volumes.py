@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 from common.data_definitions import OPERATION_STATES
 from common.database_operations import FlightBlenderDatabaseReader
@@ -15,8 +16,6 @@ load_dotenv(find_dotenv())
 ENV_FILE = find_dotenv()
 if ENV_FILE:
     load_dotenv(ENV_FILE)
-
-from loguru import logger
 
 
 class Command(BaseCommand):
@@ -60,10 +59,6 @@ class Command(BaseCommand):
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         if not flight_declaration:
             raise CommandError(f"Flight Declaration with ID {flight_declaration_id} does not exist")
-
-        _flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
-            flight_declaration_id=flight_declaration_id
-        )
 
         stored_operational_intent = my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
 
