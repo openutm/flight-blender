@@ -70,11 +70,32 @@ dev = [
     "pyyaml>=6.0.2",
     "uritemplate>=4.2.0",
     "inflection>=0.5.1",
+    "pytest-cov>=7.1.0",
+    "radon>=6.0.1",
 ]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "flight_blender.settings"
 python_files = ["test_*.py", "tests.py", "tests_*.py"]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/tests.py",
+    "*/test_*.py",
+    ".venv/*",
+    "manage.py",
+    "flight_blender/asgi.py",
+    "flight_blender/celery.py",
+    "flight_blender/settings.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+precision = 1
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,242 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "sqlite://:memory:"
+      BYPASS_AUTH_TOKEN_VERIFICATION: "1"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv sync --dev
+      - name: Run tests with coverage
+        id: coverage
+        run: |
+          set +e
+          uv run pytest --cov --cov-report=term-missing --cov-report=json --tb=short -q 2>&1 | tee coverage-output.txt
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+      - name: Extract coverage metrics
+        if: always()
+        id: metrics
+        run: |
+          if [ -f coverage.json ]; then
+            total=$(python3 -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
+            echo "total_coverage=$total" >> "$GITHUB_OUTPUT"
+          else
+            echo "total_coverage=N/A" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :bar_chart: Test Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          TOTAL="${{ steps.metrics.outputs.total_coverage }}"
+          if [ "$TOTAL" = "N/A" ]; then
+            echo ":warning: Coverage data not available (tests may have failed)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**Overall coverage: ${TOTAL}%**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "<details><summary>Full report</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat coverage-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const total = '${{ steps.metrics.outputs.total_coverage }}';
+            const exitCode = '${{ steps.coverage.outputs.exit_code }}';
+
+            let body = '## :bar_chart: Test Coverage Report\n\n';
+
+            if (total === 'N/A') {
+              body += ':warning: Coverage data not available (tests may have failed).\n';
+            } else {
+              const pct = parseFloat(total);
+              let badge = ':red_circle:';
+              if (pct >= 80) badge = ':green_circle:';
+              else if (pct >= 60) badge = ':yellow_circle:';
+              body += `${badge} **Overall coverage: ${total}%**\n\n`;
+
+              if (fs.existsSync('coverage.json')) {
+                const data = JSON.parse(fs.readFileSync('coverage.json', 'utf8'));
+                const files = Object.entries(data.files || {})
+                  .map(([name, info]) => ({
+                    name,
+                    cover: info.summary.percent_covered_display,
+                    pct: info.summary.percent_covered,
+                  }))
+                  .filter(f => !f.name.includes('/tests') && !f.name.endsWith('tests.py'))
+                  .sort((a, b) => a.pct - b.pct);
+
+                const low = files.filter(f => f.pct < 50).slice(0, 15);
+                if (low.length > 0) {
+                  body += '<details><summary>Files with lowest coverage (&lt;50%)</summary>\n\n';
+                  body += '| File | Coverage |\n|------|----------|\n';
+                  for (const f of low) {
+                    body += `| \`${f.name}\` | ${f.cover}% |\n`;
+                  }
+                  body += '\n</details>\n';
+                }
+              }
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':bar_chart: Test Coverage Report'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  complexity:
+    name: Code Complexity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install radon
+        run: pip install radon
+      - name: Run cyclomatic complexity analysis
+        id: cc
+        run: |
+          # Get average complexity
+          radon cc . -a -s --exclude ".venv,migrations" 2>&1 | tee cc-full.txt
+          AVG=$(tail -1 cc-full.txt | sed 's/.*Average complexity: //')
+          echo "average=$AVG" >> "$GITHUB_OUTPUT"
+
+          # Get high-complexity blocks (C and above)
+          radon cc . -a -s --exclude ".venv,migrations" -n C 2>&1 | tee cc-high.txt
+
+          # Count high-complexity blocks (lines that start with spaces and have a grade)
+          HIGH_COUNT=$(grep -cE '^\s+(F|M|C) ' cc-high.txt || true)
+          echo "high_count=$HIGH_COUNT" >> "$GITHUB_OUTPUT"
+      - name: Run maintainability index
+        id: mi
+        run: |
+          radon mi . -s --exclude ".venv,migrations" 2>&1 | tee mi-full.txt
+
+          # Count files with low maintainability (C or below)
+          LOW_MI=$(grep -cE ' - [CDF] ' mi-full.txt || true)
+          echo "low_mi_count=$LOW_MI" >> "$GITHUB_OUTPUT"
+
+          # Extract low-MI files
+          grep -E ' - [CDF] ' mi-full.txt > mi-low.txt || true
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :brain: Code Complexity Metrics" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Average cyclomatic complexity:** ${{ steps.cc.outputs.average }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**High-complexity blocks (C+):** ${{ steps.cc.outputs.high_count }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Low maintainability files (C-):** ${{ steps.mi.outputs.low_mi_count }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          HIGH_COUNT="${{ steps.cc.outputs.high_count }}"
+          if [ "$HIGH_COUNT" != "0" ]; then
+            echo "<details><summary>High-complexity blocks</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat cc-high.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          LOW_MI="${{ steps.mi.outputs.low_mi_count }}"
+          if [ "$LOW_MI" != "0" ]; then
+            echo "<details><summary>Low maintainability files</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat mi-low.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const avg = '${{ steps.cc.outputs.average }}';
+            const highCount = parseInt('${{ steps.cc.outputs.high_count }}' || '0');
+            const lowMI = parseInt('${{ steps.mi.outputs.low_mi_count }}' || '0');
+
+            let body = '## :brain: Code Complexity Report\n\n';
+            body += `**Average cyclomatic complexity:** ${avg}\n`;
+            body += `**High-complexity blocks (C+):** ${highCount}\n`;
+            body += `**Low maintainability files:** ${lowMI}\n\n`;
+
+            if (highCount > 0 && fs.existsSync('cc-high.txt')) {
+              const ccOutput = fs.readFileSync('cc-high.txt', 'utf8').trim();
+              body += '<details><summary>High-complexity blocks (grade C and above)</summary>\n\n';
+              body += '```\n' + ccOutput + '\n```\n';
+              body += '</details>\n\n';
+            }
+
+            if (lowMI > 0 && fs.existsSync('mi-low.txt')) {
+              const miOutput = fs.readFileSync('mi-low.txt', 'utf8').trim();
+              body += '<details><summary>Low maintainability files</summary>\n\n';
+              body += '```\n' + miOutput + '\n```\n';
+              body += '</details>\n';
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(':brain: Code Complexity Report'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
