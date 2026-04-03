@@ -1,14 +1,31 @@
 import hashlib
+import os
 from dataclasses import asdict
 
 import arrow
 from django.db.models import QuerySet
+from loguru import logger
 from rtree import index
+from rtree.exceptions import RTreeError
 
 from auth_helper.common import get_redis
+from common.utils import normalize_view_box
 
 from .data_definitions import FlightDeclarationMetadata
 from .models import FlightDeclaration
+
+
+def _open_or_recover_index(base_path: str) -> index.Index:
+    """Open an RTree index, auto-recovering from corrupt files."""
+    try:
+        return index.Index(base_path)
+    except RTreeError:
+        logger.warning("Corrupt RTree index at %s, recreating", base_path)
+        for ext in (".idx", ".dat"):
+            path = base_path + ext
+            if os.path.exists(path):
+                os.remove(path)
+        return index.Index(base_path)
 
 
 class FlightDeclarationRTreeIndexFactory:
@@ -26,7 +43,7 @@ class FlightDeclarationRTreeIndexFactory:
 
     def __init__(self, index_name: str):
         self.r = get_redis()
-        self.idx = index.Index(index_name)
+        self.idx = _open_or_recover_index(index_name)
 
     def add_box_to_index(
         self,
@@ -47,7 +64,7 @@ class FlightDeclarationRTreeIndexFactory:
             end_date (str): The end date of the flight declaration.
         """
         metadata = FlightDeclarationMetadata(start_date=start_date, end_date=end_date, flight_declaration_id=flight_declaration_id)
-        self.idx.insert(id=id, coordinates=(view[0], view[1], view[2], view[3]), obj=asdict(metadata))
+        self.idx.insert(id=id, coordinates=normalize_view_box(view), obj=asdict(metadata))
 
     def delete_from_index(self, enumerated_id: int, view: list[float]) -> None:
         """
@@ -57,7 +74,7 @@ class FlightDeclarationRTreeIndexFactory:
             enumerated_id (int): The unique identifier for the box.
             view (List[float]): The bounding box coordinates [minx, miny, maxx, maxy].
         """
-        self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
+        self.idx.delete(id=enumerated_id, coordinates=normalize_view_box(view))
 
     def generate_flight_declaration_index(self, all_flight_declarations: QuerySet | list[FlightDeclaration]) -> None:
         """
@@ -102,8 +119,6 @@ class FlightDeclarationRTreeIndexFactory:
         Returns:
             List[FlightDeclarationMetadata]: A list of metadata for intersecting boxes.
         """
-        intersections = [
-            FlightDeclarationMetadata(**n.object) for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)
-        ]
+        intersections = [FlightDeclarationMetadata(**n.object) for n in self.idx.intersection(normalize_view_box(view_box), objects=True)]
 
         return intersections

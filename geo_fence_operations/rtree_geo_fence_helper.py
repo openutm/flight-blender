@@ -1,19 +1,36 @@
 import hashlib
+import os
 from dataclasses import asdict
 
 import arrow
 from django.db.models import QuerySet
+from loguru import logger
 from rtree import index
+from rtree.exceptions import RTreeError
 
 from auth_helper.common import get_redis
+from common.utils import normalize_view_box
 
 from .data_definitions import GeoFenceMetadata
 from .models import GeoFence
 
 
+def _open_or_recover_index(base_path: str) -> index.Index:
+    """Open an RTree index, auto-recovering from corrupt files."""
+    try:
+        return index.Index(base_path)
+    except RTreeError:
+        logger.warning("Corrupt RTree index at %s, recreating", base_path)
+        for ext in (".idx", ".dat"):
+            path = base_path + ext
+            if os.path.exists(path):
+                os.remove(path)
+        return index.Index(base_path)
+
+
 class GeoFenceRTreeIndexFactory:
     def __init__(self, index_name: str):
-        self.idx = index.Index(index_name)
+        self.idx = _open_or_recover_index(index_name)
         self.r = get_redis()
 
     def add_box_to_index(
@@ -40,7 +57,7 @@ class GeoFenceRTreeIndexFactory:
             end_date=end_date,
             geo_fence_id=geo_fence_id,
         )
-        self.idx.insert(id=id, coordinates=(view[0], view[1], view[2], view[3]), obj=asdict(metadata))
+        self.idx.insert(id=id, coordinates=normalize_view_box(view), obj=asdict(metadata))
 
     def delete_from_index(self, enumerated_id: int, view: list[float]):
         """
@@ -50,7 +67,7 @@ class GeoFenceRTreeIndexFactory:
             enumerated_id (int): The unique identifier for the geo-fence.
             view (List[float]): A list of four floats representing the bounding box coordinates to be deleted.
         """
-        self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
+        self.idx.delete(id=enumerated_id, coordinates=normalize_view_box(view))
 
     def generate_geo_fence_index(self, all_fences: QuerySet | list[GeoFence]) -> None:
         """
@@ -101,6 +118,5 @@ class GeoFenceRTreeIndexFactory:
         Returns:
             List[dict]: A list of metadata dictionaries for each intersecting box.
         """
-
-        intersections = [n.object for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)]
+        intersections = [n.object for n in self.idx.intersection(normalize_view_box(view_box), objects=True)]
         return intersections

@@ -35,3 +35,19 @@ class EnhancedJSONDecoder(json.JSONDecoder):
             except (ValueError, TypeError):
                 pass
         return obj
+
+
+def normalize_view_box(view: list[float]) -> tuple[float, float, float, float]:
+    """
+    Normalizes a bounding box so that min values are less than max values.
+    Args:
+        view (List[float]): [minx, miny, maxx, maxy]
+    Returns:
+        tuple[float, float, float, float]: (minx, miny, maxx, maxy) with correct ordering
+    """
+    minx, miny, maxx, maxy = view[0], view[1], view[2], view[3]
+    if minx > maxx:
+        minx, maxx = maxx, minx
+    if miny > maxy:
+        miny, maxy = maxy, miny
+    return minx, miny, maxx, maxy
