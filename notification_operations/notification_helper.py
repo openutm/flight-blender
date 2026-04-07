@@ -70,8 +70,33 @@ class InitialNotificationFactory:
         self.exchange_name = exchange_name
 
     def declare_exchange(self):
-        logger.info(f"Trying to declare exchange ({self.exchange_name})...")
-        self.channel.exchange_declare(exchange=self.exchange_name, durable=True)
+        """Declare the operational_events exchange as a ``topic`` exchange.
+
+        A ``topic`` exchange allows consumers to bind with wildcard routing
+        keys (e.g. ``#`` to receive all messages).  If the exchange already
+        exists with a different type (e.g. ``direct``), it is deleted and
+        re-created so that wildcard subscriptions work correctly.
+        """
+        logger.info(f"Declaring exchange '{self.exchange_name}' as topic...")
+        try:
+            self.channel.exchange_declare(
+                exchange=self.exchange_name,
+                exchange_type="topic",
+                durable=True,
+            )
+        except pika.exceptions.ChannelClosedByBroker as exc:
+            if exc.reply_code == 406:  # PRECONDITION_FAILED — type mismatch
+                logger.warning(f"Exchange '{self.exchange_name}' exists with different type, recreating as topic")
+                # Channel was closed by broker; open a new one on the same connection
+                self.channel = self.connection.channel()
+                self.channel.exchange_delete(exchange=self.exchange_name)
+                self.channel.exchange_declare(
+                    exchange=self.exchange_name,
+                    exchange_type="topic",
+                    durable=True,
+                )
+            else:
+                raise
 
     def close(self):
         self.channel.close()

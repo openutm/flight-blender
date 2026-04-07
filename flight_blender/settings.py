@@ -107,7 +107,9 @@ if USE_LOCAL_SQLITE_DATABASE:
         }
     }
 else:
-    DATABASES["default"] = dj_database_url.config(conn_max_age=600)
+    DATABASES["default"] = dj_database_url.config(
+        conn_max_age=int(os.getenv("CONN_MAX_AGE", 0)),
+    )
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators

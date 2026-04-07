@@ -1,14 +1,30 @@
 import hashlib
+import os
 from dataclasses import asdict
 
 import arrow
 from django.db.models import QuerySet
+from loguru import logger
 from rtree import index
+from rtree.exceptions import RTreeError
 
 from auth_helper.common import get_redis
 
 from .data_definitions import FlightDeclarationMetadata
 from .models import FlightDeclaration
+
+
+def _open_or_recover_index(base_path: str) -> index.Index:
+    """Open an RTree index, auto-recovering from corrupt files."""
+    try:
+        return index.Index(base_path)
+    except RTreeError:
+        logger.warning("Corrupt RTree index at %s, recreating", base_path)
+        for ext in (".idx", ".dat"):
+            path = base_path + ext
+            if os.path.exists(path):
+                os.remove(path)
+        return index.Index(base_path)
 
 
 class FlightDeclarationRTreeIndexFactory:
@@ -26,7 +42,7 @@ class FlightDeclarationRTreeIndexFactory:
 
     def __init__(self, index_name: str):
         self.r = get_redis()
-        self.idx = index.Index(index_name)
+        self.idx = _open_or_recover_index(index_name)
 
     def add_box_to_index(
         self,

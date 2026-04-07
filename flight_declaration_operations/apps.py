@@ -17,12 +17,15 @@ class FlightDeclarationOperationsConfig(AppConfig):
 
         if amqp_connection_url:
             logger.info(f"Connecting to AMQP {amqp_connection_url} for processing notifications..")
-            my_notification_helper = InitialNotificationFactory(
-                amqp_connection_url=amqp_connection_url,
-                exchange_name="operational_events",
-            )
-            my_notification_helper.declare_exchange()
-            my_notification_helper.close()
-            logger.info("Exchange declared on AMQP...")
+            try:
+                my_notification_helper = InitialNotificationFactory(
+                    amqp_connection_url=amqp_connection_url,
+                    exchange_name="operational_events",
+                )
+                my_notification_helper.declare_exchange()
+                my_notification_helper.close()
+                logger.info("Exchange declared on AMQP...")
+            except Exception:
+                logger.warning("AMQP broker unavailable at startup, notifications will retry per-message")
         else:
             logger.info("AMQP not set, skipping exchange creation..")

@@ -5,7 +5,7 @@ authors = [{ name = "Hrishikesh Ballal", email = "hrishi@openskies.sh" }]
 description = "Flight Blender"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 
 keywords = ["Flight Blender"]
 classifiers = [
@@ -76,6 +76,10 @@ dev = [
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "flight_blender.settings"
+addopts = "-v --tb=short"
+env = [
+    "USE_LOCAL_SQLITE_DATABASE=1",
+]
 python_files = ["test_*.py", "tests.py", "tests_*.py"]
 
 [tool.coverage.run]

@@ -15,13 +15,12 @@ required to — any class that provides ``generate_track_messages()`` is valid.
 from typing import List
 
 import arrow
-
 from pyproj import Geod
-from surveillance_monitoring_operations.data_definitions import ActiveTrack
 
 from common.redis_stream_operations import RedisStreamOperations
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from surveillance_monitoring_operations.data_definitions import (
+    ActiveTrack,
     AircraftPosition,
     AircraftState,
     LatLangAltPoint,

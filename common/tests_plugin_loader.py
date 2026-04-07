@@ -29,7 +29,6 @@ from surveillance_monitoring_operations.traffic_data_fuser_protocol import (
     TrafficDataFuser as TrafficDataFuserProtocol,
 )
 
-
 # ---------------------------------------------------------------------------
 # load_plugin — core mechanics
 # ---------------------------------------------------------------------------

@@ -373,6 +373,14 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
             source_type = 0
             icao_address = flight_details_id
 
+            # Extract sensor timestamp from RID state (RFC3339 → epoch microseconds)
+            rid_timestamp_us = 0
+            try:
+                rid_ts_value = _current_state.timestamp.value
+                rid_timestamp_us = int(arrow.get(rid_ts_value).float_timestamp * 1_000_000)
+            except Exception:
+                pass
+
             so = SingleRIDObservation(
                 session_id=operation_id,
                 lat_dd=lat_dd,
@@ -381,6 +389,7 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
                 traffic_source=traffic_source,
                 source_type=source_type,
                 icao_address=icao_address,
+                timestamp=rid_timestamp_us,
                 metadata=asdict(observation_and_metadata),
             )
             write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
@@ -567,6 +576,14 @@ def stream_rid_test_data(requested_flights, test_id):
                         r.set(time_since_last_notification_key, query_time.int_timestamp)
             r.set(last_observation_timestamp_key, query_time.int_timestamp)
 
+            # Extract sensor timestamp from RID telemetry (RFC3339 → epoch microseconds)
+            rid_timestamp_us = 0
+            try:
+                rid_ts_value = single_telemetry_data["timestamp"]["value"]
+                rid_timestamp_us = int(arrow.get(rid_ts_value).float_timestamp * 1_000_000)
+            except Exception:
+                pass
+
             so = SingleRIDObservation(
                 session_id=test_id,
                 lat_dd=lat_dd,
@@ -575,9 +592,9 @@ def stream_rid_test_data(requested_flights, test_id):
                 traffic_source=traffic_source,
                 source_type=source_type,
                 icao_address=icao_address,
+                timestamp=rid_timestamp_us,
                 metadata=asdict(observation_metadata),
             )
-            # TODO: Write to database
             write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
             logger.debug("Submitted flight observation..")
 

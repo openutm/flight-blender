@@ -34,7 +34,6 @@ from common.data_definitions import RESPONSE_CONTENT_TYPE
 from .data_definitions import IntersectionCheckResult
 from .models import FlightDeclaration, FlightOperationTracking
 
-
 # ---------------------------------------------------------------------------
 # Test-payload helpers
 # ---------------------------------------------------------------------------

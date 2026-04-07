@@ -8,15 +8,14 @@ than assigning the full time window to every feature.
 
 To activate, set the environment variable::
 
-    FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR=example_plugins.hello_world_volume_generator.HelloWorldVolumeGenerator
+    FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = example_plugins.hello_world_volume_generator.HelloWorldVolumeGenerator
 
 See PLUGINS.md for the full guide.
 """
 
-import logging
-
 import arrow
 from geojson import FeatureCollection
+from loguru import logger
 from pyproj import Geod
 from shapely.geometry import shape
 
@@ -28,8 +27,6 @@ from scd_operations.scd_data_definitions import (
     Volume4D,
 )
 from scd_operations.scd_data_definitions import Polygon as Plgn
-
-logger = logging.getLogger(__name__)
 
 # Safety margin added around each geometry (degrees, ~55 m at equator).
 _BUFFER_DEG = 0.0005
