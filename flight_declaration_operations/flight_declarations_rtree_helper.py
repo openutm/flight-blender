@@ -26,7 +26,7 @@ def _open_or_recover_index(base_path: str) -> index.Index:
                 try:
                     os.remove(path)
                 except OSError as exc:
-                    logger.warning("Failed to remove corrupt RTree file %s during recovery: %s", path, exc)
+                    logger.warning("Failed to remove corrupt RTree file {} during recovery: {}", path, exc)
         return index.Index(base_path)
 
 
