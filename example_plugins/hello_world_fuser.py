@@ -8,7 +8,7 @@ same aircraft and always presents the newest position.
 
 To activate, set the environment variable::
 
-    FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = example_plugins.hello_world_fuser.HelloWorldFuser
+    FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER=example_plugins.hello_world_fuser.HelloWorldFuser
 
 See PLUGINS.md for the full guide.
 """

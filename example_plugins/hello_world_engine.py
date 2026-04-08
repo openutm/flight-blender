@@ -8,7 +8,7 @@ easy to understand and extend.
 
 To activate, set the environment variable::
 
-    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE = example_plugins.hello_world_engine.HelloWorldEngine
+    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=example_plugins.hello_world_engine.HelloWorldEngine
 
 See PLUGINS.md for the full guide.
 """

@@ -8,7 +8,7 @@ than assigning the full time window to every feature.
 
 To activate, set the environment variable::
 
-    FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = example_plugins.hello_world_volume_generator.HelloWorldVolumeGenerator
+    FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR=example_plugins.hello_world_volume_generator.HelloWorldVolumeGenerator
 
 See PLUGINS.md for the full guide.
 """

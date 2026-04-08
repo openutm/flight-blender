@@ -19,11 +19,14 @@ def _open_or_recover_index(base_path: str) -> index.Index:
     try:
         return index.Index(base_path)
     except RTreeError:
-        logger.warning("Corrupt RTree index at %s, recreating", base_path)
+        logger.warning("Corrupt RTree index at {}, recreating", base_path)
         for ext in (".idx", ".dat"):
             path = base_path + ext
             if os.path.exists(path):
-                os.remove(path)
+                try:
+                    os.remove(path)
+                except OSError:
+                    logger.exception("Failed to remove corrupt RTree index file %s during recovery", path)
         return index.Index(base_path)
 
 
