@@ -72,6 +72,7 @@ dev = [
     "inflection>=0.5.1",
     "pytest-cov>=7.1.0",
     "radon>=6.0.1",
+    "pytest-env>=1.2.0",
 ]
 
 [tool.pytest.ini_options]
