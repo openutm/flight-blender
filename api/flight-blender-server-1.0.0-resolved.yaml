@@ -1224,6 +1224,54 @@ paths:
       in: path
       required: true
 
+  /flight_stream/bulk_set_air_traffic/{session_id}:
+    post:
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        description: A UUID string identifying the session id associated with observation.
+        schema:
+          type: string
+      summary: 'Bulk Add Airtraffic observation(s)'
+      security:
+        - AuthFromPassport: [flightblender.write]
+      description:
+        "Submit air traffic data into Flight Blender in bulk. The provided payload will be chunked into sizes of 250 and uploaded via background processes. Flight Blender will normalize the data and eventually send it to Flight Spotlight or make it available to other interfaces. A single or multiple observations can be submitted at a given time."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                observations:
+                  $ref: '#/components/schemas/FlightFeedJSON'
+
+      responses:
+        '201':
+          description: A confirmation of operation creation or data processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlightObservationProcessingResponse'
+              examples:
+                Success Response:
+                  value:
+                    message: "Data Processed successfully"
+        '400':
+          description: "Flight observations have structural or type errors."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+              examples:
+                Bad Request:
+                  value:
+                    message: "A JSON observation object must be provided"
+      tags:
+        - air-traffic
+
   /flight_stream/set_air_traffic/{session_id}:
     post:
       parameters:

@@ -1,5 +1,6 @@
 # Create your views here.
 import json
+import time
 import uuid
 from dataclasses import asdict
 from os import environ as env
@@ -37,7 +38,7 @@ from .models import SignedTelmetryPublicKey
 from .pki_helper import MessageVerifier, ResponseSigningOperations
 from .rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
 from .serializers import SignedTelmetryPublicKeySerializer
-from .tasks import start_opensky_network_stream, write_incoming_air_traffic_data
+from .tasks import bulk_write_incoming_air_traffic_data, start_opensky_network_stream, write_incoming_air_traffic_data
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -85,6 +86,71 @@ def public_key_view(request):
 @api_view(["GET"])
 def ping(request):
     return JsonResponse({"message": "pong"}, status=200)
+
+
+@api_view(["POST"])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
+def bulk_set_air_traffic(request, session_id):
+    """This is a POST method that takes in a request for bulk Air traffic observation and processes the input data."""
+
+    try:
+        assert request.headers["Content-Type"] == "application/json"
+    except AssertionError:
+        msg = {"message": "Unsupported Media Type"}
+        return JsonResponse(msg, status=415)
+    else:
+        req = request.data
+
+    try:
+        observations = req["observations"]
+    except KeyError:
+        msg = FlightObservationsProcessingResponse(
+            message="At least one observation is required: observations with a list of observation objects. One or more of these were not found in your JSON request. For sample data see: https://github.com/openskies-sh/airtraffic-data-protocol-development/blob/master/Airtraffic-Data-Protocol.md#sample-traffic-object",
+            status=400,
+        )
+
+        m = asdict(msg)
+        return JsonResponse(m, status=m["status"])
+    schema = ObservationSchema()
+    validated_observations = []
+
+    # Validate all observations first
+    for observation in observations:
+        try:
+            validated_data = schema.load(observation)
+            validated_observations.append({**validated_data, "metadata": observation.get("metadata", {})})
+        except ValidationError as err:
+            msg = {
+                "message": "One of your observations do not have mandatory required fields or has incorrect data types. Please see error details.",
+                "errors": err.messages,
+            }
+            return JsonResponse(msg, status=400)
+
+    # Process validated observations
+    session_id_str = str(session_id) if session_id else "00000000-0000-0000-0000-000000000000"
+    all_parsed_observations = []
+    for validated_data in validated_observations:
+        so = SingleAirtrafficObservation(
+            session_id=session_id_str,
+            lat_dd=validated_data["lat_dd"],
+            lon_dd=validated_data["lon_dd"],
+            altitude_mm=validated_data["altitude_mm"],
+            traffic_source=validated_data["traffic_source"],
+            source_type=validated_data["source_type"],
+            icao_address=validated_data["icao_address"],
+            metadata=validated_data["metadata"],
+            timestamp=validated_data["timestamp"],
+        )
+        all_parsed_observations.append(asdict(so))
+
+    BATCH_SIZE = 250
+    for i in range(0, len(all_parsed_observations), BATCH_SIZE):
+        batch = all_parsed_observations[i : i + BATCH_SIZE]
+        bulk_write_incoming_air_traffic_data.delay(json.dumps(batch))
+        time.sleep(0.2)  # Sleep for a short time to avoid overwhelming the task queue
+
+    op = FlightObservationsProcessingResponse(message="OK", status=201)
+    return JsonResponse(asdict(op), status=op.status)
 
 
 @api_view(["POST"])
