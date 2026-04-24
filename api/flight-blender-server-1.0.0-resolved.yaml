@@ -4236,11 +4236,15 @@ components:
           - 2
           - 3
           - 5
+          - 6
+          - 7
           description: >
             The state of the operation
              * `2` - Activated
              * `3` - Nonconforming
              * `5` - Ended
+             * `6` - Withdrawn
+             * `7` - Cancelled
 
     FlightDeclarationFeatureGeoJSON:
       type: object

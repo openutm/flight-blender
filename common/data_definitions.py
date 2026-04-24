@@ -59,6 +59,8 @@ OPERATOR_EVENT_LOOKUP = {
     5: "operator_confirms_ended",
     2: "operator_activates",
     4: "operator_initiates_contingent",
+    6 : "operator_withdraws",
+    7 : "operator_cancels",
 }
 
 VALID_OPERATIONAL_INTENT_STATES = [
