@@ -47,7 +47,6 @@ class AcceptedState(State):
             return EndedState()
         elif event == "ua_departs_early_late_outside_op_intent":
             return NonconformingState()
-        
 
         return self
 
