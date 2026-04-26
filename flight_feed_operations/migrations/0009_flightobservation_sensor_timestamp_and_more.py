@@ -25,7 +25,7 @@ def add_sensor_timestamp_if_missing(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("flight_feed_operations", "0007_alter_flightobservation_traffic_source"),
+        ("flight_feed_operations", "0008_alter_flightobservation_traffic_source"),
     ]
 
     operations = [
