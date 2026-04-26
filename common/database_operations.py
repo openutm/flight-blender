@@ -2,7 +2,7 @@ import json
 import os
 import uuid
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Never, Optional
 from uuid import UUID
 
@@ -572,6 +572,28 @@ class FlightBlenderDatabaseWriter:
         except PeerOperationalIntentReference.DoesNotExist:
             return None
 
+    @staticmethod
+    def _normalize_timestamp(ts: float | int | str | None) -> datetime | None:
+        """Normalize microsecond/millisecond timestamps to datetime."""
+        if not ts:
+            return None
+        try:
+            timestamp = float(ts)
+        except (TypeError, ValueError):
+            logger.warning("Invalid sensor timestamp {!r}; storing observation without sensor_timestamp", ts)
+            return None
+
+        if timestamp > 1e15:
+            timestamp = timestamp / 1_000_000
+        elif timestamp > 1e12:
+            timestamp = timestamp / 1_000
+
+        try:
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            logger.warning("Out-of-range sensor timestamp {!r}; storing observation without sensor_timestamp", ts)
+            return None
+
     def bulk_write_flight_observations(self, observations: list[SingleAirtrafficObservation]) -> bool:
         try:
             flight_observation_objects = []
@@ -596,6 +618,7 @@ class FlightBlenderDatabaseWriter:
 
     def write_flight_observation(self, single_observation: SingleAirtrafficObservation) -> bool:
         session_id = single_observation.session_id if single_observation.session_id else "00000000-0000-0000-0000-000000000000"
+        sensor_timestamp = self._normalize_timestamp(single_observation.timestamp)
         try:
             flight_observation = FlightObservation(
                 session_id=session_id,
@@ -606,6 +629,7 @@ class FlightBlenderDatabaseWriter:
                 source_type=single_observation.source_type,
                 icao_address=single_observation.icao_address,
                 metadata=json.dumps(single_observation.metadata),
+                sensor_timestamp=sensor_timestamp,
             )
             flight_observation.save()
             return True

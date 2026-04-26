@@ -6,22 +6,22 @@ declarations.  Unlike the built-in RTree engine this implementation
 does a straightforward database query without spatial indexing —
 easy to understand and extend.
 
-To activate, set the environment variable::
+To activate, set the environment variable:
+
+.. code-block:: bash
 
     FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=example_plugins.hello_world_engine.HelloWorldEngine
 
 See PLUGINS.md for the full guide.
 """
 
-import logging
+from loguru import logger
 
 from flight_declaration_operations.data_definitions import (
     DeconflictionRequest,
     DeconflictionResult,
 )
 from flight_declaration_operations.models import FlightDeclaration
-
-logger = logging.getLogger(__name__)
 
 # Operation states — mirrors the constants used by the default engine.
 _STATE_ACCEPTED = 0
@@ -65,7 +65,7 @@ class HelloWorldEngine:
             all_relevant_fences=[],
             all_relevant_declarations=conflicting_ids,
             is_approved=not has_conflicts,
-            declaration_state=_STATE_REJECTED if has_conflicts else (
-                _STATE_ACCEPTED if request.ussp_network_enabled else _STATE_ACCEPTED_WITH_CONDITIONS
-            ),
+            declaration_state=_STATE_REJECTED
+            if has_conflicts
+            else (_STATE_ACCEPTED if request.ussp_network_enabled else _STATE_ACCEPTED_WITH_CONDITIONS),
         )

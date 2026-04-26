@@ -66,6 +66,7 @@ class SingleRIDObservation:
     traffic_source: int
     source_type: int
     icao_address: str
+    timestamp: int = 0
     metadata: dict = field(default_factory=dict)
     session_id: str | None = ""
 
@@ -83,6 +84,7 @@ class SingleAirtrafficObservation:
     timestamp: int = 0
     metadata: dict = field(default_factory=dict)
     session_id: str | None = ""
+    ingested_at_ms: int = 0  # Redis stream message_id timestamp (epoch ms)
 
 
 @dataclass

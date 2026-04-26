@@ -6,17 +6,19 @@ emits one ``TrackMessage`` per active aircraft.  This is the simplest
 useful fusion strategy — it de-duplicates multiple reports for the
 same aircraft and always presents the newest position.
 
-To activate, set the environment variable::
+To activate, set the environment variable:
+
+.. code-block:: bash
 
     FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER=example_plugins.hello_world_fuser.HelloWorldFuser
 
 See PLUGINS.md for the full guide.
 """
 
-import logging
 from typing import List
 
 import arrow
+from loguru import logger
 
 from flight_feed_operations.data_definitions import SingleAirtrafficObservation
 from surveillance_monitoring_operations.data_definitions import (
@@ -25,8 +27,6 @@ from surveillance_monitoring_operations.data_definitions import (
     SpeedAccuracy,
     TrackMessage,
 )
-
-logger = logging.getLogger(__name__)
 
 # Observations older than this many seconds are considered stale.
 _STALE_THRESHOLD_SECS = 60

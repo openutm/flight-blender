@@ -53,7 +53,7 @@ Flight Blender has a plugin architecture that lets you swap core components — 
 
 ![roadmap](images/oss-roadmap.png)
 
-The image above details a general roadmap to standards compatibility. To monitor activities and track progress effectively, issues are the best way to manage and see the current work. 
+The image above details a general roadmap to standards compatibility. To monitor activities and track progress effectively, issues are the best way to manage and see the current work.
 
 ---
 

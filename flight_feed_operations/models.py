@@ -32,7 +32,7 @@ class FlightObservation(models.Model):
         latitude_dd (FloatField): Latitude of the observation in decimal degrees.
         longitude_dd (FloatField): Longitude of the observation in decimal degrees.
         altitude_mm (FloatField): Altitude of the observation in millimeters.
-        timestamp (DateTimeField): Timestamp of the observation.
+        sensor_timestamp (DateTimeField): Sensor-reported observation time (from API client, unix epoch converted to datetime). Nullable for backwards compatibility.
         traffic_source (IntegerField): Traffic source of the observation.
         source_type (IntegerField): Source type of the observation.
         icao_address (TextField): ICAO address of the observation.
@@ -53,6 +53,12 @@ class FlightObservation(models.Model):
     icao_address = models.TextField(help_text="ICAO address of the observation")
 
     metadata = models.TextField(help_text="Raw data for the RID stream")
+
+    sensor_timestamp = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Sensor-reported observation time (converted from unix epoch submitted by API client)",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
