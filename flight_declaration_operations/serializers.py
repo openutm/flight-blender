@@ -122,7 +122,7 @@ class FlightDeclarationStateSerializer(serializers.ModelSerializer):
             int: The validated state value.
         """
         if self.instance and value not in list(OPERATOR_EVENT_LOOKUP.keys()):
-            raise serializers.ValidationError("An operator can only set the state to Activated (2), Contingent (4) or Ended (5) using this endpoint")
+            raise serializers.ValidationError("An operator can only set the state to Activated (2), Contingent (4), Ended (5), Withdrawn (6), or Cancelled (7) using this endpoint")
 
         current_state = self.instance.state
         event = OPERATOR_EVENT_LOOKUP[value]

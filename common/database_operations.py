@@ -594,6 +594,28 @@ class FlightBlenderDatabaseWriter:
             logger.warning("Out-of-range sensor timestamp {!r}; storing observation without sensor_timestamp", ts)
             return None
 
+    def bulk_write_flight_observations(self, observations: list[SingleAirtrafficObservation]) -> bool:
+        try:
+            flight_observation_objects = []
+            for single_observation in observations:
+                session_id = single_observation.session_id if single_observation.session_id else "00000000-0000-0000-0000-000000000000"
+                flight_observation = FlightObservation(
+                    session_id=session_id,
+                    traffic_source=single_observation.traffic_source,
+                    latitude_dd=single_observation.lat_dd,
+                    longitude_dd=single_observation.lon_dd,
+                    altitude_mm=single_observation.altitude_mm,
+                    source_type=single_observation.source_type,
+                    icao_address=single_observation.icao_address,
+                    metadata=json.dumps(single_observation.metadata),
+                )
+                flight_observation_objects.append(flight_observation)
+
+            FlightObservation.objects.bulk_create(flight_observation_objects)
+            return True
+        except IntegrityError:
+            return False
+
     def write_flight_observation(self, single_observation: SingleAirtrafficObservation) -> bool:
         session_id = single_observation.session_id if single_observation.session_id else "00000000-0000-0000-0000-000000000000"
         sensor_timestamp = self._normalize_timestamp(single_observation.timestamp)

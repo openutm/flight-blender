@@ -27,6 +27,38 @@ if ENV_FILE:
 #### Airtraffic Endpoint
 
 
+@app.task(name="bulk_write_incoming_air_traffic_data")
+def bulk_write_incoming_air_traffic_data(observations_str: str):
+    """
+    Processes and writes a batch of incoming air traffic data.
+    This function takes a JSON string representing a list of observations,
+    parses it, writes it to the database in bulk, and then pushes to a Redis stream.
+    """
+    my_database_writer = FlightBlenderDatabaseWriter()
+    my_redis_helper = RedisStreamOperations()
+    obs_list = json.loads(observations_str)
+
+    parsed_observations = []
+    for obs in obs_list:
+        try:
+            single_obs = from_dict(data=obs, data_class=SingleAirtrafficObservation)
+            parsed_observations.append(single_obs)
+        except (
+            DaciteError,
+            WrongTypeError,
+        ) as e:
+            logger.error(f"Error parsing observation: {e}")
+            continue
+
+    if parsed_observations:
+        logger.info(f"Writing {len(parsed_observations)} observations to database in bulk..")
+        my_database_writer.bulk_write_flight_observations(parsed_observations)
+
+        logger.info("Writing batch to Redis stream..")
+        for single_obs in parsed_observations:
+            my_redis_helper.add_air_traffic_data(stream_name="air_traffic_stream", observation=asdict(single_obs))
+
+
 @app.task(name="write_incoming_air_traffic_data")
 def write_incoming_air_traffic_data(observation: str):
     """

@@ -113,6 +113,8 @@ class FlightOperationConformanceHelper:
             4: self._handle_contingent_state,
             3: self._handle_non_conforming_state,
             2: self._handle_activated_state,
+            6: self._handle_withdrawn_state,
+            7: self._handle_cancelled_state,
         }
 
         handler = state_transition_handlers.get(new_state)
@@ -249,6 +251,25 @@ class FlightOperationConformanceHelper:
                 # self._remove_conformance_monitoring_task()
             else:
                 logger.info("USSP Network is not enabled, skipping non-conforming state handling with DSS")
+    
+
+    def _handle_withdrawn_state(self, original_state: int, event: str):
+        if event != "operator_withdraws":
+            logger.info("Withdrawal event mismatch")
+            return
+        if self.USSP_NETWORK_ENABLED:
+            self._clear_operation_from_dss()
+        if self.ENABLE_CONFORMANCE_MONITORING:
+            self._remove_conformance_monitoring_task()
+
+    def _handle_cancelled_state(self, original_state: int, event: str):
+        if event != "operator_cancels":
+            logger.info("Cancellation event mismatch")
+            return
+        if self.USSP_NETWORK_ENABLED:
+            self._clear_operation_from_dss()
+        if self.ENABLE_CONFORMANCE_MONITORING:
+            self._remove_conformance_monitoring_task()
 
     def _handle_activated_state(self, original_state: int, event: str):
         """

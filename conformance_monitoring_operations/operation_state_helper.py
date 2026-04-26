@@ -31,6 +31,10 @@ class ProcessingNotSubmittedToDss(State):
     def on_event(self, event):
         if event == "dss_accepts":
             return AcceptedState()
+        elif event == "operator_withdraws":
+            return WithdrawnState()
+        elif event == "operator_cancels":
+            return CancelledState()
         return self
 
 
