@@ -81,9 +81,9 @@ class RedisStreamOperations:
                 if group["name"].decode("utf-8") == group_name:
                     logger.debug(f"Consumer group '{group_name}' already exists for stream '{stream_name}'.")
                     return True
-        except Exception:
-            # Stream might not exist yet, which is fine - we'll create it with mkstream
-            pass
+        except Exception as exc:
+            # Stream might not exist yet, which is fine because xgroup_create uses mkstream.
+            logger.debug("Unable to inspect consumer groups for Redis stream '{}': {}", stream_name, exc)
         try:
             # Create the consumer group (and stream if it doesn't exist)
             self.redis.xgroup_create(stream_name, group_name, id="0", mkstream=True)
@@ -345,13 +345,13 @@ class RedisStreamOperations:
             logger.error(f"Error reading from Redis stream '{stream_name}' with consumer '{consumer_id}': {e}")
             return []
 
-    def _parse_stream_message_to_observation(self, fields: dict, message_id: str | None = None) -> SingleAirtrafficObservation | None:
+    def _parse_stream_message_to_observation(self, fields: dict, message_id: str | bytes | None = None) -> SingleAirtrafficObservation | None:
         """
         Parse Redis stream message fields into a SingleAirtrafficObservation instance.
 
         Args:
             fields (dict): The message fields from Redis stream.
-            message_id (str | None): Redis stream message ID (format: '<ms_timestamp>-<seq>').
+            message_id (str | bytes | None): Redis stream message ID (format: '<ms_timestamp>-<seq>').
 
         Returns:
             SingleAirtrafficObservation | None: Parsed observation or None if parsing fails.
@@ -401,11 +401,11 @@ class RedisStreamOperations:
             return None
 
     @staticmethod
-    def _extract_message_id_timestamp(message_id: str | None) -> int:
+    def _extract_message_id_timestamp(message_id: str | bytes | None) -> int:
         """Extract epoch-ms timestamp from a Redis stream message ID ('<ms>-<seq>')."""
         if not message_id:
             return 0
-        raw = message_id if isinstance(message_id, str) else message_id.decode("utf-8") if isinstance(message_id, bytes) else str(message_id)
+        raw = message_id.decode("utf-8") if isinstance(message_id, bytes) else str(message_id)
         try:
             return int(raw.split("-", 1)[0])
         except (ValueError, IndexError):

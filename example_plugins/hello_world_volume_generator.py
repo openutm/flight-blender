@@ -6,7 +6,9 @@ configurable safety buffer around each geometry.  This produces
 time-sequenced volumes that approximate actual UAV transit rather
 than assigning the full time window to every feature.
 
-To activate, set the environment variable::
+To activate, set the environment variable:
+
+.. code-block:: bash
 
     FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR=example_plugins.hello_world_volume_generator.HelloWorldVolumeGenerator
 

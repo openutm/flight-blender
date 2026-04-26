@@ -6,7 +6,9 @@ emits one ``TrackMessage`` per active aircraft.  This is the simplest
 useful fusion strategy — it de-duplicates multiple reports for the
 same aircraft and always presents the newest position.
 
-To activate, set the environment variable::
+To activate, set the environment variable:
+
+.. code-block:: bash
 
     FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER=example_plugins.hello_world_fuser.HelloWorldFuser
 

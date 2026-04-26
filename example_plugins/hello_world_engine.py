@@ -6,7 +6,9 @@ declarations.  Unlike the built-in RTree engine this implementation
 does a straightforward database query without spatial indexing —
 easy to understand and extend.
 
-To activate, set the environment variable::
+To activate, set the environment variable:
+
+.. code-block:: bash
 
     FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=example_plugins.hello_world_engine.HelloWorldEngine
 

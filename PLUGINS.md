@@ -63,6 +63,7 @@ from flight_declaration_operations.data_definitions import (
     DeconflictionResult,
 )
 
+
 class MyEngine:
     def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
         # Your logic here
@@ -85,9 +86,12 @@ Each extension point has a protocol class that defines the contract. For example
 ```python
 # flight_declaration_operations/deconfliction_protocol.py
 
+
 @runtime_checkable
 class DeconflictionEngine(Protocol):
-    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult: ...
+    def check_deconfliction(
+        self, request: DeconflictionRequest
+    ) -> DeconflictionResult: ...
 ```
 
 Your class must implement every method in the protocol with matching signatures. You do **not** need to inherit from the protocol or import it — Python's structural subtyping handles the rest. The loader will verify conformance at startup and raise a `TypeError` if something is missing.
@@ -120,6 +124,7 @@ Your class must implement every method in the protocol with matching signatures.
 
 ```python
 # surveillance_monitoring_operations/traffic_data_fuser_protocol.py
+
 
 @runtime_checkable
 class TrafficDataFuser(Protocol):
@@ -180,10 +185,16 @@ Splits the overall time window across GeoJSON features proportionally to each se
 
 ```python
 class HelloWorldVolumeGenerator:
-    def __init__(self, default_uav_speed_m_per_s, default_uav_climb_rate_m_per_s, default_uav_descent_rate_m_per_s):
-        ...
+    def __init__(
+        self,
+        default_uav_speed_m_per_s,
+        default_uav_climb_rate_m_per_s,
+        default_uav_descent_rate_m_per_s,
+    ): ...
 
-    def build_v4d_from_geojson(self, geo_json_fc, start_datetime, end_datetime) -> list[Volume4D]:
+    def build_v4d_from_geojson(
+        self, geo_json_fc, start_datetime, end_datetime
+    ) -> list[Volume4D]:
         # Compute per-feature geodesic length, proportion time, buffer geometry
         ...
 ```
@@ -215,7 +226,9 @@ MyEngine = load_plugin(
     "example_plugins.hello_world_engine.HelloWorldEngine",
     expected_protocol=DeconflictionEngine,
 )
-print(f"Loaded: {MyEngine}")  # <class 'example_plugins.hello_world_engine.HelloWorldEngine'>
+print(
+    f"Loaded: {MyEngine}"
+)  # <class 'example_plugins.hello_world_engine.HelloWorldEngine'>
 ```
 
 Write a Django `TestCase` to verify behavior (the example engine queries the database, so use `TestCase` instead of `SimpleTestCase`):
@@ -223,7 +236,10 @@ Write a Django `TestCase` to verify behavior (the example engine queries the dat
 ```python
 from django.test import TestCase
 from datetime import datetime, timezone, timedelta
-from flight_declaration_operations.data_definitions import DeconflictionRequest, DeconflictionResult
+from flight_declaration_operations.data_definitions import (
+    DeconflictionRequest,
+    DeconflictionResult,
+)
 from example_plugins.hello_world_engine import HelloWorldEngine
 
 

@@ -573,15 +573,26 @@ class FlightBlenderDatabaseWriter:
             return None
 
     @staticmethod
-    def _normalize_timestamp(ts):
+    def _normalize_timestamp(ts: float | int | str | None) -> datetime | None:
         """Normalize microsecond/millisecond timestamps to datetime."""
         if not ts:
             return None
-        if ts > 1e15:
-            ts = ts / 1_000_000
-        elif ts > 1e12:
-            ts = ts / 1_000
-        return datetime.fromtimestamp(ts, tz=timezone.utc)
+        try:
+            timestamp = float(ts)
+        except (TypeError, ValueError):
+            logger.warning("Invalid sensor timestamp {!r}; storing observation without sensor_timestamp", ts)
+            return None
+
+        if timestamp > 1e15:
+            timestamp = timestamp / 1_000_000
+        elif timestamp > 1e12:
+            timestamp = timestamp / 1_000
+
+        try:
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            logger.warning("Out-of-range sensor timestamp {!r}; storing observation without sensor_timestamp", ts)
+            return None
 
     def write_flight_observation(self, single_observation: SingleAirtrafficObservation) -> bool:
         session_id = single_observation.session_id if single_observation.session_id else "00000000-0000-0000-0000-000000000000"

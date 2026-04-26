@@ -55,6 +55,24 @@ from .rid_utils import (
 load_dotenv(find_dotenv())
 
 
+def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:
+    """Parse an RID RFC3339 timestamp into epoch microseconds."""
+    if not rid_ts_value:
+        logger.warning("Missing RID timestamp for {}. Defaulting sensor timestamp to 0", context)
+        return 0
+
+    try:
+        return int(arrow.get(rid_ts_value).float_timestamp * 1_000_000)
+    except (ParserError, TypeError, ValueError) as exc:
+        logger.warning(
+            "Failed to parse RID timestamp {!r} for {}. Defaulting sensor timestamp to 0. Error: {}",
+            rid_ts_value,
+            context,
+            exc,
+        )
+        return 0
+
+
 @app.task(name="write_operator_rid_notification")
 def write_operator_rid_notification(message: str, session_id: str):
     operator_rid_notification = OperatorRIDNotificationCreationPayload(message=message, session_id=session_id)
@@ -373,13 +391,8 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
             source_type = 0
             icao_address = flight_details_id
 
-            # Extract sensor timestamp from RID state (RFC3339 → epoch microseconds)
-            rid_timestamp_us = 0
-            try:
-                rid_ts_value = _current_state.timestamp.value
-                rid_timestamp_us = int(arrow.get(rid_ts_value).float_timestamp * 1_000_000)
-            except Exception:
-                pass
+            rid_ts_value = getattr(_current_state.timestamp, "value", None)
+            rid_timestamp_us = _parse_rid_timestamp_us(rid_ts_value, f"operation {operation_id}")
 
             so = SingleRIDObservation(
                 session_id=operation_id,
@@ -576,13 +589,9 @@ def stream_rid_test_data(requested_flights, test_id):
                         r.set(time_since_last_notification_key, query_time.int_timestamp)
             r.set(last_observation_timestamp_key, query_time.int_timestamp)
 
-            # Extract sensor timestamp from RID telemetry (RFC3339 → epoch microseconds)
-            rid_timestamp_us = 0
-            try:
-                rid_ts_value = single_telemetry_data["timestamp"]["value"]
-                rid_timestamp_us = int(arrow.get(rid_ts_value).float_timestamp * 1_000_000)
-            except Exception:
-                pass
+            telemetry_timestamp = single_telemetry_data.get("timestamp") if isinstance(single_telemetry_data, dict) else None
+            rid_ts_value = telemetry_timestamp.get("value") if isinstance(telemetry_timestamp, dict) else None
+            rid_timestamp_us = _parse_rid_timestamp_us(rid_ts_value, f"test {test_id}")
 
             so = SingleRIDObservation(
                 session_id=test_id,
