@@ -745,12 +745,16 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
     serializer_class = FlightDeclarationSerializer
     pagination_class = StandardResultsSetPagination
 
-    def get_relevant_flight_declaration(self, start_date, end_date, view_port: list[float]):
+    def get_relevant_flight_declaration(self, start_date, end_date, view_port: list[float], states: list[int] | None = None):
         present = arrow.now()
         s_date = arrow.get(start_date, "YYYY-MM-DD") if start_date else present.shift(days=-1)
         e_date = arrow.get(end_date, "YYYY-MM-DD") if end_date else present.shift(days=1)
 
         all_fd_within_timelimits = FlightDeclaration.objects.filter(start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat())
+
+        if states:
+            all_fd_within_timelimits = all_fd_within_timelimits.filter(state__in=states)
+
         logger.info("Found %s flight declaration" % len(all_fd_within_timelimits))
 
         if view_port:
@@ -769,7 +773,15 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         view = self.request.query_params.get("view", None)
         view_port = [float(i) for i in view.split(",")] if view else []
 
-        return self.get_relevant_flight_declaration(view_port=view_port, start_date=start_date, end_date=end_date)
+        raw_states = self.request.query_params.get("state", None)
+        states: list[int] | None = None
+        if raw_states:
+            try:
+                states = [int(s.strip()) for s in raw_states.split(",")]
+            except ValueError:
+                states = None
+
+        return self.get_relevant_flight_declaration(view_port=view_port, start_date=start_date, end_date=end_date, states=states)
 
     def get(self, request, *args, **kwargs):
         return self.list(request, *args, **kwargs)
