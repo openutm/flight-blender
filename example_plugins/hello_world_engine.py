@@ -17,21 +17,23 @@ See PLUGINS.md for the full guide.
 
 from loguru import logger
 
+from common.data_definitions import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
 from flight_declaration_operations.data_definitions import (
     DeconflictionRequest,
     DeconflictionResult,
 )
 from flight_declaration_operations.models import FlightDeclaration
 
-# Operation states — must match OPERATION_STATES in common/data_definitions.py:
-#   0 = Not Submitted, 1 = Accepted, 2 = Activated, 3 = Nonconforming,
-#   4 = Contingent, 5 = Ended, 6 = Withdrawn, 7 = Cancelled, 8 = Rejected
-_STATE_NOT_SUBMITTED = 0  # Pending USSP network validation
-_STATE_ACCEPTED = 1  # Locally accepted (no USSP network)
-_STATE_REJECTED = 8
+# Derive state codes directly from the canonical OPERATION_STATES tuple so this
+# example can never silently drift out of sync with common/data_definitions.py.
+_STATES_LOOKUP = {str(label): code for code, label in OPERATION_STATES}
+_STATE_NOT_SUBMITTED = _STATES_LOOKUP["Not Submitted"]  # 0 — pending USSP network validation
+_STATE_ACCEPTED = _STATES_LOOKUP["Accepted"]  # 1 — locally accepted (no USSP network)
+_STATE_REJECTED = _STATES_LOOKUP["Rejected"]  # 8
+del _STATES_LOOKUP  # only needed for initialisation; remove from module namespace
 
-# Active operational states that count as "in use" for conflict detection.
-_ACTIVE_STATES = [1, 2, 3, 4]  # Accepted, Activated, Nonconforming, Contingent
+# Reuse the canonical active-states list as an immutable tuple.
+_ACTIVE_STATES = tuple(ACTIVE_OPERATIONAL_STATES)  # (1, 2, 3, 4)
 
 
 class HelloWorldEngine:
@@ -55,7 +57,7 @@ class HelloWorldEngine:
             overlapping = overlapping.exclude(pk=request.declaration_id)
 
         conflicting_ids = list(overlapping.values_list("id", flat=True)[:20])
-        has_conflicts = len(conflicting_ids) > 0
+        has_conflicts = bool(conflicting_ids)
 
         if has_conflicts:
             logger.info(
