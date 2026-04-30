@@ -205,7 +205,7 @@ class RemoteIDOperations:
             return isa_creation_response
 
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")
+            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             return isa_creation_response
@@ -298,7 +298,7 @@ class RemoteIDOperations:
                 "extents": json.loads(json.dumps(asdict(flight_extents))),
             }
 
-            auth_credentials = my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")
+            auth_credentials = my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")  # nosec B106
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_credentials["access_token"],
@@ -342,7 +342,7 @@ class RemoteIDOperations:
             return subscription_response
 
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")
+            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             return subscription_response
@@ -520,7 +520,7 @@ class RemoteIDOperations:
             logger.debug(f"Flight url list : {all_flights_url}")
             audience = generate_audience_from_base_url(base_url=_service_area.uss_base_url)
 
-            auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")
+            auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_credentials["access_token"],

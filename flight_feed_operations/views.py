@@ -93,7 +93,7 @@ def ping(request):
 def bulk_set_air_traffic(request, session_id):
     """This is a POST method that takes in a request for bulk Air traffic observation and processes the input data."""
 
-    if request.headers.get("Content-Type") != "application/json":
+    if request.content_type != "application/json":
         msg = {"message": "Unsupported Media Type"}
         return JsonResponse(msg, status=415)
     else:
@@ -196,7 +196,7 @@ def set_air_traffic(request, session_id):
         }
     """
 
-    if request.headers.get("Content-Type") != "application/json":
+    if request.content_type != "application/json":
         msg = {"message": "Unsupported Media Type"}
         return JsonResponse(msg, status=415)
     else:

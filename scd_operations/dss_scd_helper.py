@@ -927,10 +927,10 @@ class SCDOperations:
             audience = env.get("DSS_SELF_AUDIENCE", "localhost")
         if not audience:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
-            return
-        auth_token = {}
+            return {"error": "DSS_SELF_AUDIENCE is not set in the environment"}
+        auth_token: dict = {}
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="scd")
+            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="scd")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             logger.error(f"Audience {audience}")

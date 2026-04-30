@@ -184,9 +184,10 @@ def upsert_close_flight_plan(request, flight_plan_id):
             )
 
         auth_token = my_scd_dss_helper.get_auth_token()
-        if "error" in auth_token:
+        if not auth_token or "error" in auth_token:
             logger.error("Error in retrieving auth_token, check if the auth server is running properly, error details below")
-            logger.error(auth_token["error"])
+            if auth_token and "error" in auth_token:
+                logger.error(auth_token["error"])
             return Response(
                 json.loads(json.dumps(asdict(failed_planning_response), cls=EnhancedJSONEncoder)),
                 status=status.HTTP_200_OK,
