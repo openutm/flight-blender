@@ -76,9 +76,24 @@ def start_stop_surveillance_heartbeat_track(request, surveillance_session_id):
                 status=400,
             )
         end_datetime = (timezone.now() + timedelta(minutes=30)).isoformat()
-        database_writer.create_surveillance_session(surveillance_session_id=surveillance_session_id, valid_until=end_datetime)
-        database_writer.create_surveillance_monitoring_heartbeat_periodic_task(surveillance_session_id=str(surveillance_session_id))
-        database_writer.create_surveillance_monitoring_track_periodic_task(surveillance_session_id=str(surveillance_session_id))
+        session_created = database_writer.create_surveillance_session(surveillance_session_id=surveillance_session_id, valid_until=end_datetime)
+        if not session_created:
+            logger.error(f"Failed to create surveillance session with id {surveillance_session_id}")
+            return JsonResponse({"error": "Failed to create surveillance session"}, status=500)
+
+        heartbeat_task_created = database_writer.create_surveillance_monitoring_heartbeat_periodic_task(
+            surveillance_session_id=str(surveillance_session_id)
+        )
+        if not heartbeat_task_created:
+            logger.error(f"Failed to create surveillance monitoring heartbeat task for session {surveillance_session_id}")
+            database_writer.delete_surveillance_session(surveillance_session_id=surveillance_session_id)
+            return JsonResponse({"error": "Failed to create surveillance monitoring heartbeat task"}, status=500)
+
+        track_task_created = database_writer.create_surveillance_monitoring_track_periodic_task(surveillance_session_id=str(surveillance_session_id))
+        if not track_task_created:
+            logger.error(f"Failed to create surveillance monitoring track task for session {surveillance_session_id}")
+            database_writer.delete_surveillance_session(surveillance_session_id=surveillance_session_id)
+            return JsonResponse({"error": "Failed to create surveillance monitoring track task"}, status=500)
 
         return JsonResponse({"status": "Surveillance monitoring heartbeat started"})
     else:
