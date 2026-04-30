@@ -23,26 +23,31 @@ from flight_declaration_operations.data_definitions import (
 )
 from flight_declaration_operations.models import FlightDeclaration
 
-# Operation states — mirrors the constants used by the default engine.
-_STATE_ACCEPTED = 0
-_STATE_ACCEPTED_WITH_CONDITIONS = 1
+# Operation states — must match OPERATION_STATES in common/data_definitions.py:
+#   0 = Not Submitted, 1 = Accepted, 2 = Activated, 3 = Nonconforming,
+#   4 = Contingent, 5 = Ended, 6 = Withdrawn, 7 = Cancelled, 8 = Rejected
+_STATE_NOT_SUBMITTED = 0  # Pending USSP network validation
+_STATE_ACCEPTED = 1  # Locally accepted (no USSP network)
 _STATE_REJECTED = 8
+
+# Active operational states that count as "in use" for conflict detection.
+_ACTIVE_STATES = [1, 2, 3, 4]  # Accepted, Activated, Nonconforming, Contingent
 
 
 class HelloWorldEngine:
     """Time-window de-confliction engine.
 
-    Approves a flight declaration only when no existing *accepted*
+    Approves a flight declaration only when no existing *active*
     declaration overlaps the same time window.  Geofence checks
     are intentionally skipped to keep the example concise.
     """
 
     def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
-        # Find accepted declarations whose time window overlaps the request.
+        # Find active declarations whose time window overlaps the request.
         overlapping = FlightDeclaration.objects.filter(
             start_datetime__lt=request.end_datetime,
             end_datetime__gt=request.start_datetime,
-            state__in=[_STATE_ACCEPTED, _STATE_ACCEPTED_WITH_CONDITIONS],
+            state__in=_ACTIVE_STATES,
         )
 
         # Exclude the declaration itself (important for re-evaluation).
@@ -65,7 +70,5 @@ class HelloWorldEngine:
             all_relevant_fences=[],
             all_relevant_declarations=conflicting_ids,
             is_approved=not has_conflicts,
-            declaration_state=_STATE_REJECTED
-            if has_conflicts
-            else (_STATE_ACCEPTED if request.ussp_network_enabled else _STATE_ACCEPTED_WITH_CONDITIONS),
+            declaration_state=_STATE_REJECTED if has_conflicts else (_STATE_NOT_SUBMITTED if request.ussp_network_enabled else _STATE_ACCEPTED),
         )
