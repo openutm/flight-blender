@@ -1466,13 +1466,29 @@ class FlightDeclarationListStateFilterTests(TestCase):
         self.assertEqual(body["results"], [])
 
     @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
-    def test_invalid_state_value_ignores_filter(self):
-        """?state=notanumber falls back to returning all declarations (filter ignored)."""
+    def test_invalid_state_value_returns_400(self):
+        """?state=notanumber returns 400 Bad Request."""
         response = self._get("?state=notanumber")
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_trailing_comma_parses_valid_states(self):
+        """?state=1, (trailing comma) is treated as state=1 — empty token ignored."""
+        response = self._get("?state=1,")
         self.assertEqual(response.status_code, 200)
         body = response.json()
         returned_ids = {r["id"] for r in body["results"]}
-        # All three should still be present since invalid state is ignored
+        self.assertIn(str(self.fd_accepted.id), returned_ids)
+        self.assertNotIn(str(self.fd_activated.id), returned_ids)
+        self.assertNotIn(str(self.fd_rejected.id), returned_ids)
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_double_comma_parses_valid_states(self):
+        """?state=1,,2 (double comma) is treated as state=1,2 — empty token ignored."""
+        response = self._get("?state=1,,2")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        returned_ids = {r["id"] for r in body["results"]}
         self.assertIn(str(self.fd_accepted.id), returned_ids)
         self.assertIn(str(self.fd_activated.id), returned_ids)
-        self.assertIn(str(self.fd_rejected.id), returned_ids)
+        self.assertNotIn(str(self.fd_rejected.id), returned_ids)
