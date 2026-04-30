@@ -1662,6 +1662,87 @@ paths:
       tags:
         - flight-declarations
 
+  /flight_declaration_ops/flight_declaration/{flight_declaration_id}/submit_to_dss:
+    post:
+      parameters:
+        - in: path
+          name: flight_declaration_id
+          description: 'The ID of the flight declaration to submit to the DSS'
+          schema:
+            type: string
+            format: uuid
+          required: true
+
+      summary: 'Manually submit a flight declaration to the DSS'
+      operationId: submitFlightDeclarationToDss
+      security:
+        - AuthFromPassport: [flightblender.write]
+      description: >
+        Triggers DSS submission for a flight declaration that is in state `0`
+        (*ProcessingNotSubmittedToDss*).  This endpoint is intended for use
+        when `AUTO_SUBMIT_TO_DSS=0`, allowing operators to create a pool of
+        candidate declarations and then pick exactly one to forward to the DSS
+        for strategic deconfliction.  Requires `USSP_NETWORK_ENABLED=1`.
+
+      responses:
+        '200':
+          description: DSS submission initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: DSS submission initiated.
+                  id:
+                    type: string
+                    format: uuid
+                    description: ID of the flight declaration being submitted
+        '400':
+          description: USSP network is not enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequest400ErrorResponse'
+        '401':
+          description: Un-authorized request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Unauthorized401ErrorResponse'
+        '403':
+          description: Forbidden request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forbidden403ErrorResponse'
+        '404':
+          description: Flight declaration not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFound404ErrorResponse'
+        '409':
+          description: >
+            Flight declaration is not in state 0 (ProcessingNotSubmittedToDss).
+            Only declarations in state 0 can be submitted via this endpoint.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Standard500ErrorResponse'
+      tags:
+        - flight-declarations
+
   /flight_stream/public_keys/:
     get:
       operationId: Get all Public Keys

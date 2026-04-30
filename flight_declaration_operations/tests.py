@@ -1360,3 +1360,174 @@ class SetOperationalIntentsBulkTests(TestCase):
         body = response.json()
         indices = [r["index"] for r in body["results"]]
         self.assertEqual(indices, [0, 1, 2])
+
+
+# ---------------------------------------------------------------------------
+# AUTO_SUBMIT_TO_DSS and submit_to_dss endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@override_settings(
+    DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
+    CELERY_TASK_ALWAYS_EAGER=True,
+)
+class AutoSubmitToDssTests(TestCase):
+    """Tests for the AUTO_SUBMIT_TO_DSS gate in _process_intersection_result."""
+
+    URL = "/flight_declaration_ops/set_flight_declaration"
+
+    def setUp(self):
+        self.client = Client()
+        self.auth = _make_dummy_bearer_token()
+
+    def _post(self, payload, content_type=RESPONSE_CONTENT_TYPE):
+        return self.client.post(
+            self.URL,
+            data=json.dumps(payload),
+            content_type=content_type,
+            HTTP_AUTHORIZATION=self.auth,
+        )
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(
+            IntersectionCheckResult(
+                all_relevant_fences=[],
+                all_relevant_declarations=[],
+                is_approved=True,
+                declaration_state=0,
+            )
+        ),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "AUTO_SUBMIT_TO_DSS": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_auto_submit_disabled_does_not_trigger_dss(
+        self,
+        mock_run_deconfliction,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        """When AUTO_SUBMIT_TO_DSS=0, declarations remain in state=0 and are NOT submitted."""
+        payload = _make_flight_declaration_payload()
+
+        response = self._post(payload)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["state"], 0)
+        mock_submit_dss.delay.assert_not_called()
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch(
+        "flight_declaration_operations.views._run_deconfliction",
+        side_effect=_mock_run_deconfliction(
+            IntersectionCheckResult(
+                all_relevant_fences=[],
+                all_relevant_declarations=[],
+                is_approved=True,
+                declaration_state=0,
+            )
+        ),
+    )
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "AUTO_SUBMIT_TO_DSS": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_auto_submit_enabled_triggers_dss(
+        self,
+        mock_run_deconfliction,
+        mock_send_msg,
+        mock_submit_dss,
+    ):
+        """When AUTO_SUBMIT_TO_DSS=1 (default), DSS submission is triggered immediately."""
+        payload = _make_flight_declaration_payload()
+
+        response = self._post(payload)
+
+        self.assertEqual(response.status_code, 200)
+        mock_submit_dss.delay.assert_called_once()
+
+
+@override_settings(
+    DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
+    CELERY_TASK_ALWAYS_EAGER=True,
+)
+class SubmitToDssEndpointTests(TestCase):
+    """Tests for the POST /flight_declaration/<pk>/submit_to_dss endpoint."""
+
+    def setUp(self):
+        self.client = Client()
+        self.auth = _make_dummy_bearer_token()
+
+    def _make_declaration(self, state: int = 0) -> FlightDeclaration:
+        now = arrow.now()
+        fd = FlightDeclaration.objects.create(
+            operational_intent="{}",
+            bounds="-1,-1,1,1",
+            type_of_operation=1,
+            aircraft_id="test-ac",
+            state=state,
+            originating_party="Test",
+            start_datetime=now.shift(minutes=10).datetime,
+            end_datetime=now.shift(hours=1).datetime,
+            is_approved=True,
+        )
+        return fd
+
+    def _post(self, pk):
+        return self.client.post(
+            f"/flight_declaration_ops/flight_declaration/{pk}/submit_to_dss",
+            content_type=RESPONSE_CONTENT_TYPE,
+            HTTP_AUTHORIZATION=self.auth,
+        )
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_valid_state0_declaration_triggers_dss_submission(self, mock_send_msg, mock_submit_dss):
+        """A declaration in state=0 with USSP enabled should be submitted to DSS."""
+        fd = self._make_declaration(state=0)
+
+        response = self._post(fd.id)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("id", body)
+        self.assertEqual(body["id"], str(fd.id))
+        mock_submit_dss.delay.assert_called_once_with(flight_declaration_id=str(fd.id))
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "0", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_ussp_disabled_returns_400(self, mock_send_msg, mock_submit_dss):
+        """Returns 400 when USSP_NETWORK_ENABLED=0."""
+        fd = self._make_declaration(state=0)
+
+        response = self._post(fd.id)
+
+        self.assertEqual(response.status_code, 400)
+        mock_submit_dss.delay.assert_not_called()
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_declaration_not_found_returns_404(self, mock_send_msg, mock_submit_dss):
+        """Returns 404 when the declaration ID does not exist."""
+        import uuid
+
+        fake_id = uuid.uuid4()
+        response = self._post(fake_id)
+
+        self.assertEqual(response.status_code, 404)
+        mock_submit_dss.delay.assert_not_called()
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_declaration_in_wrong_state_returns_409(self, mock_send_msg, mock_submit_dss):
+        """Returns 409 when declaration is already in state != 0 (e.g. Accepted=1)."""
+        fd = self._make_declaration(state=1)
+
+        response = self._post(fd.id)
+
+        self.assertEqual(response.status_code, 409)
+        mock_submit_dss.delay.assert_not_called()
