@@ -26,7 +26,7 @@ class WeatherService:
             "hourly": ",".join(WEATHER_TOPICS),
         }
 
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=30)
 
         if response.status_code == status.HTTP_200_OK:
             return response.json()

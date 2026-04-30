@@ -251,7 +251,6 @@ class FlightOperationConformanceHelper:
                 # self._remove_conformance_monitoring_task()
             else:
                 logger.info("USSP Network is not enabled, skipping non-conforming state handling with DSS")
-    
 
     def _handle_withdrawn_state(self, original_state: int, event: str):
         if event != "operator_withdraws":

@@ -139,6 +139,7 @@ def start_opensky_network_stream(view_port: str, session_id: str):
         response = requests.get(
             url_data,
             auth=(env.get("OPENSKY_NETWORK_USERNAME", "opensky"), env.get("OPENSKY_NETWORK_PASSWORD", "opensky")),
+            timeout=30,
         )
         logger.info(url_data)
         if response.status_code == 200:

@@ -59,8 +59,8 @@ OPERATOR_EVENT_LOOKUP = {
     5: "operator_confirms_ended",
     2: "operator_activates",
     4: "operator_initiates_contingent",
-    6 : "operator_withdraws",
-    7 : "operator_cancels",
+    6: "operator_withdraws",
+    7: "operator_cancels",
 }
 
 VALID_OPERATIONAL_INTENT_STATES = [
@@ -112,10 +112,10 @@ SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES = [
 ]
 
 # Locations for Index Creation, using tmp to avoid permission issues in Docker / Kubernetes
-FLIGHT_DECLARATION_INDEX_BASEPATH = "/tmp/blender_flight_declaration_idx"
-FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH = "/tmp/blender_opint_idx"
-GEOFENCE_INDEX_BASEPATH = "/tmp/blender_geofence_idx"
-OPINT_INDEX_BASEPATH = "/tmp/blender_opint_proc_idx"
+FLIGHT_DECLARATION_INDEX_BASEPATH = "/tmp/blender_flight_declaration_idx"  # nosec B108
+FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH = "/tmp/blender_opint_idx"  # nosec B108
+GEOFENCE_INDEX_BASEPATH = "/tmp/blender_geofence_idx"  # nosec B108
+OPINT_INDEX_BASEPATH = "/tmp/blender_opint_proc_idx"  # nosec B108
 
 DEFAULT_UAV_SPEED_M_PER_S = env.get("DEFAULT_UAV_SPEED_M_PER_S", 5.5)  # ~20 km/h
 DEFAULT_UAV_CLIMB_RATE_M_PER_S = env.get("DEFAULT_UAV_CLIMB_RATE_M_PER_S", 2.0)  # ~7.2 km/h

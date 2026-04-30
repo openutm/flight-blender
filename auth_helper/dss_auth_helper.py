@@ -103,7 +103,7 @@ class AuthorityCredentialsGetter:
                 "issuer": issuer,
             }
 
-            token_data = requests.get(auth_server_url, params=payload)
+            token_data = requests.get(auth_server_url, params=payload, timeout=30)
             if token_data.status_code != 200:
                 logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {auth_server_url}")
                 logger.error(f"Payload: {payload}")
@@ -119,7 +119,7 @@ class AuthorityCredentialsGetter:
             }
 
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
-            token_data = requests.post(auth_server_url, data=payload, headers=headers)
+            token_data = requests.post(auth_server_url, data=payload, headers=headers, timeout=30)
             if token_data.status_code != 200:
                 logger.error(f"Failed to get token for audience {audience} with scopes {scopes_str} and URL {auth_server_url}")
                 logger.error(f"Payload: {payload}")

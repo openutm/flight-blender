@@ -63,9 +63,7 @@ INDEX_NAME = "geofence_proc"
 @api_view(["PUT"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_geo_fence(request: HttpRequest):
-    try:
-        assert request.headers["Content-Type"] == "application/json"
-    except AssertionError:
+    if request.headers.get("Content-Type") != "application/json":
         msg = {"message": "Unsupported Media Type"}
         return HttpResponse(
             json.dumps(msg),
@@ -122,9 +120,7 @@ def set_geo_fence(request: HttpRequest):
 @api_view(["POST"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def set_geozone(request):
-    try:
-        assert request.headers["Content-Type"] == "application/json"
-    except AssertionError:
+    if request.headers.get("Content-Type") != "application/json":
         msg = {"message": "Unsupported Media Type"}
         return HttpResponse(
             json.dumps(msg),
