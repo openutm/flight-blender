@@ -50,4 +50,9 @@ urlpatterns = [
         flight_declaration_views.FlightDeclarationDelete.as_view(),
         name="flight-declaration-delete",
     ),
+    path(
+        "flight_declaration/<uuid:pk>/submit_to_dss",
+        flight_declaration_views.submit_flight_declaration_to_dss,
+        name="flight-declaration-submit-to-dss",
+    ),
 ]

@@ -47,7 +47,7 @@ from .data_definitions import (
 )
 from .deconfliction_protocol import DeconflictionEngine
 from .flight_declarations_rtree_helper import FlightDeclarationRTreeIndexFactory
-from .models import FlightDeclaration
+from .models import FlightDeclaration, FlightOperationalIntentReference
 from .pagination import StandardResultsSetPagination
 from .serializers import (
     FlightDeclarationApprovalSerializer,
@@ -331,10 +331,13 @@ def _process_intersection_result(
             level="error",
         )
 
-    # Only submit to DSS when the declaration was approved and USSP is enabled.
-    # declaration_state is 0 only when ussp_network_enabled is truthy AND no
-    # intersection conflicts were found (conflicts set it to 8).
-    if is_approved and declaration_state == 0 and ussp_network_enabled:
+    # Only submit to DSS when the declaration was approved, USSP is enabled,
+    # and auto-submit is not disabled.  Setting AUTO_SUBMIT_TO_DSS=0 keeps the
+    # declaration in state=0 (ProcessingNotSubmittedToDss) so operators can
+    # create a set of candidate declarations and pick one to submit manually
+    # via the dedicated submit_to_dss endpoint.
+    auto_submit_to_dss = int(env.get("AUTO_SUBMIT_TO_DSS", 1))
+    if is_approved and declaration_state == 0 and ussp_network_enabled and auto_submit_to_dss:
         submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
 
     return FlightDeclarationCreateResponse(
@@ -595,6 +598,80 @@ def set_operational_intents_bulk(request):
         json.dumps(asdict(bulk_response)),
         status=http_status,
         content_type=RESPONSE_CONTENT_TYPE,
+    )
+
+
+@api_view(["POST"])
+@requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
+def submit_flight_declaration_to_dss(request, pk):
+    """Manually submit a flight declaration to the DSS.
+
+    This endpoint is intended for use when ``AUTO_SUBMIT_TO_DSS=0`` so that
+    operators can create a pool of candidate declarations (all in state=0 /
+    *ProcessingNotSubmittedToDss*) and then pick exactly one to forward to
+    the DSS for strategic deconfliction.
+
+    The declaration must exist and be in state=0.  Any other state (already
+    submitted, rejected, ended, …) is rejected with HTTP 409.
+
+    Idempotency guards:
+    * A row-level lock (``SELECT FOR UPDATE``) prevents two concurrent
+      requests from both enqueuing a submission task.
+    * An existing ``FlightOperationalIntentReference`` for this declaration
+      (written by ``submit_flight_declaration_to_dss_async`` on success)
+      means DSS submission has already completed; a second call returns 409.
+    """
+    ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", 0))
+    if not ussp_network_enabled:
+        return JsonResponse(
+            {"message": "USSP network is not enabled; DSS submission is only available when USSP_NETWORK_ENABLED=1."},
+            status=400,
+        )
+
+    with transaction.atomic():
+        try:
+            flight_declaration = FlightDeclaration.objects.select_for_update().get(pk=pk)
+        except FlightDeclaration.DoesNotExist:
+            return JsonResponse({"message": "Flight declaration not found."}, status=404)
+
+        if flight_declaration.state != 0:
+            return JsonResponse(
+                {
+                    "message": (
+                        "Flight declaration is not in 'Not Submitted' state (state=0). "
+                        "Current state: %d. Only declarations in state=0 can be submitted to the DSS via this endpoint."
+                    )
+                    % flight_declaration.state
+                },
+                status=409,
+            )
+
+        # Guard against re-submission when a previous task already succeeded and
+        # created an operational intent reference in the DSS.
+        if FlightOperationalIntentReference.objects.filter(declaration=flight_declaration).exists():
+            return JsonResponse(
+                {"message": "A DSS operational intent reference already exists for this flight declaration."},
+                status=409,
+            )
+
+        # Record the submission attempt inside the lock so a concurrent request
+        # that arrives before the async task updates the state can be detected.
+        flight_declaration_id = str(flight_declaration.id)
+        flight_declaration.add_state_history_entry(
+            new_state=flight_declaration.state,
+            original_state=flight_declaration.state,
+            notes="DSS submission initiated via manual endpoint",
+        )
+
+    submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
+    send_operational_update_message.delay(
+        flight_declaration_id=flight_declaration_id,
+        message_text="Manual DSS submission triggered for flight declaration %s" % flight_declaration_id,
+        level="info",
+    )
+    return JsonResponse(
+        {"message": "DSS submission initiated.", "id": flight_declaration_id},
+        status=200,
     )
 
 

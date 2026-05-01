@@ -42,6 +42,7 @@ If you are working in stand-alone mode, recommended initially, the above environ
 | Variable Key | Data Type | Description |
 |--------------|--------------|:-----:|
 | USSP_NETWORK_ENABLED | int | Set it as 0 for standalone mode. Set it as 1 for interacting with an ASTM compliant DSS system. |
+| AUTO_SUBMIT_TO_DSS | int | (optional, default `1`) Set it to `0` to prevent flight declarations from being automatically submitted to the DSS upon creation. When disabled, declarations remain in state `0` (`ProcessingNotSubmittedToDss`) until manually promoted via the `POST /flight_declaration_ops/flight_declaration/<uuid>/submit_to_dss` endpoint. Useful in tactical workflows where operators create multiple candidate declarations and choose one to submit. |
 | DSS_SELF_AUDIENCE | string | This is the domain name of the lender instance. You can set it as localhost or development/testing. |
 | AUTH_DSS_CLIENT_ID | string | (optional) Sometimes authorities will provide special tokens for accessing the DSS. If you are using it locally via `/build/dev/run_locally.sh` via the InterUSS/DSS repository, you can just use a random long string. |
 | AUTH_DSS_CLIENT_SECRET | string | (optional) Similar to above, sometimes authorities provide. |
