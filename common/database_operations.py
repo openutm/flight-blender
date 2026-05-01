@@ -1067,6 +1067,11 @@ class FlightBlenderDatabaseWriter:
     def remove_surveillance_monitoring_heartbeat_periodic_task(self, surveillance_monitoring_heartbeat_task: TaskScheduler):
         surveillance_monitoring_heartbeat_task.terminate()
 
+    def delete_surveillance_session(self, surveillance_session_id: UUID | str) -> None:
+        for task in TaskScheduler.objects.filter(session_id=str(surveillance_session_id)):
+            task.terminate()
+        SurveillanceSession.objects.filter(id=surveillance_session_id).delete()
+
     def create_conformance_monitoring_periodic_task(self, flight_declaration: FlightDeclaration) -> bool:
         conformance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
