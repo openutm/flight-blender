@@ -116,6 +116,7 @@ exclude_dirs = [
     ".venv",
     "*/migrations/*",
     "*/tests.py",
+    "*tests.py",
     "*/test_*.py",
     "*/tests_*.py",
 ]
