@@ -4,16 +4,22 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+from django_celery_beat.models import IntervalSchedule, PeriodicTask
 
-# A pre-signed HS256 JWT with scope/iss/aud accepted by the bypass verifier.
+from common.database_operations import FlightBlenderDatabaseWriter
+from conformance_monitoring_operations.models import TaskScheduler
+from surveillance_monitoring_operations.models import SurveillanceSession
+
+# A dummy JWT with an RS256 header and scope/iss/aud accepted by the bypass verifier.
 # Signature is not checked when BYPASS_AUTH_TOKEN_VERIFICATION=1.
 _DUMMY_JWT = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
     ".eyJzdWIiOiJ0ZXN0dXNlciIsInNjb3BlIjoiZmxpZ2h0YmxlbmRlci53cml0ZSBmbGlnaHRibGVuZGVyLnJlYWQiLCJpc3MiOiJkdW1teSIsImF1ZCI6InRlc3RmbGlnaHQuZmxpZ2h0YmxlbmRlci5jb20ifQ"
     ".zW7dJaQyj0MpARupQDW5xA5KT8zNYF0DqIZXOowHlgI"
 )
 _AUTH_HEADER = f"Bearer {_DUMMY_JWT}"
-_BYPASS_ENV = {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"}
+_BYPASS_ENV = {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"}  # nosec B105
 
 
 class StartStopSurveillanceHeartbeatTrackTests(TestCase):
@@ -184,3 +190,42 @@ class StartStopSurveillanceHeartbeatTrackTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         writer_instance.remove_surveillance_monitoring_heartbeat_periodic_task.assert_called_once_with(surveillance_monitoring_heartbeat_task=task)
+
+
+class DeleteSurveillanceSessionTests(TestCase):
+    """Integration tests for FlightBlenderDatabaseWriter.delete_surveillance_session."""
+
+    def _make_task_scheduler(self, session_id):
+        """Create a real TaskScheduler (with PeriodicTask) tied to session_id."""
+        interval, _ = IntervalSchedule.objects.get_or_create(period="seconds", every=1)
+        ptask = PeriodicTask.objects.create(
+            name=f"test_task_{uuid.uuid4()}",
+            task="send_heartbeat_to_consumer",
+            interval=interval,
+        )
+        return TaskScheduler.objects.create(
+            periodic_task=ptask,
+            session_id=session_id,
+        )
+
+    def test_delete_removes_session_and_tasks(self):
+        session_id = uuid.uuid4()
+        SurveillanceSession.objects.create(id=session_id, valid_until=timezone.now())
+        self._make_task_scheduler(session_id)
+        self._make_task_scheduler(session_id)
+
+        writer = FlightBlenderDatabaseWriter()
+        writer.delete_surveillance_session(surveillance_session_id=session_id)
+
+        self.assertFalse(SurveillanceSession.objects.filter(id=session_id).exists())
+        self.assertFalse(TaskScheduler.objects.filter(session_id=str(session_id)).exists())
+        self.assertEqual(PeriodicTask.objects.filter(taskscheduler__session_id=str(session_id)).count(), 0)
+
+    def test_delete_no_tasks_only_removes_session(self):
+        session_id = uuid.uuid4()
+        SurveillanceSession.objects.create(id=session_id, valid_until=timezone.now())
+
+        writer = FlightBlenderDatabaseWriter()
+        writer.delete_surveillance_session(surveillance_session_id=session_id)
+
+        self.assertFalse(SurveillanceSession.objects.filter(id=session_id).exists())
