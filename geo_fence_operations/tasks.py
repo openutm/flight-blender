@@ -21,7 +21,7 @@ def download_geozone_source(geo_zone_url: str, geozone_source_id: str):
     r = get_redis()
     geoawareness_test_data_store = "geoawarenes_test." + str(geozone_source_id)
     try:
-        geo_zone_request = requests.get(geo_zone_url)
+        geo_zone_request = requests.get(geo_zone_url, timeout=30)
     except ConnectionError as ce:
         logger.error("Error in downloading data from Geofence url")
         logger.error(ce)

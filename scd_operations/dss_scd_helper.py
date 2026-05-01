@@ -90,18 +90,15 @@ class FlightPlanningDataValidator:
         self.flight_planning_data = incoming_flight_planning_data
 
     def validate_flight_planning_state(self) -> bool:
-        try:
-            assert self.flight_planning_data.uas_state in [
-                "Nominal",
-                "OffNominal",
-                "Contingent",
-                "NotSpecified",
-            ]
-        except AssertionError as ae:
-            logger.error(ae)
+        if self.flight_planning_data.uas_state not in [
+            "Nominal",
+            "OffNominal",
+            "Contingent",
+            "NotSpecified",
+        ]:
+            logger.error("Invalid uas_state: %s" % self.flight_planning_data.uas_state)
             return False
-        else:
-            return True
+        return True
 
     def validate_flight_planning_off_nominals(self) -> bool:
         if self.flight_planning_data.usage_state in ["Planned", "InUse"] and bool(self.flight_planning_data.off_nominal_volumes):
@@ -124,17 +121,14 @@ class OperationalIntentValidator:
         self.operational_intent_data = operational_intent_data
 
     def validate_operational_intent_state(self) -> bool:
-        try:
-            assert self.operational_intent_data.state in [
-                "Accepted",
-                "Activated",
-                "Nonconforming",
-            ]
-        except AssertionError as ae:
-            logger.error(ae)
+        if self.operational_intent_data.state not in [
+            "Accepted",
+            "Activated",
+            "Nonconforming",
+        ]:
+            logger.error("Invalid operational intent state: %s" % self.operational_intent_data.state)
             return False
-        else:
-            return True
+        return True
 
     def validate_operational_intent_state_off_nominals(self) -> bool:
         if self.operational_intent_data.state in ["Accepted", "Activated"] and bool(self.operational_intent_data.off_nominal_volumes):
@@ -156,17 +150,13 @@ class PeerOperationalIntentValidator:
 
     def validate_individual_operational_intent(self, operational_intent: OperationalIntentDetailsUSSResponse) -> bool:
         all_checks_passed: list[bool] = []
-        try:
-            assert operational_intent.reference.state in VALID_OPERATIONAL_INTENT_STATES
-        except AssertionError:
+        if operational_intent.reference.state not in VALID_OPERATIONAL_INTENT_STATES:
             logger.debug(f"Error in received operational intent state, it is not valid {operational_intent.reference.state}")
             all_checks_passed.append(False)
         else:
             all_checks_passed.append(True)
 
-        try:
-            assert isinstance(operational_intent.details.priority, int)
-        except AssertionError:
+        if not isinstance(operational_intent.details.priority, int):
             logger.debug(f"Error in received operational intent priority, it is not one an integer {operational_intent.details.priority}")
             all_checks_passed.append(False)
         else:
@@ -738,6 +728,7 @@ class SCDOperations:
                     query_op_int_url,
                     json=json.loads(json.dumps(asdict(area_of_interest))),
                     headers=headers,
+                    timeout=30,
                 )
             except Exception as re:
                 logger.error("Error in getting operational intent for the volume %s " % re)
@@ -753,7 +744,7 @@ class SCDOperations:
                 dss_op_int_details_url = self.dss_base_url + "dss/v1/operational_intent_references/" + operational_intent_reference_detail["id"]
                 # get new auth token for USS
                 try:
-                    op_int_uss_details = requests.get(dss_op_int_details_url, headers=headers)
+                    op_int_uss_details = requests.get(dss_op_int_details_url, headers=headers, timeout=30)
                 except Exception as e:
                     logger.error("Error in getting operational intent details %s" % e)
                 else:
@@ -852,7 +843,7 @@ class SCDOperations:
 
                     logger.debug(f"Querying USS: {current_uss_base_url}")
                     try:
-                        uss_operational_intent_request = requests.get(uss_operational_intent_url, headers=uss_headers)
+                        uss_operational_intent_request = requests.get(uss_operational_intent_url, headers=uss_headers, timeout=30)
                     except urllib3.exceptions.NameResolutionError:
                         logger.info("URLLIB error")
                         raise ConnectionError("Could not reach peer USS.. ")
@@ -934,14 +925,12 @@ class SCDOperations:
         my_authorization_helper = AuthorityCredentialsGetter()
         if not audience:
             audience = env.get("DSS_SELF_AUDIENCE", "localhost")
-        try:
-            assert audience
-        except AssertionError:
+        if not audience:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
-            return
-        auth_token = {}
+            return {"error": "DSS_SELF_AUDIENCE is not set in the environment"}
+        auth_token: dict = {}
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="scd")
+            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="scd")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             logger.error(f"Audience {audience}")
@@ -986,6 +975,7 @@ class SCDOperations:
             dss_opint_delete_url,
             json=json.loads(json.dumps(asdict(delete_payload))),
             headers=headers,
+            timeout=30,
         )
 
         dss_response = dss_r.json()
@@ -1133,6 +1123,7 @@ class SCDOperations:
             notification_url,
             json=json.loads(json.dumps(asdict(notification_payload))),
             headers=headers,
+            timeout=30,
         )
 
         uss_r_status_code = uss_r.status_code
@@ -1395,6 +1386,7 @@ class SCDOperations:
             dss_opint_update_url,
             json=json.loads(json.dumps(asdict(operational_intent_update_payload), cls=LazyEncoder)),
             headers=headers,
+            timeout=30,
         )
         dss_response = dss_r.json()
         dss_request_status_code = dss_r.status_code
@@ -1596,6 +1588,7 @@ class SCDOperations:
                 new_operational_intent_ref_creation_url,
                 json=opint_creation_payload,
                 headers=headers,
+                timeout=30,
             )
         except Exception as re:
             logger.error("Error in putting operational intent in the DSS %s " % re)

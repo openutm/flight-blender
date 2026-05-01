@@ -36,9 +36,11 @@ class SurveillanceMetricCalculator:
         if total >= 2:
             first_event = events.first()
             last_event = events.last()
-            assert first_event is not None and last_event is not None
-            span_seconds = (last_event.dispatched_at - first_event.dispatched_at).total_seconds()
-            rate_hz = round((total - 1) / span_seconds, 2) if span_seconds > 0 else 0.0
+            if first_event is None or last_event is None:
+                rate_hz = 0.0
+            else:
+                span_seconds = (last_event.dispatched_at - first_event.dispatched_at).total_seconds()
+                rate_hz = round((total - 1) / span_seconds, 2) if span_seconds > 0 else 0.0
         else:
             rate_hz = 0.0
 
