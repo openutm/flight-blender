@@ -112,7 +112,7 @@ ignore-words = ".codespellignore"
 quiet-level = 2
 
 [tool.bandit]
-exclude_dirs = [".venv", "*/migrations/*", "*/tests/*"]
+exclude_dirs = [".venv", "*/migrations/*", "*/tests/*", "*tests.py", "*/test_*.py", "*/tests_*.py"]
 
 [tool.ruff]
 exclude = [
