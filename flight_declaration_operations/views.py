@@ -11,6 +11,7 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from marshmallow.exceptions import ValidationError
 from rest_framework import generics, mixins, status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.decorators import api_view
 from shapely.geometry import shape
 
@@ -807,8 +808,8 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         serializer_class (Serializer): The serializer class for FlightDeclaration.
         pagination_class (Pagination): The pagination class for the results.
     Methods:
-        get_relevant_flight_declaration(start_date, end_date, view_port):
-            Filters flight declarations based on the provided date range and viewport.
+        get_relevant_flight_declaration(start_date, end_date, view_port, states):
+            Filters flight declarations based on the provided date range, viewport, and optional state list.
         get_queryset():
             Retrieves the queryset of flight declarations based on query parameters.
         get(request, *args, **kwargs):
@@ -822,13 +823,17 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
     serializer_class = FlightDeclarationSerializer
     pagination_class = StandardResultsSetPagination
 
-    def get_relevant_flight_declaration(self, start_date, end_date, view_port: list[float]):
+    def get_relevant_flight_declaration(self, start_date, end_date, view_port: list[float], states: list[int] | None = None):
         present = arrow.now()
         s_date = arrow.get(start_date, "YYYY-MM-DD") if start_date else present.shift(days=-1)
         e_date = arrow.get(end_date, "YYYY-MM-DD") if end_date else present.shift(days=1)
 
         all_fd_within_timelimits = FlightDeclaration.objects.filter(start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat())
-        logger.info("Found %s flight declaration" % len(all_fd_within_timelimits))
+
+        if states:
+            all_fd_within_timelimits = all_fd_within_timelimits.filter(state__in=states)
+
+        logger.info("Found %s flight declaration" % all_fd_within_timelimits.count())
 
         if view_port:
             my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH)
@@ -846,7 +851,17 @@ class FlightDeclarationCreateList(mixins.ListModelMixin, generics.GenericAPIView
         view = self.request.query_params.get("view", None)
         view_port = [float(i) for i in view.split(",")] if view else []
 
-        return self.get_relevant_flight_declaration(view_port=view_port, start_date=start_date, end_date=end_date)
+        raw_states = self.request.query_params.get("state", None)
+        states: list[int] | None = None
+        if raw_states:
+            tokens = [s.strip() for s in raw_states.split(",") if s.strip()]
+            if tokens:
+                try:
+                    states = [int(s) for s in tokens]
+                except ValueError:
+                    raise DRFValidationError({"state": "State values must be integers."})
+
+        return self.get_relevant_flight_declaration(view_port=view_port, start_date=start_date, end_date=end_date, states=states)
 
     def get(self, request, *args, **kwargs):
         return self.list(request, *args, **kwargs)

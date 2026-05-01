@@ -146,8 +146,10 @@ class OperatorRegistrationNumberValidator:
         ]
 
     def gen_checksum(self, raw_id):
-        assert raw_id.isalnum()
-        assert len(raw_id) == 15
+        if not raw_id.isalnum():
+            raise ValueError("raw_id must be alphanumeric")
+        if len(raw_id) != 15:
+            raise ValueError("raw_id must be 15 characters long")
         d = {v: k for k, v in enumerate(self.registration_number_code_points)}
         numeric_base_id = list(map(d.__getitem__, list(raw_id)))
         # Multiplication factors for each digit depending on its position
@@ -165,27 +167,30 @@ class OperatorRegistrationNumberValidator:
         return self.registration_number_code_points[control_number]
 
     def is_valid(self):
-        # Get the prefix
-        oprn, secure_characters = self.operator_registration_number.split("-")
+        try:
+            # Get the prefix
+            oprn, secure_characters = self.operator_registration_number.split("-")
 
-        if len(oprn) != 16:
-            return False
-        if len(secure_characters) != 3:
-            return False
-        base_id = oprn[3:-1]
-        if not base_id.isalnum():
-            return False
-        # country_code = self.operator_registration_number[:3]
-        checksum = self.operator_registration_number[-5]  # checksum
-        # op_registration_suffix = self.operator_registration_number[3:]
-        random_three_alnum_string = self.operator_registration_number[-3:]
+            if len(oprn) != 16:
+                return False
+            if len(secure_characters) != 3:
+                return False
+            base_id = oprn[3:-1]
+            if not base_id.isalnum():
+                return False
+            # country_code = self.operator_registration_number[:3]
+            checksum = self.operator_registration_number[-5]  # checksum
+            # op_registration_suffix = self.operator_registration_number[3:]
+            random_three_alnum_string = self.operator_registration_number[-3:]
 
-        computed_checksum = self.gen_checksum(base_id + random_three_alnum_string)
+            computed_checksum = self.gen_checksum(base_id + random_three_alnum_string)
 
-        if computed_checksum != checksum:
+            if computed_checksum != checksum:
+                return False
+
+            return True
+        except ValueError:
             return False
-
-        return True
 
 
 class DSSAreaClearHandler:

@@ -65,6 +65,7 @@ class ConstraintOperations:
                     query_constraints_url,
                     json=json.loads(json.dumps(asdict(area_of_interest))),
                     headers=headers,
+                    timeout=30,
                 )
             except Exception as re:
                 logger.error("Error in getting constraint for the volume %s " % re)
@@ -158,7 +159,7 @@ class ConstraintOperations:
 
                     logger.info(f"Querying USS for constraints: {constraints_detail_url}")
                     try:
-                        uss_constraint_request = requests.get(constraints_detail_url, headers=uss_headers)
+                        uss_constraint_request = requests.get(constraints_detail_url, headers=uss_headers, timeout=30)
                     except urllib3.exceptions.NameResolutionError:
                         logger.info("URLLIB error")
                         raise ConnectionError("Could not reach peer USS.. ")
@@ -225,13 +226,12 @@ class ConstraintOperations:
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
         if not audience:
             audience = env.get("DSS_SELF_AUDIENCE", "")
-        try:
-            assert audience
-        except AssertionError:
+        if not audience:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
-        auth_token = {}
+            return {"error": "DSS_SELF_AUDIENCE is not set in the environment"}
+        auth_token: dict = {}
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="constraints")
+            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="constraints")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             logger.error(f"Auth server error {e}")

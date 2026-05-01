@@ -200,23 +200,19 @@ class RemoteIDOperations:
         audience = env.get("DSS_SELF_AUDIENCE", "000")
         error = None
 
-        try:
-            assert audience
-        except AssertionError:
+        if not audience:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
             return isa_creation_response
 
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")
+            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             return isa_creation_response
         else:
             error = auth_token.get("error")
 
-        try:
-            assert error is None
-        except AssertionError:
+        if error is not None:
             return isa_creation_response
 
         # A token from authority was received,
@@ -235,17 +231,16 @@ class RemoteIDOperations:
                 dss_isa_create_url,
                 json=json.loads(json.dumps(p_dict)),
                 headers=headers,
+                timeout=30,
             )
         except Exception as re:
             logger.error("Error in posting to DSS URL %s " % re)
             return isa_creation_response
 
-        try:
-            assert dss_r.status_code == 200
-            isa_creation_response.created = 1
-        except AssertionError:
+        if dss_r.status_code != 200:
             logger.error("Error in creating ISA in the DSS %s" % dss_r.text)
             return isa_creation_response
+        isa_creation_response.created = 1
 
         dss_response = dss_r.json()
         dss_response_service_area = dss_response["service_area"]
@@ -303,13 +298,13 @@ class RemoteIDOperations:
                 "extents": json.loads(json.dumps(asdict(flight_extents))),
             }
 
-            auth_credentials = my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")
+            auth_credentials = my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")  # nosec B106
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_credentials["access_token"],
             }
             try:
-                response = requests.post(url, headers=headers, json=json.loads(json.dumps(payload)))
+                response = requests.post(url, headers=headers, json=json.loads(json.dumps(payload)), timeout=30)
             except Exception as re:
                 logger.error(f"Error in sending subscriber notification to {url} :  {re} ")
             if response.status_code == 204:
@@ -342,23 +337,19 @@ class RemoteIDOperations:
         audience = env.get("DSS_SELF_AUDIENCE", "000")
         error = None
 
-        try:
-            assert audience
-        except AssertionError:
+        if not audience:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
             return subscription_response
 
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")
+            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             return subscription_response
         else:
             error = auth_token.get("error")
 
-        try:
-            assert error is None
-        except AssertionError:
+        if error is not None:
             return subscription_response
         else:
             # A token from authority was received,
@@ -401,18 +392,16 @@ class RemoteIDOperations:
             }
 
             try:
-                dss_r = requests.put(dss_subscription_url, json=payload, headers=headers)
+                dss_r = requests.put(dss_subscription_url, json=payload, headers=headers, timeout=30)
             except Exception as re:
                 logger.error("Error in posting to subscription URL %s " % re)
                 return subscription_response
 
-            try:
-                assert dss_r.status_code == 200
-                subscription_response.created = True
-            except AssertionError:
+            if dss_r.status_code != 200:
                 logger.error("Error in creating subscription in the DSS %s" % dss_r.text)
                 return subscription_response
             else:
+                subscription_response.created = True
                 dss_response = dss_r.json()
 
                 service_areas = dss_response["service_areas"]
@@ -476,7 +465,7 @@ class RemoteIDOperations:
         flight_details_exist = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)
         if not flight_details_exist:
             # Get and store the flight details
-            flight_details_request = requests.get(rid_flight_details_query_url, headers=headers)
+            flight_details_request = requests.get(rid_flight_details_query_url, headers=headers, timeout=30)
             if flight_details_request.status_code != 200:
                 logger.info("Error in retrieving flight details for %s" % flight_id)
                 logger.error(flight_details_request.text)
@@ -531,12 +520,12 @@ class RemoteIDOperations:
             logger.debug(f"Flight url list : {all_flights_url}")
             audience = generate_audience_from_base_url(base_url=_service_area.uss_base_url)
 
-            auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")
+            auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_credentials["access_token"],
             }
-            flights_request = requests.get(rid_query_url, headers=headers)
+            flights_request = requests.get(rid_query_url, headers=headers, timeout=30)
 
             if flights_request.status_code == 200:
                 # https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/uastech/standards/dd4016b09fc8cb98f30c2a17b5a088fb2995ab54/remoteid/canonical.yaml
@@ -554,9 +543,7 @@ class RemoteIDOperations:
                         headers=headers,
                     )
 
-                    try:
-                        assert flight.get("current_state") is not None
-                    except AssertionError:
+                    if flight.get("current_state") is None:
                         logger.error("There is no current_state provided by SP on the flights url %s" % rid_query_url)
                         logger.debug(f"{json.dumps(flight)}")
                     else:

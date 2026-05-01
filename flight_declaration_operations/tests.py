@@ -1369,7 +1369,6 @@ class SetOperationalIntentsBulkTests(TestCase):
 # AUTO_SUBMIT_TO_DSS and submit_to_dss endpoint tests
 # ---------------------------------------------------------------------------
 
-
 @override_settings(
     DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
     CELERY_TASK_ALWAYS_EAGER=True,
@@ -1379,10 +1378,7 @@ class AutoSubmitToDssTests(TestCase):
 
     URL = "/flight_declaration_ops/set_flight_declaration"
 
-    def setUp(self):
-        self.client = Client()
-        self.auth = _make_dummy_bearer_token()
-
+    
     def _post(self, payload, content_type=RESPONSE_CONTENT_TYPE):
         return self.client.post(
             self.URL,
@@ -1576,3 +1572,131 @@ class SubmitToDssEndpointTests(TestCase):
             notes="DSS submission initiated via manual endpoint",
         )
         self.assertTrue(history.exists())
+
+
+# ---------------------------------------------------------------------------
+# FlightDeclarationCreateList state-filter tests
+# ---------------------------------------------------------------------------
+
+class FlightDeclarationListStateFilterTests(TestCase):
+    """Tests for the ``?state=`` query parameter on the flight_declaration list endpoint."""
+
+    URL = "/flight_declaration_ops/flight_declaration"
+
+    def setUp(self):
+        self.client = Client()
+        self.auth = _make_dummy_bearer_token()
+        now = arrow.now()
+        _empty_intent = json.dumps({"volumes": []})
+        _raw_geojson = json.dumps({"type": "FeatureCollection", "features": []})
+        _bounds = "0.0,0.0,1.0,1.0"
+        # Create declarations with different states so we can filter them.
+        self.fd_accepted = FlightDeclaration.objects.create(
+            originating_party="Test",
+            start_datetime=now.shift(minutes=10).isoformat(),
+            end_datetime=now.shift(hours=1).isoformat(),
+            type_of_operation=1,
+            aircraft_id="ac-accepted",
+            state=1,  # Accepted
+            operational_intent=_empty_intent,
+            flight_declaration_raw_geojson=_raw_geojson,
+            bounds=_bounds,
+        )
+        self.fd_activated = FlightDeclaration.objects.create(
+            originating_party="Test",
+            start_datetime=now.shift(minutes=10).isoformat(),
+            end_datetime=now.shift(hours=1).isoformat(),
+            type_of_operation=1,
+            aircraft_id="ac-activated",
+            state=2,  # Activated
+            operational_intent=_empty_intent,
+            flight_declaration_raw_geojson=_raw_geojson,
+            bounds=_bounds,
+        )
+        self.fd_rejected = FlightDeclaration.objects.create(
+            originating_party="Test",
+            start_datetime=now.shift(minutes=10).isoformat(),
+            end_datetime=now.shift(hours=1).isoformat(),
+            type_of_operation=1,
+            aircraft_id="ac-rejected",
+            state=8,  # Rejected
+            operational_intent=_empty_intent,
+            flight_declaration_raw_geojson=_raw_geojson,
+            bounds=_bounds,
+        )
+
+    def _get(self, params=""):
+        return self.client.get(
+            f"{self.URL}{params}",
+            HTTP_AUTHORIZATION=self.auth,
+        )
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_no_state_filter_returns_all(self):
+        """Without ?state= all declarations within the default date window are returned."""
+        response = self._get()
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        returned_ids = {r["id"] for r in body["results"]}
+        self.assertIn(str(self.fd_accepted.id), returned_ids)
+        self.assertIn(str(self.fd_activated.id), returned_ids)
+        self.assertIn(str(self.fd_rejected.id), returned_ids)
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_single_state_filter(self):
+        """?state=1 returns only Accepted declarations."""
+        response = self._get("?state=1")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        returned_ids = {r["id"] for r in body["results"]}
+        self.assertIn(str(self.fd_accepted.id), returned_ids)
+        self.assertNotIn(str(self.fd_activated.id), returned_ids)
+        self.assertNotIn(str(self.fd_rejected.id), returned_ids)
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_multiple_states_filter(self):
+        """?state=1,2 returns Accepted and Activated declarations."""
+        response = self._get("?state=1,2")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        returned_ids = {r["id"] for r in body["results"]}
+        self.assertIn(str(self.fd_accepted.id), returned_ids)
+        self.assertIn(str(self.fd_activated.id), returned_ids)
+        self.assertNotIn(str(self.fd_rejected.id), returned_ids)
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_state_filter_no_matches_returns_empty(self):
+        """?state=5 (Ended) returns an empty list when no matching declarations exist."""
+        response = self._get("?state=5")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["results"], [])
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_invalid_state_value_returns_400(self):
+        """?state=notanumber returns 400 Bad Request."""
+        response = self._get("?state=notanumber")
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_trailing_comma_parses_valid_states(self):
+        """?state=1, (trailing comma) is treated as state=1 — empty token ignored."""
+        response = self._get("?state=1,")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        returned_ids = {r["id"] for r in body["results"]}
+        self.assertIn(str(self.fd_accepted.id), returned_ids)
+        self.assertNotIn(str(self.fd_activated.id), returned_ids)
+        self.assertNotIn(str(self.fd_rejected.id), returned_ids)
+
+    @patch.dict(os.environ, {"BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_double_comma_parses_valid_states(self):
+        """?state=1,,2 (double comma) is treated as state=1,2 — empty token ignored."""
+        response = self._get("?state=1,,2")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        returned_ids = {r["id"] for r in body["results"]}
+        self.assertIn(str(self.fd_accepted.id), returned_ids)
+        self.assertIn(str(self.fd_activated.id), returned_ids)
+        self.assertNotIn(str(self.fd_rejected.id), returned_ids)
+
