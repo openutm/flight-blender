@@ -17,32 +17,39 @@ See PLUGINS.md for the full guide.
 
 from loguru import logger
 
+from common.data_definitions import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
 from flight_declaration_operations.data_definitions import (
     DeconflictionRequest,
     DeconflictionResult,
 )
 from flight_declaration_operations.models import FlightDeclaration
 
-# Operation states — mirrors the constants used by the default engine.
-_STATE_ACCEPTED = 0
-_STATE_ACCEPTED_WITH_CONDITIONS = 1
-_STATE_REJECTED = 8
+# Derive state codes directly from the canonical OPERATION_STATES tuple so this
+# example can never silently drift out of sync with common/data_definitions.py.
+_STATES_LOOKUP = {str(label): code for code, label in OPERATION_STATES}
+_STATE_NOT_SUBMITTED = _STATES_LOOKUP["Not Submitted"]  # 0 — pending USSP network validation
+_STATE_ACCEPTED = _STATES_LOOKUP["Accepted"]  # 1 — locally accepted (no USSP network)
+_STATE_REJECTED = _STATES_LOOKUP["Rejected"]  # 8
+del _STATES_LOOKUP  # only needed for initialisation; remove from module namespace
+
+# Reuse the canonical active-states list as an immutable tuple.
+_ACTIVE_STATES = tuple(ACTIVE_OPERATIONAL_STATES)  # (1, 2, 3, 4)
 
 
 class HelloWorldEngine:
     """Time-window de-confliction engine.
 
-    Approves a flight declaration only when no existing *accepted*
+    Approves a flight declaration only when no existing *active*
     declaration overlaps the same time window.  Geofence checks
     are intentionally skipped to keep the example concise.
     """
 
     def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
-        # Find accepted declarations whose time window overlaps the request.
+        # Find active declarations whose time window overlaps the request.
         overlapping = FlightDeclaration.objects.filter(
             start_datetime__lt=request.end_datetime,
             end_datetime__gt=request.start_datetime,
-            state__in=[_STATE_ACCEPTED, _STATE_ACCEPTED_WITH_CONDITIONS],
+            state__in=_ACTIVE_STATES,
         )
 
         # Exclude the declaration itself (important for re-evaluation).
@@ -50,7 +57,7 @@ class HelloWorldEngine:
             overlapping = overlapping.exclude(pk=request.declaration_id)
 
         conflicting_ids = list(overlapping.values_list("id", flat=True)[:20])
-        has_conflicts = len(conflicting_ids) > 0
+        has_conflicts = bool(conflicting_ids)
 
         if has_conflicts:
             logger.info(
@@ -65,7 +72,5 @@ class HelloWorldEngine:
             all_relevant_fences=[],
             all_relevant_declarations=conflicting_ids,
             is_approved=not has_conflicts,
-            declaration_state=_STATE_REJECTED
-            if has_conflicts
-            else (_STATE_ACCEPTED if request.ussp_network_enabled else _STATE_ACCEPTED_WITH_CONDITIONS),
+            declaration_state=_STATE_REJECTED if has_conflicts else (_STATE_NOT_SUBMITTED if request.ussp_network_enabled else _STATE_ACCEPTED),
         )
