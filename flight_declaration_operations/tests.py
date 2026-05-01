@@ -32,7 +32,7 @@ from django.test import Client, TestCase, override_settings
 from common.data_definitions import RESPONSE_CONTENT_TYPE
 
 from .data_definitions import IntersectionCheckResult
-from .models import FlightDeclaration, FlightOperationTracking
+from .models import FlightDeclaration, FlightOperationTracking, FlightOperationalIntentReference
 
 # ---------------------------------------------------------------------------
 # Test-payload helpers
@@ -131,9 +131,12 @@ def _make_operational_intent_payload(**overrides) -> dict:
 def _make_dummy_bearer_token() -> str:
     """Create a minimal JWT accepted by the bypass-auth path.
 
-    With ``BYPASS_AUTH_TOKEN_VERIFICATION=1`` the decorator decodes the token
-    **without** verifying the signature, so HS256 with an arbitrary key is fine.
-    It only checks for ``scope``, ``iss``, and ``aud`` claims.
+    With ``BYPASS_AUTH_TOKEN_VERIFICATION=1`` the decorator calls
+    ``handle_bypass_verification``, which decodes with
+    ``options={"verify_signature": False}``.  In PyJWT ≥ 2.0 this flag
+    disables the algorithm-mismatch check as well, so an HS256 token is
+    accepted even though the call lists ``algorithms=["RS256"]``.  The
+    decoder only validates ``scope``, ``iss``, and ``aud`` claims.
     """
     token = jwt.encode(
         {
@@ -1531,3 +1534,45 @@ class SubmitToDssEndpointTests(TestCase):
 
         self.assertEqual(response.status_code, 409)
         mock_submit_dss.delay.assert_not_called()
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_existing_opint_reference_returns_409(self, mock_send_msg, mock_submit_dss):
+        """Returns 409 when a FlightOperationalIntentReference already exists (already submitted)."""
+        import arrow as _arrow
+
+        fd = self._make_declaration(state=0)
+        # Simulate a previously completed DSS submission by creating the reference directly.
+        FlightOperationalIntentReference.objects.create(
+            declaration=fd,
+            uss_availability="Normal",
+            manager="test-manager",
+            uss_base_url="http://localhost:8000",
+            version="1",
+            state="Accepted",
+            subscription_id="sub-1",
+            time_start=_arrow.now().shift(minutes=10).datetime,
+            time_end=_arrow.now().shift(hours=1).datetime,
+        )
+
+        response = self._post(fd.id)
+
+        self.assertEqual(response.status_code, 409)
+        mock_submit_dss.delay.assert_not_called()
+
+    @patch("flight_declaration_operations.views.submit_flight_declaration_to_dss_async")
+    @patch("flight_declaration_operations.views.send_operational_update_message")
+    @patch.dict(os.environ, {"USSP_NETWORK_ENABLED": "1", "BYPASS_AUTH_TOKEN_VERIFICATION": "1"})
+    def test_valid_submission_records_history_entry(self, mock_send_msg, mock_submit_dss):
+        """A successful submission records a 'DSS submission initiated' history entry."""
+        fd = self._make_declaration(state=0)
+
+        response = self._post(fd.id)
+
+        self.assertEqual(response.status_code, 200)
+        history = FlightOperationTracking.objects.filter(
+            flight_declaration=fd,
+            notes="DSS submission initiated via manual endpoint",
+        )
+        self.assertTrue(history.exists())

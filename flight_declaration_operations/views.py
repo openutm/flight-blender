@@ -46,7 +46,7 @@ from .data_definitions import (
 )
 from .deconfliction_protocol import DeconflictionEngine
 from .flight_declarations_rtree_helper import FlightDeclarationRTreeIndexFactory
-from .models import FlightDeclaration
+from .models import FlightDeclaration, FlightOperationalIntentReference
 from .pagination import StandardResultsSetPagination
 from .serializers import (
     FlightDeclarationApprovalSerializer,
@@ -612,6 +612,13 @@ def submit_flight_declaration_to_dss(request, pk):
 
     The declaration must exist and be in state=0.  Any other state (already
     submitted, rejected, ended, …) is rejected with HTTP 409.
+
+    Idempotency guards:
+    * A row-level lock (``SELECT FOR UPDATE``) prevents two concurrent
+      requests from both enqueuing a submission task.
+    * An existing ``FlightOperationalIntentReference`` for this declaration
+      (written by ``submit_flight_declaration_to_dss_async`` on success)
+      means DSS submission has already completed; a second call returns 409.
     """
     ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", 0))
     if not ussp_network_enabled:
@@ -620,24 +627,41 @@ def submit_flight_declaration_to_dss(request, pk):
             status=400,
         )
 
-    try:
-        flight_declaration = FlightDeclaration.objects.get(pk=pk)
-    except FlightDeclaration.DoesNotExist:
-        return JsonResponse({"message": "Flight declaration not found."}, status=404)
+    with transaction.atomic():
+        try:
+            flight_declaration = FlightDeclaration.objects.select_for_update().get(pk=pk)
+        except FlightDeclaration.DoesNotExist:
+            return JsonResponse({"message": "Flight declaration not found."}, status=404)
 
-    if flight_declaration.state != 0:
-        return JsonResponse(
-            {
-                "message": (
-                    "Flight declaration is not in 'Not Submitted' state (state=0). "
-                    "Current state: %d. Only declarations in state=0 can be submitted to the DSS via this endpoint."
-                )
-                % flight_declaration.state
-            },
-            status=409,
+        if flight_declaration.state != 0:
+            return JsonResponse(
+                {
+                    "message": (
+                        "Flight declaration is not in 'Not Submitted' state (state=0). "
+                        "Current state: %d. Only declarations in state=0 can be submitted to the DSS via this endpoint."
+                    )
+                    % flight_declaration.state
+                },
+                status=409,
+            )
+
+        # Guard against re-submission when a previous task already succeeded and
+        # created an operational intent reference in the DSS.
+        if FlightOperationalIntentReference.objects.filter(declaration=flight_declaration).exists():
+            return JsonResponse(
+                {"message": "A DSS operational intent reference already exists for this flight declaration."},
+                status=409,
+            )
+
+        # Record the submission attempt inside the lock so a concurrent request
+        # that arrives before the async task updates the state can be detected.
+        flight_declaration_id = str(flight_declaration.id)
+        flight_declaration.add_state_history_entry(
+            new_state=flight_declaration.state,
+            original_state=flight_declaration.state,
+            notes="DSS submission initiated via manual endpoint",
         )
 
-    flight_declaration_id = str(flight_declaration.id)
     submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
     send_operational_update_message.delay(
         flight_declaration_id=flight_declaration_id,
