@@ -57,8 +57,9 @@ jobs:
       # -------------------------------------------------------
       - name: Create Docker networks
         run: |
-          docker network create --subnet=172.27.0.0/16 "$NETWORK" || true
-          # dss_internal_network needs specific subnet for CockroachDB static IPs
+          # interop_ecosystem_network: plain bridge, no subnet (run_locally.sh attaches to this)
+          docker network create "$NETWORK" || true
+          # dss_internal_network needs a specific subnet for CockroachDB static IPs
           docker network create \
             --subnet=172.27.0.0/16 \
             --ip-range=172.27.0.0/24 \
@@ -92,9 +93,13 @@ jobs:
           cd /tmp/interuss-monitoring
           NUM_USS=2 ./build/dev/run_locally.sh up -d
           echo "Waiting for dummy OAuth to be ready..."
+          # dummy-oauth does NOT expose /.well-known/jwks.json (returns 404)
+          # so we check for any HTTP response on port 8085 instead
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8085/.well-known/jwks.json > /dev/null 2>&1; then
-              echo "dummy-oauth is ready."
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+              "http://localhost:8085/" 2>/dev/null || echo "000")
+            if [ "$STATUS" != "000" ]; then
+              echo "dummy-oauth is ready (HTTP $STATUS)."
               break
             fi
             [ "$i" -eq 60 ] && echo "ERROR: dummy-oauth did not start in time." && exit 1
@@ -232,12 +237,12 @@ jobs:
         with:
           name: interuss-qualification-reports-${{ github.run_number }}
           path: |
-            testing/interuss/output/f3548_report.json
-            testing/interuss/output/f3548_requirements.html
-            testing/interuss/output/f3548_sequence.html
-            testing/interuss/output/netrid_v22a_report.json
-            testing/interuss/output/netrid_v22a_requirements.html
-            testing/interuss/output/netrid_v22a_sequence.html
+            testing/interuss/output/f3548/report.json
+            testing/interuss/output/f3548/f3548_requirements/
+            testing/interuss/output/f3548/sequence/
+            testing/interuss/output/netrid_v22a/report.json
+            testing/interuss/output/netrid_v22a/netrid_v22a_requirements/
+            testing/interuss/output/netrid_v22a/sequence/
           if-no-files-found: warn
           retention-days: 30
 
