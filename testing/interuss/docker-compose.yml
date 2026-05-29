@@ -1,0 +1,68 @@
+# docker-compose.yml for running Flight Blender against InterUSS uss_qualifier
+# All services join the external 'interop_ecosystem_network' created by
+# the InterUSS monitoring repository's build/dev/run_locally.sh script.
+#
+# Usage:
+#   docker compose -f testing/interuss/docker-compose.yml up -d
+#
+# This file is intentionally separate from the main docker-compose.yml so
+# the test environment does not interfere with production configuration.
+
+services:
+
+  db-blender-test:
+    image: postgres:17-alpine
+    container_name: db-blender-test
+    hostname: db-blender-test
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+      POSTGRES_DB: testdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - interop_ecosystem_network
+
+  redis-blender-test:
+    image: valkey/valkey:8-alpine
+    container_name: redis-blender-test
+    hostname: redis-blender-test
+    networks:
+      - interop_ecosystem_network
+
+  flight-blender-test:
+    image: openutm/flight-blender-test:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: flight-blender-test
+    hostname: flight-blender.localutm
+    env_file: .env.interuss
+    entrypoint: ["/bin/bash", "entrypoints/with-database/entrypoint.sh"]
+    depends_on:
+      db-blender-test:
+        condition: service_healthy
+      redis-blender-test:
+        condition: service_started
+    networks:
+      - interop_ecosystem_network
+
+  celery-blender-test:
+    image: openutm/flight-blender-test:latest
+    container_name: celery-blender-test
+    env_file: .env.interuss
+    entrypoint: ["/bin/bash", "entrypoints/with-database/entrypoint-celery.sh"]
+    depends_on:
+      db-blender-test:
+        condition: service_healthy
+      redis-blender-test:
+        condition: service_started
+    networks:
+      - interop_ecosystem_network
+
+networks:
+  interop_ecosystem_network:
+    external: true
