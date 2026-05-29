@@ -231,6 +231,63 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # -------------------------------------------------------
+      - name: Post PR comment with qualification report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+
+            // Build the comment body via the same Python script used for Step Summary
+            let body;
+            try {
+              body = execSync(
+                'python3 testing/interuss/scripts/report_to_summary.py ' +
+                'testing/interuss/output/f3548/report.json ' +
+                'testing/interuss/output/netrid_v22a/report.json',
+                { encoding: 'utf8' }
+              );
+            } catch (e) {
+              body = e.stdout || '';
+            }
+
+            const header =
+              `## InterUSS Qualification Report\n\n` +
+              `_Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) ` +
+              `| Commit \`${{ github.sha }}\`_\n\n`;
+
+            const comment = header + (body.trim() || '> Report files were not generated.');
+
+            // Find and replace any existing bot comment on this PR
+            const marker = '<!-- interuss-qualification-report -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes(marker)
+            );
+
+            const fullBody = marker + '\n' + comment;
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+            }
+
+      # -------------------------------------------------------
       - name: Upload qualification reports
         if: always()
         uses: actions/upload-artifact@v4
