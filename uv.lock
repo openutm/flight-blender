@@ -552,7 +552,7 @@ requires-dist = [
     { name = "cryptography", specifier = "==46.0.7" },
     { name = "dacite", specifier = "==1.9.2" },
     { name = "dj-database-url", specifier = "==2.1.0" },
-    { name = "django", specifier = ">=5.2.14" },
+    { name = "django", specifier = "==5.2.14" },
     { name = "django-celery-beat", specifier = "==2.8.1" },
     { name = "djangorestframework", specifier = "==3.16.1" },
     { name = "geojson", specifier = "==3.2.0" },
