@@ -47,7 +47,7 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
         try:
             creds_getter = AuthorityCredentialsGetter()
             audience = settings.dss_self_audience
-            credentials = creds_getter.get_cached_credentials(audience=audience, token_type="scd")
+            credentials = creds_getter.get_cached_credentials(audience=audience, token_type="scd")  # nosec B106
             token = credentials.get("access_token", "")
 
             dss_base_url = settings.__dict__.get("dss_base_url", "http://host.docker.internal:8082")

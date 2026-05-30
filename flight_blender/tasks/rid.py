@@ -24,7 +24,7 @@ def submit_dss_subscription(self, subscription_db_id: str, view: str, end_dateti
         engine = create_engine(sync_url)
 
         creds_getter = AuthorityCredentialsGetter()
-        credentials = creds_getter.get_cached_credentials(audience=settings.dss_self_audience, token_type="rid")
+        credentials = creds_getter.get_cached_credentials(audience=settings.dss_self_audience, token_type="rid")  # nosec B106
         token = credentials.get("access_token", "")
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 

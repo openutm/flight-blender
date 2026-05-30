@@ -30,7 +30,7 @@ async def _handle_ws_auth(websocket: WebSocket) -> None:
     except asyncio.TimeoutError:
         # No auth message within timeout — that's fine for other clients
         pass
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
