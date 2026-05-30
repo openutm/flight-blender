@@ -2,9 +2,12 @@
 FastAPI router for geo fence operations.
 """
 
+import json
 import uuid
+from datetime import datetime, timezone
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -84,6 +87,68 @@ async def delete_geo_fence(fence_id: uuid.UUID = Path(...), db: AsyncSession = D
 async def set_geo_fence(payload: GeoFenceCreate, db: AsyncSession = Depends(get_db)):
     """Convenience endpoint for creating/replacing a geo fence."""
     fence = GeoFence(**payload.model_dump())
+    db.add(fence)
+    await db.flush()
+    await db.refresh(fence)
+    return fence
+
+
+def _parse_geojson_fence(geojson: dict[str, Any]) -> dict[str, Any]:
+    """Extract GeoFence fields from a GeoJSON FeatureCollection."""
+    features = geojson.get("features") or []
+    if not features:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GeoJSON must contain at least one feature")
+    props = features[0].get("properties") or {}
+    geometry = features[0].get("geometry") or {}
+
+    # Compute bounding box from polygon coordinates
+    coords = geometry.get("coordinates", [[]])
+    flat_coords = [pt for ring in coords for pt in ring]
+    if flat_coords:
+        lons = [pt[0] for pt in flat_coords]
+        lats = [pt[1] for pt in flat_coords]
+        bounds = json.dumps({"minx": min(lons), "miny": min(lats), "maxx": max(lons), "maxy": max(lats)})
+    else:
+        bounds = "{}"
+
+    # Parse start/end times; fall back to sensible defaults
+    try:
+        start_dt = datetime.fromisoformat(props["start_time"])
+    except (KeyError, ValueError):
+        start_dt = datetime.now(timezone.utc)
+    try:
+        end_dt = datetime.fromisoformat(props["end_time"])
+    except (KeyError, ValueError):
+        from datetime import timedelta
+
+        end_dt = start_dt if isinstance(start_dt, datetime) else datetime.now(timezone.utc)
+        end_dt = end_dt + timedelta(days=365)
+
+    if start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=timezone.utc)
+    if end_dt.tzinfo is None:
+        end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+    return {
+        "raw_geo_fence": json.dumps(geojson),
+        "upper_limit": float(props.get("upper_limit", 500)),
+        "lower_limit": float(props.get("lower_limit", 0)),
+        "name": str(props.get("name", "Geofence"))[:50],
+        "bounds": bounds,
+        "start_datetime": start_dt,
+        "end_datetime": end_dt,
+        "is_test_dataset": False,
+    }
+
+
+@router.put("/set_geo_fence", response_model=GeoFenceResponse, dependencies=[WriteDep])
+async def set_geo_fence_put(geojson: dict[str, Any] = Body(...), db: AsyncSession = Depends(get_db)):
+    """Accept a GeoJSON FeatureCollection via PUT and create a geo fence.
+
+    Used by the verification toolkit which sends a GeoJSON document.
+    """
+    fields = _parse_geojson_fence(geojson)
+    fence = GeoFence(**fields)
     db.add(fence)
     await db.flush()
     await db.refresh(fence)

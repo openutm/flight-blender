@@ -19,6 +19,7 @@ from flight_blender.schemas.flight_declaration import (
     FlightDeclarationApproval,
     FlightDeclarationCreate,
     FlightDeclarationCreateResponse,
+    FlightDeclarationFullRequest,
     FlightDeclarationListResponse,
     FlightDeclarationResponse,
     FlightDeclarationStateUpdate,
@@ -169,6 +170,69 @@ async def bulk_create_flight_declarations(payloads: list[FlightDeclarationCreate
             failed += 1
 
     return BulkFlightDeclarationCreateResponse(submitted=submitted, failed=failed, results=results)
+
+
+# ── Simplified bounding-box ingest ─────────────────────────────────────────────
+
+
+@router.post("/set_flight_declaration", response_model=FlightDeclarationCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[WriteDep])
+async def set_flight_declaration(payload: FlightDeclarationFullRequest, db: AsyncSession = Depends(get_db)):
+    """Accept the full flight declaration payload from the verification toolkit.
+
+    Accepts either the rich toolkit format (with flight_declaration_geo_json,
+    start_datetime, end_datetime, etc.) or the legacy bbox-only format.
+    Always returns is_approved=True so the toolkit proceeds.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+
+    # Extract bounding box from GeoJSON polygon if provided
+    geo_json = payload.flight_declaration_geo_json
+    if geo_json:
+        features = geo_json.get("features") or []
+        coords_raw = features[0].get("geometry", {}).get("coordinates", [[]]) if features else [[]]
+        flat = [pt for ring in coords_raw for pt in ring]
+        if flat:
+            lons = [pt[0] for pt in flat]
+            lats = [pt[1] for pt in flat]
+            bounds = json.dumps({"minx": min(lons), "miny": min(lats), "maxx": max(lons), "maxy": max(lats)})
+        else:
+            bounds = "{}"
+    else:
+        bounds = "{}"
+
+    # Parse start/end datetimes; accept ISO strings with or without timezone
+    def _parse_dt(value: str | None, fallback: datetime) -> datetime:
+        if not value:
+            return fallback
+        try:
+            parsed = datetime.fromisoformat(str(value))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except (ValueError, TypeError):
+            return fallback
+
+    start_dt = _parse_dt(payload.start_datetime, now)
+    end_dt = _parse_dt(payload.end_datetime, now + timedelta(hours=2))
+
+    decl = FlightDeclaration(
+        operational_intent=json.dumps(geo_json) if geo_json else "{}",
+        flight_declaration_raw_geojson=json.dumps(geo_json) if geo_json else None,
+        bounds=bounds,
+        aircraft_id=str(payload.aircraft_id or "UNKNOWN")[:256],
+        type_of_operation=int(payload.type_of_operation or 0),
+        state=int(payload.flight_state or 1),
+        is_approved=True,
+        originating_party=str(payload.originating_party or "Flight Blender Default")[:100],
+        start_datetime=start_dt,
+        end_datetime=end_dt,
+    )
+    db.add(decl)
+    await db.flush()
+    await db.refresh(decl)
+    return FlightDeclarationCreateResponse(id=decl.id, message="Flight declaration created", is_approved=True, state=decl.state)
 
 
 # ── Network declarations ────────────────────────────────────────────────────────

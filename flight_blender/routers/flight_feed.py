@@ -16,6 +16,7 @@ from flight_blender.models.flight_feed import FlightObservation, SignedTelemetry
 from flight_blender.schemas.flight_feed import (
     BulkObservationRequest,
     FlightObservationResponse,
+    RIDTelemetryRequest,
     SignedTelemetryPublicKeyCreate,
     SignedTelemetryPublicKeyResponse,
     SignedTelemetryPublicKeyUpdate,
@@ -77,11 +78,15 @@ async def delete_public_key(key_id: uuid.UUID = Path(...), db: AsyncSession = De
 
 
 @router.post("/set_air_traffic/{session_id}", dependencies=[WriteDep])
-async def set_air_traffic(observation: SingleObservation, session_id: uuid.UUID = Path(...)):
-    """Ingest a single air traffic observation via Celery task."""
-    task_payload = {**observation.model_dump(), "session_id": str(session_id)}
-    write_incoming_air_traffic_data.delay(task_payload)
-    return {"message": "Observation queued for processing"}
+async def set_air_traffic(payload: BulkObservationRequest, session_id: uuid.UUID = Path(...)):
+    """Ingest one or more air traffic observations via Celery task.
+
+    Accepts the bulk observation format ``{"observations": [...]}`` used by
+    the verification toolkit as well as any other caller.
+    """
+    observations = [{**obs.model_dump(), "session_id": str(session_id)} for obs in payload.observations]
+    bulk_write_incoming_air_traffic_data.delay(observations)
+    return {"message": f"{len(observations)} observation(s) queued for processing"}
 
 
 @router.post("/bulk_set_air_traffic/{session_id}", dependencies=[WriteDep])
@@ -111,6 +116,29 @@ async def set_telemetry(observation: SingleObservation):
     """Accept a raw telemetry observation and queue it."""
     write_incoming_air_traffic_data.delay(observation.model_dump())
     return {"message": "Telemetry queued"}
+
+
+@router.put("/set_telemetry", status_code=status.HTTP_201_CREATED, dependencies=[WriteDep])
+async def set_telemetry_put(payload: RIDTelemetryRequest):
+    """Accept bulk RID telemetry observations (ASTM F3411 format) from the verification toolkit.
+
+    The toolkit calls ``PUT /flight_stream/set_telemetry`` with a JSON body of
+    the form ``{"observations": [{"current_states": [...], "flight_details": {...}}]}``.
+    Each observation is queued for asynchronous processing.
+
+    Returns 201 on success so the toolkit records the submission as billable time.
+    """
+    count = 0
+    for entry in payload.observations:
+        for state in entry.current_states:
+            obs = {
+                "current_state": state,
+                "flight_details": entry.flight_details,
+            }
+            write_incoming_air_traffic_data.delay(obs)
+            count += 1
+    logger.info(f"Queued {count} RID telemetry state(s) for processing")
+    return {"message": f"{count} telemetry state(s) queued for processing"}
 
 
 @router.post("/set_signed_telemetry", dependencies=[WriteDep])

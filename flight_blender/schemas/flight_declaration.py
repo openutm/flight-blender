@@ -9,6 +9,34 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 
+class FlightDeclarationBBoxRequest(BaseModel):
+    """Simplified bounding-box payload for the /set_flight_declaration endpoint."""
+
+    minx: float
+    miny: float
+    maxx: float
+    maxy: float
+
+
+class FlightDeclarationFullRequest(BaseModel):
+    """Full flight declaration payload as sent by the openutm verification toolkit.
+
+    Accepts the rich template payload including GeoJSON polygon, datetimes, and
+    all extra metadata fields from the template. Extra fields are silently
+    ignored, so both old (bbox-only) and new (GeoJSON) formats are tolerated.
+    """
+
+    start_datetime: str | None = None
+    end_datetime: str | None = None
+    flight_declaration_geo_json: dict | None = None
+    aircraft_id: str | None = None
+    originating_party: str | None = None
+    type_of_operation: int = 0
+    flight_state: int = 1
+
+    model_config = {"extra": "allow"}
+
+
 class FlightDeclarationCreate(BaseModel):
     operational_intent: str
     flight_declaration_raw_geojson: str | None = None

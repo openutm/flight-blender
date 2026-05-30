@@ -5,7 +5,7 @@ All settings are loaded from environment variables with sensible defaults.
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,21 @@ class Settings(BaseSettings):
         default="sqlite+aiosqlite:///./flight_blender.db",
         alias="DATABASE_URL",
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        """Normalize legacy Postgres URL schemes to the asyncpg async dialect.
+
+        Heroku/Render/etc. export ``postgres://`` or ``postgresql://`` URLs.
+        SQLAlchemy 2 async requires ``postgresql+asyncpg://``.
+        """
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            if v.startswith("postgresql://"):
+                return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # ── Redis ──────────────────────────────────────────────────────────────────
     redis_host: str = Field(default="redis", alias="REDIS_HOST")
@@ -48,8 +63,17 @@ class Settings(BaseSettings):
     auth_server_jwks_uri: str = Field(default="", alias="AUTH_SERVER_JWKS_URI")
 
     # ── Celery ─────────────────────────────────────────────────────────────────
-    celery_broker_url: str = Field(default="redis://redis:6379/", alias="CELERY_BROKER_URL")
-    celery_result_backend: str = Field(default="redis://redis:6379/", alias="CELERY_RESULT_BACKEND")
+    celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
+    celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
+
+    @model_validator(mode="after")
+    def _fill_celery_urls_from_redis(self) -> "Settings":
+        """Fall back to REDIS_BROKER_URL / redis_url when CELERY_* vars are absent."""
+        if not self.celery_broker_url:
+            self.celery_broker_url = self.redis_broker_url
+        if not self.celery_result_backend:
+            self.celery_result_backend = self.redis_url
+        return self
 
     # ── Weather ────────────────────────────────────────────────────────────────
     weather_api_base_url: str = Field(default="https://api.open-meteo.com/v1/forecast", alias="WEATHER_API_BASE_URL")

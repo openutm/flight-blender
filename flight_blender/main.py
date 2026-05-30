@@ -10,7 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from loguru import logger
 
 from flight_blender.config import get_settings
-from flight_blender.database import engine, Base
+from flight_blender.database import engine
 from flight_blender.routers import (
     conformance,
     constraint,
@@ -30,10 +30,8 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create DB tables on startup; clean up on shutdown."""
+    """Application lifespan handler. Schema is managed by Alembic migrations."""
     logger.info("Starting Flight Blender …")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     yield
     logger.info("Shutting down Flight Blender …")
     await engine.dispose()

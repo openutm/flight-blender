@@ -2,10 +2,12 @@
 Pydantic schemas for flight feed operations.
 """
 
+import json as _json
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SignedTelemetryPublicKeyBase(BaseModel):
@@ -42,6 +44,15 @@ class SingleObservation(BaseModel):
     metadata: str = Field(default="{}", description="Raw metadata JSON string")
     sensor_timestamp: datetime | None = None
 
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def coerce_metadata_to_str(cls, v: Any) -> str:
+        if isinstance(v, dict):
+            return _json.dumps(v)
+        if v is None:
+            return "{}"
+        return str(v)
+
 
 class BulkObservationRequest(BaseModel):
     observations: list[SingleObservation]
@@ -52,6 +63,33 @@ class TelemetryObservation(BaseModel):
 
     current_state: dict
     flight_details: dict | None = None
+
+
+class RIDTelemetryObservationEntry(BaseModel):
+    """One entry in the RID telemetry bulk payload sent by the toolkit.
+
+    Matches the structure built by ``_build_telemetry_payload`` in the
+    verification toolkit::
+
+        {"observations": [{"current_states": [...], "flight_details": {...}}]}
+    """
+
+    current_states: list[dict] = Field(default_factory=list)
+    flight_details: dict | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class RIDTelemetryRequest(BaseModel):
+    """Bulk RID telemetry request as sent by the openutm verification toolkit.
+
+    The toolkit calls ``PUT /flight_stream/set_telemetry`` with this payload and
+    expects a 201 response.
+    """
+
+    observations: list[RIDTelemetryObservationEntry]
+
+    model_config = {"extra": "allow"}
 
 
 class FlightObservationResponse(BaseModel):
