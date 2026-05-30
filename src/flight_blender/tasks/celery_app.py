@@ -35,5 +35,9 @@ celery_app.conf.update(
             "task": "cleanup_old_heartbeat_events",
             "schedule": 3600.0,  # Every hour
         },
+        "periodic-conformance-check": {
+            "task": "check_all_flight_conformance",
+            "schedule": 30.0,  # Every 30 seconds
+        },
     },
 )
