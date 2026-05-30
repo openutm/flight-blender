@@ -7,6 +7,7 @@ a real Celery broker, database, or Redis instance.
 
 import json
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -273,73 +274,91 @@ class TestSurveillanceTasks:
 # conformance task helpers
 # ---------------------------------------------------------------------------
 class TestConformanceTasks:
+    # NOTE: these tests were updated when the conformance tasks moved from the
+    # `state == 2 => conforming` stub to the real C2-C11 engine. The tasks now
+    # import `create_engine` / `Session` / `read_latest_observation` at module
+    # level, so they are patched at `flight_blender.tasks.conformance.*`. The
+    # "conforming" expectation now also requires fresh telemetry within the
+    # liveness window, and the telemetry task writes its own ConformanceRecord
+    # (it no longer just dispatches `check_flight_conformance`).
+    _VALID_ID = "00000000-0000-0000-0000-000000000001"
+
     def test_check_flight_conformance_declaration_not_found(self):
         """When declaration not found, task should log and return without error."""
-        mock_engine = MagicMock()
         mock_session_obj = MagicMock()
         mock_session_obj.__enter__ = MagicMock(return_value=mock_session_obj)
         mock_session_obj.__exit__ = MagicMock(return_value=False)
         mock_session_obj.get.return_value = None
 
         with (
-            patch("sqlalchemy.create_engine", return_value=mock_engine),
-            patch("sqlalchemy.orm.Session", return_value=mock_session_obj),
+            patch("flight_blender.tasks.conformance.create_engine"),
+            patch("flight_blender.tasks.conformance.Session", return_value=mock_session_obj),
         ):
             from flight_blender.tasks.conformance import check_flight_conformance
 
-            # Should return without raising
-            check_flight_conformance("00000000-0000-0000-0000-000000000001")
+            check_flight_conformance(self._VALID_ID)
+            mock_session_obj.add.assert_not_called()
 
     def test_check_flight_conformance_creates_record(self):
-        """When declaration exists, a ConformanceRecord should be created."""
-        mock_engine = MagicMock()
+        """An Activated declaration with fresh telemetry yields a conforming record."""
         mock_session_obj = MagicMock()
         mock_session_obj.__enter__ = MagicMock(return_value=mock_session_obj)
         mock_session_obj.__exit__ = MagicMock(return_value=False)
 
         fake_decl = MagicMock()
-        fake_decl.id = "some-uuid"
-        fake_decl.state = 2  # ACTIVATED → conforming
+        fake_decl.id = uuid.uuid4()
+        fake_decl.state = 2  # Activated
+        fake_decl.latest_telemetry_datetime = datetime.now(timezone.utc)
         mock_session_obj.get.return_value = fake_decl
 
         with (
-            patch("sqlalchemy.create_engine", return_value=mock_engine),
-            patch("sqlalchemy.orm.Session", return_value=mock_session_obj),
+            patch("flight_blender.tasks.conformance.create_engine"),
+            patch("flight_blender.tasks.conformance.Session", return_value=mock_session_obj),
         ):
             from flight_blender.tasks.conformance import check_flight_conformance
 
-            check_flight_conformance("00000000-0000-0000-0000-000000000001")
+            check_flight_conformance(self._VALID_ID)
             mock_session_obj.add.assert_called_once()
             mock_session_obj.commit.assert_called_once()
+            record = mock_session_obj.add.call_args[0][0]
+            assert record.conformance_state == 1
 
     def test_check_operation_telemetry_conformance_no_telemetry(self):
         """When no telemetry exists, task should return without error."""
-        with patch("flight_blender.common.redis_stream_operations.read_latest_observation", return_value=None):
+        with patch("flight_blender.tasks.conformance.read_latest_observation", return_value=None):
             from flight_blender.tasks.conformance import check_operation_telemetry_conformance
 
-            # Should return without raising
-            check_operation_telemetry_conformance("00000000-0000-0000-0000-000000000001")
+            check_operation_telemetry_conformance(self._VALID_ID)
 
     def test_check_operation_telemetry_conformance_with_telemetry(self):
-        """When telemetry exists, dispatches conformance check."""
-        mock_engine = MagicMock()
+        """When telemetry exists, the task writes a telemetry ConformanceRecord."""
         mock_session_obj = MagicMock()
         mock_session_obj.__enter__ = MagicMock(return_value=mock_session_obj)
         mock_session_obj.__exit__ = MagicMock(return_value=False)
         fake_decl = MagicMock()
+        fake_decl.id = uuid.uuid4()
+        fake_decl.state = 2
+        fake_decl.aircraft_id = "ABC"
+        fake_decl.start_datetime = datetime.now(timezone.utc) - timedelta(hours=1)
+        fake_decl.end_datetime = datetime.now(timezone.utc) + timedelta(hours=1)
+        fake_decl.operational_intent = "{}"
         mock_session_obj.get.return_value = fake_decl
+        mock_session_obj.execute.return_value.scalars.return_value.all.return_value = []
 
         with (
-            patch("flight_blender.common.redis_stream_operations.read_latest_observation", return_value={"lat_dd": "10.0"}),
-            patch("sqlalchemy.create_engine", return_value=mock_engine),
-            patch("sqlalchemy.orm.Session", return_value=mock_session_obj),
-            patch("flight_blender.tasks.conformance.check_flight_conformance") as mock_check,
+            patch(
+                "flight_blender.tasks.conformance.read_latest_observation",
+                return_value={"lat_dd": "10.0", "lon_dd": "20.0", "altitude_mm": 0, "icao_address": "ABC"},
+            ),
+            patch("flight_blender.tasks.conformance.create_engine"),
+            patch("flight_blender.tasks.conformance.Session", return_value=mock_session_obj),
         ):
-            mock_check.delay = MagicMock()
             from flight_blender.tasks.conformance import check_operation_telemetry_conformance
 
-            check_operation_telemetry_conformance("00000000-0000-0000-0000-000000000001")
-            mock_check.delay.assert_called_once()
+            check_operation_telemetry_conformance(self._VALID_ID)
+            mock_session_obj.add.assert_called_once()
+            record = mock_session_obj.add.call_args[0][0]
+            assert record.event_type == "telemetry_check"
 
 
 # ---------------------------------------------------------------------------
