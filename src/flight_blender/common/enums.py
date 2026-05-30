@@ -62,6 +62,31 @@ class SurveillanceSensorMaintenance(str):
     UNPLANNED = "unplanned"
 
 
+# ── Operational-intent state groupings (ASTM F3548-21) ───────────────────────
+# Restored from the Django common/data_definitions.py (dropped in the FastAPI
+# migration) so conformance / flight-declaration / SCD logic share one typed
+# source of truth.
+
+# Op-intent states valid for coordination (Django [1, 2, 3, 4]).
+VALID_OPERATIONAL_INTENT_STATES: frozenset[OperationState] = frozenset(
+    {
+        OperationState.ACCEPTED,
+        OperationState.ACTIVATED,
+        OperationState.NONCONFORMING,
+        OperationState.CONTINGENT,
+    }
+)
+
+# Op-intent states where the operation is actively airborne (Django [2, 3, 4]).
+ACTIVE_OPERATIONAL_STATES: frozenset[OperationState] = frozenset(
+    {
+        OperationState.ACTIVATED,
+        OperationState.NONCONFORMING,
+        OperationState.CONTINGENT,
+    }
+)
+
+
 # Scope constants
 FLIGHTBLENDER_READ_SCOPE = "blender.read"
 FLIGHTBLENDER_WRITE_SCOPE = "blender.write"
