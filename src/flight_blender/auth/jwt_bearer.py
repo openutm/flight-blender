@@ -15,36 +15,58 @@ settings = get_settings()
 _bearer = HTTPBearer(auto_error=False)
 
 
-async def _get_token_payload(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Security(_bearer)],
-) -> dict:
-    """Validate Bearer JWT and return its payload.
+def verify_bearer_token(token: str | None) -> dict:
+    """Verify a raw bearer token string and return its claims.
 
-    If BYPASS_AUTH_TOKEN_VERIFICATION is set the token is not verified
+    Shared by the HTTP dependency (:func:`_get_token_payload`) and the WebSocket
+    auth gate. Raises ``HTTPException`` (401) on any failure. If
+    BYPASS_AUTH_TOKEN_VERIFICATION is set the token is not verified
     (development / test mode only).
     """
     if settings.bypass_auth_token_verification:
         # Return a minimal payload with all scopes
         return {"scope": f"{settings.flightblender_read_scope} {settings.flightblender_write_scope}"}
 
-    if credentials is None:
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authentication token")
 
-    token = credentials.credentials
+    # Fail CLOSED: without a JWKS source we cannot verify the signature, so we
+    # refuse to authenticate rather than trusting an unverified token. (Django's
+    # default posture was fail-closed; an unverified decode here would let any
+    # forged token through, including its ``scope`` claim.)
+    if not settings.auth_server_jwks_uri:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token verification is not configured (no JWKS URI); refusing to authenticate",
+        )
+
+    # Always require a signed, non-expiring-disallowed, issued token. Match the
+    # Django original which enforced exp/iss/aud presence and RS256 signatures.
+    required_claims = ["exp", "iss"]
+    decode_kwargs: dict = {"algorithms": ["RS256"]}
+    if settings.auth_audience:
+        decode_kwargs["audience"] = settings.auth_audience
+        required_claims.append("aud")
+    decode_kwargs["options"] = {"require": required_claims}
+
     try:
-        if settings.auth_server_jwks_uri:
-            jwks_client = jwt.PyJWKClient(settings.auth_server_jwks_uri)
-            signing_key = jwks_client.get_signing_key_from_jwt(token)
-            payload = jwt.decode(token, signing_key.key, algorithms=["RS256"])
-        else:
-            # Decode without verification (insecure – only for fully trusted local environments)
-            payload = jwt.decode(token, options={"verify_signature": False})
+        jwks_client = jwt.PyJWKClient(settings.auth_server_jwks_uri)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(token, signing_key.key, **decode_kwargs)
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired") from exc
     except jwt.InvalidTokenError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
     return payload
+
+
+async def _get_token_payload(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Security(_bearer)],
+) -> dict:
+    """FastAPI dependency: validate the Bearer JWT and return its payload."""
+    token = credentials.credentials if credentials else None
+    return verify_bearer_token(token)
 
 
 def require_scope(*required_scopes: str):
