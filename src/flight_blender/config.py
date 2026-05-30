@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     # ── API Auth ───────────────────────────────────────────────────────────────
     bypass_auth_token_verification: bool = Field(default=False, alias="BYPASS_AUTH_TOKEN_VERIFICATION")
     auth_server_jwks_uri: str = Field(default="", alias="AUTH_SERVER_JWKS_URI")
+    # Expected JWT audience (Django's PASSPORT_AUDIENCE / API_IDENTIFIER). When set,
+    # inbound tokens must carry a matching ``aud`` claim or they are rejected.
+    auth_audience: str = Field(default="", alias="AUTH_AUDIENCE")
 
     # ── Celery ─────────────────────────────────────────────────────────────────
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
