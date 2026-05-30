@@ -14,6 +14,7 @@ from flight_blender.database import engine
 from flight_blender.routers import (
     conformance,
     constraint,
+    daa,
     flight_declaration,
     flight_feed,
     geo_fence,
@@ -69,6 +70,12 @@ def create_app() -> FastAPI:
     app.include_router(surveillance.router, prefix="/surveillance_monitoring_ops", tags=["Surveillance"])
     app.include_router(conformance.router, prefix="/conformance_monitoring_ops", tags=["Conformance"])
     app.include_router(weather.router, prefix="/weather_monitoring_ops", tags=["Weather"])
+    app.include_router(daa.router, prefix="/detect_and_avoid_ops", tags=["DAA"])
+
+    # ── WebSocket endpoints ───────────────────────────────────────────────
+    from flight_blender.websocket import ws_router
+
+    app.include_router(ws_router)
 
     @app.get("/ping", tags=["Health"])
     async def ping():

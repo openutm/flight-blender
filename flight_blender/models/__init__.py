@@ -21,6 +21,7 @@ from flight_blender.models.surveillance import (
     SurveillanceTrackEvent,
 )
 from flight_blender.models.notification import OperatorRIDNotification
+from flight_blender.models.daa import DAAAlert, DAAIncidentLog
 
 __all__ = [
     "FlightObservation",
@@ -46,4 +47,6 @@ __all__ = [
     "SurveillanceSession",
     "SurveillanceTrackEvent",
     "OperatorRIDNotification",
+    "DAAAlert",
+    "DAAIncidentLog",
 ]

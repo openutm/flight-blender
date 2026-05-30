@@ -1,6 +1,7 @@
 from flight_blender.routers import (
     conformance,
     constraint,
+    daa,
     flight_declaration,
     flight_feed,
     geo_fence,
@@ -15,6 +16,7 @@ from flight_blender.routers import (
 __all__ = [
     "conformance",
     "constraint",
+    "daa",
     "flight_declaration",
     "flight_feed",
     "geo_fence",

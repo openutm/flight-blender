@@ -9,9 +9,22 @@ MAX_STREAM_LEN = 500
 
 
 def add_air_traffic_data(observation: dict) -> str | None:
-    """Append one observation dict to the Redis stream. Returns the entry ID."""
+    """Append one observation dict to the Redis stream. Returns the entry ID.
+
+    Filters out None values since Redis XADD requires string/int/float values.
+    """
     r = get_redis()
-    return r.xadd(FLIGHT_OBSERVATION_KEY, observation, maxlen=MAX_STREAM_LEN, approximate=True)
+    # Filter out None values and convert to strings
+    clean_obs = {}
+    for k, v in observation.items():
+        if v is None:
+            continue
+        if isinstance(v, dict):
+            import json
+            clean_obs[k] = json.dumps(v)
+        else:
+            clean_obs[k] = v
+    return r.xadd(FLIGHT_OBSERVATION_KEY, clean_obs, maxlen=MAX_STREAM_LEN, approximate=True)
 
 
 def read_all_observations(session_id: str | None = None, count: int = 500) -> list[dict]:

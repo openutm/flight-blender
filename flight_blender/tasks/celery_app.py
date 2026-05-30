@@ -30,4 +30,10 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     worker_prefetch_multiplier=1,
+    beat_schedule={
+        "cleanup-old-heartbeat-events": {
+            "task": "cleanup_old_heartbeat_events",
+            "schedule": 3600.0,  # Every hour
+        },
+    },
 )

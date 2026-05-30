@@ -151,15 +151,64 @@ async def submit_to_dss(declaration_id: uuid.UUID = Path(...), db: AsyncSession 
 # ── Bulk creation ───────────────────────────────────────────────────────────────
 
 
+def _build_declaration_from_full_request(payload: FlightDeclarationFullRequest) -> dict:
+    """Convert a FlightDeclarationFullRequest to FlightDeclaration fields."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+
+    geo_json = payload.flight_declaration_geo_json
+    if geo_json:
+        features = geo_json.get("features") or []
+        coords_raw = features[0].get("geometry", {}).get("coordinates", [[]]) if features else [[]]
+        flat = [pt for ring in coords_raw for pt in ring]
+        if flat:
+            lons = [pt[0] for pt in flat]
+            lats = [pt[1] for pt in flat]
+            bounds = json.dumps({"minx": min(lons), "miny": min(lats), "maxx": max(lons), "maxy": max(lats)})
+        else:
+            bounds = "{}"
+    else:
+        bounds = "{}"
+
+    def _parse_dt(value: str | None, fallback: datetime) -> datetime:
+        if not value:
+            return fallback
+        try:
+            parsed = datetime.fromisoformat(str(value))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except (ValueError, TypeError):
+            return fallback
+
+    start_dt = _parse_dt(payload.start_datetime, now)
+    end_dt = _parse_dt(payload.end_datetime, now + timedelta(hours=2))
+
+    return {
+        "operational_intent": json.dumps(geo_json) if geo_json else "{}",
+        "flight_declaration_raw_geojson": json.dumps(geo_json) if geo_json else None,
+        "bounds": bounds,
+        "aircraft_id": str(payload.aircraft_id or "UNKNOWN")[:256],
+        "type_of_operation": int(payload.type_of_operation or 0),
+        "state": int(payload.flight_state or 1),
+        "is_approved": True,
+        "originating_party": str(payload.originating_party or "Flight Blender Default")[:100],
+        "start_datetime": start_dt,
+        "end_datetime": end_dt,
+    }
+
+
 @router.post("/set_flight_declarations_bulk", response_model=BulkFlightDeclarationCreateResponse, dependencies=[WriteDep])
-async def bulk_create_flight_declarations(payloads: list[FlightDeclarationCreate], db: AsyncSession = Depends(get_db)):
+async def bulk_create_flight_declarations(payloads: list[FlightDeclarationFullRequest], db: AsyncSession = Depends(get_db)):
     results: list[BulkFlightDeclarationResult] = []
     submitted = 0
     failed = 0
 
     for payload in payloads:
         try:
-            decl = FlightDeclaration(**payload.model_dump())
+            fields = _build_declaration_from_full_request(payload)
+            decl = FlightDeclaration(**fields)
             db.add(decl)
             await db.flush()
             results.append(BulkFlightDeclarationResult(id=decl.id, message="Created", success=True))
@@ -183,52 +232,8 @@ async def set_flight_declaration(payload: FlightDeclarationFullRequest, db: Asyn
     start_datetime, end_datetime, etc.) or the legacy bbox-only format.
     Always returns is_approved=True so the toolkit proceeds.
     """
-    from datetime import datetime, timedelta, timezone
-
-    now = datetime.now(timezone.utc)
-
-    # Extract bounding box from GeoJSON polygon if provided
-    geo_json = payload.flight_declaration_geo_json
-    if geo_json:
-        features = geo_json.get("features") or []
-        coords_raw = features[0].get("geometry", {}).get("coordinates", [[]]) if features else [[]]
-        flat = [pt for ring in coords_raw for pt in ring]
-        if flat:
-            lons = [pt[0] for pt in flat]
-            lats = [pt[1] for pt in flat]
-            bounds = json.dumps({"minx": min(lons), "miny": min(lats), "maxx": max(lons), "maxy": max(lats)})
-        else:
-            bounds = "{}"
-    else:
-        bounds = "{}"
-
-    # Parse start/end datetimes; accept ISO strings with or without timezone
-    def _parse_dt(value: str | None, fallback: datetime) -> datetime:
-        if not value:
-            return fallback
-        try:
-            parsed = datetime.fromisoformat(str(value))
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
-            return parsed
-        except (ValueError, TypeError):
-            return fallback
-
-    start_dt = _parse_dt(payload.start_datetime, now)
-    end_dt = _parse_dt(payload.end_datetime, now + timedelta(hours=2))
-
-    decl = FlightDeclaration(
-        operational_intent=json.dumps(geo_json) if geo_json else "{}",
-        flight_declaration_raw_geojson=json.dumps(geo_json) if geo_json else None,
-        bounds=bounds,
-        aircraft_id=str(payload.aircraft_id or "UNKNOWN")[:256],
-        type_of_operation=int(payload.type_of_operation or 0),
-        state=int(payload.flight_state or 1),
-        is_approved=True,
-        originating_party=str(payload.originating_party or "Flight Blender Default")[:100],
-        start_datetime=start_dt,
-        end_datetime=end_dt,
-    )
+    fields = _build_declaration_from_full_request(payload)
+    decl = FlightDeclaration(**fields)
     db.add(decl)
     await db.flush()
     await db.refresh(decl)
@@ -251,3 +256,144 @@ async def get_network_declarations_by_view(
     db: AsyncSession = Depends(get_db),
 ):
     return {"view": view, "network_declarations": []}
+
+
+# ── Operational Intent ingest ──────────────────────────────────────────────────
+
+
+def _build_declaration_from_op_intent(request_data: dict, default_state: int) -> dict:
+    """Extract flight declaration fields from an operational-intent payload."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+
+    def _parse_dt(value: str | None, fallback: datetime) -> datetime:
+        if not value:
+            return fallback
+        try:
+            # Handle Unix timestamps (as used by uas_standards Volume4D)
+            if isinstance(value, (int, float)):
+                from datetime import datetime as dt
+                parsed = dt.fromtimestamp(value, tz=timezone.utc)
+                return parsed
+            parsed = datetime.fromisoformat(str(value))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except (ValueError, TypeError):
+            return fallback
+
+    start_dt = _parse_dt(request_data.get("start_datetime"), now)
+    end_dt = _parse_dt(request_data.get("end_datetime"), now + timedelta(hours=2))
+
+    # Extract volumes and compute bounds from Volume4D list
+    volumes = request_data.get("operational_intent_volume4ds", [])
+    all_lons: list[float] = []
+    all_lats: list[float] = []
+    for v4d in volumes:
+        vol = v4d.get("volume", {})
+        outline = vol.get("outline_polygon", {})
+        # Handle both "coordinates" (GeoJSON) and "vertices" (ASTM standard) formats
+        coords = outline.get("coordinates", [[]])
+        vertices = outline.get("vertices", [])
+        if vertices:
+            # ASTM format: list of {lat, lng} dicts
+            for v in vertices:
+                all_lons.append(float(v.get("lng", 0)))
+                all_lats.append(float(v.get("lat", 0)))
+        elif coords:
+            # GeoJSON format: nested coordinate arrays
+            flat = [pt for ring in coords for pt in ring]
+            for pt in flat:
+                all_lons.append(pt[0])
+                all_lats.append(pt[1])
+
+    bounds = (
+        json.dumps({"minx": min(all_lons), "miny": min(all_lats), "maxx": max(all_lons), "maxy": max(all_lats)})
+        if all_lons
+        else "{}"
+    )
+
+    # Build a GeoJSON representation from the volumes for raw storage
+    geo_json_features = []
+    for v4d in volumes:
+        vol = v4d.get("volume", {})
+        outline = vol.get("outline_polygon", {})
+        vertices = outline.get("vertices", [])
+        coords = outline.get("coordinates", [])
+        if vertices:
+            # Convert ASTM vertices to GeoJSON coordinates
+            ring = [[v["lng"], v["lat"]] for v in vertices]
+            geo_json_features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Polygon", "coordinates": [ring]},
+                    "properties": {
+                        "min_altitude": vol.get("altitude_lower", {}),
+                        "max_altitude": vol.get("altitude_upper", {}),
+                    },
+                }
+            )
+        elif coords:
+            geo_json_features.append(
+                {
+                    "type": "Feature",
+                    "geometry": outline,
+                    "properties": {
+                        "min_altitude": vol.get("altitude_lower", {}),
+                        "max_altitude": vol.get("altitude_upper", {}),
+                    },
+                }
+            )
+    geo_json = {"type": "FeatureCollection", "features": geo_json_features} if geo_json_features else None
+
+    return {
+        "operational_intent": json.dumps(volumes),
+        "flight_declaration_raw_geojson": json.dumps(geo_json) if geo_json else None,
+        "bounds": bounds,
+        "aircraft_id": str(request_data.get("aircraft_id", "UNKNOWN"))[:256],
+        "type_of_operation": int(request_data.get("type_of_operation", 0)),
+        "state": default_state,
+        "is_approved": True,
+        "originating_party": str(request_data.get("originating_party", "Flight Blender Default"))[:100],
+        "submitted_by": request_data.get("submitted_by"),
+        "start_datetime": start_dt,
+        "end_datetime": end_dt,
+    }
+
+
+@router.post("/set_operational_intent", response_model=FlightDeclarationCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[WriteDep])
+async def set_operational_intent(payload: dict, db: AsyncSession = Depends(get_db)):
+    """Create a flight declaration from an operational-intent payload (Volume4D format).
+
+    Used by the verification toolkit's 'Upload Flight Declaration Via Operational Intent' step.
+    """
+    fields = _build_declaration_from_op_intent(payload, default_state=1)
+    decl = FlightDeclaration(**fields)
+    db.add(decl)
+    await db.flush()
+    await db.refresh(decl)
+    return FlightDeclarationCreateResponse(id=decl.id, message="Flight declaration created via operational intent", is_approved=True, state=decl.state)
+
+
+@router.post("/set_operational_intents_bulk", response_model=BulkFlightDeclarationCreateResponse, dependencies=[WriteDep])
+async def set_operational_intents_bulk(payloads: list[dict], db: AsyncSession = Depends(get_db)):
+    """Bulk create flight declarations from operational-intent payloads."""
+    results: list[BulkFlightDeclarationResult] = []
+    submitted = 0
+    failed = 0
+
+    for payload in payloads:
+        try:
+            fields = _build_declaration_from_op_intent(payload, default_state=1)
+            decl = FlightDeclaration(**fields)
+            db.add(decl)
+            await db.flush()
+            results.append(BulkFlightDeclarationResult(id=decl.id, message="Created", success=True))
+            submitted += 1
+        except Exception as exc:
+            logger.error("Bulk operational intent create error: %s", exc)
+            results.append(BulkFlightDeclarationResult(id=None, message=str(exc), success=False))
+            failed += 1
+
+    return BulkFlightDeclarationCreateResponse(submitted=submitted, failed=failed, results=results)

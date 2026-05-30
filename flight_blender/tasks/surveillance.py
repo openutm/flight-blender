@@ -9,6 +9,15 @@ from loguru import logger
 from flight_blender.tasks.celery_app import celery_app
 
 
+def _get_sync_engine():
+    from sqlalchemy import create_engine
+    from flight_blender.config import get_settings
+
+    settings = get_settings()
+    sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
+    return create_engine(sync_url)
+
+
 @celery_app.task(name="send_heartbeat_to_consumer", bind=True)
 def send_heartbeat_to_consumer(self, session_id: str):
     """
@@ -16,15 +25,11 @@ def send_heartbeat_to_consumer(self, session_id: str):
     Records timing accuracy and broadcasts via WebSocket channel layer.
     """
     try:
-        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
-        from flight_blender.config import get_settings
         from flight_blender.models.surveillance import SurveillanceHeartbeatEvent, SurveillanceSession
-
-        settings = get_settings()
-        sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_url)
         import uuid
+
+        engine = _get_sync_engine()
 
         with Session(engine) as session:
             surveillance_session = session.get(SurveillanceSession, uuid.UUID(session_id))
@@ -55,27 +60,32 @@ def send_and_generate_track_to_consumer(self, session_id: str):
     Generate track messages from fused observations and broadcast via channels.
     """
     try:
-        from flight_blender.common.redis_stream_operations import read_all_observations
-
-        observations = read_all_observations(session_id=session_id, count=10)
-        had_tracks = len(observations) > 0
-
-        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
-        from flight_blender.config import get_settings
-        from flight_blender.models.surveillance import SurveillanceTrackEvent
+        from flight_blender.models.surveillance import SurveillanceSession, SurveillanceTrackEvent
         from datetime import datetime, timezone
+        import uuid
 
-        settings = get_settings()
-        sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_url)
+        engine = _get_sync_engine()
 
-        with Session(engine) as session:
+        with Session(engine) as db_session:
+            surveillance_session = db_session.get(SurveillanceSession, uuid.UUID(session_id))
+            if not surveillance_session:
+                logger.info("Session %s no longer active, stopping track generation", session_id)
+                return
+
+            from flight_blender.common.redis_stream_operations import read_all_observations
+
+            # Read from global stream (not filtered by session) to capture all traffic
+            observations = read_all_observations(count=10)
+            had_tracks = len(observations) > 0
+
             now = datetime.now(tz=timezone.utc)
             event = SurveillanceTrackEvent(dispatched_at=now, expected_at=now, had_active_tracks=had_tracks)
-            session.add(event)
-            session.commit()
+            db_session.add(event)
+            db_session.commit()
 
+        # Re-schedule next track generation after 1 second if session still active
+        send_and_generate_track_to_consumer.apply_async(kwargs={"session_id": session_id}, countdown=1)
         logger.debug("Track event generated for session %s (had_tracks=%s)", session_id, had_tracks)
 
     except Exception as exc:
