@@ -6,7 +6,8 @@ Uses the http-message-signatures library (RFC 9421).
 
 from __future__ import annotations
 
-import json
+import base64
+import hashlib
 
 import jwt
 import requests
@@ -15,7 +16,6 @@ from loguru import logger
 try:
     from http_message_signatures import (
         HTTPMessageVerifier,
-        HTTPSignatureKeyResolver,
         algorithms,
     )
 
@@ -23,6 +23,31 @@ try:
 except ImportError:  # pragma: no cover
     _SIGNING_AVAILABLE = False
     logger.warning("http-message-signatures not installed — telemetry signature verification disabled")
+
+
+def _content_digest_matches(headers: dict[str, str], body: bytes) -> bool:
+    """Validate that the ``Content-Digest`` header binds *body* (RFC 9530).
+
+    The HTTP message signature covers the ``content-digest`` *header*, not the
+    raw body, so a signature can be replayed with a swapped body unless the
+    digest is independently checked against the body. We require a ``sha-256``
+    digest to be present and to match ``base64(sha256(body))``.
+    """
+    header = next((v for k, v in headers.items() if k.lower() == "content-digest"), None)
+    if not header:
+        # No digest to bind the body — refuse rather than trust an unbound signature.
+        return False
+
+    expected = base64.b64encode(hashlib.sha256(body).digest()).decode()
+    # Header is a Structured Field Dictionary, e.g. ``sha-256=:<b64>:``. Be lenient
+    # about ordering / additional algorithms and just look for our sha-256 value.
+    for member in header.split(","):
+        if "sha-256=" not in member.lower():
+            continue
+        value = member.split("=", 1)[1].strip().strip(":")
+        if value == expected:
+            return True
+    return False
 
 
 class _JWKKeyResolver:
@@ -57,7 +82,12 @@ async def verify_signed_request(
     if not public_keys:
         return False
 
-    import http.client
+    # The signature covers the ``content-digest`` header rather than the raw body,
+    # so verify the digest independently — otherwise a captured signature could be
+    # replayed against a tampered body.
+    if not _content_digest_matches(headers, body):
+        logger.debug("Signature verification failed: Content-Digest does not bind the body")
+        return False
 
     class _FakeRequest:
         """Minimal request object accepted by HTTPMessageVerifier."""

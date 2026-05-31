@@ -34,9 +34,13 @@ class ConstraintDetailsResponse(BaseModel):
 
 
 class USSFlightResponse(BaseModel):
+    """ASTM F3411 ``GetFlightsResponse`` shape (peer-USS RID data exchange)."""
+
+    timestamp: dict[str, Any] | None = None
     flights: list[dict[str, Any]]
 
 
 class USSFlightDetailResponse(BaseModel):
-    id: str
+    """ASTM F3411 ``GetFlightDetailsResponse`` shape (``{"details": {...}}``)."""
+
     details: dict[str, Any]

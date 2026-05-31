@@ -85,26 +85,33 @@ async def test_get_weather_returns_200(client):
     response = await client.get("/weather_monitoring_ops/weather/", params={"latitude": 51.5, "longitude": -0.1})
     assert response.status_code == 200
     body = response.json()
+    # Django parity: latitude/longitude come from the upstream response, the full
+    # WeatherSerializer shape is returned, and there is no synthetic current_weather.
     assert body["latitude"] == 51.5
     assert body["longitude"] == -0.1
+    assert "hourly" in body
+    assert "current_weather" not in body
 
 
 @pytest.mark.anyio
-async def test_get_weather_invalid_latitude(client):
+async def test_get_weather_out_of_range_latitude_is_forwarded(client):
+    # Django did presence-only validation (no range bounds); out-of-range
+    # coordinates are forwarded upstream rather than rejected with 422.
     response = await client.get("/weather_monitoring_ops/weather/", params={"latitude": 999.0, "longitude": -0.1})
-    assert response.status_code == 422
+    assert response.status_code == 200
 
 
 @pytest.mark.anyio
-async def test_get_weather_invalid_longitude(client):
+async def test_get_weather_out_of_range_longitude_is_forwarded(client):
     response = await client.get("/weather_monitoring_ops/weather/", params={"latitude": 51.5, "longitude": 999.0})
-    assert response.status_code == 422
+    assert response.status_code == 200
 
 
 @pytest.mark.anyio
 async def test_get_weather_missing_params(client):
     response = await client.get("/weather_monitoring_ops/weather/")
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert response.json() == {"error": "Longitude parameter is required"}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -196,10 +203,10 @@ async def test_get_all_flights_uss(client):
 
 @pytest.mark.anyio
 async def test_get_flight_details_uss(client):
+    """Unknown RID flight details return 404 (Django ``get_uss_flight_details``)."""
     flight_id = str(uuid.uuid4())
     response = await client.get(f"/uss_ops/flights/{flight_id}/details")
-    assert response.status_code == 200
-    assert response.json()["id"] == flight_id
+    assert response.status_code == 404
 
 
 # ══════════════════════════════════════════════════════════════════════════════

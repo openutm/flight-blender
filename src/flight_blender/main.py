@@ -65,6 +65,9 @@ def create_app() -> FastAPI:
     app.include_router(constraint.router, prefix="/constraint_ops", tags=["Constraints"])
     app.include_router(rid.router, prefix="/rid", tags=["Remote ID"])
     app.include_router(scd.router, prefix="/scd", tags=["SCD"])
+    # Peer-USS interop: Django served these at ``/uss``. Mount there for
+    # interop parity with other USSs and keep ``/uss_ops`` as a back-compat alias.
+    app.include_router(uss.router, prefix="/uss", tags=["USS Operations"])
     app.include_router(uss.router, prefix="/uss_ops", tags=["USS Operations"])
     app.include_router(utm_adapter.router, prefix="/utm_adapter", tags=["UTM Adapter"])
     app.include_router(surveillance.router, prefix="/surveillance_monitoring_ops", tags=["Surveillance"])

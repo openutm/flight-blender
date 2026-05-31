@@ -11,14 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.auth import ReadDep, WriteDep
 from flight_blender.database import get_db
-from flight_blender.models.rid import ISASubscription
 from flight_blender.models.notification import OperatorRIDNotification
+from flight_blender.models.rid import ISASubscription, RIDFlightDetail
 from flight_blender.schemas.rid import (
     CreateDSSSubscriptionRequest,
     CreateTestRequest,
     ISASubscriptionResponse,
     RIDCapabilitiesResponse,
     RIDDisplayDataResponse,
+    RIDFlightDetailCreate,
+    RIDFlightDetailResponse,
     RIDFlightDetailsResponse,
     RIDTestResponse,
     RIDUserNotificationsResponse,
@@ -78,6 +80,36 @@ async def get_rid_display_data(
 async def get_rid_flight_detail(flight_id: str = Path(...)):
     """Return detailed RID data for a specific flight."""
     return RIDFlightDetailsResponse(id=flight_id)
+
+
+# ── RID Flight Details (persisted operator metadata) ───────────────────────────
+
+
+@router.post("/flight_details", response_model=RIDFlightDetailResponse, status_code=status.HTTP_201_CREATED, dependencies=[WriteDep])
+async def create_rid_flight_detail(payload: RIDFlightDetailCreate, db: AsyncSession = Depends(get_db)):
+    """Persist RID operator/flight details (Django ``RIDFlightDetail``).
+
+    Dict-valued ASTM fields (operator_location, auth_data, uas_id,
+    eu_classification) are stored as JSON text, matching Django's storage; they
+    are served back over the peer-USS ``GET /uss/flights/<id>/details`` endpoint.
+    """
+    import json
+
+    def _dump(value):
+        return json.dumps(value) if value is not None else None
+
+    detail = RIDFlightDetail(
+        operation_description=payload.operation_description,
+        operator_id=payload.operator_id,
+        operator_location=_dump(payload.operator_location),
+        auth_data=_dump(payload.auth_data),
+        uas_id=_dump(payload.uas_id),
+        eu_classification=_dump(payload.eu_classification),
+    )
+    db.add(detail)
+    await db.flush()
+    await db.refresh(detail)
+    return detail
 
 
 # ── USS Qualifier test harness ─────────────────────────────────────────────────

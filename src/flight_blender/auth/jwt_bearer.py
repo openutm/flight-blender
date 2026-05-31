@@ -24,8 +24,16 @@ def verify_bearer_token(token: str | None) -> dict:
     (development / test mode only).
     """
     if settings.bypass_auth_token_verification:
-        # Return a minimal payload with all scopes
-        return {"scope": f"{settings.flightblender_read_scope} {settings.flightblender_write_scope}"}
+        # Return a minimal payload with all scopes (dev / test mode), including
+        # the RID peer-USS interop scopes so the USS-to-USS endpoints are
+        # reachable without a real token.
+        scopes = [
+            settings.flightblender_read_scope,
+            settings.flightblender_write_scope,
+            getattr(settings, "rid_display_provider_scope", "rid.display_provider"),
+            getattr(settings, "rid_service_provider_scope", "rid.service_provider"),
+        ]
+        return {"scope": " ".join(scopes)}
 
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authentication token")
@@ -88,3 +96,9 @@ def require_scope(*required_scopes: str):
 # Convenient aliases
 ReadDep = Depends(require_scope(settings.flightblender_read_scope))
 WriteDep = Depends(require_scope(settings.flightblender_write_scope))
+
+# Remote-ID peer-USS interop scopes (ASTM F3411). The USS-to-USS RID data
+# exchange endpoints must require these RID-specific scopes rather than the
+# generic blender read/write scopes, matching the Django original.
+RIDDisplayProviderDep = Depends(require_scope(settings.rid_display_provider_scope))
+RIDServiceProviderDep = Depends(require_scope(settings.rid_service_provider_scope))
