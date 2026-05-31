@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,40 +14,32 @@ from flight_blender.models.daa import DAAAlert, DAAIncidentLog
 router = APIRouter()
 
 
-def _parse_iso_date(value: str, field: str) -> datetime:
-    """Parse an ISO-8601 datetime filter, returning 422 on malformed input.
-
-    The original port silently swallowed ``ValueError`` and dropped the filter,
-    so a client passing a bad date got unfiltered results with no error signal.
-    """
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Invalid ISO-8601 datetime for {field}: {value!r}",
-        ) from exc
-
-
 def _filter_incident_query(
     query: Select,
     event_type: str | None,
     alert_level: int | None,
     alert_id: str | None,
-    start_date: str | None,
-    end_date: str | None,
+    start_date: datetime | None,
+    end_date: datetime | None,
 ) -> Select:
-    """Apply optional server-side filters to a DAAIncidentLog query."""
+    """Apply optional server-side filters to a DAAIncidentLog query.
+
+    Date filters are parsed at the API boundary: the route declares the
+    ``start_date``/``end_date`` query params as ``datetime``, so FastAPI/Pydantic
+    coerces them and returns ``422`` on malformed input before the handler runs.
+    This helper therefore receives already-parsed ``datetime`` objects (or
+    ``None``) and only applies the filter.
+    """
     if event_type:
         query = query.where(DAAIncidentLog.event_type == event_type)
     if alert_level is not None:
         query = query.where(DAAIncidentLog.alert_level == alert_level)
     if alert_id:
         query = query.where(DAAIncidentLog.alert_id == alert_id)
-    if start_date:
-        query = query.where(DAAIncidentLog.created_at >= _parse_iso_date(start_date, "start_date"))
-    if end_date:
-        query = query.where(DAAIncidentLog.created_at <= _parse_iso_date(end_date, "end_date"))
+    if start_date is not None:
+        query = query.where(DAAIncidentLog.created_at >= start_date)
+    if end_date is not None:
+        query = query.where(DAAIncidentLog.created_at <= end_date)
     return query
 
 
@@ -79,8 +71,8 @@ async def get_active_daa_alerts(db: AsyncSession = Depends(get_db)) -> list[dict
 async def get_daa_incident_logs(
     event_type: str | None = Query(default=None),
     alert_level: int | None = Query(default=None),
-    start_date: str | None = Query(default=None),
-    end_date: str | None = Query(default=None),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
     alert_id: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
