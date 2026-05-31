@@ -23,6 +23,20 @@ on:
       - "testing/interuss/**"
       - ".github/workflows/interuss-qualification.yml"
 
+  # Run automatically on pull requests targeting relevant branches
+  pull_request:
+    branches:
+      - main
+      - "feat/issue-95-*"
+    paths:
+      - "rid_operations/**"
+      - "scd_operations/**"
+      - "auth_helper/**"
+      - "conformance_monitoring_operations/**"
+      - "constraint_operations/**"
+      - "testing/interuss/**"
+      - ".github/workflows/interuss-qualification.yml"
+
   # Nightly run to catch regressions early
   schedule:
     - cron: "0 3 * * 1"  # 03:00 UTC every Monday
@@ -31,6 +45,10 @@ on:
 concurrency:
   group: interuss-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   interuss-qualification:
@@ -231,13 +249,70 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # -------------------------------------------------------
+      - name: Upload qualification reports
+        id: upload_reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interuss-qualification-reports-${{ github.run_number }}
+          path: |
+            testing/interuss/output/f3548/report.json
+            testing/interuss/output/f3548/f3548_requirements/
+            testing/interuss/output/f3548/sequence/
+            testing/interuss/output/netrid_v22a/report.json
+            testing/interuss/output/netrid_v22a/netrid_v22a_requirements/
+            testing/interuss/output/netrid_v22a/sequence/
+          if-no-files-found: warn
+          retention-days: 30
+
+      # -------------------------------------------------------
       - name: Post PR comment with qualification report
-        if: always() && github.event_name == 'pull_request'
+        if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const { execSync } = require('child_process');
             const fs = require('fs');
+
+            // Find and replace any existing bot comment on this PR
+            const marker = '<!-- interuss-qualification-report -->';
+            const headBranch = '${{ github.ref_name }}';
+            let prNumber = context.issue.number;
+
+            if (!prNumber) {
+              console.log(`Checking for open pull requests for branch: ${headBranch}`);
+              let prs = [];
+              try {
+                const res = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  head: `${context.repo.owner}:${headBranch}`,
+                });
+                prs = res.data || [];
+              } catch (e) {
+                console.log(`Failed to list PRs using head filter: ${e.message}. Falling back to listing all open PRs.`);
+                try {
+                  const res = await github.rest.pulls.list({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    state: 'open',
+                  });
+                  prs = (res.data || []).filter(p => p.head.ref === headBranch);
+                } catch (err) {
+                  console.log(`Fallback PR list failed: ${err.message}`);
+                }
+              }
+              if (prs && prs.length > 0) {
+                prNumber = prs[0].number;
+                console.log(`Found open PR #${prNumber} for branch ${headBranch}`);
+              }
+            }
+
+            if (!prNumber) {
+              console.log(`No open pull request found for branch ${headBranch}. Skipping PR comment.`);
+              return;
+            }
 
             // Build the comment body via the same Python script used for Step Summary
             let body;
@@ -252,19 +327,23 @@ jobs:
               body = e.stdout || '';
             }
 
+            const artifactUrl = '${{ steps.upload_reports.outputs.artifact-url }}';
+            let artifactLink = '';
+            if (artifactUrl) {
+              artifactLink = ` | [Download Qualification Reports](${artifactUrl})`;
+            }
+
             const header =
               `## InterUSS Qualification Report\n\n` +
               `_Run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) ` +
-              `| Commit \`${{ github.sha }}\`_\n\n`;
+              `| Commit \`${{ github.sha }}\`${artifactLink}_\n\n`;
 
             const comment = header + (body.trim() || '> Report files were not generated.');
 
-            // Find and replace any existing bot comment on this PR
-            const marker = '<!-- interuss-qualification-report -->';
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: prNumber,
             });
             const existing = comments.find(c =>
               c.user.type === 'Bot' && c.body.includes(marker)
@@ -282,26 +361,10 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: prNumber,
                 body: fullBody,
               });
             }
-
-      # -------------------------------------------------------
-      - name: Upload qualification reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: interuss-qualification-reports-${{ github.run_number }}
-          path: |
-            testing/interuss/output/f3548/report.json
-            testing/interuss/output/f3548/f3548_requirements/
-            testing/interuss/output/f3548/sequence/
-            testing/interuss/output/netrid_v22a/report.json
-            testing/interuss/output/netrid_v22a/netrid_v22a_requirements/
-            testing/interuss/output/netrid_v22a/sequence/
-          if-no-files-found: warn
-          retention-days: 30
 
       # -------------------------------------------------------
       - name: Collect container logs on failure
