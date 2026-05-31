@@ -1369,6 +1369,7 @@ class SetOperationalIntentsBulkTests(TestCase):
 # AUTO_SUBMIT_TO_DSS and submit_to_dss endpoint tests
 # ---------------------------------------------------------------------------
 
+
 @override_settings(
     DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
     CELERY_TASK_ALWAYS_EAGER=True,
@@ -1378,7 +1379,6 @@ class AutoSubmitToDssTests(TestCase):
 
     URL = "/flight_declaration_ops/set_flight_declaration"
 
-    
     def _post(self, payload, content_type=RESPONSE_CONTENT_TYPE):
         return self.client.post(
             self.URL,
@@ -1578,6 +1578,7 @@ class SubmitToDssEndpointTests(TestCase):
 # FlightDeclarationCreateList state-filter tests
 # ---------------------------------------------------------------------------
 
+
 class FlightDeclarationListStateFilterTests(TestCase):
     """Tests for the ``?state=`` query parameter on the flight_declaration list endpoint."""
 
@@ -1699,4 +1700,3 @@ class FlightDeclarationListStateFilterTests(TestCase):
         self.assertIn(str(self.fd_accepted.id), returned_ids)
         self.assertIn(str(self.fd_activated.id), returned_ids)
         self.assertNotIn(str(self.fd_rejected.id), returned_ids)
-

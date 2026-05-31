@@ -143,3 +143,6 @@ celerybeat-schedule.db
 # Ignore rtree indexes
 *.dat
 *.idx
+
+# InterUSS qualification test output
+testing/interuss/output/

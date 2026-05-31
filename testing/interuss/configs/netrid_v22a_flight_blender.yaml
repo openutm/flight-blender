@@ -1,0 +1,296 @@
+# uss_qualifier configuration: ASTM F3411-22a (Remote ID v22a)
+# Tests Flight Blender as a Network Remote ID Service Provider (NETRID SP)
+# against the ASTM F3411-22a standard.
+#
+# Flight Blender role: Service Provider (injection at /rid)
+# mock_uss_riddp role:  Display Provider observer (at v22a.riddp.uss1.localutm)
+# mock_uss_ridsp role:  Peer SP for interaction tests (at v22a.ridsp.uss1.localutm)
+# DSS: dss1.uss1.localutm (and dss1.uss2.localutm for interop tests)
+#
+# Required environment variable (passed to `docker run`):
+#   AUTH_SPEC  - e.g. DummyOAuth(http://oauth.authority.localutm:8085/token,flight-blender.localutm)
+#
+# Run with:
+#   docker run --rm \
+#     --network interop_ecosystem_network \
+#     -w /app/monitoring/uss_qualifier \
+#     -e AUTH_SPEC="..." \
+#     -v "$(pwd)/testing/interuss/configs:/configs" \
+#     -v "$(pwd)/testing/interuss/output:/app/monitoring/uss_qualifier/output" \
+#     interuss/monitoring:v0.30.0 \
+#     uv run main.py \
+#       --config "file:///configs/netrid_v22a_flight_blender.yaml" \
+#       --output-path "output/netrid_v22a"
+
+$content_schema: monitoring/uss_qualifier/configurations/configuration/USSQualifierConfiguration.json
+
+v1:
+  test_run:
+    resources:
+      resource_declarations:
+
+        # =================================
+        # ========== Environment ==========
+        # =================================
+
+        utm_auth:
+          resource_type: resources.communications.AuthAdapterResource
+          specification:
+            environment_variable_containing_auth_spec: AUTH_SPEC
+            scopes_authorized:
+              - rid.inject_test_data
+              - dss.read.identification_service_areas
+              - rid.service_provider
+              - rid.display_provider
+              - dss.write.identification_service_areas
+              - interuss.versioning.read_system_versions
+              - ""
+
+        # Flight Blender as the NETRID Service Provider under test
+        netrid_service_providers_v22a:
+          resource_type: resources.netrid.NetRIDServiceProviders
+          dependencies:
+            auth_adapter: utm_auth
+          specification:
+            service_providers:
+              - participant_id: flight_blender
+                injection_base_url: http://flight-blender.localutm:8000/rid
+
+        # mock_uss_riddp as the Display Provider observer
+        netrid_observers_v22a:
+          resource_type: resources.netrid.NetRIDObserversResource
+          dependencies:
+            auth_adapter: utm_auth
+          specification:
+            observers:
+              - participant_id: uss1
+                observation_base_url: http://v22a.riddp.uss1.localutm/riddp/observation
+
+        # DSS instances — v22a uses /rid/v2 path
+        netrid_dss_instances_v22a:
+          resource_type: resources.astm.f3411.DSSInstancesResource
+          dependencies:
+            auth_adapter: utm_auth
+          specification:
+            dss_instances:
+              - participant_id: uss1
+                rid_version: F3411-22a
+                base_url: http://dss1.uss1.localutm/rid/v2
+              - participant_id: uss2
+                rid_version: F3411-22a
+                base_url: http://dss1.uss2.localutm/rid/v2
+
+        # mock_uss_riddp as mock DP (used by uss_qualifier for interaction tests)
+        mock_uss_instance_dp_v22a:
+          resource_type: resources.interuss.mock_uss.client.MockUSSResource
+          dependencies:
+            auth_adapter: utm_auth
+          specification:
+            participant_id: mock_uss
+            mock_uss_base_url: http://v22a.riddp.uss1.localutm
+
+        # mock_uss_ridsp as mock SP (used by uss_qualifier for interaction tests)
+        mock_uss_instance_sp_v22a:
+          resource_type: resources.interuss.mock_uss.client.MockUSSResource
+          dependencies:
+            auth_adapter: utm_auth
+          specification:
+            participant_id: mock_uss
+            mock_uss_base_url: http://v22a.ridsp.uss1.localutm
+
+        # USS identification: map participant IDs to URL regexes for reporting
+        uss_identification:
+          resource_type: resources.interuss.uss_identification.USSIdentificationResource
+          specification:
+            uss_identifiers:
+              flight_blender:
+                server_url_regexes:
+                  - 'http://flight-blender\.localutm.*'
+              uss1:
+                server_url_regexes:
+                  - 'http://[^/]*uss1\.localutm.*'
+              uss2:
+                server_url_regexes:
+                  - 'http://[^/]*uss2\.localutm.*'
+
+        # =================================
+        # ========== Baseline =============
+        # =================================
+
+        utm_client_identity:
+          resource_type: resources.communications.ClientIdentityResource
+          dependencies:
+            auth_adapter: utm_auth
+          specification:
+            whoami_audience: localhost
+            whoami_scope: rid.display_provider
+
+        id_generator:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.interuss.IDGeneratorResource
+          dependencies:
+            client_identity: utm_client_identity
+
+        netrid_observation_evaluation_configuration:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.netrid.EvaluationConfigurationResource
+          specification: {}
+
+        # Kentland, Virginia test area (same as dev/library/resources.yaml)
+        kentland_service_area_volume:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.VolumeResource
+          specification:
+            template:
+              outline_polygon:
+                vertices:
+                  - lat: 37.1853
+                    lng: -80.6140
+                  - lat: 37.2148
+                    lng: -80.6140
+                  - lat: 37.2148
+                    lng: -80.5440
+                  - lat: 37.1853
+                    lng: -80.5440
+              altitude_lower:
+                value: 0
+                reference: W84
+                units: M
+              altitude_upper:
+                value: 3048
+                reference: W84
+                units: M
+              start_time:
+                offset_from:
+                  starting_from:
+                    time_during_test: TimeOfEvaluation
+                  offset: 1s
+              end_time:
+                offset_from:
+                  starting_from:
+                    time_during_test: TimeOfEvaluation
+                  offset: 1h0m1s
+
+        kentland_service_area:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.netrid.ServiceAreaResource
+          dependencies:
+            volume: kentland_service_area_volume
+          specification:
+            base_url: https://testdummy.interuss.org/interuss/monitoring/uss_qualifier/configurations/dev/library/resources/kentland_service_area
+
+        kentland_planning_area_volume:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.VolumeResource
+          specification:
+            template:
+              outline_polygon:
+                vertices:
+                  - lat: 37.1853
+                    lng: -80.6140
+                  - lat: 37.2148
+                    lng: -80.6140
+                  - lat: 37.2148
+                    lng: -80.5440
+                  - lat: 37.1853
+                    lng: -80.5440
+              altitude_lower:
+                value: 0
+                reference: W84
+                units: M
+              altitude_upper:
+                value: 3048
+                reference: W84
+                units: M
+
+        kentland_planning_area:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.PlanningAreaResource
+          dependencies:
+            volume: kentland_planning_area_volume
+          specification:
+            base_url: https://testdummy.interuss.org/interuss/monitoring/uss_qualifier/configurations/dev/library/resources/kentland_planning_area
+
+        # An area too large to be accepted by any conformant USS
+        au_problematically_big_area:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.VolumeResource
+          specification:
+            template:
+              outline_polygon:
+                vertices:
+                  - lat: -23
+                    lng: 130
+                  - lat: -24
+                    lng: 130
+                  - lat: -24
+                    lng: 132
+                  - lat: -23
+                    lng: 132
+
+        # Kentland KML-based flight data
+        kentland_flights_data:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.netrid.FlightDataResource
+          specification:
+            kml_source:
+              kml_file:
+                path: file://./test_data/usa/kentland/rid.kml
+            flight_start_delay: 5s
+
+        # Allow private/non-public addresses and cleartext (we're running locally)
+        test_exclusions:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.dev.TestExclusionsResource
+          specification:
+            allow_private_addresses: true
+            allow_cleartext_queries: true
+
+    non_baseline_inputs:
+      - v1.test_run.resources.resource_declarations.utm_auth
+      - v1.test_run.resources.resource_declarations.netrid_service_providers_v22a
+      - v1.test_run.resources.resource_declarations.netrid_observers_v22a
+      - v1.test_run.resources.resource_declarations.netrid_dss_instances_v22a
+      - v1.test_run.resources.resource_declarations.mock_uss_instance_dp_v22a
+      - v1.test_run.resources.resource_declarations.mock_uss_instance_sp_v22a
+      - v1.test_run.resources.resource_declarations.uss_identification
+
+    action:
+      test_suite:
+        suite_type: suites.astm.netrid.f3411_22a
+        resources:
+          flights_data: kentland_flights_data
+          service_providers: netrid_service_providers_v22a
+          observers: netrid_observers_v22a
+          mock_uss_dp: mock_uss_instance_dp_v22a
+          mock_uss_sp: mock_uss_instance_sp_v22a
+          evaluation_configuration: netrid_observation_evaluation_configuration
+          dss_instances: netrid_dss_instances_v22a
+          utm_client_identity: utm_client_identity
+          id_generator: id_generator
+          service_area: kentland_service_area
+          problematically_big_area: au_problematically_big_area
+          planning_area: kentland_planning_area
+          test_exclusions: test_exclusions
+          uss_identification: uss_identification
+
+    execution:
+      # Run ALL tests regardless of failures — we want a complete report
+      stop_fast: false
+
+  artifacts:
+    raw_report:
+      indent: 2
+
+    tested_requirements:
+      - report_name: netrid_v22a_requirements
+        requirement_collections:
+          sp_dss:
+            requirement_sets:
+              - astm.f3411.v22a.service_provider#Mandatory requirements
+              - astm.f3411.v22a.dss_provider
+        participant_requirements:
+          flight_blender: sp_dss
+          uss1: sp_dss
+
+    sequence_view: {}
