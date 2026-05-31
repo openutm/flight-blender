@@ -45,6 +45,7 @@ class GeoFenceResponse(BaseModel):
     name: str
     bounds: str
     status: int
+    message: str | None = None
     is_test_dataset: bool
     start_datetime: datetime
     end_datetime: datetime
@@ -60,29 +61,46 @@ class GeoFenceListResponse(BaseModel):
 
 
 class GeoZoneQueryRequest(BaseModel):
-    """ED-269 geo-awareness query."""
+    """InterUSS ED-269 geo-awareness map query.
 
-    volumes: list[dict[str, Any]]
-    after: datetime | None = None
-    before: datetime | None = None
+    The InterUSS qualifier posts ``{"checks": [{"filter_sets": [...]}]}``. Each
+    filter set may carry a ``position`` (a ``[lon, lat]`` pair), an ``after`` /
+    ``before`` time window, and/or an ``ed269`` block. All fields are optional so
+    an empty ``checks`` array is accepted (and resolves to ``Absent``).
+    """
+
+    checks: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class GeoAwarenessStatusResponse(BaseModel):
-    result: str
+class GeoZoneCheckResult(BaseModel):
+    geozone: str
+
+
+class GeoZoneChecksResponse(BaseModel):
+    applicableGeozone: list[GeoZoneCheckResult]  # noqa: N815 - ED-269 wire name
     message: str | None = None
 
 
-class GeospatialDataSourceCreate(BaseModel):
+class GeoAwarenessStatusResponse(BaseModel):
+    """ED-269 geo-awareness test-harness status."""
+
+    status: str
+    api_version: str = "latest"
+
+
+class GeoZoneHttpsSource(BaseModel):
     url: str
-    name: str
-    description: str = ""
+    format: str = "ED-269"
 
 
-class GeospatialDataSourceResponse(BaseModel):
-    id: uuid.UUID
-    url: str
-    name: str
-    description: str
-    created_at: datetime
+class GeoZoneSourceRequest(BaseModel):
+    """InterUSS geospatial data source create/update body."""
 
-    model_config = {"from_attributes": True}
+    https_source: GeoZoneHttpsSource
+
+
+class GeoAwarenessTestStatus(BaseModel):
+    """Status record stored per geozone source id."""
+
+    result: str
+    message: str = ""
