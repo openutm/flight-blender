@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     # other USSs present these RID scopes, not the blender read/write scopes.
     rid_display_provider_scope: str = "rid.display_provider"
     rid_service_provider_scope: str = "rid.service_provider"
+    # InterUSS geo-awareness test-harness scope (ED-269). Guards the geo-awareness
+    # status, geospatial data source lifecycle and map-query endpoints — distinct
+    # from the generic blender scopes, matching the Django original.
+    geo_awareness_test_scope: str = "geo-awareness.test"
 
     # ── Plugin Engine Settings ─────────────────────────────────────────────────
     plugin_traffic_data_fuser: str = Field(

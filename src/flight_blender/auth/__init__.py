@@ -1,5 +1,6 @@
 from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
 from flight_blender.auth.jwt_bearer import (
+    GeoAwarenessTestDep,
     ReadDep,
     RIDDisplayProviderDep,
     RIDServiceProviderDep,
@@ -9,6 +10,7 @@ from flight_blender.auth.jwt_bearer import (
 
 __all__ = [
     "AuthorityCredentialsGetter",
+    "GeoAwarenessTestDep",
     "ReadDep",
     "RIDDisplayProviderDep",
     "RIDServiceProviderDep",

@@ -32,6 +32,7 @@ def verify_bearer_token(token: str | None) -> dict:
             settings.flightblender_write_scope,
             getattr(settings, "rid_display_provider_scope", "rid.display_provider"),
             getattr(settings, "rid_service_provider_scope", "rid.service_provider"),
+            getattr(settings, "geo_awareness_test_scope", "geo-awareness.test"),
         ]
         return {"scope": " ".join(scopes)}
 
@@ -102,3 +103,9 @@ WriteDep = Depends(require_scope(settings.flightblender_write_scope))
 # generic blender read/write scopes, matching the Django original.
 RIDDisplayProviderDep = Depends(require_scope(settings.rid_display_provider_scope))
 RIDServiceProviderDep = Depends(require_scope(settings.rid_service_provider_scope))
+
+# InterUSS geo-awareness test-harness scope (ED-269). The geo-awareness status,
+# geospatial data source lifecycle and map-query endpoints must require this
+# dedicated scope rather than the generic blender read/write scopes, matching
+# the Django original which guarded them with ``geo-awareness.test``.
+GeoAwarenessTestDep = Depends(require_scope(settings.geo_awareness_test_scope))
