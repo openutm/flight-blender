@@ -78,3 +78,16 @@ async def test_get_daa_incident_logs_all_filters(client):
     )
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+@pytest.mark.anyio
+async def test_list_alerts_malformed_start_date_returns_422(client):
+    """A malformed start_date must be rejected (was silently swallowed)."""
+    response = await client.get("/detect_and_avoid_ops/alerts", params={"start_date": "not-a-date"})
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_list_alerts_malformed_end_date_returns_422(client):
+    response = await client.get("/detect_and_avoid_ops/alerts", params={"end_date": "13/13/2025"})
+    assert response.status_code == 422
