@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,21 @@ from flight_blender.database import get_db
 from flight_blender.models.daa import DAAAlert, DAAIncidentLog
 
 router = APIRouter()
+
+
+def _parse_iso_date(value: str, field: str) -> datetime:
+    """Parse an ISO-8601 datetime filter, returning 422 on malformed input.
+
+    The original port silently swallowed ``ValueError`` and dropped the filter,
+    so a client passing a bad date got unfiltered results with no error signal.
+    """
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid ISO-8601 datetime for {field}: {value!r}",
+        ) from exc
 
 
 def _filter_incident_query(
@@ -30,15 +45,9 @@ def _filter_incident_query(
     if alert_id:
         query = query.where(DAAIncidentLog.alert_id == alert_id)
     if start_date:
-        try:
-            query = query.where(DAAIncidentLog.created_at >= datetime.fromisoformat(start_date))
-        except ValueError:
-            pass
+        query = query.where(DAAIncidentLog.created_at >= _parse_iso_date(start_date, "start_date"))
     if end_date:
-        try:
-            query = query.where(DAAIncidentLog.created_at <= datetime.fromisoformat(end_date))
-        except ValueError:
-            pass
+        query = query.where(DAAIncidentLog.created_at <= _parse_iso_date(end_date, "end_date"))
     return query
 
 
