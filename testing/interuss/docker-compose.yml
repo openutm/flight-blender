@@ -40,6 +40,8 @@ services:
       dockerfile: Dockerfile
     container_name: flight-blender-test
     hostname: flight-blender.localutm
+    ports:
+      - "8000:8000"
     env_file: .env.interuss
     entrypoint: ["/bin/bash", "entrypoints/with-database/entrypoint.sh"]
     depends_on:

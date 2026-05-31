@@ -69,7 +69,7 @@ wait_for_http() {
   local max_attempts="${2:-60}"
   local attempt=0
   log "Waiting for ${url} ..."
-  until curl -sf --max-time 5 "${url}" > /dev/null 2>&1; do
+  until [ "$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${url}" 2>/dev/null || echo "000")" != "000" ]; do
     attempt=$((attempt + 1))
     if [ "${attempt}" -ge "${max_attempts}" ]; then
       log "ERROR: ${url} did not become ready after ${max_attempts} attempts."
@@ -101,6 +101,7 @@ fi
 # Prepare output directory
 # ============================================================
 mkdir -p "${OUTPUT_DIR}"
+chmod 777 "${OUTPUT_DIR}"
 log "Output directory: ${OUTPUT_DIR}"
 
 # ============================================================

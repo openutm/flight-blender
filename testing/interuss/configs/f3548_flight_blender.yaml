@@ -55,7 +55,6 @@ v1:
       - v1.test_run.resources.resource_declarations.test_env_version_providers
       - v1.test_run.resources.resource_declarations.prod_env_version_providers
       - v1.test_run.resources.resource_declarations.flight_planners
-      - v1.test_run.resources.resource_declarations.flight_planners_to_clear
       - v1.test_run.resources.resource_declarations.dss
       - v1.test_run.resources.resource_declarations.dss_instances
       - v1.test_run.resources.resource_declarations.mock_uss
