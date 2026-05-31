@@ -523,6 +523,77 @@ class TestFlightDeclarationTasks:
             assert fake_decl.state == 1
             mock_db.commit.assert_called_once()
 
+    def test_submit_declaration_sends_real_extents_from_volumes(self):
+        """The DSS op-intent PUT carries the operation's stored volumes as ``extents``
+        (was hard-coded ``[]``), built via the utm_adapter reference-payload builder."""
+        from flight_blender.tasks.flight_declaration import submit_flight_declaration_to_dss_async
+
+        volumes = [
+            {
+                "volume": {
+                    "outline_polygon": {"vertices": [{"lat": 1.0, "lng": 2.0}, {"lat": 1.0, "lng": 3.0}, {"lat": 2.0, "lng": 3.0}]},
+                    "altitude_lower": {"value": 0.0},
+                    "altitude_upper": {"value": 120.0},
+                },
+                "time_start": {"value": "2030-01-01T00:00:00Z"},
+                "time_end": {"value": "2030-01-01T01:00:00Z"},
+            }
+        ]
+        fake_decl = MagicMock()
+        fake_decl.state = 0
+        fake_decl.id = "decl-id"
+        fake_decl.end_datetime = datetime.now(tz=timezone.utc) + timedelta(hours=2)
+        fake_decl.operational_intent = json.dumps(volumes)
+        mock_db = self._make_session_mock(declaration=fake_decl)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.json.return_value = {"operational_intent_reference": {}}
+        mock_creds_instance = MagicMock()
+        mock_creds_instance.get_cached_credentials.return_value = {"access_token": "token123"}
+
+        with (
+            patch("sqlalchemy.create_engine"),
+            patch("sqlalchemy.orm.Session", return_value=mock_db),
+            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("requests.put", return_value=mock_resp) as mock_put,
+        ):
+            submit_flight_declaration_to_dss_async("00000000-0000-0000-0000-000000000001")
+
+        mock_put.assert_called_once()
+        body = mock_put.call_args.kwargs["json"]
+        assert body["extents"] == volumes
+        # No live DSS area query yet, so the airspace key stays empty (documented follow-up).
+        assert body["key"] == []
+
+    def test_submit_declaration_empty_op_intent_sends_empty_extents(self):
+        """A declaration whose operational_intent is ``{}`` yields ``extents=[]`` (no crash)."""
+        from flight_blender.tasks.flight_declaration import submit_flight_declaration_to_dss_async
+
+        fake_decl = MagicMock()
+        fake_decl.state = 0
+        fake_decl.id = "decl-id"
+        fake_decl.end_datetime = datetime.now(tz=timezone.utc) + timedelta(hours=2)
+        fake_decl.operational_intent = "{}"
+        mock_db = self._make_session_mock(declaration=fake_decl)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 201
+        mock_resp.json.return_value = {"operational_intent_reference": {}}
+        mock_creds_instance = MagicMock()
+        mock_creds_instance.get_cached_credentials.return_value = {"access_token": "token123"}
+
+        with (
+            patch("sqlalchemy.create_engine"),
+            patch("sqlalchemy.orm.Session", return_value=mock_db),
+            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("requests.put", return_value=mock_resp) as mock_put,
+        ):
+            submit_flight_declaration_to_dss_async("00000000-0000-0000-0000-000000000001")
+
+        body = mock_put.call_args.kwargs["json"]
+        assert body["extents"] == []
+
     def test_submit_declaration_dss_failure(self):
         """When DSS returns non-201, declaration state should be Rejected."""
         from flight_blender.tasks.flight_declaration import submit_flight_declaration_to_dss_async

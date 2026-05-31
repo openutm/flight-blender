@@ -15,6 +15,7 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
     Validates start/end times, submits the operational intent, and updates the
     declaration state based on the DSS response.
     """
+    import json
     import uuid
     from datetime import datetime, timezone
 
@@ -24,6 +25,7 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
     from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
     from flight_blender.config import get_settings
     from flight_blender.models.flight_declaration import FlightDeclaration, FlightOperationalIntentReference
+    from flight_blender.services.peer_uss_client import build_operational_intent_reference_payload
 
     settings = get_settings()
     sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
@@ -58,13 +60,24 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
             import requests
 
             opint_id = str(uuid.uuid4())
-            body = {
-                "extents": [],
-                "key": [],
-                "state": "Accepted",
-                "uss_base_url": settings.dss_self_audience,
-                "new_subscription": None,
-            }
+
+            # Build non-empty extents from the operation's stored volumes (the
+            # operational_intent JSON holds the list of Volume4Ds for op-intent
+            # ingests). The airspace ``key`` requires a live DSS area query of
+            # overlapping op-intent references — that round-trip is a documented
+            # follow-up, so existing_references stays [] (key remains []).
+            try:
+                stored = json.loads(decl.operational_intent) if decl.operational_intent else []
+            except (json.JSONDecodeError, TypeError):
+                stored = []
+            volumes = stored if isinstance(stored, list) else []
+
+            body = build_operational_intent_reference_payload(
+                volumes=volumes,
+                state="Accepted",
+                existing_references=[],
+                uss_base_url=settings.dss_self_audience,
+            )
 
             resp = requests.put(
                 f"{dss_base_url}/dss/v1/operational_intent_references/{opint_id}",
