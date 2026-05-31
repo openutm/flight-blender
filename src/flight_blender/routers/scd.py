@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.auth import ReadDep, WriteDep
+from flight_blender.common.enums import OperationState
 from flight_blender.common.plugin_loader import load_plugin
 from flight_blender.config import get_settings
 from flight_blender.database import get_db
@@ -192,20 +193,20 @@ async def _strategic_planning_result(payload: FlightPlanUpsertRequest, db: Async
     try:
         intended = payload.intended_flight or {}
         if _resolve_usage_state(payload, intended) not in _PLANNING_USAGE_STATES:
-            return PLANNING_RESULT_NOT_PLANNED
+            return PlanningResult.NOT_PLANNED
 
         candidates = _candidate_volumes_from_intended_flight(intended)
         if not candidates:
             # Nothing concrete to plan -> Django returns NotPlanned for an empty op-intent.
-            return PLANNING_RESULT_NOT_PLANNED
+            return PlanningResult.NOT_PLANNED
 
         existing = await _existing_volumes(db)
         if _conflicts_with_existing(candidates, existing, int(settings.ussp_network_enabled)):
-            return PLANNING_RESULT_CONFLICT
-        return PLANNING_RESULT_PLANNED
+            return PlanningResult.CONFLICT
+        return PlanningResult.PLANNED
     except Exception as exc:
         logger.error("SCD strategic deconfliction error; failing closed: {}", exc)
-        return PLANNING_RESULT_FAILED
+        return PlanningResult.FAILED
 
 
 # ── SCD v1 ─────────────────────────────────────────────────────────────────────
