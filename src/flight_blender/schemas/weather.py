@@ -5,7 +5,7 @@ Pydantic schemas for weather monitoring.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WeatherRequest(BaseModel):
@@ -16,7 +16,23 @@ class WeatherRequest(BaseModel):
 
 
 class WeatherResponse(BaseModel):
-    latitude: float
-    longitude: float
-    current_weather: dict[str, Any] | None = None
+    """Weather forecast response mirroring the Django ``WeatherSerializer`` shape.
+
+    Emits exactly the serializer's declared fields (latitude, longitude,
+    generationtime_ms, utc_offset_seconds, timezone, timezone_abbreviation,
+    elevation, hourly_units, hourly). Like the DRF serializer, undeclared
+    upstream keys (e.g. ``current_weather``) are dropped (``extra="ignore"``).
+    Fields are optional so partial upstream payloads validate without error.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    latitude: float | None = None
+    longitude: float | None = None
+    generationtime_ms: float | None = None
+    utc_offset_seconds: int | None = None
+    timezone: str | None = None
+    timezone_abbreviation: str | None = None
+    elevation: float | None = None
+    hourly_units: dict[str, Any] | None = None
     hourly: dict[str, Any] | None = None
