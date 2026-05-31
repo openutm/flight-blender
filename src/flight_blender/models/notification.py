@@ -15,7 +15,8 @@ class OperatorRIDNotification(Base):
     __tablename__ = "operator_rid_notification"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    session_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    # Django parity: ``session_id`` is ``blank=True, null=True`` (nullable).
+    session_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     flight_declaration_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("flight_declaration.id", ondelete="SET NULL"), nullable=True)

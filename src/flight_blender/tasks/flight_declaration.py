@@ -15,13 +15,15 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
     Validates start/end times, submits the operational intent, and updates the
     declaration state based on the DSS response.
     """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import Session
-    from flight_blender.config import get_settings
-    from flight_blender.models.flight_declaration import FlightDeclaration, FlightOperationalIntentReference
-    from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
     import uuid
     from datetime import datetime, timezone
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
+    from flight_blender.config import get_settings
+    from flight_blender.models.flight_declaration import FlightDeclaration, FlightOperationalIntentReference
 
     settings = get_settings()
     sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
@@ -102,6 +104,7 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
 
 def _add_tracking(session, decl, notes: str) -> None:
     import json
+
     from flight_blender.models.flight_declaration import FlightOperationTracking
 
     tracking = FlightOperationTracking(
@@ -117,13 +120,23 @@ def send_operational_update_message(self, flight_declaration_id: str, message_te
     """
     Dispatch an AMQP / notification message about a flight declaration state change.
     """
-    import pika
     import json
     import os
 
+    import pika
+
     amqp_url = os.getenv("AMQP_URL", "")
     if not amqp_url:
-        logger.debug("No AMQP_URL configured; skipping notification for %s", flight_declaration_id)
+        # P2: without a broker the notification must not be silently dropped.
+        # Persist it locally (mirroring the Django consumer's row creation) and
+        # warn that the AMQP publish was skipped.
+        logger.warning("No AMQP_URL configured; persisting notification locally for %s", flight_declaration_id)
+        from flight_blender.tasks import notification as notification_tasks
+
+        notification_tasks._persist_operator_rid_notification_sync(
+            message=message_text,
+            session_id=flight_declaration_id,
+        )
         return
 
     try:
