@@ -22,79 +22,67 @@ classifiers = [
 ]
 
 dependencies = [
-    "arrow==1.3.0",
+    "alembic==1.16.1",
+    "aiosqlite==0.21.0",
+    "asyncpg==0.30.0",
     "celery==5.5.3",
     "cryptography==46.0.7",
-    "dacite==1.9.2",
-    "dj-database-url==2.1.0",
-    "django==5.2.14",
-    "django-celery-beat==2.8.1",
-    "djangorestframework==3.16.1",
-    "geojson==3.2.0",
-    "gunicorn==23.0.0",
-    "uvicorn[standard]==0.37.0",
-    "http-message-signatures==0.5.0",
-    "implicitdict==4.0.1",
-    "jwcrypto==1.5.7",
-    "marshmallow==4.1.2",
-    "numpy==2.3.4",
-    "pandas==2.2.3",
+    "fastapi>=0.116.0",
+    "httpx==0.28.1",
+    "loguru==0.7.3",
     "pika==1.3.2",
     "psycopg2-binary==2.9.10",
+    "pydantic-settings==2.9.1",
     "pyjwt==2.12.0",
-    "pyproj==3.7.2",
-    "python-dotenv==1.2.2",
-    "python-jose==3.5.0",
     "redis==7.0.1",
     "requests==2.33.0",
-    "rtree==1.4.0",
-    "shapely==2.1.2",
-    "tldextract==5.3.0",
-    "uas-standards==3.4.0",
+    "sqlalchemy[asyncio]==2.0.41",
+    "uvicorn[standard]>=0.34.0",
     "wait-for-it==2.3.0",
-    "channels==4.3.1",
-    "channels-redis==4.3.0",
-    "loguru==0.7.3",
+    "starlette>=0.47.0",
+    "rtree>=1.0.0",
+    "http-message-signatures>=0.5.0",
+    "http-sfv>=0.9.0",
+    "jwcrypto>=1.5.0",
 ]
 
 [dependency-groups]
 dev = [
+    "anyio[trio]>=4.0.0",
     "bandit[sarif]>=1.8.3",
     "codespell>=2.4.1",
+    "inflection>=0.5.1",
     "pre-commit>=4.2.0",
     "pyright>=1.1.398",
-    "pytest-django>=4.11.1",
-    "pyupgrade>=3.19.1",
-    "ruff>=0.11.4",
-    "python-lsp-server>=1.12.2",
-    "pyyaml>=6.0.2",
-    "uritemplate>=4.2.0",
-    "inflection>=0.5.1",
+    "pytest-anyio>=0.0.0",
     "pytest-cov>=7.1.0",
-    "radon>=6.0.1",
     "pytest-env>=1.2.0",
+    "pyupgrade>=3.19.1",
+    "radon>=6.0.1",
+    "ruff>=0.11.4",
+    "uritemplate>=4.2.0",
 ]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "flight_blender.settings"
 addopts = "-v --tb=short"
 env = [
-    "USE_LOCAL_SQLITE_DATABASE=1",
+    "DATABASE_URL=sqlite+aiosqlite:///./test.db",
+    "BYPASS_AUTH_TOKEN_VERIFICATION=1",
 ]
 python_files = ["test_*.py", "tests.py", "tests_*.py"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/flight_blender"]
+
 [tool.coverage.run]
-source = ["."]
+source = ["src/flight_blender"]
+concurrency = ["greenlet", "thread"]
 omit = [
-    "*/migrations/*",
     "*/tests/*",
     "*/tests.py",
     "*/test_*.py",
     ".venv/*",
-    "manage.py",
-    "flight_blender/asgi.py",
-    "flight_blender/celery.py",
-    "flight_blender/settings.py",
+    "*/alembic_migrations/*",
 ]
 
 [tool.coverage.report]

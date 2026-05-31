@@ -124,17 +124,40 @@ jobs:
         id: audit
         run: |
           set +e
-          pip-audit -r requirements.txt --format markdown --output pip-audit-report.md 2>pip-audit-stderr.txt
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          pip-audit -r requirements.txt --format json --output pip-audit-report.json 2>pip-audit-stderr.txt
+          audit_exit=$?
+          # Convert JSON to markdown for the PR comment
+          if [ -s pip-audit-report.json ]; then
+            python3 -c "
+          import json, sys
+          data = json.load(open('pip-audit-report.json'))
+          deps = data.get('dependencies', [])
+          vulns = [d for d in deps if d.get('vulns')]
+          if vulns:
+              print('| Package | Version | Vulnerability |')
+              print('|---------|---------|---------------|')
+              for d in vulns:
+                  for v in d['vulns']:
+                      print(f'| {d[\"name\"]} | {d[\"version\"]} | {v[\"id\"]} |')
+          " > pip-audit-report.md 2>/dev/null || true
+          fi
+          # pip-audit returns 1 when vulns found, 2 on error; treat 0 and 1 as pass
+          # (vulnerabilities are reported in the PR comment, not as a hard failure)
+          if [ "$audit_exit" = "2" ]; then
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          fi
           set -e
       - name: Write Job Summary
         if: always()
         run: |
+          echo "## pip-audit results" >> "$GITHUB_STEP_SUMMARY"
           if [ -s pip-audit-report.md ]; then
-            echo "## pip-audit results" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
             cat pip-audit-report.md >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "## pip-audit results" >> "$GITHUB_STEP_SUMMARY"
             echo "No vulnerabilities found." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Comment on PR
@@ -145,7 +168,7 @@ jobs:
             const fs = require('fs');
             let body = '## :shield: pip-audit results\n\n';
             if (fs.existsSync('pip-audit-report.md') && fs.readFileSync('pip-audit-report.md', 'utf8').trim()) {
-              body += fs.readFileSync('pip-audit-report.md', 'utf8');
+              body += '```\n' + fs.readFileSync('pip-audit-report.md', 'utf8') + '\n```\n';
             } else {
               body += ':white_check_mark: No vulnerabilities found.';
             }

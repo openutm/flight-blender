@@ -7,4 +7,4 @@ if ! wait-for-it --parallel --service $REDIS_HOST:$REDIS_PORT; then
     exit
 fi
 
-celery --app=flight_blender worker --loglevel=info
+celery -A flight_blender.tasks.celery_app worker --loglevel=info
