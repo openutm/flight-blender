@@ -23,6 +23,7 @@ from flight_blender.schemas.flight_feed import (
     SingleObservation,
     TelemetryObservation,
 )
+from flight_blender.tasks.flight_declaration import send_operational_update_message
 from flight_blender.tasks.flight_feed import bulk_write_incoming_air_traffic_data, write_incoming_air_traffic_data
 
 router = APIRouter()
@@ -86,6 +87,11 @@ async def set_air_traffic(payload: BulkObservationRequest, session_id: uuid.UUID
     """
     observations = [{**obs.model_dump(), "session_id": str(session_id)} for obs in payload.observations]
     bulk_write_incoming_air_traffic_data.delay(observations)
+    send_operational_update_message.delay(
+        str(session_id),
+        f"{len(observations)} air traffic observation(s) ingested",
+        "info",
+    )
     return {"message": f"{len(observations)} observation(s) queued for processing"}
 
 
@@ -94,6 +100,11 @@ async def bulk_set_air_traffic(payload: BulkObservationRequest, session_id: uuid
     """Ingest multiple air traffic observations via Celery task."""
     observations = [{**obs.model_dump(), "session_id": str(session_id)} for obs in payload.observations]
     bulk_write_incoming_air_traffic_data.delay(observations)
+    send_operational_update_message.delay(
+        str(session_id),
+        f"{len(observations)} air traffic observation(s) ingested",
+        "info",
+    )
     return {"message": f"{len(observations)} observations queued for processing"}
 
 

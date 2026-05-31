@@ -29,7 +29,7 @@ class FlightObservation(Base):
     __tablename__ = "flight_feed_observation"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    session_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    session_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
     latitude_dd: Mapped[float] = mapped_column(Float, nullable=False)
     longitude_dd: Mapped[float] = mapped_column(Float, nullable=False)
     altitude_mm: Mapped[float] = mapped_column(Float, nullable=False)
