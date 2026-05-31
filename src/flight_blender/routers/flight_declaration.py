@@ -512,15 +512,28 @@ async def set_operational_intents_bulk(payloads: list[OperationalIntentIngestReq
     settings = get_settings()
     default_state = 0 if settings.ussp_network_enabled else 1
 
-    # Optimistic bulk creation, mirroring the Django bulk endpoint (the strategic
-    # intersection check is applied on the single-create paths).
+    # Each op-intent runs the same strategic deconfliction as the single-create
+    # path: a conflict (or engine error) fails closed and is not approved.
     for payload in payloads:
         try:
             fields = _build_declaration_from_op_intent(payload.model_dump(), default_state=default_state)
-            fields["is_approved"] = True
+            geo_json_str = fields.get("flight_declaration_raw_geojson")
+            geo_json = json.loads(geo_json_str) if geo_json_str else None
+            is_approved, deconf_state = await _run_deconfliction(
+                geo_json,
+                fields["start_datetime"],
+                fields["end_datetime"],
+                db=db,
+                bounds=fields["bounds"],
+                type_of_operation=fields["type_of_operation"],
+            )
+            fields["is_approved"] = is_approved
+            fields["state"] = deconf_state
             decl = FlightDeclaration(**fields)
             db.add(decl)
             await db.flush()
+            await db.refresh(decl)
+            _maybe_submit_to_dss(decl.id, is_approved, deconf_state)
             results.append(BulkFlightDeclarationResult(id=decl.id, message="Created", success=True))
             submitted += 1
         except Exception as exc:

@@ -293,3 +293,48 @@ async def test_submit_to_dss(client):
 async def test_submit_to_dss_not_found(client):
     response = await client.post(f"{BASE}/flight_declaration/{uuid.uuid4()}/submit_to_dss")
     assert response.status_code == 404
+
+
+# ── Bulk endpoints run strategic deconfliction (regression guard) ──────────────
+
+
+@pytest.mark.anyio
+async def test_bulk_create_flight_declarations_runs_deconfliction(client, monkeypatch):
+    """Bulk flight-declaration create must run deconfliction, not optimistically approve."""
+    from flight_blender.common.enums import OperationState
+    from flight_blender.routers import flight_declaration as fd_router
+
+    async def fake_run_deconfliction(*args, **kwargs):
+        return False, int(OperationState.REJECTED)
+
+    monkeypatch.setattr(fd_router, "_run_deconfliction", fake_run_deconfliction)
+
+    response = await client.post(f"{BASE}/set_flight_declarations_bulk", json=[FULL_REQUEST_PAYLOAD])
+    assert response.status_code == 200
+    created_id = response.json()["results"][0]["id"]
+
+    detail = await client.get(f"{BASE}/flight_declaration/{created_id}")
+    assert detail.status_code == 200
+    assert detail.json()["is_approved"] is False
+    assert detail.json()["state"] == int(OperationState.REJECTED)
+
+
+@pytest.mark.anyio
+async def test_bulk_set_operational_intents_runs_deconfliction(client, monkeypatch):
+    """Bulk op-intent create must run deconfliction, not optimistically approve."""
+    from flight_blender.common.enums import OperationState
+    from flight_blender.routers import flight_declaration as fd_router
+
+    async def fake_run_deconfliction(*args, **kwargs):
+        return False, int(OperationState.REJECTED)
+
+    monkeypatch.setattr(fd_router, "_run_deconfliction", fake_run_deconfliction)
+
+    response = await client.post(f"{BASE}/set_operational_intents_bulk", json=[OP_INTENT_PAYLOAD])
+    assert response.status_code == 200
+    created_id = response.json()["results"][0]["id"]
+
+    detail = await client.get(f"{BASE}/flight_declaration/{created_id}")
+    assert detail.status_code == 200
+    assert detail.json()["is_approved"] is False
+    assert detail.json()["state"] == int(OperationState.REJECTED)
