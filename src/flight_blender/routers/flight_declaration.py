@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.auth import ReadDep, WriteDep
+from flight_blender.common.enums import OperationState
 from flight_blender.common.plugin_loader import load_plugin
 from flight_blender.config import get_settings
 from flight_blender.database import get_db
@@ -148,47 +149,60 @@ async def _run_deconfliction(
     type_of_operation: int = 0,
     exclude_id: uuid.UUID | None = None,
 ) -> tuple[bool, int]:
-    """Pre-fetch spatial data from DB then run the configured deconfliction engine."""
+    """Pre-fetch spatial data from DB then run the configured deconfliction engine.
+
+    Strategic deconfliction is safety critical and *fails closed*: any error
+    building inputs or running the engine results in the operation NOT being
+    approved (state Rejected), rather than being silently accepted.
+    """
     settings = get_settings()
-
-    # Pre-fetch active geofences overlapping the time window
-    fence_result = await db.execute(
-        select(GeoFence).where(
-            GeoFence.status == 1,
-            GeoFence.start_datetime <= end_datetime,
-            GeoFence.end_datetime >= start_datetime,
+    try:
+        # Pre-fetch active geofences overlapping the time window
+        fence_result = await db.execute(
+            select(GeoFence).where(
+                GeoFence.status == 1,
+                GeoFence.start_datetime <= end_datetime,
+                GeoFence.end_datetime >= start_datetime,
+            )
         )
-    )
-    fences = fence_result.scalars().all()
-    prefetched_fences = [{"id": str(f.id), "bounds": f.bounds} for f in fences]
+        fences = fence_result.scalars().all()
+        prefetched_fences = [{"id": str(f.id), "bounds": f.bounds} for f in fences]
 
-    # Pre-fetch active flight declarations overlapping the time window
-    decl_query = select(FlightDeclaration).where(
-        FlightDeclaration.state.in_(_ACTIVE_STATES),
-        FlightDeclaration.start_datetime <= end_datetime,
-        FlightDeclaration.end_datetime >= start_datetime,
-    )
-    if exclude_id is not None:
-        decl_query = decl_query.where(FlightDeclaration.id != exclude_id)
-    decl_result = await db.execute(decl_query)
-    declarations = decl_result.scalars().all()
-    prefetched_declarations = [{"id": str(d.id), "bounds": d.bounds} for d in declarations]
+        # Pre-fetch active flight declarations overlapping the time window
+        decl_query = select(FlightDeclaration).where(
+            FlightDeclaration.state.in_(_ACTIVE_STATES),
+            FlightDeclaration.start_datetime <= end_datetime,
+            FlightDeclaration.end_datetime >= start_datetime,
+        )
+        if exclude_id is not None:
+            decl_query = decl_query.where(FlightDeclaration.id != exclude_id)
+        decl_result = await db.execute(decl_query)
+        declarations = decl_result.scalars().all()
+        prefetched_declarations = [{"id": str(d.id), "bounds": d.bounds} for d in declarations]
 
-    engine_cls = load_plugin(settings.plugin_deconfliction_engine, expected_protocol=DeconflictionEngine)
-    engine = engine_cls()
-    req = DeconflictionRequest(
-        start_datetime=start_datetime.isoformat(),
-        end_datetime=end_datetime.isoformat(),
-        flight_declaration_geo_json=geo_json,
-        view_box=_view_box_from_bounds(bounds),
-        ussp_network_enabled=settings.ussp_network_enabled,
-        type_of_operation=type_of_operation,
-        priority=0,
-        prefetched_fences=prefetched_fences,
-        prefetched_declarations=prefetched_declarations,
-    )
-    result = engine.check_deconfliction(req)
-    return result.is_approved, result.declaration_state
+        engine_cls = load_plugin(settings.plugin_deconfliction_engine, expected_protocol=DeconflictionEngine)
+        engine = engine_cls()
+        # Bounding-box (R-tree) deconfliction — a faithful port of the Django
+        # DefaultDeconflictionEngine create-path. The full 4D volume-mode check
+        # (deconflict_operational_intent) is exercised directly by the engine
+        # unit tests and used by the SCD flight-planning endpoint.
+        req = DeconflictionRequest(
+            start_datetime=start_datetime.isoformat(),
+            end_datetime=end_datetime.isoformat(),
+            flight_declaration_geo_json=geo_json,
+            view_box=_view_box_from_bounds(bounds),
+            ussp_network_enabled=int(settings.ussp_network_enabled),
+            type_of_operation=type_of_operation,
+            priority=0,
+            prefetched_fences=prefetched_fences,
+            prefetched_declarations=prefetched_declarations,
+        )
+        result = engine.check_deconfliction(req)
+        return result.is_approved, result.declaration_state
+    except Exception as exc:
+        # Fail closed: a deconfliction failure must never auto-approve an operation.
+        logger.error("Deconfliction engine error; failing closed (not approving): {}", exc)
+        return False, int(OperationState.REJECTED)
 
 
 async def _get_declaration_or_404(declaration_id: uuid.UUID, db: AsyncSession) -> FlightDeclaration:
@@ -196,6 +210,21 @@ async def _get_declaration_or_404(declaration_id: uuid.UUID, db: AsyncSession) -
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flight declaration not found")
     return obj
+
+
+def _maybe_submit_to_dss(declaration_id: uuid.UUID, is_approved: bool, declaration_state: int) -> None:
+    """Submit an approved operation to the DSS when the USSP network is enabled.
+
+    Mirrors the Django acceptance path
+    (``flight_declaration_operations/views.py``): a clear deconfliction result
+    with the USSP network enabled leaves the operation Processing (state 0) and
+    queues an async DSS submission, gated additionally by ``AUTO_SUBMIT_TO_DSS``.
+    With the network disabled the operation is Accepted locally (state 1) and no
+    submission is made.
+    """
+    settings = get_settings()
+    if is_approved and declaration_state == int(OperationState.NOT_SUBMITTED) and settings.ussp_network_enabled and settings.auto_submit_to_dss:
+        submit_flight_declaration_to_dss_async.delay(str(declaration_id))
 
 
 # ── CRUD ────────────────────────────────────────────────────────────────────────
@@ -341,20 +370,14 @@ async def bulk_create_flight_declarations(payloads: list[FlightDeclarationFullRe
     settings = get_settings()
     default_state = 0 if settings.ussp_network_enabled else 1
 
+    # Optimistic bulk creation, mirroring the Django bulk endpoint: each
+    # declaration is created with is_approved=True / state=default_state; the
+    # full strategic intersection check is applied on the single-create paths.
     for payload in payloads:
         try:
             fields = _build_declaration_from_full_request(payload)
             fields["state"] = default_state
-            is_approved, deconf_state = await _run_deconfliction(
-                payload.flight_declaration_geo_json,
-                fields["start_datetime"],
-                fields["end_datetime"],
-                db=db,
-                bounds=fields["bounds"],
-                type_of_operation=fields["type_of_operation"],
-            )
-            fields["is_approved"] = is_approved
-            fields["state"] = deconf_state
+            fields["is_approved"] = True
             decl = FlightDeclaration(**fields)
             db.add(decl)
             await db.flush()
@@ -391,6 +414,7 @@ async def set_flight_declaration(payload: FlightDeclarationFullRequest, db: Asyn
     db.add(decl)
     await db.flush()
     await db.refresh(decl)
+    _maybe_submit_to_dss(decl.id, is_approved, deconf_state)
     return FlightDeclarationCreateResponse(id=decl.id, message="Flight declaration created", is_approved=decl.is_approved, state=decl.state)
 
 
@@ -462,6 +486,7 @@ async def set_operational_intent(payload: OperationalIntentIngestRequest, db: As
     db.add(decl)
     await db.flush()
     await db.refresh(decl)
+    _maybe_submit_to_dss(decl.id, is_approved, deconf_state)
     return FlightDeclarationCreateResponse(
         id=decl.id, message="Flight declaration created via operational intent", is_approved=decl.is_approved, state=decl.state
     )
@@ -477,21 +502,12 @@ async def set_operational_intents_bulk(payloads: list[OperationalIntentIngestReq
     settings = get_settings()
     default_state = 0 if settings.ussp_network_enabled else 1
 
+    # Optimistic bulk creation, mirroring the Django bulk endpoint (the strategic
+    # intersection check is applied on the single-create paths).
     for payload in payloads:
         try:
             fields = _build_declaration_from_op_intent(payload.model_dump(), default_state=default_state)
-            geo_json_str = fields.get("flight_declaration_raw_geojson")
-            geo_json = json.loads(geo_json_str) if geo_json_str else None
-            is_approved, deconf_state = await _run_deconfliction(
-                geo_json,
-                fields["start_datetime"],
-                fields["end_datetime"],
-                db=db,
-                bounds=fields["bounds"],
-                type_of_operation=fields["type_of_operation"],
-            )
-            fields["is_approved"] = is_approved
-            fields["state"] = deconf_state
+            fields["is_approved"] = True
             decl = FlightDeclaration(**fields)
             db.add(decl)
             await db.flush()
