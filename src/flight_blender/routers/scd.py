@@ -5,6 +5,7 @@ FastAPI router for SCD (Strategic Conflict Detection) operations.
 import json
 import uuid
 from datetime import datetime, timezone
+from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from loguru import logger
@@ -28,16 +29,32 @@ from flight_blender.services.deconfliction import DeconflictionEngine, Deconflic
 router = APIRouter()
 
 # Active operational states whose declarations must be deconflicted against.
-_ACTIVE_STATES = [1, 2, 3, 4]  # Accepted, Activated, NonConforming, Contingent
+_ACTIVE_STATES = [
+    OperationState.ACCEPTED,
+    OperationState.ACTIVATED,
+    OperationState.NONCONFORMING,
+    OperationState.CONTINGENT,
+]
 
-# ASTM planning result strings (matching the Django SCD endpoint).
-PLANNING_RESULT_PLANNED = "Planned"
-PLANNING_RESULT_CONFLICT = "ConflictWithFlight"
-PLANNING_RESULT_NOT_PLANNED = "NotPlanned"
-PLANNING_RESULT_FAILED = "Failed"
+
+class PlanningResult(StrEnum):
+    """ASTM F3548-21 flight-planning result statuses (Django SCD parity)."""
+
+    PLANNED = "Planned"
+    CONFLICT = "ConflictWithFlight"
+    NOT_PLANNED = "NotPlanned"
+    FAILED = "Failed"
+
+
+class UsageState(StrEnum):
+    """ASTM operational-intent usage states that trigger strategic deconfliction."""
+
+    PLANNED = "Planned"
+    IN_USE = "InUse"
+
 
 # usage_state values that trigger strategic deconfliction (Django Planned/InUse).
-_PLANNING_USAGE_STATES = {"Planned", "InUse"}
+_PLANNING_USAGE_STATES = {UsageState.PLANNED, UsageState.IN_USE}
 
 
 def _altitude_value(alt: dict | None) -> float | None:
