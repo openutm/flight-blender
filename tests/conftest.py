@@ -34,8 +34,8 @@ async def test_engine():
     ``AsyncSessionLocal`` inside ``flight_blender.database`` are patched so
     that both the FastAPI lifespan and ``get_db`` use the test database.
     """
-    import flight_blender.models  # noqa: F401 – registers all ORM models with Base
     import flight_blender.database as db_module
+    import flight_blender.models  # noqa: F401 – registers all ORM models with Base
     from flight_blender.database import Base
 
     engine = create_async_engine(
@@ -110,18 +110,33 @@ async def client(db):
     with (
         patch("flight_blender.routers.flight_feed.write_incoming_air_traffic_data") as _mock_write,
         patch("flight_blender.routers.flight_feed.bulk_write_incoming_air_traffic_data") as _mock_bulk,
+        patch("flight_blender.routers.flight_feed.send_operational_update_message") as _mock_feed_notify,
         patch("flight_blender.routers.flight_declaration.submit_flight_declaration_to_dss_async") as _mock_dss,
         patch("flight_blender.routers.geo_fence.write_geo_zone") as _mock_wgz,
         patch("flight_blender.routers.geo_fence.download_geozone_source") as _mock_dl,
         patch("flight_blender.routers.rid.submit_dss_subscription") as _mock_sub,
         patch("flight_blender.routers.flight_feed.read_all_observations", return_value=[]),
+        patch("flight_blender.routers.uss.read_all_observations", return_value=[]),
         patch("flight_blender.routers.surveillance.send_heartbeat_to_consumer") as _mock_hb,
         patch("flight_blender.routers.surveillance.send_and_generate_track_to_consumer") as _mock_track,
         patch("flight_blender.tasks.flight_feed.write_incoming_air_traffic_data") as _mock_utm_write,
         patch(
             "flight_blender.services.weather_service.WeatherService.get_weather",
             new_callable=AsyncMock,
-            return_value={"current_weather": {}, "hourly": {}},
+            # Django parity: the upstream Open-Meteo object is returned as-is and
+            # serialized to the WeatherSerializer shape (no synthetic
+            # ``current_weather`` field; lat/lon come from the upstream response).
+            return_value={
+                "latitude": 51.5,
+                "longitude": -0.1,
+                "generationtime_ms": 0.123,
+                "utc_offset_seconds": 0,
+                "timezone": "UTC",
+                "timezone_abbreviation": "GMT",
+                "elevation": 25.0,
+                "hourly_units": {"time": "iso8601", "temperature_2m": "°C"},
+                "hourly": {"time": ["2026-05-30T00:00"], "temperature_2m": [12.3]},
+            },
         ),
     ):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:

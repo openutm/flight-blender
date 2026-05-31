@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     # ── Scopes ─────────────────────────────────────────────────────────────────
     flightblender_read_scope: str = "blender.read"
     flightblender_write_scope: str = "blender.write"
+    # Remote-ID peer-USS interop scopes (ASTM F3411). These guard the USS-to-USS
+    # RID data exchange and MUST stay distinct from the generic blender scopes —
+    # other USSs present these RID scopes, not the blender read/write scopes.
+    rid_display_provider_scope: str = "rid.display_provider"
+    rid_service_provider_scope: str = "rid.service_provider"
 
     # ── Plugin Engine Settings ─────────────────────────────────────────────────
     plugin_traffic_data_fuser: str = Field(

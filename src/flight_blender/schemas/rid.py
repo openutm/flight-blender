@@ -19,7 +19,9 @@ class ISASubscriptionResponse(BaseModel):
     subscription_id: str
     view: str
     end_datetime: datetime
-    view_hash: str
+    # Nullable to match Django's ``view_hash`` (null=True). FastAPI computes a
+    # string SHA-256 digest; the column is a String, not an Integer.
+    view_hash: str | None = None
     is_simulated: bool
     created_at: datetime
 
