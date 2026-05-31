@@ -24,7 +24,7 @@ def _parse_iso_date(value: str, field: str) -> datetime:
         return datetime.fromisoformat(value)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Invalid ISO-8601 datetime for {field}: {value!r}",
         ) from exc
 
