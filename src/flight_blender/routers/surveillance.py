@@ -11,6 +11,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.auth import ReadDep, WriteDep
+from flight_blender.common.redis_stream_operations import read_all_observations
 from flight_blender.database import get_db
 from flight_blender.models.surveillance import (
     SurveillanceHeartbeatEvent,
@@ -98,6 +99,18 @@ async def start_stop_heartbeat(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
         await db.delete(existing)
         return {"message": "Heartbeat stopped", "session_id": str(session_id)}
+
+
+@router.get("/get_air_traffic", dependencies=[ReadDep])
+async def get_air_traffic(session_id: str | None = None):
+    """Return the latest air-traffic observations for display.
+
+    Mirrors the Django ``get_air_traffic`` GET view: it reads the most-recent
+    observations from the Redis stream (optionally filtered by ``session_id``)
+    and returns them under an ``observations`` key. Guarded by the READ scope.
+    """
+    observations = read_all_observations(session_id=session_id, count=500)
+    return {"observations": observations}
 
 
 @router.get("/list_surveillance_sensors", response_model=list[SurveillanceSensorResponse], dependencies=[ReadDep])
