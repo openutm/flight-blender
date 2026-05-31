@@ -56,13 +56,14 @@ async def test_get_daa_incident_logs_with_date_filters(client):
 
 
 @pytest.mark.anyio
-async def test_get_daa_incident_logs_invalid_date_gracefully_ignored(client):
-    # Invalid date filters should be ignored, not cause a 500 error
+async def test_get_daa_incident_logs_invalid_date_rejected(client):
+    # A malformed date filter must be rejected with 422, not silently ignored
+    # (the original port swallowed the ValueError and returned unfiltered results).
     response = await client.get(
         f"{BASE}/logs/incident/",
         params={"start_date": "not-a-date"},
     )
-    assert response.status_code == 200
+    assert response.status_code == 422
 
 
 @pytest.mark.anyio
