@@ -76,15 +76,14 @@ async def websocket_heartbeat(websocket: WebSocket, session_id: str):
 
     try:
         while True:
+            # Derive the heartbeat SLA metrics from the live observation stream
+            # instead of emitting hard-coded "healthy" constants.
+            from flight_blender.common.redis_stream_operations import read_all_observations
+            from flight_blender.tasks.surveillance import compute_sdsp_heartbeat
+
             now = datetime.now(tz=timezone.utc)
-            heartbeat_data = {
-                "surveillance_sdsp_name": "Flight Blender SDSP",
-                "meets_sla_surveillance_requirements": True,
-                "meets_sla_rr_lr_requirements": True,
-                "average_latency_or_95_percentile_latency_ms": 50,
-                "horizontal_or_vertical_95_percentile_accuracy_m": 5.0,
-                "timestamp": now.isoformat(),
-            }
+            observations = read_all_observations(session_id=session_id, count=500)
+            heartbeat_data = compute_sdsp_heartbeat(observations, now=now)
             await websocket.send_json({"heartbeat_data": heartbeat_data})
             await asyncio.sleep(1)
     except WebSocketDisconnect:
