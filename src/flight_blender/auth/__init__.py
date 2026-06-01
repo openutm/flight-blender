@@ -1,4 +1,4 @@
-from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
+from flight_blender.auth.dss import AuthorityCredentialsGetter
 from flight_blender.auth.jwt_bearer import (
     GeoAwarenessTestDep,
     ReadDep,

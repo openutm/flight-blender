@@ -147,11 +147,7 @@ class OperationalIntentSnapshot:
     operational_intent_reference_exists: bool = True
 
 
-def _aware(value: datetime) -> datetime:
-    """Coerce a datetime to timezone-aware UTC for safe comparison."""
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
+from flight_blender.common.datetime_utils import ensure_utc as _aware
 
 
 def is_time_between(begin_time: datetime, end_time: datetime, check_time: datetime) -> bool:
@@ -169,28 +165,7 @@ def is_time_between(begin_time: datetime, end_time: datetime, check_time: dateti
     return check_time >= begin_time or check_time <= end_time
 
 
-def point_in_polygon(lng: float, lat: float, vertices: list[tuple[float, float]]) -> bool:
-    """Return whether the point (lng, lat) lies inside the polygon.
-
-    Pure-Python ray-casting (even-odd rule), equivalent to shapely's
-    ``Point(lng, lat).within(Polygon(vertices))``. ``vertices`` is a list of
-    (lng, lat) tuples; the ring is treated as closed (the last vertex is
-    implicitly joined back to the first).
-    """
-    n = len(vertices)
-    if n < 3:
-        return False
-    inside = False
-    j = n - 1
-    for i in range(n):
-        xi, yi = vertices[i]
-        xj, yj = vertices[j]
-        # Does the horizontal ray from the point cross edge (j -> i)?
-        intersects = ((yi > lat) != (yj > lat)) and (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
-        if intersects:
-            inside = not inside
-        j = i
-    return inside
+from flight_blender.common.geometry import point_in_polygon  # re-exported for backward compat
 
 
 def check_operation_conformant_via_telemetry(

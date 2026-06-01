@@ -77,6 +77,13 @@ class TestRedisClient:
         rc._async_pool = None
         rc._sync_client = None
 
+    def teardown_method(self):
+        """Reset module-level singletons after each test to avoid leaking mocks."""
+        import flight_blender.common.redis_client as rc
+
+        rc._async_pool = None
+        rc._sync_client = None
+
     def test_get_async_redis_creates_instance(self):
         mock_redis = MagicMock()
         with patch("flight_blender.common.redis_client.aioredis.Redis", return_value=mock_redis):

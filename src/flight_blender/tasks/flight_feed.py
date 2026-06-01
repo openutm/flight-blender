@@ -3,12 +3,28 @@ Celery tasks for flight feed / air traffic observation processing.
 """
 
 import json
+from typing import Any
 
 import requests
 from loguru import logger
 
 from flight_blender.common.redis_stream_operations import add_air_traffic_data
+from flight_blender.models.flight_feed import FlightObservation
 from flight_blender.tasks.celery_app import celery_app
+
+
+def _build_observation(raw: dict[str, Any]) -> FlightObservation:
+    """Construct a ``FlightObservation`` from an observation dict."""
+    return FlightObservation(
+        latitude_dd=float(raw.get("lat_dd", raw.get("latitude_dd", 0))),
+        longitude_dd=float(raw.get("lon_dd", raw.get("longitude_dd", 0))),
+        altitude_mm=float(raw.get("altitude_mm", 0)),
+        traffic_source=int(raw.get("traffic_source", 12)),
+        source_type=int(raw.get("source_type", 0)),
+        icao_address=str(raw.get("icao_address", "")),
+        metadata_=json.dumps(raw["metadata"]) if isinstance(raw.get("metadata"), dict) else str(raw.get("metadata", "")),
+        session_id=raw.get("session_id"),
+    )
 
 
 def _parse_viewport(view_port: str) -> dict:
@@ -51,23 +67,11 @@ def write_incoming_air_traffic_data(self, observation: dict):
         from sqlalchemy.orm import Session
         from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
-        from flight_blender.models.flight_feed import FlightObservation
 
         engine = get_sync_engine(get_settings().database_url)
 
         with Session(engine) as session:
-            obs = FlightObservation(
-                latitude_dd=float(observation.get("lat_dd", observation.get("latitude_dd", 0))),
-                longitude_dd=float(observation.get("lon_dd", observation.get("longitude_dd", 0))),
-                altitude_mm=float(observation.get("altitude_mm", 0)),
-                traffic_source=int(observation.get("traffic_source", 12)),
-                source_type=int(observation.get("source_type", 0)),
-                icao_address=str(observation.get("icao_address", "")),
-                metadata_=json.dumps(observation.get("metadata", {}))
-                if isinstance(observation.get("metadata"), dict)
-                else str(observation.get("metadata", "")),
-                session_id=observation.get("session_id"),
-            )
+            obs = _build_observation(observation)
             session.add(obs)
             session.commit()
 
@@ -87,25 +91,11 @@ def bulk_write_incoming_air_traffic_data(self, observations: list[dict]):
         from sqlalchemy.orm import Session
         from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
-        from flight_blender.models.flight_feed import FlightObservation
 
         engine = get_sync_engine(get_settings().database_url)
 
         with Session(engine) as session:
-            obs_objects = []
-            for obs in observations:
-                obs_objects.append(
-                    FlightObservation(
-                        latitude_dd=float(obs.get("lat_dd", obs.get("latitude_dd", 0))),
-                        longitude_dd=float(obs.get("lon_dd", obs.get("longitude_dd", 0))),
-                        altitude_mm=float(obs.get("altitude_mm", 0)),
-                        traffic_source=int(obs.get("traffic_source", 12)),
-                        source_type=int(obs.get("source_type", 0)),
-                        icao_address=str(obs.get("icao_address", "")),
-                        metadata_=json.dumps(obs.get("metadata", {})) if isinstance(obs.get("metadata"), dict) else str(obs.get("metadata", "")),
-                        session_id=obs.get("session_id"),
-                    )
-                )
+            obs_objects = [_build_observation(obs) for obs in observations]
             session.add_all(obs_objects)
             session.commit()
 

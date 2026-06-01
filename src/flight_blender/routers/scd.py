@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.auth import ReadDep, WriteDep
-from flight_blender.common.enums import OperationState
+from flight_blender.common.enums import OperationState, VALID_OPERATIONAL_INTENT_STATES
 from flight_blender.common.plugin_loader import load_plugin
 from flight_blender.config import get_settings
 from flight_blender.database import get_db
@@ -30,12 +30,7 @@ from flight_blender.services.deconfliction import DeconflictionEngine, Deconflic
 router = APIRouter()
 
 # Active operational states whose declarations must be deconflicted against.
-_ACTIVE_STATES = [
-    OperationState.ACCEPTED,
-    OperationState.ACTIVATED,
-    OperationState.NONCONFORMING,
-    OperationState.CONTINGENT,
-]
+_ACTIVE_STATES = list(VALID_OPERATIONAL_INTENT_STATES)
 
 
 class PlanningResult(StrEnum):
@@ -71,15 +66,12 @@ def _altitude_value(alt: dict | None) -> float | None:
 
 
 def _parse_dt(value: object) -> datetime | None:
+    """Parse a datetime from an ISO string, optionally unwrapping ``{"value": ...}`` dicts."""
     if isinstance(value, dict):
         value = value.get("value")
-    if isinstance(value, str):
-        try:
-            dt = datetime.fromisoformat(value)
-            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        except ValueError:
-            return None
-    return None
+    from flight_blender.common.datetime_utils import parse_iso_utc
+
+    return parse_iso_utc(value)
 
 
 def _candidate_volume_from_astm_volume(v4d: dict) -> dict | None:
@@ -225,21 +217,34 @@ async def scd_capabilities():
 # ── Flight planning ─────────────────────────────────────────────────────────────
 
 
+async def _upsert_flight_plan_impl(
+    payload: FlightPlanUpsertRequest,
+    flight_plan_id: uuid.UUID,
+    db: AsyncSession,
+) -> FlightPlanResponse:
+    settings = get_settings()
+    if settings.ussp_network_enabled:
+        raise HTTPException(status_code=503, detail="DSS integration not yet implemented in FastAPI port")
+    planning_result = await _strategic_planning_result(payload, db)
+    return FlightPlanResponse(
+        flight_plan_id=flight_plan_id, planning_result=planning_result, notes="Local strategic deconfliction (USSP network disabled)"
+    )
+
+
+def _clear_area_impl() -> ClearAreaResponse:
+    settings = get_settings()
+    if settings.ussp_network_enabled:
+        raise HTTPException(status_code=503, detail="DSS integration not yet implemented in FastAPI port")
+    return ClearAreaResponse(outcome={"success": False, "message": "USSP network not enabled"})
+
+
 @router.put("/flight_planning/flight_plans/{flight_plan_id}", response_model=FlightPlanResponse, dependencies=[WriteDep])
 async def upsert_flight_plan(
     payload: FlightPlanUpsertRequest,
     flight_plan_id: uuid.UUID = Path(...),
     db: AsyncSession = Depends(get_db),
 ):
-    settings = get_settings()
-    if settings.ussp_network_enabled:
-        # USSP network requires submitting the op-intent to the DSS for
-        # network-wide strategic deconfliction (follow-up wiring).
-        raise HTTPException(status_code=503, detail="DSS integration not yet implemented in FastAPI port")
-    planning_result = await _strategic_planning_result(payload, db)
-    return FlightPlanResponse(
-        flight_plan_id=flight_plan_id, planning_result=planning_result, notes="Local strategic deconfliction (USSP network disabled)"
-    )
+    return await _upsert_flight_plan_impl(payload, flight_plan_id, db)
 
 
 @router.delete("/flight_planning/flight_plans/{flight_plan_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[WriteDep])
@@ -249,10 +254,7 @@ async def delete_flight_plan(flight_plan_id: uuid.UUID = Path(...), db: AsyncSes
 
 @router.post("/flight_planning/clear_area_requests", response_model=ClearAreaResponse, dependencies=[WriteDep])
 async def clear_area(payload: ClearAreaRequest):
-    settings = get_settings()
-    if settings.ussp_network_enabled:
-        raise HTTPException(status_code=503, detail="DSS integration not yet implemented in FastAPI port")
-    return ClearAreaResponse(outcome={"success": False, "message": "USSP network not enabled"})
+    return _clear_area_impl()
 
 
 @router.get("/flight_planning/status", response_model=SCDStatusResponse, dependencies=[ReadDep])
@@ -269,13 +271,7 @@ async def upsert_uspace_flight_plan(
     flight_plan_id: uuid.UUID = Path(...),
     db: AsyncSession = Depends(get_db),
 ):
-    settings = get_settings()
-    if settings.ussp_network_enabled:
-        raise HTTPException(status_code=503, detail="DSS integration not yet implemented in FastAPI port")
-    planning_result = await _strategic_planning_result(payload, db)
-    return FlightPlanResponse(
-        flight_plan_id=flight_plan_id, planning_result=planning_result, notes="Local strategic deconfliction (USSP network disabled)"
-    )
+    return await _upsert_flight_plan_impl(payload, flight_plan_id, db)
 
 
 @router.delete("/flight_planning/u_space/flight_plans/{flight_plan_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[WriteDep])
@@ -285,10 +281,7 @@ async def delete_uspace_flight_plan(flight_plan_id: uuid.UUID = Path(...)):
 
 @router.post("/flight_planning/u_space/clear_area_requests", response_model=ClearAreaResponse, dependencies=[WriteDep])
 async def clear_uspace_area(payload: ClearAreaRequest):
-    settings = get_settings()
-    if settings.ussp_network_enabled:
-        raise HTTPException(status_code=503, detail="DSS integration not yet implemented in FastAPI port")
-    return ClearAreaResponse(outcome={"success": False, "message": "USSP network not enabled"})
+    return _clear_area_impl()
 
 
 @router.get("/flight_planning/u_space/status", response_model=SCDStatusResponse, dependencies=[ReadDep])

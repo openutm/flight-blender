@@ -47,21 +47,12 @@ except ImportError:  # pragma: no cover
 # ── Pure geometric / temporal / altitude helpers ───────────────────────────
 
 
+from flight_blender.common.geometry import point_in_polygon as _pip
+
+
 def _point_in_polygon(pt: list[float], poly: list[list[float]]) -> bool:
-    """Ray-casting (even-odd) point-in-polygon for [lon, lat] coordinates."""
-    n = len(poly)
-    if n < 3:
-        return False
-    x, y = pt[0], pt[1]
-    inside = False
-    j = n - 1
-    for i in range(n):
-        xi, yi = poly[i][0], poly[i][1]
-        xj, yj = poly[j][0], poly[j][1]
-        if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
-            inside = not inside
-        j = i
-    return inside
+    """Adapter: call shared ``point_in_polygon`` with the deconfliction data shapes."""
+    return _pip(pt[0], pt[1], [(p[0], p[1]) for p in poly])
 
 
 def check_polygon_intersection(polygon_a: list[list[float]], polygon_b: list[list[float]]) -> bool:
@@ -108,12 +99,9 @@ def _coerce_dt(value: object) -> datetime | None:
     """Best-effort coercion of an ISO string / datetime into a datetime."""
     if isinstance(value, datetime):
         return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
-    return None
+    from flight_blender.common.datetime_utils import parse_iso_utc
+
+    return parse_iso_utc(value)
 
 
 def deconflict_operational_intent(candidate: dict, existing_volumes: list[dict]) -> bool:

@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import requests
 from loguru import logger
 
+from flight_blender.common.geometry import compute_bounds
 from flight_blender.tasks.celery_app import celery_app
 
 # ── GeoZone source status store ──────────────────────────────────────────────
@@ -35,18 +36,9 @@ _in_memory_status: dict[str, dict] = {}
 def _get_redis():
     """Return a connected Redis client, or ``None`` if Redis is unavailable."""
     try:
-        import redis
+        from flight_blender.common.redis_client import get_redis
 
-        from flight_blender.config import get_settings
-
-        settings = get_settings()
-        client = redis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            password=settings.redis_password,
-            db=0,
-            socket_connect_timeout=1,
-        )
+        client = get_redis()
         client.ping()
         return client
     except Exception:  # noqa: BLE001 - any failure means "no Redis"; degrade
@@ -160,26 +152,10 @@ def feature_to_coordinates(feature: dict) -> list[list[float]]:
     return coords
 
 
-def compute_bounds(coordinates: list[list[float]]) -> str:
-    """Return ``"minx,miny,maxx,maxy"`` (7 dp) for a set of ``[lon, lat]`` pairs."""
-    if not coordinates:
-        return ""
-    lons = [c[0] for c in coordinates]
-    lats = [c[1] for c in coordinates]
-    bnd = (min(lons), min(lats), max(lons), max(lats))
-    return ",".join(f"{x:.7f}" for x in bnd)
-
-
 def _parse_dt(value, fallback: datetime) -> datetime:
-    if not value:
-        return fallback
-    try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return fallback
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
+    from flight_blender.common.datetime_utils import parse_iso_utc
+
+    return parse_iso_utc(value, fallback=fallback) or fallback
 
 
 def validate_geo_zone(geo_zone) -> bool:

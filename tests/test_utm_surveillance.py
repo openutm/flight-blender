@@ -116,8 +116,8 @@ async def test_service_metrics_with_date_filters(client):
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["window_start"] == "2024-01-01T00:00:00"
-    assert body["window_end"] == "2024-12-31T23:59:59"
+    assert body["window_start"] == "2024-01-01T00:00:00+00:00"
+    assert body["window_end"] == "2024-12-31T23:59:59+00:00"
 
 
 @pytest.mark.anyio

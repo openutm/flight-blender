@@ -21,7 +21,7 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
 
     from sqlalchemy.orm import Session
 
-    from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
+    from flight_blender.auth.dss import get_dss_auth_header
     from flight_blender.config import get_settings
     from flight_blender.models.flight_declaration import FlightDeclaration, FlightOperationalIntentReference
     from flight_blender.services.peer_uss_client import build_operational_intent_reference_payload
@@ -49,13 +49,8 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
         logger.info("Submitting declaration %s to DSS", flight_declaration_id)
 
         try:
-            creds_getter = AuthorityCredentialsGetter()
-            audience = settings.dss_self_audience
-            credentials = creds_getter.get_cached_credentials(audience=audience, token_type="scd")  # nosec B106
-            token = credentials.get("access_token", "")
-
             dss_base_url = settings.dss_base_url
-            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            headers = get_dss_auth_header(audience=settings.dss_self_audience, token_type="scd")
 
             import requests
 

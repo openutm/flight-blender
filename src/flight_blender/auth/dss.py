@@ -1,5 +1,5 @@
 """
-DSS OAuth2 client-credentials helper (migrated from auth_helper/dss_auth_helper.py).
+DSS OAuth2 client-credentials helper.
 """
 
 import json
@@ -94,3 +94,21 @@ class AuthorityCredentialsGetter:
         if resp.status_code != 200:
             logger.error("DSS token request failed: %s %s", resp.status_code, resp.text)
         return resp.json()
+
+
+def get_dss_auth_header(audience: str, token_type: str = "scd") -> dict[str, str]:
+    """Build an Authorization header for DSS / peer-USS requests.
+
+    Parameters
+    ----------
+    audience:
+        The JWT ``aud`` claim (typically ``settings.dss_auth_audience`` or
+        ``settings.dss_self_audience``).
+    token_type:
+        Credential scope identifier forwarded to
+        :class:`AuthorityCredentialsGetter` (default ``"scd"``).
+    """
+    getter = AuthorityCredentialsGetter()
+    credentials = getter.get_cached_credentials(audience=audience, token_type=token_type)
+    access_token = credentials.get("access_token", "") if isinstance(credentials, dict) else ""
+    return {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}

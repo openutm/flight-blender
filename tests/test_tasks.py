@@ -514,7 +514,7 @@ class TestFlightDeclarationTasks:
         with (
             patch("sqlalchemy.create_engine"),
             patch("sqlalchemy.orm.Session", return_value=mock_db),
-            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("flight_blender.auth.dss.AuthorityCredentialsGetter", return_value=mock_creds_instance),
             patch("requests.put", return_value=mock_resp),
         ):
             submit_flight_declaration_to_dss_async("00000000-0000-0000-0000-000000000001")
@@ -554,7 +554,7 @@ class TestFlightDeclarationTasks:
         with (
             patch("sqlalchemy.create_engine"),
             patch("sqlalchemy.orm.Session", return_value=mock_db),
-            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("flight_blender.auth.dss.AuthorityCredentialsGetter", return_value=mock_creds_instance),
             patch("requests.put", return_value=mock_resp) as mock_put,
         ):
             submit_flight_declaration_to_dss_async("00000000-0000-0000-0000-000000000001")
@@ -585,7 +585,7 @@ class TestFlightDeclarationTasks:
         with (
             patch("sqlalchemy.create_engine"),
             patch("sqlalchemy.orm.Session", return_value=mock_db),
-            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("flight_blender.auth.dss.AuthorityCredentialsGetter", return_value=mock_creds_instance),
             patch("requests.put", return_value=mock_resp) as mock_put,
         ):
             submit_flight_declaration_to_dss_async("00000000-0000-0000-0000-000000000001")
@@ -613,7 +613,7 @@ class TestFlightDeclarationTasks:
         with (
             patch("sqlalchemy.create_engine"),
             patch("sqlalchemy.orm.Session", return_value=mock_db),
-            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("flight_blender.auth.dss.AuthorityCredentialsGetter", return_value=mock_creds_instance),
             patch("requests.put", return_value=mock_resp),
         ):
             submit_flight_declaration_to_dss_async("00000000-0000-0000-0000-000000000001")
@@ -675,7 +675,7 @@ class TestRidTasks:
         with (
             patch("sqlalchemy.create_engine"),
             patch("sqlalchemy.orm.Session", return_value=mock_db),
-            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("flight_blender.auth.dss.AuthorityCredentialsGetter", return_value=mock_creds_instance),
             patch("requests.put", return_value=mock_resp),
         ):
             submit_dss_subscription("00000000-0000-0000-0000-000000000001", "10,20,30,40", "2030-01-01T00:00:00Z")
@@ -700,7 +700,7 @@ class TestRidTasks:
         with (
             patch("sqlalchemy.create_engine"),
             patch("sqlalchemy.orm.Session", return_value=mock_db),
-            patch("flight_blender.auth.dss_auth_helper.AuthorityCredentialsGetter", return_value=mock_creds_instance),
+            patch("flight_blender.auth.dss.AuthorityCredentialsGetter", return_value=mock_creds_instance),
             patch("requests.put", return_value=mock_resp),
         ):
             submit_dss_subscription("00000000-0000-0000-0000-000000000001", "10,20,30,40", "2030-01-01T00:00:00Z")

@@ -101,7 +101,9 @@ _REVERSE_MAP: dict[type[_State], int] = {v: k for k, v in _STATE_MAP.items()}
 TERMINAL_STATES: frozenset[int] = frozenset({5, 6, 7, 8})
 
 # States considered "active" for deconfliction intersection checks
-ACTIVE_OPERATIONAL_STATES: list[int] = [1, 2, 3, 4]
+from flight_blender.common.enums import VALID_OPERATIONAL_INTENT_STATES
+
+ACTIVE_OPERATIONAL_STATES: list[int] = list(VALID_OPERATIONAL_INTENT_STATES)
 
 
 def _make_state(state_int: int) -> _State:
@@ -131,11 +133,16 @@ def is_valid_transition(current_state: int, event: str) -> tuple[bool, int]:
 def get_valid_transitions() -> dict[int, list[str]]:
     """Return mapping of state_int → list of events that cause a transition."""
     events = [
-        "dss_accepts", "operator_withdraws", "operator_cancels",
-        "operator_activates", "operator_confirms_ended",
+        "dss_accepts",
+        "operator_withdraws",
+        "operator_cancels",
+        "operator_activates",
+        "operator_confirms_ended",
         "ua_departs_early_late_outside_op_intent",
-        "ua_exits_coordinated_op_intent", "operator_initiates_contingent",
-        "operator_return_to_coordinated_op_intent", "timeout",
+        "ua_exits_coordinated_op_intent",
+        "operator_initiates_contingent",
+        "operator_return_to_coordinated_op_intent",
+        "timeout",
         "operator_confirms_contingent",
     ]
     result: dict[int, list[str]] = {}

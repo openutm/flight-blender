@@ -33,14 +33,7 @@ from flight_blender.schemas.surveillance import (
 from flight_blender.tasks.surveillance import send_and_generate_track_to_consumer, send_heartbeat_to_consumer
 
 
-def _parse_iso_dt(value: str | None) -> datetime | None:
-    """Parse an ISO-8601 date string, returning None on failure."""
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
+from flight_blender.common.datetime_utils import parse_iso_utc as _parse_iso_dt
 
 
 def _apply_time_window(query: Select, model: Any, start_dt: datetime | None, end_dt: datetime | None) -> Select:

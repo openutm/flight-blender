@@ -32,7 +32,7 @@ from typing import Any
 import requests
 from loguru import logger
 
-from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
+from flight_blender.auth.dss import get_dss_auth_header
 from flight_blender.config import get_settings
 from flight_blender.schemas.deconfliction import (
     LatLng,
@@ -48,10 +48,7 @@ _REQUEST_TIMEOUT = 30
 
 def _auth_header(token_type: str = "scd") -> dict[str, str]:
     """Build the Authorization header using the DSS token helper."""
-    getter = AuthorityCredentialsGetter()
-    credentials = getter.get_cached_credentials(audience=settings.dss_auth_audience, token_type=token_type)
-    access_token = credentials.get("access_token", "") if isinstance(credentials, dict) else ""
-    return {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    return get_dss_auth_header(audience=settings.dss_auth_audience, token_type=token_type)
 
 
 # ── P1: peer op-intent details GET ───────────────────────────────────────────

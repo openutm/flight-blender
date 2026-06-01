@@ -18,9 +18,15 @@ class FlightDeclarationBBoxRequest(BaseModel):
     maxy: float
 
 
+from flight_blender.common.datetime_utils import parse_iso_utc
+
+
 def _parse_utc(value: str) -> datetime:
-    dt = datetime.fromisoformat(value)
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    """Parse an ISO-8601 string into a timezone-aware UTC datetime (raises on failure)."""
+    result = parse_iso_utc(value)
+    if result is None:
+        raise ValueError(f"Invalid datetime: {value!r}")
+    return result
 
 
 def _validate_date_window(start_raw: str, end_raw: str) -> None:

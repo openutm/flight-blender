@@ -39,28 +39,11 @@ from flight_blender.tasks.geo_fence import (
 router = APIRouter()
 
 
-def _compute_bounds(flat_coords: list[list[float]]) -> str:
-    """Return a comma-separated ``"minx,miny,maxx,maxy"`` bounds string.
-
-    Matches the Django ``unary_union(...).bounds`` formatting and the
-    ``write_geo_zone`` task path, so all GeoFence rows share one bounds format.
-    """
-    if not flat_coords:
-        return ""
-    lons = [pt[0] for pt in flat_coords]
-    lats = [pt[1] for pt in flat_coords]
-    return f"{min(lons):.7f},{min(lats):.7f},{max(lons):.7f},{max(lats):.7f}"
-
-
 def _parse_fence_dt(props: dict[str, Any], key: str, fallback: datetime) -> datetime:
     """Parse a datetime string from props or return the fallback."""
-    try:
-        dt = datetime.fromisoformat(props[key])
-    except (KeyError, ValueError):
-        dt = fallback
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
+    from flight_blender.common.datetime_utils import parse_iso_utc
+
+    return parse_iso_utc(props.get(key), fallback=fallback) or fallback
 
 
 async def _get_fence_or_404(fence_id: uuid.UUID, db: AsyncSession, *, include_test: bool = True) -> GeoFence:
@@ -142,7 +125,9 @@ def _parse_geojson_fence(geojson: dict[str, Any]) -> dict[str, Any]:
     geometry = features[0].get("geometry") or {}
 
     flat_coords = [pt for ring in geometry.get("coordinates", [[]]) for pt in ring]
-    bounds = _compute_bounds(flat_coords)
+    from flight_blender.common.geometry import compute_bounds
+
+    bounds = compute_bounds(flat_coords)
 
     now = datetime.now(timezone.utc)
     start_dt = _parse_fence_dt(props, "start_time", now)
@@ -199,43 +184,19 @@ async def geo_awareness_status():
     return GeoAwarenessStatusResponse(status="Ready", api_version="latest")
 
 
-def _point_in_ring(lon: float, lat: float, ring: list[list[float]]) -> bool:
-    """Ray-casting point-in-polygon test for a single ``[lon, lat]`` ring."""
-    inside = False
-    n = len(ring)
-    if n < 3:
-        return False
-    j = n - 1
-    for i in range(n):
-        xi, yi = ring[i][0], ring[i][1]
-        xj, yj = ring[j][0], ring[j][1]
-        if ((yi > lat) != (yj > lat)) and (lon < (xj - xi) * (lat - yi) / ((yj - yi) or 1e-12) + xi):
-            inside = not inside
-        j = i
-    return inside
-
-
-def _bounds_contains_point(bounds: str, lon: float, lat: float) -> bool:
-    """Return True if the comma-separated ``minx,miny,maxx,maxy`` bounds cover the point."""
-    try:
-        minx, miny, maxx, maxy = (float(x) for x in bounds.split(","))
-    except (ValueError, AttributeError):
-        return False
-    return minx <= lon <= maxx and miny <= lat <= maxy
-
-
 def _geozone_covers_point(fence: GeoFence, lon: float, lat: float) -> bool:
     """Point membership: try the stored geometry ring, fall back to the bbox."""
+    from flight_blender.common.geometry import bounds_contains_point, compute_bounds, point_in_polygon
     from flight_blender.tasks.geo_fence import feature_to_coordinates
 
     if fence.geozone:
         try:
             ring = feature_to_coordinates(json.loads(fence.geozone))
             if ring:
-                return _point_in_ring(lon, lat, ring)
+                return point_in_polygon(lon, lat, [(p[0], p[1]) for p in ring])
         except (TypeError, ValueError):
             pass
-    return _bounds_contains_point(fence.bounds or "", lon, lat)
+    return bounds_contains_point(fence.bounds or "", lon, lat)
 
 
 @router.post("/geo_awareness/map/queries", response_model=GeoZoneChecksResponse, dependencies=[GeoAwarenessTestDep])

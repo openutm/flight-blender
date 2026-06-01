@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.auth import ReadDep, WriteDep
-from flight_blender.common.enums import OperationState
+from flight_blender.common.enums import OperationState, VALID_OPERATIONAL_INTENT_STATES
 from flight_blender.common.plugin_loader import load_plugin
 from flight_blender.config import get_settings
 from flight_blender.database import get_db
@@ -41,17 +41,7 @@ router = APIRouter()
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 
-def _parse_utc_dt(value: str | int | float | None, fallback: datetime) -> datetime:
-    """Parse a datetime from an ISO string or Unix timestamp, defaulting to *fallback*."""
-    if value is None:
-        return fallback
-    try:
-        if isinstance(value, (int, float)):
-            return datetime.fromtimestamp(value, tz=timezone.utc)
-        parsed = datetime.fromisoformat(str(value))
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-    except (ValueError, TypeError):
-        return fallback
+from flight_blender.common.datetime_utils import parse_iso_utc as _parse_utc_dt
 
 
 def _safe_int(value: object, default: int) -> int:
@@ -137,7 +127,7 @@ def _view_box_from_bounds(bounds_json: str) -> list[float]:
         return []
 
 
-_ACTIVE_STATES = [1, 2, 3, 4]  # Accepted, Activated, NonConforming, Contingent
+_ACTIVE_STATES = list(VALID_OPERATIONAL_INTENT_STATES)
 
 
 async def _run_deconfliction(

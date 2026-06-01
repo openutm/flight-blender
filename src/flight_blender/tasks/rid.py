@@ -14,18 +14,15 @@ def submit_dss_subscription(self, subscription_db_id: str, view: str, end_dateti
         import uuid
         import requests
         from sqlalchemy.orm import Session
+        from flight_blender.auth.dss import get_dss_auth_header
         from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
         from flight_blender.models.rid import ISASubscription
-        from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
 
         settings = get_settings()
         engine = get_sync_engine(settings.database_url)
 
-        creds_getter = AuthorityCredentialsGetter()
-        credentials = creds_getter.get_cached_credentials(audience=settings.dss_self_audience, token_type="rid")  # nosec B106
-        token = credentials.get("access_token", "")
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        headers = get_dss_auth_header(audience=settings.dss_self_audience, token_type="rid")
 
         dss_base_url = settings.dss_base_url
         sub_id = str(uuid.uuid4())
