@@ -3,7 +3,7 @@ SQLAlchemy models for flight declaration operations.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,8 +25,8 @@ class FlightDeclaration(Base):
     submitted_by: Mapped[str | None] = mapped_column(String(254), nullable=True)
     approved_by: Mapped[str | None] = mapped_column(String(254), nullable=True)
     latest_telemetry_datetime: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    start_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
-    end_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    start_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    end_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -73,8 +73,8 @@ class FlightOperationalIntentReference(Base):
     uss_base_url: Mapped[str] = mapped_column(String(256), nullable=False)
     version: Mapped[str] = mapped_column(String(256), nullable=False)
     state: Mapped[str] = mapped_column(String(40), nullable=False)
-    time_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
-    time_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    time_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    time_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     subscription_id: Mapped[str] = mapped_column(String(256), nullable=False)
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -269,9 +269,9 @@ def write_geo_zone(self, geozone_data, source_url: str = ""):
     try:
         # Import inside the task so tests can patch ``sqlalchemy.create_engine`` /
         # ``sqlalchemy.orm.Session`` (matches the other Celery tasks).
-        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
+        from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
         from flight_blender.models.geo_fence import GeoFence
 
@@ -283,9 +283,7 @@ def write_geo_zone(self, geozone_data, source_url: str = ""):
             logger.warning("No GeoZone features found in payload from {}", source_url)
             return
 
-        settings = get_settings()
-        sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_url)
+        engine = get_sync_engine(get_settings().database_url)
         with Session(engine) as session:
             for fields in parsed:
                 session.add(GeoFence(**fields))

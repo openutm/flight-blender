@@ -13,22 +13,21 @@ def submit_dss_subscription(self, subscription_db_id: str, view: str, end_dateti
     try:
         import uuid
         import requests
-        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
+        from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
         from flight_blender.models.rid import ISASubscription
         from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
 
         settings = get_settings()
-        sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_url)
+        engine = get_sync_engine(settings.database_url)
 
         creds_getter = AuthorityCredentialsGetter()
         credentials = creds_getter.get_cached_credentials(audience=settings.dss_self_audience, token_type="rid")  # nosec B106
         token = credentials.get("access_token", "")
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-        dss_base_url = settings.__dict__.get("dss_base_url", "http://host.docker.internal:8082")
+        dss_base_url = settings.dss_base_url
         sub_id = str(uuid.uuid4())
         # Parse bounding box: lat_lo,lng_lo,lat_hi,lng_hi
         coords = [float(c) for c in view.split(",")]
@@ -77,14 +76,12 @@ def write_operator_rid_notification(self, session_id: str, message: str, flight_
     """Persist an operator RID notification."""
     try:
         import uuid
-        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
+        from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
         from flight_blender.models.notification import OperatorRIDNotification
 
-        settings = get_settings()
-        sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_url)
+        engine = get_sync_engine(get_settings().database_url)
 
         with Session(engine) as session:
             notif = OperatorRIDNotification(

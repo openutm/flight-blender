@@ -2,6 +2,7 @@
 JWT Bearer token verification and FastAPI security dependencies.
 """
 
+from functools import lru_cache
 from typing import Annotated
 
 import jwt
@@ -13,6 +14,18 @@ from flight_blender.config import get_settings
 settings = get_settings()
 
 _bearer = HTTPBearer(auto_error=False)
+
+
+@lru_cache(maxsize=1)
+def _get_jwks_client(jwks_uri: str) -> jwt.PyJWKClient:
+    """Return a cached ``PyJWKClient`` for *jwks_uri*.
+
+    The client is created once per distinct URI and reused for all subsequent
+    requests, avoiding an HTTP round-trip to the JWKS endpoint on every
+    authenticated call.  Tests can clear the cache via
+    ``_get_jwks_client.cache_clear()``.
+    """
+    return jwt.PyJWKClient(jwks_uri)
 
 
 def verify_bearer_token(token: str | None) -> dict:
@@ -59,7 +72,7 @@ def verify_bearer_token(token: str | None) -> dict:
     decode_kwargs["options"] = {"require": required_claims}
 
     try:
-        jwks_client = jwt.PyJWKClient(settings.auth_server_jwks_uri)
+        jwks_client = _get_jwks_client(settings.auth_server_jwks_uri)
         signing_key = jwks_client.get_signing_key_from_jwt(token)
         payload = jwt.decode(token, signing_key.key, **decode_kwargs)
     except jwt.ExpiredSignatureError as exc:

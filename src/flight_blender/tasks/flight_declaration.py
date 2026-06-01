@@ -19,7 +19,6 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
     import uuid
     from datetime import datetime, timezone
 
-    from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
 
     from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
@@ -27,9 +26,10 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
     from flight_blender.models.flight_declaration import FlightDeclaration, FlightOperationalIntentReference
     from flight_blender.services.peer_uss_client import build_operational_intent_reference_payload
 
+    from flight_blender.common.sync_engine import get_sync_engine
+
     settings = get_settings()
-    sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
+    engine = get_sync_engine(settings.database_url)
 
     with Session(engine) as session:
         decl = session.get(FlightDeclaration, uuid.UUID(flight_declaration_id))
@@ -54,7 +54,7 @@ def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str):
             credentials = creds_getter.get_cached_credentials(audience=audience, token_type="scd")  # nosec B106
             token = credentials.get("access_token", "")
 
-            dss_base_url = settings.__dict__.get("dss_base_url", "http://host.docker.internal:8082")
+            dss_base_url = settings.dss_base_url
             headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
             import requests

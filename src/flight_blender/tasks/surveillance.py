@@ -128,13 +128,10 @@ def compute_sdsp_heartbeat(observations: list[dict], now: datetime | None = None
 
 
 def _get_sync_engine():
-    from sqlalchemy import create_engine
-
+    from flight_blender.common.sync_engine import get_sync_engine
     from flight_blender.config import get_settings
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-    return create_engine(sync_url)
+    return get_sync_engine(get_settings().database_url)
 
 
 @celery_app.task(name="send_heartbeat_to_consumer", bind=True)

@@ -48,15 +48,12 @@ def write_incoming_air_traffic_data(self, observation: dict):
     This task uses a synchronous SQLAlchemy session because Celery workers are sync.
     """
     try:
-        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
+        from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
         from flight_blender.models.flight_feed import FlightObservation
 
-        settings = get_settings()
-        # Convert async URL to sync
-        sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_url)
+        engine = get_sync_engine(get_settings().database_url)
 
         with Session(engine) as session:
             obs = FlightObservation(
@@ -87,14 +84,12 @@ def bulk_write_incoming_air_traffic_data(self, observations: list[dict]):
     Persist a batch of air traffic observations and push each to the Redis stream.
     """
     try:
-        from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
+        from flight_blender.common.sync_engine import get_sync_engine
         from flight_blender.config import get_settings
         from flight_blender.models.flight_feed import FlightObservation
 
-        settings = get_settings()
-        sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-        engine = create_engine(sync_url)
+        engine = get_sync_engine(get_settings().database_url)
 
         with Session(engine) as session:
             obs_objects = []

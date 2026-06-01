@@ -37,9 +37,9 @@ from flight_blender.tasks.celery_app import celery_app
 
 
 def _sync_engine():
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
-    return create_engine(sync_url)
+    from flight_blender.common.sync_engine import get_sync_engine
+
+    return get_sync_engine(get_settings().database_url)
 
 
 def _ussp_network_enabled() -> bool:

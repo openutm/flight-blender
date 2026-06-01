@@ -71,6 +71,7 @@ def use_jwks(monkeypatch):
                 return types.SimpleNamespace(key=public_key)
 
         monkeypatch.setattr(jb.jwt, "PyJWKClient", _FakeJWKClient)
+        jb._get_jwks_client.cache_clear()
 
     return _install
 

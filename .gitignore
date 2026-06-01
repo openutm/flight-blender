@@ -138,6 +138,7 @@ dmypy.json
 
 .vscode/settings.json
 *.sqlite3
+*.db
 celerybeat-schedule.db
 
 # Ignore rtree indexes

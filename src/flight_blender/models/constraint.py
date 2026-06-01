@@ -3,7 +3,7 @@ SQLAlchemy models for constraint operations.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -35,8 +35,8 @@ class ConstraintReference(Base):
     manager: Mapped[str | None] = mapped_column(String(256), nullable=True)
     uss_base_url: Mapped[str] = mapped_column(String(256), default="", nullable=False)
     version: Mapped[str] = mapped_column(String(256), default="", nullable=False)
-    time_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
-    time_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    time_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    time_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_live: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -50,8 +50,8 @@ class CompositeConstraint(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     declaration_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("flight_declaration.id", ondelete="CASCADE"), nullable=False)
     bounds: Mapped[str] = mapped_column(String(140), nullable=False)
-    start_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
-    end_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.now)
+    start_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    end_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     alt_max: Mapped[float] = mapped_column(Float, nullable=False)
     alt_min: Mapped[float] = mapped_column(Float, nullable=False)
     constraint_reference_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("constraint_reference.id", ondelete="CASCADE"), nullable=False)

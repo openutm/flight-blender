@@ -61,6 +61,7 @@ def auth_enabled(monkeypatch):
 
     monkeypatch.setattr(jb.jwt, "PyJWKClient", _FakeJWKClient)
     monkeypatch.setattr(jb, "settings", _settings(auth_server_jwks_uri="https://jwks.test"))
+    jb._get_jwks_client.cache_clear()
 
     def _token(scope: str = "blender.read blender.write") -> str:
         return jwt.encode(

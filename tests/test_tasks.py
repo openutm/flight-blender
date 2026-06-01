@@ -221,16 +221,15 @@ class TestGeoFenceTasks:
 class TestSurveillanceTasks:
     def test_get_sync_engine_builds_url(self):
         """_get_sync_engine should convert async URL to sync."""
-        import os
+        with patch("flight_blender.common.sync_engine.create_engine") as mock_create:
+            mock_create.return_value = MagicMock()
+            from flight_blender.common.sync_engine import get_sync_engine
 
-        with patch.dict(os.environ, {"DATABASE_URL": "sqlite+aiosqlite://:memory:"}):
-            with patch("sqlalchemy.create_engine") as mock_create:
-                mock_create.return_value = MagicMock()
-                from flight_blender.tasks.surveillance import _get_sync_engine
-
-                _get_sync_engine()
-                call_url = mock_create.call_args[0][0]
-                assert "+aiosqlite" not in call_url
+            get_sync_engine.cache_clear()
+            get_sync_engine("sqlite+aiosqlite://:memory:")
+            call_url = mock_create.call_args[0][0]
+            assert "+aiosqlite" not in call_url
+            get_sync_engine.cache_clear()
 
     def test_send_heartbeat_session_not_found(self):
         """If the surveillance session doesn't exist, task should return without error."""

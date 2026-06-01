@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     dss_auth_url: str = Field(default="http://host.docker.internal:8085", alias="DSS_AUTH_URL")
     dss_auth_token_endpoint: str = Field(default="/auth/token", alias="DSS_AUTH_TOKEN_ENDPOINT")
     dss_self_audience: str = Field(default="localhost", alias="DSS_SELF_AUDIENCE")
+    dss_auth_audience: str = Field(default="", alias="DSS_AUTH_AUDIENCE")
+    dss_base_url: str = Field(default="http://host.docker.internal:8082", alias="DSS_BASE_URL")
     auth_dss_client_id: str = Field(default="", alias="AUTH_DSS_CLIENT_ID")
     auth_dss_client_secret: str = Field(default="", alias="AUTH_DSS_CLIENT_SECRET")
 
