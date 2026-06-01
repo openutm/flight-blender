@@ -73,15 +73,18 @@ dev = [
     "pytest-cov>=7.1.0",
     "radon>=6.0.1",
     "pytest-env>=1.2.0",
+    "fakeredis>=2.36.0",
 ]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "flight_blender.settings"
 addopts = "-v --tb=short"
+testpaths = ["tests"]
 env = [
     "USE_LOCAL_SQLITE_DATABASE=1",
+    "BYPASS_AUTH_TOKEN_VERIFICATION=1",
 ]
-python_files = ["test_*.py", "tests.py", "tests_*.py"]
+python_files = ["test_*.py"]
 
 [tool.coverage.run]
 source = ["."]

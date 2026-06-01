@@ -30,7 +30,7 @@ jobs:
         id: coverage
         run: |
           set +e
-          uv run pytest --cov --cov-report=term-missing --cov-report=json --tb=short -q 2>&1 | tee coverage-output.txt
+          uv run pytest --cov --cov-report=term-missing --cov-report=json --cov-report=html --tb=short -q 2>&1 | tee coverage-output.txt
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
           set -e
       - name: Extract coverage metrics
@@ -39,9 +39,77 @@ jobs:
         run: |
           if [ -f coverage.json ]; then
             total=$(python3 -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
+            covered=$(python3 -c "import json; print(json.load(open('coverage.json'))['totals']['covered_lines'])")
+            total_lines=$(python3 -c "import json; print(json.load(open('coverage.json'))['totals']['num_statements'])")
             echo "total_coverage=$total" >> "$GITHUB_OUTPUT"
+            echo "covered_lines=$covered" >> "$GITHUB_OUTPUT"
+            echo "total_lines=$total_lines" >> "$GITHUB_OUTPUT"
           else
             echo "total_coverage=N/A" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upload HTML coverage report
+        if: always() && hashFiles('htmlcov/index.html') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 14
+      # - name: Upload coverage to Codecov
+      #   if: always() && hashFiles('coverage.json') != ''
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     files: coverage.json
+      #     flags: unittests
+      #     fail_ci_if_error: false
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Write Job Summary
+        if: always()
+        run: |
+          echo "## :bar_chart: Test Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          TOTAL="${{ steps.metrics.outputs.total_coverage }}"
+          if [ "$TOTAL" = "N/A" ]; then
+            echo ":warning: Coverage data not available (tests may have failed)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            COVERED="${{ steps.metrics.outputs.covered_lines }}"
+            LINES="${{ steps.metrics.outputs.total_lines }}"
+            echo "**Overall coverage: ${TOTAL}%** (${COVERED} / ${LINES} lines)" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+
+            # Per-module summary table
+            echo "### Per-module coverage" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "| Module | Coverage |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|--------|----------|" >> "$GITHUB_STEP_SUMMARY"
+            python3 -c "
+          import json
+          data = json.load(open('coverage.json'))
+          modules = {}
+          for f, info in data.get('files', {}).items():
+              parts = f.split('/')
+              if len(parts) >= 2 and not f.startswith('tests/'):
+                  mod = parts[0]
+                  if mod not in modules:
+                      modules[mod] = {'covered': 0, 'total': 0}
+                  modules[mod]['covered'] += info['summary']['covered_lines']
+                  modules[mod]['total'] += info['summary']['num_statements']
+          for mod in sorted(modules):
+              m = modules[mod]
+              pct = round(m['covered'] / m['total'] * 100, 1) if m['total'] > 0 else 0
+              icon = ':green_circle:' if pct >= 80 else ':yellow_circle:' if pct >= 50 else ':red_circle:'
+              print(f'| {icon} \`{mod}\` | {pct}% |')
+          " >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "<details><summary>Full terminal output</summary>" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat coverage-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> :page_facing_up: Download the **HTML report** from the [Artifacts](../actions) section for interactive browsing." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Write Job Summary
         if: always()
