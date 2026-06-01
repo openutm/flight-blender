@@ -9,7 +9,10 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, st
 from loguru import logger
 
 from flight_blender.auth.jwt_bearer import verify_bearer_token
+from flight_blender.common.redis_stream_operations import async_read_all_observations
 from flight_blender.config import get_settings
+from flight_blender.services.traffic_data_fuser import DefaultTrafficDataFuser
+from flight_blender.tasks.surveillance import compute_sdsp_heartbeat
 from flight_blender.websocket.manager import ConnectionManager, manager
 
 settings = get_settings()
@@ -53,8 +56,8 @@ async def _handle_ws_auth(websocket: WebSocket) -> None:
     except asyncio.TimeoutError:
         # No auth message within timeout — that's fine for other clients
         pass
-    except Exception:  # nosec B110
-        pass
+    except Exception as exc:
+        logger.debug("WebSocket auth message handling failed: {}", exc)
 
 
 @ws_router.websocket("/ws/surveillance/heartbeat/{session_id}")
@@ -76,20 +79,16 @@ async def websocket_heartbeat(websocket: WebSocket, session_id: str):
 
     try:
         while True:
-            # Derive the heartbeat SLA metrics from the live observation stream
-            # instead of emitting hard-coded "healthy" constants.
-            from flight_blender.common.redis_stream_operations import read_all_observations
-            from flight_blender.tasks.surveillance import compute_sdsp_heartbeat
-
             now = datetime.now(tz=timezone.utc)
-            observations = read_all_observations(session_id=session_id, count=500)
+            observations = await async_read_all_observations(session_id=session_id, count=500)
             heartbeat_data = compute_sdsp_heartbeat(observations, now=now)
             await websocket.send_json({"heartbeat_data": heartbeat_data})
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         manager.disconnect(websocket, channel)
         logger.info("Heartbeat WebSocket disconnected for session %s", session_id)
-    except Exception:
+    except Exception as exc:
+        logger.error("Heartbeat WebSocket error for session %s: %s", session_id, exc)
         manager.disconnect(websocket, channel)
 
 
@@ -112,11 +111,7 @@ async def websocket_track(websocket: WebSocket, session_id: str):
 
     try:
         while True:
-            # Read latest observations from Redis stream
-            from flight_blender.common.redis_stream_operations import read_all_observations
-            from flight_blender.services.traffic_data_fuser import DefaultTrafficDataFuser
-
-            observations = read_all_observations(session_id=session_id, count=500)
+            observations = await async_read_all_observations(session_id=session_id, count=500)
 
             if observations:
                 fuser = DefaultTrafficDataFuser(session_id=session_id, raw_observations=observations)
@@ -139,5 +134,6 @@ async def websocket_track(websocket: WebSocket, session_id: str):
     except WebSocketDisconnect:
         manager.disconnect(websocket, channel)
         logger.info("Track WebSocket disconnected for session %s", session_id)
-    except Exception:
+    except Exception as exc:
+        logger.error("Track WebSocket error for session %s: %s", session_id, exc)
         manager.disconnect(websocket, channel)

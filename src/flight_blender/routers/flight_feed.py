@@ -161,7 +161,7 @@ async def set_signed_telemetry(payload: TelemetryObservation, request: Request, 
     active_keys = key_result.scalars().all()
 
     if active_keys:
-        public_keys = fetch_public_keys_from_db_rows(active_keys)
+        public_keys = await fetch_public_keys_from_db_rows(active_keys)
         body = await request.body()
         verified = await verify_signed_request(
             method=request.method,

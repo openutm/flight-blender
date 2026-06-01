@@ -15,6 +15,10 @@ engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     future=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=3600,
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -31,7 +35,11 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency: yields an async database session."""
+    """FastAPI dependency: yields an async database session.
+
+    The session is committed automatically after the handler returns
+    (unless an exception occurred, in which case it is rolled back).
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session

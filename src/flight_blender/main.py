@@ -50,9 +50,14 @@ def create_app() -> FastAPI:
     if not settings.debug:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 
+    # CORS: never combine allow_credentials=True with allow_origins=["*"] —
+    # browsers reject this per the CORS spec.  In debug mode we allow the
+    # common local dev origins; in production the operator must configure
+    # ALLOWED_ORIGINS (falls back to ALLOWED_HOSTS for backward compat).
+    origins = ["http://localhost:3000", "http://localhost:8080", "http://127.0.0.1:3000"] if settings.debug else settings.allowed_hosts
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if settings.debug else settings.allowed_hosts,
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -11,6 +11,7 @@ connection works without a token, preserving the existing dev/test behaviour.
 
 import time
 import types
+from unittest.mock import AsyncMock, patch
 
 import jwt
 import pytest
@@ -27,7 +28,12 @@ TRACK = "/ws/surveillance/track/test-session"
 
 @pytest.fixture
 def ws_client():
-    return TestClient(create_app())
+    with patch(
+        "flight_blender.websocket.async_read_all_observations",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        yield TestClient(create_app())
 
 
 def _keypair():

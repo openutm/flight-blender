@@ -5,12 +5,15 @@ Uses the http-message-signatures library (RFC 9421).
 """
 
 from __future__ import annotations
+from jwt.algorithms import RSAAlgorithm
+from http_message_signatures.resolvers import HTTPSignatureKeyResolver
+from flight_blender.models import SignedTelemetryPublicKey
+from typing import Iterable
 
 import base64
 import hashlib
 
-import jwt
-import requests
+import httpx
 from loguru import logger
 
 try:
@@ -50,14 +53,14 @@ def _content_digest_matches(headers: dict[str, str], body: bytes) -> bool:
     return False
 
 
-class _JWKKeyResolver:
+class _JWKKeyResolver(HTTPSignatureKeyResolver):
     """Resolve public keys from a JWK dict for HTTP message signature verification."""
 
     def __init__(self, jwk_data: dict) -> None:
         self._jwk = jwk_data
 
     def resolve_public_key(self, key_id: str | None = None):  # type: ignore[override]
-        return jwt.algorithms.RSAAlgorithm.from_jwk(self._jwk)
+        return RSAAlgorithm.from_jwk(self._jwk)
 
     def resolve_private_key(self, key_id: str) -> None:  # type: ignore[override]
         return None
@@ -114,29 +117,30 @@ async def verify_signed_request(
     return False
 
 
-def fetch_public_keys_from_db_rows(rows: list) -> dict[str, dict]:
+async def fetch_public_keys_from_db_rows(rows: Iterable[SignedTelemetryPublicKey]) -> dict[str, dict]:
     """Fetch and cache JWK data for a list of SignedTelemetryPublicKey model rows.
 
     Returns a mapping of key_id → JWK dict.
-    Uses a simple in-process requests.Session (no Redis in FastAPI path).
+    Uses an async ``httpx.AsyncClient`` so it can be called from async handlers
+    without blocking the event loop.
     """
-    session = requests.Session()
     result: dict[str, dict] = {}
 
-    for row in rows:
-        kid = row.key_id
-        try:
-            resp = session.get(row.url, timeout=5)
-            resp.raise_for_status()
-            jwks = resp.json()
-            jwk: dict | None = None
-            if "keys" in jwks:
-                jwk = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
-            elif jwks.get("kid") == kid:
-                jwk = jwks
-            if jwk:
-                result[kid] = jwk
-        except Exception as exc:
-            logger.error("Failed to fetch public key {} from {}: {}", kid, row.url, exc)
+    async with httpx.AsyncClient(timeout=5) as client:
+        for row in rows:
+            kid = row.key_id
+            try:
+                resp = await client.get(row.url)
+                resp.raise_for_status()
+                jwks = resp.json()
+                jwk: dict | None = None
+                if "keys" in jwks:
+                    jwk = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
+                elif jwks.get("kid") == kid:
+                    jwk = jwks
+                if jwk:
+                    result[kid] = jwk
+            except Exception as exc:
+                logger.error("Failed to fetch public key {} from {}: {}", kid, row.url, exc)
 
     return result

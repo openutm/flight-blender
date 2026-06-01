@@ -2,7 +2,7 @@
 Redis stream operations for air traffic data (migrated from common/redis_stream_operations.py).
 """
 
-from flight_blender.common.redis_client import get_redis
+from flight_blender.common.redis_client import get_async_redis, get_redis
 
 FLIGHT_OBSERVATION_KEY = "flight_blender_air_traffic"
 MAX_STREAM_LEN = 500
@@ -43,4 +43,25 @@ def read_all_observations(session_id: str | None = None, count: int = 500) -> li
 def read_latest_observation(session_id: str | None = None) -> dict | None:
     """Return the most-recent observation, optionally filtered by session_id."""
     observations = read_all_observations(session_id=session_id, count=500)
+    return observations[0] if observations else None
+
+
+# ── Async variants for use in async handlers (WebSocket, FastAPI endpoints) ──
+
+
+async def async_read_all_observations(session_id: str | None = None, count: int = 500) -> list[dict]:
+    """Async version of :func:`read_all_observations` for use in async handlers."""
+    r = get_async_redis()
+    entries = await r.xrevrange(FLIGHT_OBSERVATION_KEY, count=count)
+    result = []
+    for _entry_id, fields in entries:
+        if session_id and fields.get("session_id") != session_id:
+            continue
+        result.append(fields)
+    return result
+
+
+async def async_read_latest_observation(session_id: str | None = None) -> dict | None:
+    """Async version of :func:`read_latest_observation` for use in async handlers."""
+    observations = await async_read_all_observations(session_id=session_id, count=500)
     return observations[0] if observations else None
