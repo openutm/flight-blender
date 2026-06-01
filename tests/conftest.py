@@ -150,6 +150,128 @@ def future_dates():
     )
 
 
+# ---------------------------------------------------------------------------
+# DSS / SCDOperations mock fixtures (all backed by tests/fakes.py)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_scd_auth_error(monkeypatch):
+    """SCDOperations.get_auth_token returns an error — triggers the auth-failure branch."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_error())
+
+
+@pytest.fixture
+def mock_scd_dss_success(monkeypatch):
+    """SCDOperations succeeds: auth OK, DSS submission accepted."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations,
+        "create_and_submit_operational_intent_reference",
+        lambda self, **kwargs: fakes.fake_submission_success(),
+    )
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_nearby_operational_intents", lambda self, **kwargs: fakes.fake_empty_nearby_operational_intents())
+
+
+@pytest.fixture
+def mock_scd_dss_conflict(monkeypatch):
+    """SCDOperations: auth OK, DSS submission returns conflict."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations,
+        "create_and_submit_operational_intent_reference",
+        lambda self, **kwargs: fakes.fake_submission_conflict(),
+    )
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+
+
+@pytest.fixture
+def mock_scd_dss_failure(monkeypatch):
+    """SCDOperations: auth OK, DSS submission fails (500)."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations,
+        "create_and_submit_operational_intent_reference",
+        lambda self, **kwargs: fakes.fake_submission_failure(),
+    )
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+
+
+@pytest.fixture
+def mock_scd_dss_timeout(monkeypatch):
+    """SCDOperations: auth OK, DSS submission times out (408)."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations,
+        "create_and_submit_operational_intent_reference",
+        lambda self, **kwargs: fakes.fake_submission_timeout(),
+    )
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+
+
+@pytest.fixture
+def mock_scd_delete_success(monkeypatch):
+    """SCDOperations.delete_operational_intent returns success (200)."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations,
+        "delete_operational_intent",
+        lambda self, **kwargs: fakes.fake_delete_success(),
+    )
+
+
+@pytest.fixture
+def mock_scd_delete_failure(monkeypatch):
+    """SCDOperations.delete_operational_intent returns failure (404)."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations,
+        "delete_operational_intent",
+        lambda self, **kwargs: fakes.fake_delete_failure(),
+    )
+
+
+@pytest.fixture
+def mock_network_opint_empty(monkeypatch):
+    """SCDOperations.get_and_process_nearby_operational_intents returns empty FeatureCollection."""
+    from tests import fakes
+    import scd_operations.dss_scd_helper as dss_helper
+
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations,
+        "get_and_process_nearby_operational_intents",
+        lambda self, **kwargs: {"type": "FeatureCollection", "features": []},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shared payload fixtures
+# ---------------------------------------------------------------------------
+
+
 @pytest.fixture
 def flight_declaration_payload(sample_geojson_feature_collection, future_dates):
     """A complete flight declaration creation payload."""

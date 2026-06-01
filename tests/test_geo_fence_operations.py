@@ -170,6 +170,57 @@ class TestGeoAwarenessHarness:
         data = resp.json()
         assert data["result"] == "Unsupported"
 
+    def test_geozone_source_put_valid_url(self, client):
+        """Valid HTTPS URL → task scheduled (eager, fails gracefully) → 200 Activating."""
+        source_id = str(uuid.uuid4())
+        resp = client.put(
+            f"/geo_fence_ops/geo_awareness/geospatial_data_sources/{source_id}",
+            data=json.dumps({"https_source": {"url": "https://example.com/geozone.geojson", "format": "geojson"}}),
+            content_type="application/json",
+            **auth_header(GA_TEST_SCOPE),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["result"] == "Activating"
+
+    def test_geozone_source_get_after_activate(self, client):
+        """GET after a successful PUT returns the stored status (200)."""
+        source_id = str(uuid.uuid4())
+        # First activate the source
+        client.put(
+            f"/geo_fence_ops/geo_awareness/geospatial_data_sources/{source_id}",
+            data=json.dumps({"https_source": {"url": "https://example.com/geozone.geojson", "format": "geojson"}}),
+            content_type="application/json",
+            **auth_header(GA_TEST_SCOPE),
+        )
+        # Now GET should find the key in Redis and return 200
+        resp = client.get(
+            f"/geo_fence_ops/geo_awareness/geospatial_data_sources/{source_id}",
+            **auth_header(GA_TEST_SCOPE),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "result" in data
+
+    def test_geozone_source_delete_after_activate(self, client):
+        """DELETE after a successful PUT removes test geozones and returns 200 Deactivating."""
+        source_id = str(uuid.uuid4())
+        # First activate the source
+        client.put(
+            f"/geo_fence_ops/geo_awareness/geospatial_data_sources/{source_id}",
+            data=json.dumps({"https_source": {"url": "https://example.com/geozone.geojson", "format": "geojson"}}),
+            content_type="application/json",
+            **auth_header(GA_TEST_SCOPE),
+        )
+        # Now DELETE should find the key and return 200
+        resp = client.delete(
+            f"/geo_fence_ops/geo_awareness/geospatial_data_sources/{source_id}",
+            **auth_header(GA_TEST_SCOPE),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["result"] == "Deactivating"
+
     def test_geozone_source_put_missing_url(self, client):
         source_id = str(uuid.uuid4())
         resp = client.put(

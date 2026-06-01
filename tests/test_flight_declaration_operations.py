@@ -432,3 +432,90 @@ class TestNetworkFlightDeclarations:
             **auth_header(READ_SCOPE),
         )
         assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+class TestSubmitToDSSEnabled:
+    """Tests for submit_flight_declaration_to_dss when USSP_NETWORK_ENABLED=1."""
+
+    def test_submit_to_dss_not_found(self, client, monkeypatch):
+        """When the flight declaration does not exist, returns 404."""
+        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        pk = str(uuid.uuid4())
+        resp = client.post(
+            f"/flight_declaration_ops/flight_declaration/{pk}/submit_to_dss",
+            **auth_header(WRITE_SCOPE),
+        )
+        assert resp.status_code == 404
+
+    def test_submit_to_dss_wrong_state(self, client, monkeypatch, flight_declaration_payload):
+        """Flight declaration not in state=0 returns 409."""
+        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        create_resp = client.post(
+            "/flight_declaration_ops/set_flight_declaration",
+            data=flight_declaration_payload,
+            content_type="application/json",
+            **auth_header(WRITE_SCOPE),
+        )
+        fd_id = create_resp.json()["id"]
+
+        # Move to state 1 (Accepted) to trigger the guard
+        client.put(
+            f"/flight_declaration_ops/flight_declaration_state/{fd_id}",
+            data={"state": 1},
+            content_type="application/json",
+            **auth_header(WRITE_SCOPE),
+        )
+
+        resp = client.post(
+            f"/flight_declaration_ops/flight_declaration/{fd_id}/submit_to_dss",
+            **auth_header(WRITE_SCOPE),
+        )
+        assert resp.status_code == 409
+
+    def test_submit_to_dss_success(self, client, monkeypatch, flight_declaration_payload):
+        """When state=0, submit_to_dss enqueues the task and returns 200.
+
+        AUTO_SUBMIT_TO_DSS=0 prevents the creation endpoint from auto-submitting
+        (which would consume the state=0 window and return 409 on the explicit call).
+        """
+        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setenv("AUTO_SUBMIT_TO_DSS", "0")
+        create_resp = client.post(
+            "/flight_declaration_ops/set_flight_declaration",
+            data=flight_declaration_payload,
+            content_type="application/json",
+            **auth_header(WRITE_SCOPE),
+        )
+        fd_id = create_resp.json()["id"]
+
+        resp = client.post(
+            f"/flight_declaration_ops/flight_declaration/{fd_id}/submit_to_dss",
+            **auth_header(WRITE_SCOPE),
+        )
+        assert resp.status_code == 200
+        assert "id" in resp.json()
+
+
+@pytest.mark.django_db
+class TestNetworkFlightDeclarationsByViewEnabled:
+    """Tests network_flight_declaration_details_by_view with USSP_NETWORK_ENABLED=1."""
+
+    def test_network_by_view_enabled_returns_200(self, client, monkeypatch, mock_network_opint_empty):
+        """With USSP enabled and mocked DSS, returns 200 with empty list."""
+        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        resp = client.get(
+            "/flight_declaration_ops/network_flight_declarations_by_view?view=52.500,13.399,52.501,13.400",
+            **auth_header(READ_SCOPE),
+        )
+        assert resp.status_code == 200
+
+    def test_network_by_id_enabled_no_flight(self, client, monkeypatch):
+        """With USSP enabled but flight not found returns 400 or 404."""
+        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        pk = str(uuid.uuid4())
+        resp = client.get(
+            f"/flight_declaration_ops/flight_declaration/{pk}/network_flight_declarations",
+            **auth_header(READ_SCOPE),
+        )
+        assert resp.status_code in (400, 404)
