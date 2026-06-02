@@ -1,8 +1,8 @@
-"""Tests for scd_operations/utils.py – UAVSerialNumberValidator and OperatorRegistrationNumberValidator."""
+"""Tests for flight_blender.scd/utils.py – UAVSerialNumberValidator and OperatorRegistrationNumberValidator."""
 
 import pytest
 
-from scd_operations.utils import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
+from flight_blender.scd.utils import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
 
 
 # ---------------------------------------------------------------------------

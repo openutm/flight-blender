@@ -11,7 +11,7 @@ from tests.conftest import (
 )
 from tests.fakes import VALID_UAS_SERIAL_NUMBER, VALID_OPERATOR_ID
 
-from flight_declaration_operations.models import FlightDeclaration, FlightOperationalIntentReference
+from flight_blender.flight_declarations.models import FlightDeclaration, FlightOperationalIntentReference
 
 
 def _scd_flight_plan_payload(uas_serial_number="ABCD5EFGHJ", operator_id="INVALID-OP"):

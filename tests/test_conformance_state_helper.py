@@ -1,8 +1,8 @@
-"""Tests for conformance_monitoring_operations.conformance_state_helper."""
+"""Tests for flight_blender.conformance.conformance_state_helper."""
 
 import pytest
 
-from conformance_monitoring_operations.conformance_state_helper import ConformanceChecksList
+from flight_blender.conformance.conformance_state_helper import ConformanceChecksList
 
 
 class TestStatusCodeBase:

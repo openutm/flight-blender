@@ -11,14 +11,14 @@ from tests.conftest import (
     RID_DP_SCOPE,
 )
 
-from constraint_operations.models import GeoFence
-from flight_declaration_operations.models import (
+from flight_blender.constraint.models import GeoFence
+from flight_blender.flight_declarations.models import (
     CompositeOperationalIntent,
     FlightDeclaration,
     FlightOperationalIntentDetail,
     FlightOperationalIntentReference,
 )
-from rid_operations.models import RIDFlightDetail
+from flight_blender.rid.models import RIDFlightDetail
 
 
 REPORT_SCOPES = [
