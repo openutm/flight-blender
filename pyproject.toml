@@ -117,6 +117,7 @@ quiet-level = 2
 [tool.bandit]
 exclude_dirs = [
     ".venv",
+    "tests",
     "*/migrations/*",
     "*/tests.py",
     "*tests.py",
@@ -153,6 +154,7 @@ exclude = [
     "site-packages",
     "venv",
     "migrations",
+    "tests",
 ]
 line-length = 150
 indent-width = 4

@@ -211,12 +211,12 @@ jobs:
         id: cc
         run: |
           # Get average complexity
-          radon cc . -a -s --exclude ".venv,migrations" 2>&1 | tee cc-full.txt
+          radon cc . -a -s --exclude ".venv,migrations,tests" 2>&1 | tee cc-full.txt
           AVG=$(tail -1 cc-full.txt | sed 's/.*Average complexity: //')
           echo "average=$AVG" >> "$GITHUB_OUTPUT"
 
           # Get high-complexity blocks (C and above)
-          radon cc . -a -s --exclude ".venv,migrations" -n C 2>&1 | tee cc-high.txt
+          radon cc . -a -s --exclude ".venv,migrations,tests" -n C 2>&1 | tee cc-high.txt
 
           # Count high-complexity blocks (lines that start with spaces and have a grade)
           HIGH_COUNT=$(grep -cE '^\s+(F|M|C) ' cc-high.txt || true)
@@ -224,7 +224,7 @@ jobs:
       - name: Run maintainability index
         id: mi
         run: |
-          radon mi . -s --exclude ".venv,migrations" 2>&1 | tee mi-full.txt
+          radon mi . -s --exclude ".venv,migrations,tests" 2>&1 | tee mi-full.txt
 
           # Count files with low maintainability (C or below)
           LOW_MI=$(grep -cE ' - [CDF] ' mi-full.txt || true)
