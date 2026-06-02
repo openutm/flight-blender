@@ -62,9 +62,6 @@ class FlightBlenderConformanceEngine:
         else:
             flight_operational_intent_reference = True
 
-        operational_intent_details_raw = flight_declaration.operational_intent
-        operational_intent_details = json.loads(operational_intent_details_raw)
-
         # C2 Check
         if not flight_operational_intent_reference or not flight_declaration:
             logger.error(
@@ -72,6 +69,9 @@ class FlightBlenderConformanceEngine:
             )
             logger.error("Conformance check failed, flight authorization not found, raising code {ConformanceChecksList.C2}")
             return ConformanceChecksList.C2
+
+        operational_intent_details_raw = flight_declaration.operational_intent
+        operational_intent_details = json.loads(operational_intent_details_raw)
 
         operation_start_time = arrow.get(flight_declaration.start_datetime)
         operation_end_time = arrow.get(flight_declaration.end_datetime)
@@ -207,6 +207,9 @@ class FlightBlenderConformanceEngine:
             logger.info(f"Flight authorization / operational intent reference does not exist for {flight_declaration_id}, C11 Check failed.")
             logger.info(f"Raising Error code {ConformanceChecksList.C11}")
             return ConformanceChecksList.C11
+        if not flight_declaration:
+            logger.info(f"Flight declaration does not exist for {flight_declaration_id}, C10 Check failed.")
+            return ConformanceChecksList.C10
         # The time the most recent telemetry was sent
         latest_telemetry_datetime = flight_declaration.latest_telemetry_datetime
         # Check the current time is within the start / end date time +/- 15 seconds TODO: trim this window as it is to broad

@@ -2,6 +2,8 @@
 
 ![blender-logo](images/blender-logo.jpg)
 
+![Coverage](badges/coverage.svg)
+
 Flight Blender is an open-source backend and data-processing engine designed to support standards-compliant UTM (Unmanned Traffic Management) services. It adheres to the latest regulations for UTM/U-Space in the EU and other jurisdictions. With Flight Blender, you can:
 
 - Implement a Remote ID "service provider" compatible with the ASTM-F3411 Remote ID standard, along with Flight Spotlight, an open-source Remote ID Display Application.

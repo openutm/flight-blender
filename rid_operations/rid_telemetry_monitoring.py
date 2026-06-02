@@ -46,3 +46,5 @@ class FlightTelemetryRIDEngine:
 
         if errors:
             return (False, errors)
+
+        return (True, [])

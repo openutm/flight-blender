@@ -22,4 +22,13 @@
     "sonarlint.disableTelemetry": true,
     "python.analysis.typeCheckingMode": "basic",
     "editor.wordWrap": "on",
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/.mypy_cache": true,
+        "**/.venv": true,
+        "**/venv": true,
+        "**/.env": true,
+        "**/.envrc": true
+    }
 }
