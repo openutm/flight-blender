@@ -1,0 +1,95 @@
+name: Verification Integration Tests
+
+# Run high-level integration tests using the openutm/verification toolkit.
+# The job builds the current branch's image, starts Flight Blender + its
+# dependencies (Postgres, Redis) via the verification repo's compose file,
+# then runs the full scenario suite (config/default.yaml).
+#
+# Reference: https://github.com/openutm/verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 2 * * 0'  # weekly, every Sunday at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or SHA to test (leave empty for the current ref)'
+        required: false
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Verification integration ─────────────────────────────────────────────────
+  verification-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout flight-blender
+        uses: actions/checkout@v4
+
+      # Build from the current branch so the test environment exercises this
+      # exact code, not the published Docker Hub image.
+      - name: Build flight-blender Docker image
+        run: docker build -t openutm/flight-blender:latest .
+
+      # Check out the verification toolkit next to our repo.
+      - name: Checkout openutm/verification
+        uses: actions/checkout@v4
+        with:
+          repository: openutm/verification
+          path: verification
+
+      # Pull infrastructure images before starting the stack.
+      # --pull never on docker compose up means it won't pull ANY image,
+      # including postgres/redis.  We pull those separately here.
+      - name: Pull infrastructure images
+        run: docker pull postgres:latest && docker pull valkey/valkey:latest
+
+      # Start Flight Blender + Redis + Postgres.
+      # --pull never ensures Docker Compose uses the image we just built
+      # instead of pulling openutm/flight-blender from Docker Hub.
+      # --wait blocks until the flight-blender healthcheck passes (GET /ping).
+      - name: Start Flight Blender stack
+        run: |
+          docker compose \
+            --env-file .env.tests \
+            -f docker-compose.fb.yml \
+            up -d --wait --pull never
+        working-directory: verification/tests
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install verification toolkit
+        run: uv sync --locked --all-extras --dev
+        working-directory: verification
+
+      # Runs the full scenario suite (basic_conformance, astm_f3623,
+      # air_traffic_simulations, extra, astm_f3442) against localhost:8000.
+      - name: Run full scenario suite
+        run: uv run openutm-verify --debug --config config/default.yaml
+        working-directory: verification
+
+      - name: Upload verification reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-reports-${{ github.event.pull_request.number || github.run_id }}
+          path: verification/reports/
+          retention-days: 14
+
+      - name: Stop containers
+        if: always()
+        run: |
+          docker compose \
+            --env-file .env.tests \
+            -f docker-compose.fb.yml \
+            down -v
+        working-directory: verification/tests
