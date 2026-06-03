@@ -1,3 +1,4 @@
+from jwt.algorithms import RSAAlgorithm
 import json
 from urllib.parse import urlparse
 
@@ -71,7 +72,7 @@ async def validate_token(token: str, required_scopes: list[str], allow_any: bool
     public_keys = {}
     for jwk in all_keys:
         try:
-            public_keys[jwk["kid"]] = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
+            public_keys[jwk["kid"]] = RSAAlgorithm.from_jwk(json.dumps(jwk))
         except Exception as exc:
             logger.warning("Skipping malformed JWK kid={}: {}", jwk.get("kid"), exc)
 
