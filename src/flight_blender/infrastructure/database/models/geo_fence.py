@@ -8,7 +8,7 @@ from flight_blender.infrastructure.database.session import Base
 
 
 class GeoFenceORM(Base):
-    __tablename__ = "geo_fence_geofence"
+    __tablename__ = "geo_fence_operations_geofence"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     raw_geo_fence: Mapped[str | None] = mapped_column(Text, nullable=True)
