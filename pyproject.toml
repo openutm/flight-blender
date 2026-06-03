@@ -83,7 +83,11 @@ dev = [
     "radon>=6.0.1",
     "pytest-env>=1.2.0",
     "fakeredis>=2.36.0",
+    "django-stubs>=5.0.0",
 ]
+
+[tool.pyright]
+typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "flight_blender.settings"
