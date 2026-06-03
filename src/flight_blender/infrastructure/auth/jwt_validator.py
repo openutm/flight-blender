@@ -72,8 +72,8 @@ async def validate_token(token: str, required_scopes: list[str], allow_any: bool
     for jwk in all_keys:
         try:
             public_keys[jwk["kid"]] = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Skipping malformed JWK kid={}: {}", jwk.get("kid"), exc)
 
     unverified_header = jwt.get_unverified_header(token)
     kid = unverified_header.get("kid")
