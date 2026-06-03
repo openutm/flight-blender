@@ -77,6 +77,39 @@ class TestGeoFenceCRUD:
         )
         assert resp.status_code == 415
 
+    def test_set_geo_fence_with_start_end_time(self, fastapi_client):
+        """Regression: payload with start_time/end_time in properties must return 200, not 500."""
+        payload = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "upper_limit": 500,
+                        "lower_limit": 100,
+                        "start_time": "2023-03-07T16:48:41",
+                        "end_time": "2027-03-07T16:48:41",
+                        "name": "Geofence 1",
+                    },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [30.142621994018555, -1.985209815625593],
+                                [30.156269073486328, -1.985209815625593],
+                                [30.156269073486328, -1.9534712184928378],
+                                [30.142621994018555, -1.9534712184928378],
+                                [30.142621994018555, -1.985209815625593],
+                            ]
+                        ],
+                    },
+                }
+            ],
+        }
+        resp = fastapi_client.put("/set_geo_fence", json=payload, headers=_fastapi_auth(WRITE_SCOPE))
+        assert resp.status_code == 200
+        assert "id" in resp.json()
+
     def test_set_geo_fence_invalid_schema(self, fastapi_client):
         resp = fastapi_client.put(
             "/set_geo_fence",

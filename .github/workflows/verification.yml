@@ -74,7 +74,7 @@ jobs:
       # Runs the full scenario suite (basic_conformance, astm_f3623,
       # air_traffic_simulations, extra, astm_f3442) against localhost:8000.
       - name: Run full scenario suite
-        run: uv run openutm-verify --debug --config config/default.yaml
+        run: uv run openutm-verify --debug --config config/fb_pr.yaml
         working-directory: verification
 
       - name: Upload verification reports

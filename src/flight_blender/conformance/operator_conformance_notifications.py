@@ -1,16 +1,12 @@
-from os import environ as env
-
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
+from flight_blender.config import settings
 from flight_blender.flight_declarations.tasks import send_operational_update_message
-
-load_dotenv(find_dotenv())
 
 
 class OperationConformanceNotification:
     def __init__(self, flight_declaration_id: str):
-        self.amqp_connection_url = env.get("AMQP_URL", 0)
+        self.amqp_connection_url = settings.AMQP_URL
         self.flight_declaration_id = flight_declaration_id
 
     def send_conformance_status_notification(self, message: str, level: str):

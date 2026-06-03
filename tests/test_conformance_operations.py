@@ -417,7 +417,7 @@ class TestOperationConformanceNotification:
         notif.send_conformance_status_notification(message="Test message", level="error")
 
     def test_with_amqp_calls_task(self):
-        with patch.dict("os.environ", {"AMQP_URL": "amqp://localhost"}):
+        with patch("flight_blender.config.settings.AMQP_URL", "amqp://localhost"):
             with patch("flight_blender.conformance.operator_conformance_notifications.send_operational_update_message") as mock_task:
                 mock_delay = MagicMock()
                 mock_task.delay = mock_delay
