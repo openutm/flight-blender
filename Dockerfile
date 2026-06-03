@@ -11,9 +11,12 @@ RUN addgroup --gid 10000 django && adduser --shell /bin/bash --disabled-password
 RUN chown -R django:django /app
 USER django:django
 
-COPY --chown=django:django uv.lock pyproject.toml LICENSE ./
-RUN uv sync --frozen --no-dev
+# Install dependencies (cached layer — only invalidated when lockfile changes)
+COPY --chown=django:django uv.lock pyproject.toml LICENSE README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
 
+# Copy source, then install the project itself (fast — deps already in .venv)
 COPY --chown=django:django . .
+RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
