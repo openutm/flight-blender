@@ -1,8 +1,8 @@
 """
 Unit tests for:
-- surveillance_monitoring_operations/tasks.py
-- surveillance_monitoring_operations/metric_calculator.py
-- surveillance_monitoring_operations/custom_signals.py
+- flight_blender.surveillance/tasks.py
+- flight_blender.surveillance/metric_calculator.py
+- flight_blender.surveillance/custom_signals.py
 
 All external I/O (Redis channel layer, Celery, DB) is mocked.
 """
@@ -14,11 +14,11 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
-from common.database_operations import FlightBlenderDatabaseWriter
-from common.redis_stream_operations import RedisStreamOperations
-from surveillance_monitoring_operations.metric_calculator import SurveillanceMetricCalculator
-from surveillance_monitoring_operations.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
-from surveillance_monitoring_operations.tasks import (
+from flight_blender.common.database_operations import FlightBlenderDatabaseWriter
+from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.surveillance.metric_calculator import SurveillanceMetricCalculator
+from flight_blender.surveillance.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
+from flight_blender.surveillance.tasks import (
     cleanup_old_heartbeat_events,
     send_heartbeat_to_consumer,
     send_and_generate_track_to_consumer,
@@ -177,7 +177,7 @@ class TestSensorHealthMetrics:
         reader = _mock_db_reader(health_records=[], pre_window_status=None)
         calc = SurveillanceMetricCalculator(database_reader=reader)
         now = arrow.utcnow()
-        with patch("surveillance_monitoring_operations.models.SurveillanceSensor") as mock_sensor_cls:
+        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
             mock_sensor_cls.objects.get.side_effect = Exception("not found")
             result = calc.calculate_sensor_health_metrics(
                 sensor_id=str(uuid.uuid4()),
@@ -202,7 +202,7 @@ class TestSensorHealthMetrics:
 
         reader = _mock_db_reader(health_records=[failure_rec, recovery_rec], pre_window_status="operational")
         calc = SurveillanceMetricCalculator(database_reader=reader)
-        with patch("surveillance_monitoring_operations.models.SurveillanceSensor") as mock_sensor_cls:
+        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
             mock_sensor_cls.objects.get.side_effect = Exception("not found")
             result = calc.calculate_sensor_health_metrics(
                 sensor_id=str(uuid.uuid4()),
@@ -227,7 +227,7 @@ class TestSensorHealthMetrics:
 
         reader = _mock_db_reader(health_records=[failure_rec, recovery_rec], pre_window_status="operational")
         calc = SurveillanceMetricCalculator(database_reader=reader)
-        with patch("surveillance_monitoring_operations.models.SurveillanceSensor") as mock_sensor_cls:
+        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
             mock_sensor_cls.objects.get.side_effect = Exception("not found")
             result = calc.calculate_sensor_health_metrics(
                 sensor_id=str(uuid.uuid4()),
@@ -246,7 +246,7 @@ class TestSensorHealthMetrics:
 
         reader = _mock_db_reader(health_records=[recovery_rec], pre_window_status="outage")
         calc = SurveillanceMetricCalculator(database_reader=reader)
-        with patch("surveillance_monitoring_operations.models.SurveillanceSensor") as mock_sensor_cls:
+        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
             mock_sensor_cls.objects.get.side_effect = Exception("not found")
             result = calc.calculate_sensor_health_metrics(
                 sensor_id=str(uuid.uuid4()),
@@ -266,15 +266,15 @@ class TestSensorHealthMetrics:
 class TestSendHeartbeatToConsumer:
     def test_heartbeat_sent_successfully(self):
         """send_heartbeat_to_consumer should record event when channel send succeeds."""
-        with patch("surveillance_monitoring_operations.tasks.RedisChannelLayer") as mock_layer_cls:
+        with patch("flight_blender.surveillance.tasks.RedisChannelLayer") as mock_layer_cls:
             mock_layer = MagicMock()
             mock_layer_cls.return_value = mock_layer
 
-            with patch("surveillance_monitoring_operations.tasks.async_to_sync") as mock_a2s:
+            with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
                 mock_a2s.return_value = lambda *a, **kw: None
 
                 with patch.object(FlightBlenderDatabaseWriter, "record_heartbeat_event") as mock_record:
-                    with patch("common.database_operations.FlightBlenderDatabaseReader") as mock_reader_cls:
+                    with patch("flight_blender.common.database_operations.FlightBlenderDatabaseReader") as mock_reader_cls:
                         mock_reader = MagicMock()
                         mock_reader.get_active_surveillance_sensors.return_value.exists.return_value = False
                         mock_reader_cls.return_value = mock_reader
@@ -284,12 +284,12 @@ class TestSendHeartbeatToConsumer:
 
     def test_heartbeat_channel_error_still_records(self):
         """send_heartbeat_to_consumer records the event even when channel send fails."""
-        with patch("surveillance_monitoring_operations.tasks.RedisChannelLayer"):
-            with patch("surveillance_monitoring_operations.tasks.async_to_sync") as mock_a2s:
+        with patch("flight_blender.surveillance.tasks.RedisChannelLayer"):
+            with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
                 mock_a2s.return_value = MagicMock(side_effect=Exception("channel unavailable"))
 
                 with patch.object(FlightBlenderDatabaseWriter, "record_heartbeat_event") as mock_record:
-                    with patch("common.database_operations.FlightBlenderDatabaseReader") as mock_reader_cls:
+                    with patch("flight_blender.common.database_operations.FlightBlenderDatabaseReader") as mock_reader_cls:
                         mock_reader = MagicMock()
                         mock_reader.get_active_surveillance_sensors.return_value.exists.return_value = False
                         mock_reader_cls.return_value = mock_reader
@@ -306,12 +306,12 @@ class TestSendHeartbeatToConsumer:
 class TestSendAndGenerateTrackToConsumer:
     def test_track_consumer_runs(self):
         """send_and_generate_track_to_consumer calls record_track_event."""
-        with patch("surveillance_monitoring_operations.tasks.RedisChannelLayer"):
+        with patch("flight_blender.surveillance.tasks.RedisChannelLayer"):
             with patch.object(RedisStreamOperations, "create_consumer_reader", return_value="consumer-1"):
                 with patch.object(RedisStreamOperations, "read_latest_air_traffic_data", return_value=[]):
-                    with patch("surveillance_monitoring_operations.tasks.async_to_sync") as mock_a2s:
+                    with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
                         mock_a2s.return_value = lambda *a, **kw: None
-                        with patch("surveillance_monitoring_operations.tasks.load_plugin") as mock_load:
+                        with patch("flight_blender.surveillance.tasks.load_plugin") as mock_load:
                             mock_fuser = MagicMock()
                             mock_fuser.return_value.generate_track_messages.return_value = []
                             mock_load.return_value = mock_fuser
@@ -325,8 +325,8 @@ class TestCleanupOldHeartbeatEvents:
     def test_cleanup_deletes_old_records(self):
         """cleanup_old_heartbeat_events deletes records older than retention period."""
         with patch.object(SurveillanceHeartbeatEvent.objects.__class__, "filter") as _:
-            with patch("surveillance_monitoring_operations.tasks.SurveillanceHeartbeatEvent") as mock_hb:
-                with patch("surveillance_monitoring_operations.tasks.SurveillanceTrackEvent") as mock_track:
+            with patch("flight_blender.surveillance.tasks.SurveillanceHeartbeatEvent") as mock_hb:
+                with patch("flight_blender.surveillance.tasks.SurveillanceTrackEvent") as mock_track:
                     mock_hb.objects.filter.return_value.delete.return_value = (5, {})
                     mock_track.objects.filter.return_value.delete.return_value = (3, {})
                     # Should not raise
@@ -335,8 +335,8 @@ class TestCleanupOldHeartbeatEvents:
     def test_cleanup_with_custom_retention(self, monkeypatch):
         """cleanup_old_heartbeat_events respects HEARTBEAT_RETENTION_DAYS env var."""
         monkeypatch.setenv("HEARTBEAT_RETENTION_DAYS", "7")
-        with patch("surveillance_monitoring_operations.tasks.SurveillanceHeartbeatEvent") as mock_hb:
-            with patch("surveillance_monitoring_operations.tasks.SurveillanceTrackEvent") as mock_track:
+        with patch("flight_blender.surveillance.tasks.SurveillanceHeartbeatEvent") as mock_hb:
+            with patch("flight_blender.surveillance.tasks.SurveillanceTrackEvent") as mock_track:
                 mock_hb.objects.filter.return_value.delete.return_value = (0, {})
                 mock_track.objects.filter.return_value.delete.return_value = (0, {})
                 cleanup_old_heartbeat_events()

@@ -1,4 +1,4 @@
-"""Unit tests for scd_operations/dss_scd_helper.py.
+"""Unit tests for flight_blender.scd/dss_scd_helper.py.
 
 Covers the pure-logic classes that do not require a live DSS:
   - FlightPlanningDataValidator
@@ -14,7 +14,7 @@ Covers the pure-logic classes that do not require a live DSS:
 import arrow
 import pytest
 
-from scd_operations.dss_scd_helper import (
+from flight_blender.scd.dss_scd_helper import (
     FlightPlanningDataValidator,
     OperationalIntentReferenceHelper,
     OperationalIntentValidator,
@@ -22,8 +22,8 @@ from scd_operations.dss_scd_helper import (
     VolumesConverter,
     VolumesValidator,
 )
-from scd_operations.flight_planning_data_definitions import FlightPlanningInjectionData
-from scd_operations.scd_data_definitions import (
+from flight_blender.scd.flight_planning_data_definitions import FlightPlanningInjectionData
+from flight_blender.scd.scd_data_definitions import (
     Altitude,
     Circle,
     LatLngPoint,
@@ -36,7 +36,7 @@ from scd_operations.scd_data_definitions import (
     Volume3D,
     Volume4D,
 )
-from scd_operations.scd_data_definitions import Polygon as Plgn
+from flight_blender.scd.scd_data_definitions import Polygon as Plgn
 
 
 # ---------------------------------------------------------------------------

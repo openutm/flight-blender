@@ -1,5 +1,5 @@
 """
-Unit tests for rid_operations/tasks.py
+Unit tests for flight_blender.rid/tasks.py
 
 These tests mock Redis, Celery tasks, and DSS helper methods so that we can
 exercise the business logic without any external dependencies.
@@ -13,10 +13,10 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
-from common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-from rid_operations.data_definitions import RIDStreamErrorDetail
-from rid_operations.rid_telemetry_monitoring import FlightTelemetryRIDEngine
-from rid_operations.tasks import (
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.rid.data_definitions import RIDStreamErrorDetail
+from flight_blender.rid.rid_telemetry_monitoring import FlightTelemetryRIDEngine
+from flight_blender.rid.tasks import (
     _parse_rid_timestamp_us,
     check_rid_stream_conformance,
     process_requested_flight,
@@ -151,7 +151,7 @@ class TestProcessRequestedFlight:
             "details_responses": [_make_flight_detail_entry()],
         }
         with patch.object(FlightBlenderDatabaseWriter, "create_or_update_rid_flight_details"):
-            with patch("rid_operations.tasks.write_operator_rid_notification") as mock_notify:
+            with patch("flight_blender.rid.tasks.write_operator_rid_notification") as mock_notify:
                 result, positions, altitudes = process_requested_flight(
                     requested_flight=flight,
                     flight_injection_sorted_set="test_ss2",
@@ -279,8 +279,8 @@ class TestStreamRidTelemetryData:
         """stream_rid_telemetry_data should enqueue write tasks for each state."""
         payload = json.dumps(self._make_observation_payload())
         with patch.object(FlightBlenderDatabaseWriter, "update_telemetry_timestamp"):
-            with patch("rid_operations.tasks.write_incoming_air_traffic_data") as mock_write:
-                with patch("rid_operations.tasks.wgs84_to_barometric", return_value=(100.0, 100.0)):
+            with patch("flight_blender.rid.tasks.write_incoming_air_traffic_data") as mock_write:
+                with patch("flight_blender.rid.tasks.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
         mock_write.delay.assert_called_once()
 
@@ -290,8 +290,8 @@ class TestStreamRidTelemetryData:
         obs[0]["current_states"].append(obs[0]["current_states"][0].copy())
         payload = json.dumps(obs)
         with patch.object(FlightBlenderDatabaseWriter, "update_telemetry_timestamp"):
-            with patch("rid_operations.tasks.write_incoming_air_traffic_data") as mock_write:
-                with patch("rid_operations.tasks.wgs84_to_barometric", return_value=(100.0, 100.0)):
+            with patch("flight_blender.rid.tasks.write_incoming_air_traffic_data") as mock_write:
+                with patch("flight_blender.rid.tasks.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
         assert mock_write.delay.call_count == 2
 

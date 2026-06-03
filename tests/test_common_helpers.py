@@ -7,9 +7,9 @@ from typing import Protocol, runtime_checkable
 
 import pytest
 
-from common.auth_token_audience_helper import generate_audience_from_base_url
-from common.plugin_loader import load_plugin
-from common.utils import EnhancedJSONDecoder, EnhancedJSONEncoder, LazyEncoder
+from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
+from flight_blender.plugins.loader import load_plugin
+from flight_blender.common.utils import EnhancedJSONDecoder, EnhancedJSONEncoder, LazyEncoder
 
 
 # ---------------------------------------------------------------------------
@@ -107,12 +107,12 @@ class TestGenerateAudienceFromBaseUrl:
 
 class TestLoadPlugin:
     def test_loads_valid_class(self):
-        cls = load_plugin("example_plugins.hello_world_fuser.HelloWorldFuser")
+        cls = load_plugin("flight_blender.plugins.examples.hello_world_fuser.HelloWorldFuser")
         assert cls.__name__ == "HelloWorldFuser"
 
     def test_loads_same_class_twice_cached(self):
-        cls1 = load_plugin("example_plugins.hello_world_engine.HelloWorldEngine")
-        cls2 = load_plugin("example_plugins.hello_world_engine.HelloWorldEngine")
+        cls1 = load_plugin("flight_blender.plugins.examples.hello_world_engine.HelloWorldEngine")
+        cls2 = load_plugin("flight_blender.plugins.examples.hello_world_engine.HelloWorldEngine")
         assert cls1 is cls2
 
     def test_raises_import_error_for_bad_module(self):
@@ -121,7 +121,7 @@ class TestLoadPlugin:
 
     def test_raises_attribute_error_for_bad_class(self):
         with pytest.raises(AttributeError):
-            load_plugin("common.utils.NonExistentClass")
+            load_plugin("flight_blender.common.utils.NonExistentClass")
 
     def test_validates_protocol(self):
         @runtime_checkable
@@ -130,7 +130,7 @@ class TestLoadPlugin:
                 ...
 
         cls = load_plugin(
-            "example_plugins.hello_world_fuser.HelloWorldFuser2",  # bad name
+            "flight_blender.plugins.examples.hello_world_fuser.HelloWorldFuser2",  # bad name
             expected_protocol=HasGenerateTrackMessages,
         ) if False else None  # skip — just ensure the code path exists
 
@@ -143,6 +143,6 @@ class TestLoadPlugin:
         # This class doesn't have method_xyz_does_not_exist
         with pytest.raises(TypeError):
             load_plugin(
-                "common.utils.EnhancedJSONEncoder",
+                "flight_blender.common.utils.EnhancedJSONEncoder",
                 expected_protocol=RequiresMethodXYZ,
             )
