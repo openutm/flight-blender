@@ -82,8 +82,9 @@ class SurveillanceOperations:
             if not surveillance_tasks:
                 return {"error": f"No active surveillance monitoring tasks found for {session_id}"}, 400
 
-            for task in surveillance_tasks:
-                task.terminate()
+            from asgiref.sync import sync_to_async  # noqa: PLC0415
+
+            await sync_to_async(lambda: [task.terminate() for task in surveillance_tasks])()
             return {"status": "Surveillance monitoring tasks removed successfully"}, 200
 
     async def _create_heartbeat_task(self, session_id: str) -> bool:
@@ -145,7 +146,7 @@ class SurveillanceOperations:
 
         from flight_blender.conformance.models import TaskScheduler  # noqa: PLC0415
 
-        return await sync_to_async(lambda: list(TaskScheduler.objects.filter(session_id=session_id)))()
+        return await sync_to_async(lambda: list(TaskScheduler.objects.filter(session_id=session_id).select_related("periodic_task")))()
 
     async def list_surveillance_sensors(self) -> list[dict]:
         sensors = await self.repo.get_active_surveillance_sensors()

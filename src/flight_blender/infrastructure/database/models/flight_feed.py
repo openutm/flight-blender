@@ -8,7 +8,7 @@ from flight_blender.infrastructure.database.session import Base
 
 
 class FlightObservationORM(Base):
-    __tablename__ = "flight_feed_flightobservation"
+    __tablename__ = "flight_feed_operations_flightobservation"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
@@ -28,7 +28,7 @@ class FlightObservationORM(Base):
 
 class SignedTelmetryPublicKeyORM(Base):
     # Note: table name uses Django's typo "Telmetry" not "Telemetry"
-    __tablename__ = "flight_feed_signedtelmetrypublickey"
+    __tablename__ = "flight_feed_operations_signedtelmetrypublickey"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     key_id: Mapped[str] = mapped_column(Text, nullable=False)

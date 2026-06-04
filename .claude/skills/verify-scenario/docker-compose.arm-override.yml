@@ -1,0 +1,20 @@
+# Override for macOS Apple Silicon (ARM64).
+# Strips the linux/amd64 platform constraint from all services so Docker uses
+# native ARM images instead of running x86_64 under Rosetta emulation.
+#
+# Usage (from flight-blender repo root):
+#   docker compose \
+#     --env-file ../verification/tests/.env.tests \
+#     -f ../verification/tests/docker-compose.fb.yml \
+#     -f .claude/skills/verify-scenario/docker-compose.arm-override.yml \
+#     up -d --wait --pull never
+
+services:
+  redis-blender:
+    platform: linux/arm64
+  db-blender:
+    platform: linux/arm64
+  flight-blender:
+    platform: linux/arm64
+  flight-blender-celery:
+    platform: linux/arm64

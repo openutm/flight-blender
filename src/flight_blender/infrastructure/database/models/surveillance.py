@@ -8,7 +8,7 @@ from flight_blender.infrastructure.database.session import Base
 
 
 class SurveillanceSessionORM(Base):
-    __tablename__ = "surveillance_surveillancesession"
+    __tablename__ = "surveillance_monitoring_operations_surveillancesession"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -22,7 +22,7 @@ class SurveillanceSessionORM(Base):
 
 
 class SurveillanceSensorORM(Base):
-    __tablename__ = "surveillance_surveillancesensor"
+    __tablename__ = "surveillance_monitoring_operations_surveillancesensor"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     sensor_type: Mapped[int] = mapped_column(Integer, nullable=False, default=12)
@@ -45,10 +45,10 @@ class SurveillanceSensorORM(Base):
 
 
 class SurveillanceSensorHealthORM(Base):
-    __tablename__ = "surveillance_surveillancesensorhealth"
+    __tablename__ = "surveillance_monitoring_operations_surveillancesensorhealth"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_surveillancesensor.id"), nullable=False, unique=True)
+    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_monitoring_operations_surveillancesensor.id"), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(12), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
@@ -60,10 +60,10 @@ class SurveillanceSensorHealthORM(Base):
 
 class SurveillanceSensorHealthTrackingORM(Base):
     # Django model name has typo: SurveillanceSensortHealthTracking (Sensort)
-    __tablename__ = "surveillance_surveillancesensorthealthtracking"
+    __tablename__ = "surveillance_monitoring_operations_surveillancesensorthealte007"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_surveillancesensor.id"), nullable=False)
+    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_monitoring_operations_surveillancesensor.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(12), nullable=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     recovery_type: Mapped[str | None] = mapped_column(String(12), nullable=True)
@@ -72,10 +72,10 @@ class SurveillanceSensorHealthTrackingORM(Base):
 
 
 class SurveillanceSensorMaintenanceORM(Base):
-    __tablename__ = "surveillance_surveillancesensormaintenance"
+    __tablename__ = "surveillance_monitoring_operations_surveillancesensormainte43b7"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_surveillancesensor.id"), nullable=False, unique=True)
+    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_monitoring_operations_surveillancesensor.id"), nullable=False, unique=True)
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     planned_or_unplanned: Mapped[str] = mapped_column(String(12), nullable=False)
@@ -86,10 +86,10 @@ class SurveillanceSensorMaintenanceORM(Base):
 
 
 class SurveillanceHeartbeatEventORM(Base):
-    __tablename__ = "surveillance_surveillanceheartbeatevent"
+    __tablename__ = "surveillance_monitoring_operations_surveillanceheartbeatevent"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_surveillancesession.id"), nullable=False)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_monitoring_operations_surveillancesession.id"), nullable=False)
     dispatched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     expected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     delivered_on_time: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -98,10 +98,10 @@ class SurveillanceHeartbeatEventORM(Base):
 
 
 class SurveillanceTrackEventORM(Base):
-    __tablename__ = "surveillance_surveillancetrackevent"
+    __tablename__ = "surveillance_monitoring_operations_surveillancetrackevent"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_surveillancesession.id"), nullable=False)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_monitoring_operations_surveillancesession.id"), nullable=False)
     dispatched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     expected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     had_active_tracks: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -110,10 +110,10 @@ class SurveillanceTrackEventORM(Base):
 
 
 class SurveillanceSensorFailureNotificationORM(Base):
-    __tablename__ = "surveillance_surveillancesensorfailurenotification"
+    __tablename__ = "surveillance_monitoring_operations_surveillancesensorfailur2a6d"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_surveillancesensor.id"), nullable=False)
+    sensor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("surveillance_monitoring_operations_surveillancesensor.id"), nullable=False)
     previous_status: Mapped[str] = mapped_column(String(12), nullable=False)
     new_status: Mapped[str] = mapped_column(String(12), nullable=False)
     recovery_type: Mapped[str | None] = mapped_column(String(12), nullable=True)
