@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from flight_blender.api.routers import constraint, flight_feed, geo_fence, notifications, surveillance, weather
+from flight_blender.api.routers import conformance, constraint, flight_feed, geo_fence, notifications, rid, surveillance, weather
 
 MIGRATED_PREFIXES: list[str] = [
     "/geo_fence_ops",
@@ -9,6 +9,8 @@ MIGRATED_PREFIXES: list[str] = [
     "/flight_stream",
     "/constraint_ops",
     "/notifications_ops",
+    "/conformance_monitoring_ops",
+    "/rid",
 ]
 
 
@@ -21,4 +23,6 @@ def create_fastapi_app() -> FastAPI:
     app.include_router(flight_feed.router)
     app.include_router(constraint.router)
     app.include_router(notifications.router)
+    app.include_router(conformance.router)
+    app.include_router(rid.router)
     return app
