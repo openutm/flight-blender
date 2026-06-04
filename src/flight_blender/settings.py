@@ -179,16 +179,6 @@ else:
     BROKER_URL = os.getenv("REDIS_BROKER_URL", "redis://redis:6379/")
 
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [BROKER_URL],
-        },
-    },
-}
-
-
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

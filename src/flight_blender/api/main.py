@@ -8,6 +8,7 @@ from flight_blender.api.routers import (
     geo_fence,
     misc,
     notifications,
+    realtime,
     rid,
     scd,
     surveillance,
@@ -40,6 +41,7 @@ def create_fastapi_app() -> FastAPI:
     app.include_router(flight_feed.router)
     app.include_router(constraint.router)
     app.include_router(notifications.router)
+    app.include_router(realtime.router)
     app.include_router(conformance.router)
     app.include_router(rid.router)
     app.include_router(flight_declarations.router)

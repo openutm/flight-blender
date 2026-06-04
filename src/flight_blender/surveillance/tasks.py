@@ -1,10 +1,10 @@
+import json
 import os
 import uuid
 from dataclasses import asdict
 
 import arrow
-from asgiref.sync import async_to_sync
-from channels_redis.core import RedisChannelLayer
+import redis
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
@@ -25,10 +25,17 @@ load_dotenv(find_dotenv())
 _MAX_ACCEPTABLE_LATENCY_SECS = float(os.getenv("HEARTBEAT_MAX_LATENCY_SECS", "1.5"))
 
 
+def _publish_realtime_message(channel_name: str, payload: object) -> None:
+    redis_client = redis.from_url(BROKER_URL, decode_responses=True)
+    try:
+        redis_client.publish(channel_name, json.dumps(payload))
+    finally:
+        redis_client.close()
+
+
 @app.task(name="send_and_generate_track_to_consumer")
 def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
     surveillance_session_id = session_id
-    channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
 
     expected_at = arrow.utcnow().datetime
 
@@ -47,7 +54,7 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
         all_track_data.append(asdict(track_message))
         logger.debug(f"Fused track message: {asdict(track_message)}")
 
-    async_to_sync(channel_layer.group_send)("track_" + surveillance_session_id, {"type": "track.message", "data": all_track_data})
+    _publish_realtime_message(f"track_{surveillance_session_id}", all_track_data)
 
     with session_scope() as db:
         repo = SQLAlchemySurveillanceSyncRepository(db)
@@ -61,7 +68,6 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
 @app.task(name="send_heartbeat_to_consumer")
 def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
     surveillance_session_id = session_id
-    channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
 
     logger.info(f"Preparing to send heartbeat for surveillance session with id: {surveillance_session_id}")
 
@@ -89,10 +95,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     logger.debug(f"Sending heartbeat data: {asdict(heartbeat_data)}")
     dispatch_succeeded = True
     try:
-        async_to_sync(channel_layer.group_send)(
-            "heartbeat_" + surveillance_session_id,
-            {"type": "heartbeat.message", "data": asdict(heartbeat_data)},
-        )
+        _publish_realtime_message(f"heartbeat_{surveillance_session_id}", asdict(heartbeat_data))
     except Exception as e:
         logger.error(f"Failed to send heartbeat for surveillance session {surveillance_session_id}: {e}")
         dispatch_succeeded = False
