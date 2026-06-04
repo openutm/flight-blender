@@ -1,6 +1,7 @@
 """FastAPI tests for flight_stream endpoints."""
 import json
 import uuid
+from unittest.mock import patch
 
 import jwt
 import pytest
@@ -147,6 +148,11 @@ class TestGetAirTrafficFastAPI:
 
 
 class TestStartOpenskyFeedFastAPI:
+    @pytest.fixture(autouse=True)
+    def _mock_opensky_task(self):
+        with patch("flight_blender.flight_feed.tasks.start_opensky_network_stream.delay"):
+            yield
+
     def test_unauthenticated(self, fastapi_client):
         resp = fastapi_client.get("/flight_stream/start_opensky_feed?view=52.500,13.399,52.501,13.400")
         assert resp.status_code == 401

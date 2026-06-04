@@ -1,3 +1,4 @@
+from unittest.mock import patch
 import uuid
 
 import pytest
@@ -259,6 +260,11 @@ class TestGetAirTraffic:
 
 @pytest.mark.django_db
 class TestStartOpenSkyFeed:
+    @pytest.fixture(autouse=True)
+    def _mock_opensky_task(self):
+        with patch("flight_blender.flight_feed.tasks.start_opensky_network_stream.delay"):
+            yield
+
     def test_start_opensky_missing_view(self, mounted_sync_client):
         resp = mounted_sync_client.get(
             "/flight_stream/start_opensky_feed",
