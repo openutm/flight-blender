@@ -58,10 +58,14 @@ class SQLAlchemyGeoFenceRepository:
         return len(fences)
 
     async def get_geospatial_data_sources(self, start: datetime, end: datetime) -> list[GeoFenceORM]:
-        stmt = select(GeoFenceORM).where(
-            GeoFenceORM.start_datetime >= start,
-            GeoFenceORM.end_datetime <= end,
-            GeoFenceORM.is_test_dataset == False,  # noqa: E712
-        ).order_by(GeoFenceORM.created_at)
+        stmt = (
+            select(GeoFenceORM)
+            .where(
+                GeoFenceORM.start_datetime >= start,
+                GeoFenceORM.end_datetime <= end,
+                GeoFenceORM.is_test_dataset == False,  # noqa: E712
+            )
+            .order_by(GeoFenceORM.created_at)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

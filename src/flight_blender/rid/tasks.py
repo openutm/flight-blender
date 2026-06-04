@@ -14,12 +14,9 @@ from loguru import logger
 from shapely.geometry import MultiPoint, Point, box
 
 from flight_blender.auth.common import get_redis
-from flight_blender.common.altitude_helper import wgs84_to_barometric
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
 from flight_blender.celery import app
+from flight_blender.common.altitude_helper import wgs84_to_barometric
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_blender.flight_feed.data_definitions import SingleRIDObservation
 from flight_blender.flight_feed.tasks import write_incoming_air_traffic_data
 from flight_blender.rid.data_definitions import (

@@ -7,4 +7,4 @@ class SurveillanceMonitoringOperationsConfig(AppConfig):
     label = "surveillance_monitoring_operations"
 
     def ready(self):
-        import flight_blender.surveillance.custom_signals  # noqa: F401
+        import flight_blender.surveillance.custom_signals  # noqa: F401, PLC0415

@@ -16,33 +16,16 @@ from rest_framework.decorators import api_view
 
 import flight_blender.rid.view_port_ops as view_port_ops
 from flight_blender.auth.utils import requires_scopes
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_blender.common.utils import EnhancedJSONEncoder
 from flight_blender.constraint.data_definitions import PutConstraintDetailsParameters
 from flight_blender.flight_feed import flight_stream_helper
-from flight_blender.rid.data_definitions import (
-    UASID,
-    OperatorLocation,
-    UAClassificationEU,
-)
+from flight_blender.rid.data_definitions import UASID, OperatorLocation, UAClassificationEU
 from flight_blender.rid.rid_utils import RIDAuthData, RIDFlightDetails
-from flight_blender.scd.dss_scd_helper import (
-    VolumesConverter,
-)
+from flight_blender.scd.dss_scd_helper import VolumesConverter
 from flight_blender.scd.scd_data_definitions import CompositeOperationalIntentPayload
 
-from .rid_data_definitions import (
-    GetFlightsResponse,
-    RIDAircraftPosition,
-    RIDAircraftState,
-    RIDFlight,
-    RIDFormat,
-    RIDHeight,
-    RIDTime,
-)
+from .rid_data_definitions import GetFlightsResponse, RIDAircraftPosition, RIDAircraftState, RIDFlight, RIDFormat, RIDHeight, RIDTime
 from .uss_data_definitions import (
     ErrorReport,
     FlightDetailsNotFoundMessage,

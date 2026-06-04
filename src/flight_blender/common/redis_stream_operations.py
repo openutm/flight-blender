@@ -374,8 +374,6 @@ class RedisStreamOperations:
             metadata = {}
             if "metadata" in field_data:
                 try:
-                    import json
-
                     metadata = json.loads(field_data["metadata"]) if field_data["metadata"] else {}
                 except (json.JSONDecodeError, TypeError):
                     metadata = {}

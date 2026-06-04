@@ -45,11 +45,7 @@ class DjangoFlightFeedRepository:
         return FlightObservation.objects.all().order_by("created_at").values()
 
     def get_temporal_flight_observations_by_session(self, session_id: str, after_datetime: arrow.Arrow):
-        return (
-            FlightObservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat())
-            .order_by("created_at")
-            .values()
-        )
+        return FlightObservation.objects.filter(session_id=session_id, created_at__gte=after_datetime.isoformat()).order_by("created_at").values()
 
     def get_flight_observations_by_session(self, session_id: str, after_datetime: arrow.Arrow):
         return (

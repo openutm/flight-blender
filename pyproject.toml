@@ -179,11 +179,22 @@ indent-width = 4
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "I", "PLC0415"]
 ignore = []
 fixable = ["ALL"]
 unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Legacy Django files not yet migrated to SQLAlchemy — lazy imports prevent circular deps
+"src/flight_blender/infrastructure/database/repositories/django_*.py" = ["PLC0415"]
+"src/flight_blender/infrastructure/celery/task_scheduler.py" = ["PLC0415"]
+"src/flight_blender/surveillance/views.py" = ["PLC0415"]
+"src/flight_blender/surveillance/metric_calculator.py" = ["PLC0415"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["flight_blender"]
+split-on-trailing-comma = false
 
 [tool.ruff.format]
 quote-style = "double"

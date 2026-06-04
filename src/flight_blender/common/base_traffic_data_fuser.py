@@ -19,14 +19,7 @@ from pyproj import Geod
 
 from flight_blender.common.redis_stream_operations import RedisStreamOperations
 from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
-from flight_blender.surveillance.data_definitions import (
-    ActiveTrack,
-    AircraftPosition,
-    AircraftState,
-    LatLangAltPoint,
-    SpeedAccuracy,
-    TrackMessage,
-)
+from flight_blender.surveillance.data_definitions import ActiveTrack, AircraftPosition, AircraftState, LatLangAltPoint, SpeedAccuracy, TrackMessage
 
 
 class BaseTrafficDataFuser:

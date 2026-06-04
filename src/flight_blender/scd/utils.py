@@ -4,10 +4,7 @@ import arrow
 from loguru import logger
 
 from flight_blender.common.data_definitions import OPINT_INDEX_BASEPATH
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_blender.rid import rtree_helper
 
 from . import dss_scd_helper

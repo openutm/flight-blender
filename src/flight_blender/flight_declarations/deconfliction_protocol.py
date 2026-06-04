@@ -7,10 +7,7 @@ subtyping via ``typing.Protocol``).
 
 from typing import Protocol, runtime_checkable
 
-from flight_blender.flight_declarations.data_definitions import (
-    DeconflictionRequest,
-    DeconflictionResult,
-)
+from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
 
 
 @runtime_checkable

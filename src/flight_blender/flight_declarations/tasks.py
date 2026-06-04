@@ -6,23 +6,15 @@ from dacite import from_dict
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from flight_blender.common.data_definitions import OPERATION_STATES
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
-from flight_blender.conformance.conformance_checks_handler import (
-    FlightOperationConformanceHelper,
-)
 from flight_blender.celery import app
+from flight_blender.common.data_definitions import OPERATION_STATES
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.config import settings
+from flight_blender.conformance.conformance_checks_handler import FlightOperationConformanceHelper
 from flight_blender.notifications.data_definitions import FlightDeclarationUpdateMessage
 from flight_blender.notifications.notification_helper import NotificationFactory
 from flight_blender.scd.opint_helper import DSSOperationalIntentsCreator
-from flight_blender.scd.scd_data_definitions import (
-    NotifyPeerUSSPostPayload,
-    OperationalIntentDetailsUSSResponse,
-    OperationalIntentUSSDetails,
-)
+from flight_blender.scd.scd_data_definitions import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
 
 load_dotenv(find_dotenv())
 
@@ -195,8 +187,6 @@ def send_operational_update_message(
     """
 
     update_message = FlightDeclarationUpdateMessage(body=message_text, level=level, timestamp=timestamp)
-    from flight_blender.config import settings
-
     amqp_connection_url = settings.AMQP_URL
     if amqp_connection_url:
         my_notification_helper = NotificationFactory(

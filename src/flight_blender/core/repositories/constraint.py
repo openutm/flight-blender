@@ -1,11 +1,8 @@
 from typing import Any, Protocol, runtime_checkable
 
-from flight_blender.constraint.data_definitions import (
-    CompositeConstraintPayload,
-    Constraint as ConstraintData,
-    ConstraintDetails,
-    ConstraintReference as ConstraintReferencePayload,
-)
+from flight_blender.constraint.data_definitions import CompositeConstraintPayload, ConstraintDetails
+from flight_blender.constraint.data_definitions import Constraint as ConstraintData
+from flight_blender.constraint.data_definitions import ConstraintReference as ConstraintReferencePayload
 
 
 @runtime_checkable
@@ -21,4 +18,6 @@ class ConstraintRepository(Protocol):
     def create_or_update_composite_constraint(self, composite_constraint_payload: CompositeConstraintPayload) -> Any: ...
     def update_constraint_reference_ovn(self, constraint_reference: Any, ovn: str) -> bool: ...
     def create_or_update_constraint_detail(self, constraint: ConstraintDetails, geofence: Any) -> Any | None: ...
-    def create_or_update_constraint_reference(self, constraint_reference: ConstraintReferencePayload, geofence: Any, flight_declaration: Any) -> Any | None: ...
+    def create_or_update_constraint_reference(
+        self, constraint_reference: ConstraintReferencePayload, geofence: Any, flight_declaration: Any
+    ) -> Any | None: ...

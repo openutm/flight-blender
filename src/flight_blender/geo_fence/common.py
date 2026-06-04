@@ -6,14 +6,7 @@ from loguru import logger
 from shapely.geometry import Point, mapping
 from shapely.ops import transform
 
-from .data_definitions import (
-    ED269Geometry,
-    GeoZoneFeature,
-    HorizontalProjection,
-    ImplicitDict,
-    ParseValidateResponse,
-    ZoneAuthority,
-)
+from .data_definitions import ED269Geometry, GeoZoneFeature, HorizontalProjection, ImplicitDict, ParseValidateResponse, ZoneAuthority
 
 proj_wgs84 = pyproj.Proj("+proj=longlat +datum=WGS84")
 

@@ -1,4 +1,5 @@
 import os
+import uuid
 from dataclasses import asdict
 
 import arrow
@@ -7,11 +8,12 @@ from channels_redis.core import RedisChannelLayer
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from flight_blender.plugins.loader import load_plugin
-from flight_blender.common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
+from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceSyncRepository
+from flight_blender.infrastructure.database.session import session_scope
+from flight_blender.plugins.loader import load_plugin
 from flight_blender.settings import BROKER_URL, FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
-from flight_blender.surveillance.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
 from flight_blender.surveillance.traffic_data_fuser_protocol import TrafficDataFuser as TrafficDataFuserProtocol
 
 from .data_definitions import HeartbeatMessage
@@ -25,11 +27,8 @@ _MAX_ACCEPTABLE_LATENCY_SECS = float(os.getenv("HEARTBEAT_MAX_LATENCY_SECS", "1.
 
 @app.task(name="send_and_generate_track_to_consumer")
 def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseWriter
-
-    surveillance_session_id = session_id  # For clarity in variable naming
+    surveillance_session_id = session_id
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
-    db_writer = FlightBlenderDatabaseWriter()
 
     expected_at = arrow.utcnow().datetime
 
@@ -50,34 +49,33 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
 
     async_to_sync(channel_layer.group_send)("track_" + surveillance_session_id, {"type": "track.message", "data": all_track_data})
 
-    db_writer.record_track_event(
-        surveillance_session_id=surveillance_session_id,
-        expected_at=expected_at,
-        had_active_tracks=len(track_messages) > 0,
-    )
+    with session_scope() as db:
+        repo = SQLAlchemySurveillanceSyncRepository(db)
+        repo.record_track_event(
+            session_id=uuid.UUID(surveillance_session_id),
+            expected_at=expected_at,
+            had_active_tracks=len(track_messages) > 0,
+        )
 
 
 @app.task(name="send_heartbeat_to_consumer")
 def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-
-    surveillance_session_id = session_id  # For clarity in variable naming
+    surveillance_session_id = session_id
     channel_layer = RedisChannelLayer(hosts=[BROKER_URL])
-    db_reader = FlightBlenderDatabaseReader()
-    db_writer = FlightBlenderDatabaseWriter()
 
     logger.info(f"Preparing to send heartbeat for surveillance session with id: {surveillance_session_id}")
 
     expected_at = arrow.utcnow().datetime
 
-    # Use the first active sensor's configured accuracy/latency, falling back to defaults
     avg_latency_ms = 0
     h_accuracy_m = 0
-    active_sensors = db_reader.get_active_surveillance_sensors()
-    if active_sensors.exists():
-        primary_sensor = active_sensors.first()
-        avg_latency_ms = primary_sensor.expected_latency_ms
-        h_accuracy_m = int(primary_sensor.horizontal_accuracy_m)
+    with session_scope() as db:
+        repo = SQLAlchemySurveillanceSyncRepository(db)
+        active_sensors = repo.get_active_surveillance_sensors()
+        if active_sensors:
+            primary_sensor = active_sensors[0]
+            avg_latency_ms = primary_sensor.expected_latency_ms
+            h_accuracy_m = int(primary_sensor.horizontal_accuracy_m)
 
     heartbeat_data = HeartbeatMessage(
         surveillance_sdsp_name=surveillance_session_id,
@@ -103,11 +101,13 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     latency_secs = abs((dispatch_at - expected_at).total_seconds())
     delivered_on_time = dispatch_succeeded and latency_secs <= _MAX_ACCEPTABLE_LATENCY_SECS
 
-    db_writer.record_heartbeat_event(
-        surveillance_session_id=surveillance_session_id,
-        expected_at=expected_at,
-        delivered_on_time=delivered_on_time,
-    )
+    with session_scope() as db:
+        repo = SQLAlchemySurveillanceSyncRepository(db)
+        repo.record_heartbeat_event(
+            session_id=uuid.UUID(surveillance_session_id),
+            expected_at=expected_at,
+            delivered_on_time=delivered_on_time,
+        )
 
 
 @app.task(name="cleanup_old_heartbeat_events")
@@ -118,12 +118,13 @@ def cleanup_old_heartbeat_events() -> None:
     At 1 Hz per session this prevents unbounded table growth.
     Schedule this task daily via django-celery-beat.
     """
-
     retention_days = int(os.getenv("HEARTBEAT_RETENTION_DAYS", "30"))
     cutoff = arrow.utcnow().shift(days=-retention_days).datetime
 
-    deleted_heartbeats, _ = SurveillanceHeartbeatEvent.objects.filter(dispatched_at__lt=cutoff).delete()
-    deleted_tracks, _ = SurveillanceTrackEvent.objects.filter(dispatched_at__lt=cutoff).delete()
+    with session_scope() as db:
+        repo = SQLAlchemySurveillanceSyncRepository(db)
+        deleted_heartbeats, deleted_tracks = repo.cleanup_old_events(cutoff=cutoff)
+
     logger.info(
         f"cleanup_old_heartbeat_events: deleted {deleted_heartbeats} heartbeat events "
         f"and {deleted_tracks} track events older than {retention_days} days"

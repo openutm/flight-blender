@@ -4,13 +4,7 @@ from loguru import logger
 from pyproj import Geod
 from shapely.geometry import Point, shape
 
-from flight_blender.scd.scd_data_definitions import (
-    Altitude,
-    LatLngPoint,
-    Time,
-    Volume3D,
-    Volume4D,
-)
+from flight_blender.scd.scd_data_definitions import Altitude, LatLngPoint, Time, Volume3D, Volume4D
 from flight_blender.scd.scd_data_definitions import Polygon as Plgn
 
 

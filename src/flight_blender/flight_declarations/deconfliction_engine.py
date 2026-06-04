@@ -11,18 +11,9 @@ This class satisfies :class:`~flight_blender.flight_declarations.deconfliction_p
 without inheriting from it (structural subtyping).
 """
 
-from flight_blender.common.data_definitions import (
-    ACTIVE_OPERATIONAL_STATES,
-    FLIGHT_DECLARATION_INDEX_BASEPATH,
-    GEOFENCE_INDEX_BASEPATH,
-)
-from flight_blender.flight_declarations.data_definitions import (
-    DeconflictionRequest,
-    DeconflictionResult,
-)
-from flight_blender.flight_declarations.flight_declarations_rtree_helper import (
-    FlightDeclarationRTreeIndexFactory,
-)
+from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
+from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
+from flight_blender.flight_declarations.flight_declarations_rtree_helper import FlightDeclarationRTreeIndexFactory
 from flight_blender.flight_declarations.models import FlightDeclaration
 from flight_blender.geo_fence import rtree_geo_fence_helper
 from flight_blender.geo_fence.models import GeoFence

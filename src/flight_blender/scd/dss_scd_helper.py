@@ -20,10 +20,7 @@ from flight_blender.auth.common import get_redis
 from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.common.data_definitions import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_blender.common.utils import LazyEncoder
 from flight_blender.constraint.data_definitions import CompositeConstraintPayload, Constraint
 from flight_blender.constraint.dss_constraints_helper import ConstraintOperations

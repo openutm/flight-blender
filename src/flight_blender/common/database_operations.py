@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from loguru import logger  # noqa: F401 — kept for test monkeypatching compatibility
 
 from flight_blender.infrastructure.database.repositories.django_conformance import DjangoConformanceRepository
@@ -222,7 +224,6 @@ class FlightBlenderDatabaseReader:
 class FlightBlenderDatabaseWriter:
     @staticmethod
     def _normalize_timestamp(ts):
-        from datetime import datetime, timezone
         if not ts:
             return None
         try:
@@ -255,7 +256,9 @@ class FlightBlenderDatabaseWriter:
         return self._flight_declarations.create_or_update_peer_operational_intent_details(peer_operational_intent_id, operational_intent_details)
 
     def create_or_update_peer_operational_intent_reference(self, peer_operational_intent_reference_id, peer_operational_intent_reference):
-        return self._flight_declarations.create_or_update_peer_operational_intent_reference(peer_operational_intent_reference_id, peer_operational_intent_reference)
+        return self._flight_declarations.create_or_update_peer_operational_intent_reference(
+            peer_operational_intent_reference_id, peer_operational_intent_reference
+        )
 
     def get_peer_operational_intent_reference_by_id(self, operational_intent_reference_id):
         return self._flight_declarations.get_peer_operational_intent_reference_by_id(operational_intent_reference_id)
@@ -285,13 +288,17 @@ class FlightBlenderDatabaseWriter:
         return self._flight_declarations.set_flight_declaration_non_conforming(flight_declaration)
 
     def create_flight_operational_intent_reference_with_submitted_operational_intent(self, flight_declaration, operational_intent_reference_payload):
-        return self._flight_declarations.create_flight_operational_intent_reference_with_submitted_operational_intent(flight_declaration, operational_intent_reference_payload)
+        return self._flight_declarations.create_flight_operational_intent_reference_with_submitted_operational_intent(
+            flight_declaration, operational_intent_reference_payload
+        )
 
     def create_flight_operational_intent_reference_subscribers(self, flight_declaration, subscribers):
         return self._flight_declarations.create_flight_operational_intent_reference_subscribers(flight_declaration, subscribers)
 
     def create_flight_operational_intent_details_with_submitted_operational_intent(self, flight_declaration, operational_intent_details_payload):
-        return self._flight_declarations.create_flight_operational_intent_details_with_submitted_operational_intent(flight_declaration, operational_intent_details_payload)
+        return self._flight_declarations.create_flight_operational_intent_details_with_submitted_operational_intent(
+            flight_declaration, operational_intent_details_payload
+        )
 
     def create_or_update_peer_composite_operational_intent(self, operation_id, composite_operational_intent):
         return self._flight_declarations.create_or_update_peer_composite_operational_intent(operation_id, composite_operational_intent)
@@ -299,8 +306,12 @@ class FlightBlenderDatabaseWriter:
     def create_or_update_composite_operational_intent(self, flight_declaration, composite_operational_intent_payload):
         return self._flight_declarations.create_or_update_composite_operational_intent(flight_declaration, composite_operational_intent_payload)
 
-    def update_flight_operational_intent_reference_with_dss_response(self, flight_declaration, dss_operational_intent_reference_id, ovn, dss_response):
-        return self._flight_declarations.update_flight_operational_intent_reference_with_dss_response(flight_declaration, dss_operational_intent_reference_id, ovn, dss_response)
+    def update_flight_operational_intent_reference_with_dss_response(
+        self, flight_declaration, dss_operational_intent_reference_id, ovn, dss_response
+    ):
+        return self._flight_declarations.update_flight_operational_intent_reference_with_dss_response(
+            flight_declaration, dss_operational_intent_reference_id, ovn, dss_response
+        )
 
     def create_flight_operational_intent_reference_from_flight_declaration_obj(self, flight_declaration):
         return self._flight_declarations.create_flight_operational_intent_reference_from_flight_declaration_obj(flight_declaration)
@@ -312,19 +323,25 @@ class FlightBlenderDatabaseWriter:
         return self._flight_declarations.update_telemetry_timestamp(flight_declaration_id)
 
     def update_flight_operational_intent_reference_op_int(self, flight_operational_intent_reference, dss_operational_intent_reference_id):
-        return self._flight_declarations.update_flight_operational_intent_reference_op_int(flight_operational_intent_reference, dss_operational_intent_reference_id)
+        return self._flight_declarations.update_flight_operational_intent_reference_op_int(
+            flight_operational_intent_reference, dss_operational_intent_reference_id
+        )
 
     def update_flight_operational_intent_reference_ovn(self, flight_operational_intent_reference, ovn):
         return self._flight_declarations.update_flight_operational_intent_reference_ovn(flight_operational_intent_reference, ovn)
 
     def update_flight_operational_intent_reference(self, flight_operational_intent_reference, update_operational_intent_reference):
-        return self._flight_declarations.update_flight_operational_intent_reference(flight_operational_intent_reference, update_operational_intent_reference)
+        return self._flight_declarations.update_flight_operational_intent_reference(
+            flight_operational_intent_reference, update_operational_intent_reference
+        )
 
     def update_flight_operational_intent_details(self, flight_operational_intent_detail, operational_intent_details):
         return self._flight_declarations.update_flight_operational_intent_details(flight_operational_intent_detail, operational_intent_details)
 
     def update_flight_operational_intent_reference_op_int_ovn(self, flight_operational_intent_reference, dss_operational_intent_reference_id, ovn):
-        return self._flight_declarations.update_flight_operational_intent_reference_op_int_ovn(flight_operational_intent_reference, dss_operational_intent_reference_id, ovn)
+        return self._flight_declarations.update_flight_operational_intent_reference_op_int_ovn(
+            flight_operational_intent_reference, dss_operational_intent_reference_id, ovn
+        )
 
     def update_flight_operation_operational_intent(self, flight_declaration_id, operational_intent):
         return self._flight_declarations.update_flight_operation_operational_intent(flight_declaration_id, operational_intent)
@@ -336,8 +353,12 @@ class FlightBlenderDatabaseWriter:
         return self._flight_declarations.clear_stored_operational_intents()
 
     # --- conformance ---
-    def write_flight_conformance_record(self, flight_declaration, conformance_non_conformance_state, description, event_type, geofence_breach, resolved, geofence):
-        return self._conformance.write_flight_conformance_record(flight_declaration, conformance_non_conformance_state, description, event_type, geofence_breach, resolved, geofence)
+    def write_flight_conformance_record(
+        self, flight_declaration, conformance_non_conformance_state, description, event_type, geofence_breach, resolved, geofence
+    ):
+        return self._conformance.write_flight_conformance_record(
+            flight_declaration, conformance_non_conformance_state, description, event_type, geofence_breach, resolved, geofence
+        )
 
     def create_conformance_monitoring_periodic_task(self, flight_declaration):
         return self._conformance.create_conformance_monitoring_periodic_task(flight_declaration)

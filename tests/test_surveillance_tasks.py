@@ -262,50 +262,79 @@ class TestSensorHealthMetrics:
 # ===========================================================================
 
 
+def _mock_sa_repo():
+    """Return a mock SQLAlchemySurveillanceSyncRepository."""
+    repo = MagicMock()
+    repo.get_active_surveillance_sensors.return_value = []
+    repo.record_heartbeat_event.return_value = True
+    repo.record_track_event.return_value = True
+    repo.cleanup_old_events.return_value = (0, 0)
+    return repo
+
+
+def _sa_repo_patch(mock_repo):
+    """Context manager: patch SessionLocal (via session_scope) + the repo class as looked up in tasks."""
+    from contextlib import ExitStack, contextmanager
+
+    @contextmanager
+    def _ctx():
+        mock_session = MagicMock()
+        mock_session.commit = MagicMock()
+        mock_session.rollback = MagicMock()
+        mock_session.close = MagicMock()
+
+        mock_repo_cls = MagicMock(return_value=mock_repo)
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch("flight_blender.infrastructure.database.session.SessionLocal", return_value=mock_session)
+            )
+            stack.enter_context(
+                patch(
+                    "flight_blender.surveillance.tasks.SQLAlchemySurveillanceSyncRepository",
+                    mock_repo_cls,
+                )
+            )
+            yield mock_repo
+
+    return _ctx()
+
+
 @pytest.mark.django_db
 class TestSendHeartbeatToConsumer:
     def test_heartbeat_sent_successfully(self):
         """send_heartbeat_to_consumer should record event when channel send succeeds."""
+        mock_repo = _mock_sa_repo()
+        session_id = str(uuid.uuid4())
         with patch("flight_blender.surveillance.tasks.RedisChannelLayer") as mock_layer_cls:
-            mock_layer = MagicMock()
-            mock_layer_cls.return_value = mock_layer
-
+            mock_layer_cls.return_value = MagicMock()
             with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
                 mock_a2s.return_value = lambda *a, **kw: None
-
-                with patch.object(FlightBlenderDatabaseWriter, "record_heartbeat_event") as mock_record:
-                    with patch("flight_blender.common.database_operations.FlightBlenderDatabaseReader") as mock_reader_cls:
-                        mock_reader = MagicMock()
-                        mock_reader.get_active_surveillance_sensors.return_value.exists.return_value = False
-                        mock_reader_cls.return_value = mock_reader
-                        send_heartbeat_to_consumer(session_id="sess-hb-001")
-
-                mock_record.assert_called_once()
+                with _sa_repo_patch(mock_repo):
+                    send_heartbeat_to_consumer(session_id=session_id)
+        mock_repo.record_heartbeat_event.assert_called_once()
 
     def test_heartbeat_channel_error_still_records(self):
         """send_heartbeat_to_consumer records the event even when channel send fails."""
+        mock_repo = _mock_sa_repo()
+        session_id = str(uuid.uuid4())
         with patch("flight_blender.surveillance.tasks.RedisChannelLayer"):
             with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
                 mock_a2s.return_value = MagicMock(side_effect=Exception("channel unavailable"))
-
-                with patch.object(FlightBlenderDatabaseWriter, "record_heartbeat_event") as mock_record:
-                    with patch("flight_blender.common.database_operations.FlightBlenderDatabaseReader") as mock_reader_cls:
-                        mock_reader = MagicMock()
-                        mock_reader.get_active_surveillance_sensors.return_value.exists.return_value = False
-                        mock_reader_cls.return_value = mock_reader
-                        send_heartbeat_to_consumer(session_id="sess-hb-err")
-
-                # Even on error, we record the heartbeat
-                mock_record.assert_called_once()
-                # And delivered_on_time should be False
-                kwargs = mock_record.call_args.kwargs
-                assert kwargs.get("delivered_on_time") is False
+                with _sa_repo_patch(mock_repo):
+                    send_heartbeat_to_consumer(session_id=session_id)
+        # Even on error, we record the heartbeat
+        mock_repo.record_heartbeat_event.assert_called_once()
+        kwargs = mock_repo.record_heartbeat_event.call_args.kwargs
+        assert kwargs.get("delivered_on_time") is False
 
 
 @pytest.mark.django_db
 class TestSendAndGenerateTrackToConsumer:
     def test_track_consumer_runs(self):
         """send_and_generate_track_to_consumer calls record_track_event."""
+        mock_repo = _mock_sa_repo()
+        session_id = str(uuid.uuid4())
         with patch("flight_blender.surveillance.tasks.RedisChannelLayer"):
             with patch.object(RedisStreamOperations, "create_consumer_reader", return_value="consumer-1"):
                 with patch.object(RedisStreamOperations, "read_latest_air_traffic_data", return_value=[]):
@@ -315,29 +344,25 @@ class TestSendAndGenerateTrackToConsumer:
                             mock_fuser = MagicMock()
                             mock_fuser.return_value.generate_track_messages.return_value = []
                             mock_load.return_value = mock_fuser
-                            with patch.object(FlightBlenderDatabaseWriter, "record_track_event") as mock_record:
-                                send_and_generate_track_to_consumer(session_id="sess-track-001")
-                            mock_record.assert_called_once()
+                            with _sa_repo_patch(mock_repo):
+                                send_and_generate_track_to_consumer(session_id=session_id)
+        mock_repo.record_track_event.assert_called_once()
 
 
 @pytest.mark.django_db
 class TestCleanupOldHeartbeatEvents:
     def test_cleanup_deletes_old_records(self):
         """cleanup_old_heartbeat_events deletes records older than retention period."""
-        with patch.object(SurveillanceHeartbeatEvent.objects.__class__, "filter") as _:
-            with patch("flight_blender.surveillance.tasks.SurveillanceHeartbeatEvent") as mock_hb:
-                with patch("flight_blender.surveillance.tasks.SurveillanceTrackEvent") as mock_track:
-                    mock_hb.objects.filter.return_value.delete.return_value = (5, {})
-                    mock_track.objects.filter.return_value.delete.return_value = (3, {})
-                    # Should not raise
-                    cleanup_old_heartbeat_events()
+        mock_repo = _mock_sa_repo()
+        mock_repo.cleanup_old_events.return_value = (5, 3)
+        with _sa_repo_patch(mock_repo):
+            cleanup_old_heartbeat_events()
+        mock_repo.cleanup_old_events.assert_called_once()
 
     def test_cleanup_with_custom_retention(self, monkeypatch):
         """cleanup_old_heartbeat_events respects HEARTBEAT_RETENTION_DAYS env var."""
         monkeypatch.setenv("HEARTBEAT_RETENTION_DAYS", "7")
-        with patch("flight_blender.surveillance.tasks.SurveillanceHeartbeatEvent") as mock_hb:
-            with patch("flight_blender.surveillance.tasks.SurveillanceTrackEvent") as mock_track:
-                mock_hb.objects.filter.return_value.delete.return_value = (0, {})
-                mock_track.objects.filter.return_value.delete.return_value = (0, {})
-                cleanup_old_heartbeat_events()
-        mock_hb.objects.filter.assert_called_once()
+        mock_repo = _mock_sa_repo()
+        with _sa_repo_patch(mock_repo):
+            cleanup_old_heartbeat_events()
+        mock_repo.cleanup_old_events.assert_called_once()

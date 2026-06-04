@@ -2,10 +2,7 @@ import django.dispatch
 from django.dispatch import receiver
 from loguru import logger
 
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 
 from .conformance_checks_handler import FlightOperationConformanceHelper
 from .conformance_state_helper import ConformanceChecksList

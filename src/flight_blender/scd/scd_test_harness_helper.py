@@ -22,10 +22,7 @@ from .flight_planning_data_definitions import (
     RPAS26FlightDetails,
     UpsertFlightPlanResponse,
 )
-from .scd_data_definitions import (
-    TestInjectionResult,
-    TestInjectionResultState,
-)
+from .scd_data_definitions import TestInjectionResult, TestInjectionResultState
 
 # Set the responses to be used
 failed_test_injection_response = TestInjectionResult(

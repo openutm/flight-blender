@@ -5,10 +5,7 @@ from django.core import management
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 
 from .operation_state_helper import FlightOperationStateMachine, get_status
 

@@ -17,10 +17,7 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from pyproj import Geod
 from shapely.geometry import LineString, Point, Polygon
-from uas_standards.astm.f3411.v22a.constants import (
-    NetMinClusterSizePercent,
-    NetMinObfuscationDistanceM,
-)
+from uas_standards.astm.f3411.v22a.constants import NetMinClusterSizePercent, NetMinObfuscationDistanceM
 
 from flight_blender.auth import dss_auth_helper
 from flight_blender.auth.common import get_redis
@@ -28,11 +25,7 @@ from flight_blender.common.auth_token_audience_helper import generate_audience_f
 from flight_blender.common.data_definitions import RESPONSE_CONTENT_TYPE
 from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
-from flight_blender.rid.data_definitions import (
-    UASID,
-    OperatorLocation,
-    UAClassificationEU,
-)
+from flight_blender.rid.data_definitions import UASID, OperatorLocation, UAClassificationEU
 
 from .rid_utils import (
     Cluster,

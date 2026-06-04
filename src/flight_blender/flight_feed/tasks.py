@@ -12,9 +12,10 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from pyproj import Transformer
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseWriter
-from flight_blender.common.redis_stream_operations import RedisStreamOperations
 from flight_blender.celery import app
+from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedSyncRepository
+from flight_blender.infrastructure.database.session import session_scope
 
 from .data_definitions import SingleAirtrafficObservation
 
@@ -34,7 +35,6 @@ def bulk_write_incoming_air_traffic_data(observations_str: str):
     This function takes a JSON string representing a list of observations,
     parses it, writes it to the database in bulk, and then pushes to a Redis stream.
     """
-    my_database_writer = FlightBlenderDatabaseWriter()
     my_redis_helper = RedisStreamOperations()
     obs_list = json.loads(observations_str)
 
@@ -52,7 +52,9 @@ def bulk_write_incoming_air_traffic_data(observations_str: str):
 
     if parsed_observations:
         logger.info(f"Writing {len(parsed_observations)} observations to database in bulk..")
-        my_database_writer.bulk_write_flight_observations(parsed_observations)
+        with session_scope() as db:
+            repo = SQLAlchemyFlightFeedSyncRepository(db)
+            repo.bulk_write_flight_observations(parsed_observations)
 
         logger.info("Writing batch to Redis stream..")
         for single_obs in parsed_observations:
@@ -70,7 +72,6 @@ def write_incoming_air_traffic_data(observation: str):
     Returns:
         str: The message ID of the added observation.
     """
-    my_database_writer = FlightBlenderDatabaseWriter()
     my_redis_helper = RedisStreamOperations()
     obs = json.loads(observation)
     logger.debug(f"Received observation: {obs}")
@@ -85,8 +86,10 @@ def write_incoming_air_traffic_data(observation: str):
     logger.debug(f"Parsed observation: {single_air_traffic_observation}")
 
     logger.info("Writing observation..")
+    with session_scope() as db:
+        repo = SQLAlchemyFlightFeedSyncRepository(db)
+        repo.write_flight_observation(single_air_traffic_observation)
 
-    my_database_writer.write_flight_observation(single_air_traffic_observation)
     logger.info("Writing to Redis stream..")
     my_redis_helper.add_air_traffic_data(stream_name="air_traffic_stream", observation=asdict(single_air_traffic_observation))
 

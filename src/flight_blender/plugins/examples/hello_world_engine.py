@@ -18,10 +18,7 @@ See PLUGINS.md for the full guide.
 from loguru import logger
 
 from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
-from flight_blender.flight_declarations.data_definitions import (
-    DeconflictionRequest,
-    DeconflictionResult,
-)
+from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
 from flight_blender.flight_declarations.models import FlightDeclaration
 
 # Derive state codes directly from the canonical OPERATION_STATES tuple so this

@@ -10,12 +10,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from django.core.signing import Signer
 from django.http import HttpRequest, HttpResponse
 from dotenv import find_dotenv, load_dotenv
-from http_message_signatures import (
-    HTTPMessageSigner,
-    HTTPMessageVerifier,
-    HTTPSignatureKeyResolver,
-    algorithms,
-)
+from http_message_signatures import HTTPMessageSigner, HTTPMessageVerifier, HTTPSignatureKeyResolver, algorithms
 from jwcrypto import jwk, jws
 from jwcrypto.common import json_encode
 from loguru import logger

@@ -3,13 +3,7 @@ from typing import TYPE_CHECKING, Optional
 
 from loguru import logger
 
-from .data_definitions import (
-    AggregateHealthMetrics,
-    HeartbeatDeliveryProbability,
-    HeartbeatRateMetric,
-    SensorHealthMetrics,
-    TrackUpdateProbability,
-)
+from .data_definitions import AggregateHealthMetrics, HeartbeatDeliveryProbability, HeartbeatRateMetric, SensorHealthMetrics, TrackUpdateProbability
 
 if TYPE_CHECKING:
     from flight_blender.common.database_operations import FlightBlenderDatabaseReader

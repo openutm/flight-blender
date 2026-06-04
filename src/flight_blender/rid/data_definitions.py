@@ -5,9 +5,7 @@ from enum import Enum
 from uuid import UUID
 
 from implicitdict import ImplicitDict
-from uas_standards.interuss.automated_testing.rid.v1.injection import (
-    UserNotification,
-)
+from uas_standards.interuss.automated_testing.rid.v1.injection import UserNotification
 
 ## This is the new RID telemetry data class, this will include 2022 RID data formats
 ## For more information see the ASTM RID data definitions at : https://github.com/uastech/standards/blob/dd4016b09fc8cb98f30c2a17b5a088fb2995ab54/remoteid/canonical.yaml

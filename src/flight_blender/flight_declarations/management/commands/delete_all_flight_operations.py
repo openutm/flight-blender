@@ -6,10 +6,7 @@ from django.core.management.base import BaseCommand
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_blender.scd import dss_scd_helper
 
 load_dotenv(find_dotenv())

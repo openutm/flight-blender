@@ -11,10 +11,7 @@ from rest_framework.decorators import api_view
 
 from flight_blender.auth.utils import requires_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 
 from .data_definitions import (
     HealthMessage,
@@ -282,9 +279,7 @@ def list_sensor_health_notifications(request):
     if sensor_id:
         notifications = database_reader.get_failure_notifications_for_sensor(sensor_id=sensor_id, start_time=start_date, end_time=end_date)
     else:
-        from flight_blender.surveillance.models import (
-            SurveillanceSensorFailureNotification,
-        )
+        from flight_blender.surveillance.models import SurveillanceSensorFailureNotification
 
         notifications = SurveillanceSensorFailureNotification.objects.filter(
             created_at__gte=start_date,

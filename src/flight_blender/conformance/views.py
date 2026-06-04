@@ -10,9 +10,7 @@ from rest_framework.decorators import api_view
 
 from flight_blender.auth.utils import requires_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader
 
 from .data_definitions import ConformanceRecord, ConformanceSummary
 

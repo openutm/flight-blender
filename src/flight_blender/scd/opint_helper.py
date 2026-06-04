@@ -6,10 +6,7 @@ import tldextract
 from dacite import from_dict
 from loguru import logger
 
-from flight_blender.common.database_operations import (
-    FlightBlenderDatabaseReader,
-    FlightBlenderDatabaseWriter,
-)
+from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
 from flight_blender.flight_declarations.utils import OperationalIntentsConverter
 from flight_blender.scd.dss_scd_helper import ConstraintsWriter, SCDOperations
 
