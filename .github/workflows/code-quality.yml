@@ -14,7 +14,7 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: "sqlite://:memory:"
+      DATABASE_URL: "sqlite:///:memory:"
       BYPASS_AUTH_TOKEN_VERIFICATION: "1"
     steps:
       - uses: actions/checkout@v6
@@ -31,7 +31,7 @@ jobs:
         run: |
           set +e
           uv run pytest --cov --cov-report=term-missing --cov-report=json --cov-report=html --tb=short -q 2>&1 | tee coverage-output.txt
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           set -e
       - name: Extract coverage metrics
         if: always()
