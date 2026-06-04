@@ -280,7 +280,9 @@ def _do_update_state(pk: str, state: int) -> tuple[dict, int]:
         return {"detail": "Not found"}, 404
 
     if state not in list(OPERATOR_EVENT_LOOKUP.keys()):
-        return {"detail": "An operator can only set the state to Activated (2), Contingent (4), Ended (5), Withdrawn (6), or Cancelled (7) using this endpoint"}, 400
+        return {
+            "detail": "An operator can only set the state to Activated (2), Contingent (4), Ended (5), Withdrawn (6), or Cancelled (7) using this endpoint"
+        }, 400
 
     current_state = fd.state
     event = OPERATOR_EVENT_LOOKUP[state]

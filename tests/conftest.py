@@ -14,6 +14,7 @@ from flight_blender.infrastructure.database.models.constraint import (  # noqa: 
     ConstraintDetailORM,
     ConstraintReferenceORM,
 )
+from flight_blender.infrastructure.database.models.conformance import ConformanceRecordORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.flight_declarations import (  # noqa: F401 — triggers metadata
     CompositeOperationalIntentORM,
     FlightDeclarationORM,

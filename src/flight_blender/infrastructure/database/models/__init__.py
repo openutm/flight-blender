@@ -1,3 +1,4 @@
+from flight_blender.infrastructure.database.models.conformance import ConformanceRecordORM
 from flight_blender.infrastructure.database.models.constraint import CompositeConstraintORM, ConstraintDetailORM, ConstraintReferenceORM
 from flight_blender.infrastructure.database.models.flight_declarations import (
     CompositeOperationalIntentORM,
@@ -26,6 +27,7 @@ from flight_blender.infrastructure.database.models.surveillance import (
 __all__ = [
     "CompositeConstraintORM",
     "CompositeOperationalIntentORM",
+    "ConformanceRecordORM",
     "ConstraintDetailORM",
     "ConstraintReferenceORM",
     "FlightDeclarationORM",

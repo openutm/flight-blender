@@ -24,7 +24,6 @@ from flight_blender.geo_fence.data_definitions import (
     GeoZoneChecksResponse,
     GeoZoneFilterPosition,
 )
-from flight_blender.geo_fence.tasks import download_geozone_source
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
 
 
@@ -141,6 +140,8 @@ class GeoFenceOperations:
         return None
 
     async def put_geozone_source(self, geozone_source_id: str, geo_zone_url: str) -> dict:
+        from flight_blender.geo_fence.tasks import download_geozone_source  # noqa: PLC0415
+
         r = get_async_redis()
         key = "geoawarenes_test." + geozone_source_id
         response = GeoAwarenessTestStatus(result=GeoAwarenessImportResponseEnum.Activating, message="")

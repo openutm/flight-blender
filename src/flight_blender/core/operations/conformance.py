@@ -1,22 +1,16 @@
 from dataclasses import asdict
 from datetime import datetime
 
-from asgiref.sync import sync_to_async
-
 from flight_blender.conformance.data_definitions import ConformanceRecord, ConformanceSummary
-from flight_blender.infrastructure.database.repositories.django_conformance import DjangoConformanceRepository
+from flight_blender.infrastructure.database.repositories.sa_conformance import SQLAlchemyConformanceRepository
 
 
 class ConformanceOperations:
-    def __init__(self) -> None:
-        self._repo = DjangoConformanceRepository()
+    def __init__(self, repo: SQLAlchemyConformanceRepository) -> None:
+        self._repo = repo
 
     async def get_records(self, start_time: datetime, end_time: datetime) -> list[dict]:
-        def _fetch():
-            raw = self._repo.get_conformance_records_for_duration(start_time=start_time, end_time=end_time)
-            return list(raw) if raw else []
-
-        orm_records = await sync_to_async(_fetch)()
+        orm_records = await self._repo.get_conformance_records_for_duration(start_time=start_time, end_time=end_time)
         return [
             asdict(
                 ConformanceRecord(
@@ -37,11 +31,7 @@ class ConformanceOperations:
         ]
 
     async def get_summary(self, start_time: datetime, end_time: datetime, start_date: str, end_date: str) -> ConformanceSummary:
-        def _fetch():
-            raw = self._repo.get_conformance_records_for_duration(start_time=start_time, end_time=end_time)
-            return list(raw) if raw else []
-
-        records = await sync_to_async(_fetch)()
+        records = await self._repo.get_conformance_records_for_duration(start_time=start_time, end_time=end_time)
         total = len(records)
         conforming = sum(1 for r in records if r.conformance_state == 1)
         return ConformanceSummary(

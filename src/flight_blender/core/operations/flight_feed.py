@@ -10,15 +10,12 @@ import dacite.exceptions
 from asgiref.sync import sync_to_async
 
 from flight_blender.api.schemas.flight_feed import ObservationRequest
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
-from flight_blender.flight_feed import flight_stream_helper
 from flight_blender.flight_feed.data_definitions import FlightObservationsProcessingResponse, SingleAirtrafficObservation
 from flight_blender.flight_feed.rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
 from flight_blender.flight_feed.tasks import bulk_write_incoming_air_traffic_data, start_opensky_network_stream
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.rid import view_port_ops
 from flight_blender.rid.data_definitions import SignedUnSignedTelemetryObservations
-from flight_blender.rid.tasks import stream_rid_telemetry_data
 
 
 def _dispatch_observations(all_parsed: list[dict]) -> None:
@@ -61,6 +58,8 @@ class FlightFeedOperations:
         return asdict(op), 201
 
     async def get_air_traffic(self, session_id: uuid.UUID, view: Optional[str]) -> tuple[dict, int]:
+        from flight_blender.flight_feed import flight_stream_helper  # noqa: PLC0415
+
         if not view:
             return {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}, 400
         try:
@@ -139,6 +138,9 @@ class FlightFeedOperations:
         return await self.repo.delete_signed_telemetry_public_key(pk)
 
     async def submit_telemetry(self, raw_data: dict) -> tuple[dict, int]:
+        from flight_blender.common.database_operations import FlightBlenderDatabaseReader  # noqa: PLC0415
+        from flight_blender.rid.tasks import stream_rid_telemetry_data  # noqa: PLC0415
+
         validator = FlightBlenderTelemetryValidator()
         db_reader = FlightBlenderDatabaseReader()
 
@@ -187,6 +189,9 @@ class FlightFeedOperations:
         return {"message": "Telemetry data successfully submitted"}, 201
 
     async def submit_signed_telemetry(self, raw_data: dict) -> tuple[dict, int]:
+        from flight_blender.common.database_operations import FlightBlenderDatabaseReader  # noqa: PLC0415
+        from flight_blender.rid.tasks import stream_rid_telemetry_data  # noqa: PLC0415
+
         validator = FlightBlenderTelemetryValidator()
         db_reader = FlightBlenderDatabaseReader()
 

@@ -1,9 +1,8 @@
 import json
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
-from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.validators import URLValidator
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from implicitdict import ImplicitDict
@@ -15,7 +14,6 @@ from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLI
 from flight_blender.core.operations.geo_fence import GeoFenceOperations
 from flight_blender.geo_fence.common import validate_geo_zone
 from flight_blender.geo_fence.data_definitions import GeoFencePutSchema, GeoZoneCheckRequestBody, GeoZoneHttpsSource
-from flight_blender.geo_fence.tasks import write_geo_zone
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
@@ -26,6 +24,11 @@ GA_TEST_SCOPE = "geo-awareness.test"
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> GeoFenceOperations:
     return GeoFenceOperations(repo=SQLAlchemyGeoFenceRepository(db))
+
+
+def _is_valid_http_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 # ── GeoFence CRUD ────────────────────────────────────────────────────────────
@@ -59,6 +62,8 @@ async def set_geozone(
     request: Request,
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
+    from flight_blender.geo_fence.tasks import write_geo_zone
+
     if request.headers.get("content-type") != "application/json":
         return JSONResponse({"message": "Unsupported Media Type"}, status_code=415)
 
@@ -154,10 +159,7 @@ async def put_geozone_source(
             status_code=200,
         )
 
-    url_validator = URLValidator()
-    try:
-        url_validator(source_details.https_source.url)
-    except DjangoValidationError:
+    if not _is_valid_http_url(source_details.https_source.url):
         return JSONResponse({"result": "Unsupported", "message": "Invalid url provided"}, status_code=200)
 
     result = await ops.put_geozone_source(geozone_source_id, source_details.https_source.url)
