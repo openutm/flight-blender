@@ -44,8 +44,10 @@ class FlightFeedOperations:
         ]
 
     async def set_air_traffic(self, session_id: uuid.UUID, body: ObservationRequest) -> tuple[dict, int]:
-        for so in self._to_observations(session_id, body):
-            write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
+        all_parsed = [asdict(so) for so in self._to_observations(session_id, body)]
+        BATCH_SIZE = 250
+        for i in range(0, len(all_parsed), BATCH_SIZE):
+            bulk_write_incoming_air_traffic_data.delay(json.dumps(all_parsed[i : i + BATCH_SIZE]))
 
         op = FlightObservationsProcessingResponse(message="OK", status=201)
         return asdict(op), 201
