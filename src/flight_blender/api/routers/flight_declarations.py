@@ -10,10 +10,7 @@ from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.operations.flight_declarations import (
     FlightDeclarationOperations,
-    do_network_declarations_by_id,
     do_network_declarations_by_view,
-    do_set_operational_intent,
-    do_set_operational_intents_bulk,
 )
 from flight_blender.infrastructure.database.repositories.sa_flight_declarations import SQLAlchemyFlightDeclarationRepository
 from flight_blender.infrastructure.database.session import async_get_db
@@ -38,9 +35,10 @@ async def set_flight_declaration(
 @router.post("/set_operational_intent")
 async def set_operational_intent(
     body: dict = Body(...),
+    ops: FlightDeclarationOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    data, status_code = await sync_to_async(do_set_operational_intent)(body)
+    data, status_code = await ops.set_operational_intent(body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -59,11 +57,12 @@ async def set_flight_declarations_bulk(
 @router.post("/set_operational_intents_bulk")
 async def set_operational_intents_bulk(
     body: Any = Body(...),
+    ops: FlightDeclarationOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
     if not isinstance(body, list):
         return JSONResponse({"message": "Request body must be a JSON array of operational intent objects."}, status_code=400)
-    data, status_code = await sync_to_async(do_set_operational_intents_bulk)(body)
+    data, status_code = await ops.set_operational_intents_bulk(body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -107,9 +106,10 @@ async def get_flight_declaration(
 @router.get("/flight_declaration/{flight_declaration_id}/network_flight_declarations")
 async def network_flight_declaration_details(
     flight_declaration_id: uuid.UUID,
+    ops: FlightDeclarationOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    data, status_code = await sync_to_async(do_network_declarations_by_id)(str(flight_declaration_id))
+    data, status_code = await ops.get_network_declarations_by_id(str(flight_declaration_id))
     return JSONResponse(data, status_code=status_code)
 
 

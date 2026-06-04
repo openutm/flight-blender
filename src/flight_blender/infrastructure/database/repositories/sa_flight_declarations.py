@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
+from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM, FlightOperationTrackingORM
 
 
 class SQLAlchemyFlightDeclarationRepository:
@@ -49,6 +49,22 @@ class SQLAlchemyFlightDeclarationRepository:
         await self.db.flush()
         await self.db.refresh(obj)
         return obj
+
+    async def add_state_history_entry(
+        self,
+        flight_declaration_id: uuid.UUID,
+        original_state: int,
+        new_state: int,
+        notes: str = "",
+    ) -> None:
+        original = original_state or "start"
+        entry = FlightOperationTrackingORM(
+            flight_declaration_id=flight_declaration_id,
+            notes=notes,
+            deltas=json.dumps({"original_state": str(original), "new_state": str(new_state)}),
+        )
+        self.db.add(entry)
+        await self.db.flush()
 
     async def delete(self, declaration_id: uuid.UUID) -> bool:
         obj = await self.get_by_id(declaration_id)

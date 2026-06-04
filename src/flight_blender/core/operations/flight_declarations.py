@@ -5,25 +5,36 @@ from os import environ as env
 from typing import Any
 
 import arrow
-from django.db import transaction
+from asgiref.sync import sync_to_async
 from loguru import logger
 from marshmallow.exceptions import ValidationError
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+from flight_blender.config import settings
 from flight_blender.flight_declarations.data_definitions import (
     BulkFlightDeclarationCreateResponse,
     CreateFlightDeclarationRequestSchema,
+    CreateFlightDeclarationViaOperationalIntentRequestSchema,
+    DeconflictionRequest,
     FlightDeclarationCreateResponse,
     HTTP400Response,
     HTTP404Response,
+    IntersectionCheckResult,
 )
+from flight_blender.flight_declarations.deconfliction_protocol import DeconflictionEngine
 from flight_blender.flight_declarations.utils import OperationalIntentsConverter
-from flight_blender.flight_declarations.views import _process_intersection_result, _run_deconfliction, _validate_and_save_operational_intent
+from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
 from flight_blender.infrastructure.database.repositories.sa_flight_declarations import SQLAlchemyFlightDeclarationRepository
+from flight_blender.plugins.loader import load_plugin
 from flight_blender.rid import view_port_ops
-from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations
+
+
+def _get_deconfliction_engine():
+    engine_path = settings.FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE
+    if not engine_path:
+        return None
+    return load_plugin(engine_path, expected_protocol=DeconflictionEngine)
 
 
 def _validate_geojson(fc: dict) -> tuple[bool, str | None]:
@@ -130,65 +141,40 @@ async def _create_flight_declaration_record(
     return asdict(response), 200
 
 
-def do_set_operational_intent(request_data: dict) -> tuple[dict, int]:
-    ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
-    default_state = 0 if ussp_network_enabled else 1
-    flight_declaration, error = _validate_and_save_operational_intent(request_data, default_state)
-    if error or flight_declaration is None:
-        return error or {"message": "Unknown error"}, 400
-    intersection_results = _run_deconfliction([flight_declaration], ussp_network_enabled)
-    creation_response = _process_intersection_result(flight_declaration, intersection_results[str(flight_declaration.id)], ussp_network_enabled)
-    return asdict(creation_response), 200
-
-
-def do_set_operational_intents_bulk(operational_intents_list: list) -> tuple[dict, int]:
-    ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
-    default_state = 0 if ussp_network_enabled else 1
-
-    with transaction.atomic():
-        saved: dict[int, Any] = {}
-        results: list[dict] = []
-        failed_count = 0
-
-        for idx, item in enumerate(operational_intents_list):
-            try:
-                flight_declaration, error = _validate_and_save_operational_intent(item, default_state)
-                if error or flight_declaration is None:
-                    failed_count += 1
-                    error = error or {"message": "Unknown error"}
-                    results.append(
-                        {"index": idx, "success": False, "message": error.get("message", "Validation error"), "errors": error.get("errors")}
-                    )
-                else:
-                    saved[idx] = flight_declaration
-            except Exception as exc:
-                logger.error(f"Error at index {idx}: {exc}")
-                failed_count += 1
-                results.append({"index": idx, "success": False, "message": str(exc)})
-
-        intersection_results = _run_deconfliction(list(saved.values()), ussp_network_enabled)
-        submitted_count = 0
-        for idx, flight_declaration in saved.items():
-            fd_id = str(flight_declaration.id)
-            creation_response = _process_intersection_result(flight_declaration, intersection_results[fd_id], ussp_network_enabled)
-            submitted_count += 1
-            results.append(
-                {
-                    "index": idx,
-                    "success": True,
-                    "id": creation_response.id,
-                    "is_approved": creation_response.is_approved,
-                    "state": creation_response.state,
-                }
-            )
-
-    results.sort(key=lambda r: r["index"])
-    bulk_response = BulkFlightDeclarationCreateResponse(submitted=submitted_count, failed=failed_count, results=results)
-    http_status = 200 if failed_count == 0 else 207
-    return asdict(bulk_response), http_status
+def _run_deconfliction_sa(
+    flight_declarations: list[FlightDeclarationORM],
+    ussp_network_enabled: int,
+) -> dict[str, IntersectionCheckResult]:
+    if not flight_declarations:
+        return {}
+    results: dict[str, IntersectionCheckResult] = {}
+    for fd in flight_declarations:
+        view_box = [float(i) for i in fd.bounds.split(",")]
+        raw_geojson = fd.flight_declaration_raw_geojson
+        flight_declaration_geo_json = json.loads(raw_geojson) if raw_geojson else None
+        request = DeconflictionRequest(
+            start_datetime=fd.start_datetime,
+            end_datetime=fd.end_datetime,
+            view_box=view_box,
+            ussp_network_enabled=ussp_network_enabled,
+            declaration_id=str(fd.id),
+            flight_declaration_geo_json=flight_declaration_geo_json,
+            type_of_operation=fd.type_of_operation,
+            priority=0,
+        )
+        engine_cls = _get_deconfliction_engine()
+        if engine_cls is None:
+            logger.warning("No deconfliction engine configured; skipping deconfliction for %s", fd.id)
+            continue
+        engine = engine_cls()
+        result = engine.check_deconfliction(request)
+        results[str(fd.id)] = result
+    return results
 
 
 def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
+    from flight_blender.scd.dss_scd_helper import SCDOperations
+
     ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
 
     if not view:
@@ -223,39 +209,6 @@ def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
     my_scd_helper = SCDOperations()
     try:
         operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=volumes)
-    except (ValueError, ConnectionError):
-        operational_intent_geojson = []
-
-    return operational_intent_geojson, 200
-
-
-def do_network_declarations_by_id(flight_declaration_id: str) -> tuple[dict, int]:
-    ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
-    my_database_reader = FlightBlenderDatabaseReader()
-
-    if not ussp_network_enabled:
-        return asdict(HTTP400Response(message="USSP network cannot be queried since it is not enabled in Flight Blender")), 400
-
-    if not my_database_reader.check_flight_declaration_exists(flight_declaration_id=flight_declaration_id):
-        return asdict(HTTP404Response(message=f"Flight Declaration with ID {flight_declaration_id} not found")), 404
-
-    flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-
-    if flight_declaration.state not in [0, 1, 2, 3, 4]:
-        return asdict(HTTP400Response(message="USSP network can only be queried for operational intents that are active")), 400
-
-    try:
-        operational_intent_volumes_raw = json.loads(flight_declaration.operational_intent)
-        operational_intent_volumes = operational_intent_volumes_raw["volumes"]
-    except (json.JSONDecodeError, KeyError):
-        return asdict(HTTP400Response(message="Flight declaration has invalid or missing operational intent volumes")), 400
-
-    my_operational_intent_parser = OperationalIntentReferenceHelper()
-    all_volumes = [my_operational_intent_parser.parse_volume_to_volume4D(volume=volume) for volume in operational_intent_volumes]
-
-    my_scd_helper = SCDOperations()
-    try:
-        operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=all_volumes)
     except (ValueError, ConnectionError):
         operational_intent_geojson = []
 
@@ -381,3 +334,205 @@ class FlightDeclarationOperations:
             }, 409
 
         return {"message": "DSS submission initiated.", "id": str(flight_declaration.id)}, 200
+
+    async def set_operational_intent(self, request_data: dict) -> tuple[dict, int]:
+        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+        default_state = 0 if ussp_network_enabled else 1
+
+        schema = CreateFlightDeclarationViaOperationalIntentRequestSchema()
+        try:
+            schema.load(request_data)
+        except ValidationError as err:
+            return {"message": "Validation error", "errors": err.messages}, 400
+
+        operational_intent_volume4ds = request_data.get("operational_intent_volume4ds")
+        my_operational_intent_converter = OperationalIntentsConverter()
+        parsed_operational_intent = my_operational_intent_converter.parse_volume4ds_to_V4D_list(operational_intent_volume4ds)
+        _serialized_operational_intent = [asdict(v4d) for v4d in parsed_operational_intent]
+        my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=parsed_operational_intent)
+        flight_declaration_geo_json = my_operational_intent_converter.geo_json
+
+        start_datetime = request_data.get("start_datetime", arrow.now().isoformat())
+        end_datetime = request_data.get("end_datetime", arrow.now().isoformat())
+        dates_ok, dates_error = _validate_dates(start_datetime, end_datetime)
+        if not dates_ok:
+            return {"message": dates_error}, 400
+
+        bounds = my_operational_intent_converter.get_geo_json_bounds()
+        fd = await self.repo.create(
+            operational_intent=json.dumps(_serialized_operational_intent),
+            bounds=bounds,
+            type_of_operation=request_data.get("type_of_operation", 0),
+            aircraft_id=request_data["aircraft_id"],
+            submitted_by=request_data.get("submitted_by"),
+            is_approved=True,
+            start_datetime=arrow.get(start_datetime).datetime,
+            end_datetime=arrow.get(end_datetime).datetime,
+            originating_party=request_data.get("originating_party", "No Flight Information"),
+            flight_declaration_raw_geojson=json.dumps(flight_declaration_geo_json),
+            state=default_state,
+        )
+        await self.repo.add_state_history_entry(fd.id, 0, default_state, "Created Declaration")
+
+        intersection_results = await sync_to_async(_run_deconfliction_sa)([fd], ussp_network_enabled)
+        creation_response = await self._process_intersection_result_sa(fd, intersection_results[str(fd.id)], ussp_network_enabled)
+        return asdict(creation_response), 200
+
+    async def set_operational_intents_bulk(self, operational_intents_list: list) -> tuple[dict, int]:
+        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+        default_state = 0 if ussp_network_enabled else 1
+
+        saved: dict[int, FlightDeclarationORM] = {}
+        results: list[dict] = []
+        failed_count = 0
+
+        for idx, item in enumerate(operational_intents_list):
+            schema = CreateFlightDeclarationViaOperationalIntentRequestSchema()
+            try:
+                schema.load(item)
+            except ValidationError as err:
+                failed_count += 1
+                results.append({"index": idx, "success": False, "message": "Validation error", "errors": err.messages})
+                continue
+
+            try:
+                operational_intent_volume4ds = item.get("operational_intent_volume4ds")
+                my_operational_intent_converter = OperationalIntentsConverter()
+                parsed_operational_intent = my_operational_intent_converter.parse_volume4ds_to_V4D_list(operational_intent_volume4ds)
+                _serialized_operational_intent = [asdict(v4d) for v4d in parsed_operational_intent]
+                my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=parsed_operational_intent)
+                flight_declaration_geo_json = my_operational_intent_converter.geo_json
+
+                start_datetime = item.get("start_datetime", arrow.now().isoformat())
+                end_datetime = item.get("end_datetime", arrow.now().isoformat())
+                dates_ok, dates_error = _validate_dates(start_datetime, end_datetime)
+                if not dates_ok:
+                    failed_count += 1
+                    results.append({"index": idx, "success": False, "message": dates_error})
+                    continue
+
+                bounds = my_operational_intent_converter.get_geo_json_bounds()
+                fd = await self.repo.create(
+                    operational_intent=json.dumps(_serialized_operational_intent),
+                    bounds=bounds,
+                    type_of_operation=item.get("type_of_operation", 0),
+                    aircraft_id=item["aircraft_id"],
+                    submitted_by=item.get("submitted_by"),
+                    is_approved=True,
+                    start_datetime=arrow.get(start_datetime).datetime,
+                    end_datetime=arrow.get(end_datetime).datetime,
+                    originating_party=item.get("originating_party", "No Flight Information"),
+                    flight_declaration_raw_geojson=json.dumps(flight_declaration_geo_json),
+                    state=default_state,
+                )
+                await self.repo.add_state_history_entry(fd.id, 0, default_state, "Created Declaration")
+                saved[idx] = fd
+            except Exception as exc:
+                logger.error(f"Error at index {idx}: {exc}")
+                failed_count += 1
+                results.append({"index": idx, "success": False, "message": str(exc)})
+
+        intersection_results = await sync_to_async(_run_deconfliction_sa)(list(saved.values()), ussp_network_enabled)
+        submitted_count = 0
+        for idx, fd in saved.items():
+            creation_response = await self._process_intersection_result_sa(fd, intersection_results[str(fd.id)], ussp_network_enabled)
+            submitted_count += 1
+            results.append({
+                "index": idx,
+                "success": True,
+                "id": creation_response.id,
+                "is_approved": creation_response.is_approved,
+                "state": creation_response.state,
+            })
+
+        results.sort(key=lambda r: r["index"])
+        bulk_response = BulkFlightDeclarationCreateResponse(submitted=submitted_count, failed=failed_count, results=results)
+        http_status = 200 if failed_count == 0 else 207
+        return asdict(bulk_response), http_status
+
+    async def _process_intersection_result_sa(
+        self,
+        fd: FlightDeclarationORM,
+        intersection_result: IntersectionCheckResult,
+        ussp_network_enabled: int,
+    ) -> FlightDeclarationCreateResponse:
+        from flight_blender.flight_declarations.tasks import send_operational_update_message, submit_flight_declaration_to_dss_async
+
+        is_approved = intersection_result.is_approved
+        declaration_state = intersection_result.declaration_state
+        all_relevant_fences = intersection_result.all_relevant_fences
+        all_relevant_declarations = intersection_result.all_relevant_declarations
+
+        if not is_approved:
+            original_state = fd.state
+            updated_fd = await self.repo.update(fd.id, is_approved=False, state=declaration_state)
+            fd = updated_fd or fd
+            await self.repo.add_state_history_entry(
+                fd.id,
+                original_state,
+                declaration_state,
+                "Rejected by Flight Blender because of time/space conflicts with existing operations",
+            )
+
+        flight_declaration_id = str(fd.id)
+        send_operational_update_message.delay(
+            flight_declaration_id=flight_declaration_id,
+            message_text="Flight Declaration created..",
+            level="info",
+        )
+
+        if all_relevant_fences and all_relevant_declarations:
+            self_deconfliction_failed_msg = f"Self deconfliction failed for operation {flight_declaration_id} did not pass self-deconfliction, there are existing operations declared in the area"
+            send_operational_update_message.delay(
+                flight_declaration_id=flight_declaration_id,
+                message_text=self_deconfliction_failed_msg,
+                level="error",
+            )
+
+        auto_submit_to_dss = int(env.get("AUTO_SUBMIT_TO_DSS", 1))
+        if is_approved and declaration_state == 0 and ussp_network_enabled and auto_submit_to_dss:
+            submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
+
+        return FlightDeclarationCreateResponse(
+            id=flight_declaration_id,
+            message="Submitted Flight Declaration",
+            is_approved=is_approved,
+            state=declaration_state,
+        )
+
+    async def get_network_declarations_by_id(self, flight_declaration_id: str) -> tuple[dict, int]:
+        from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations
+
+        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+
+        if not ussp_network_enabled:
+            return asdict(HTTP400Response(message="USSP network cannot be queried since it is not enabled in Flight Blender")), 400
+
+        try:
+            fd_uuid = uuid.UUID(flight_declaration_id)
+        except ValueError:
+            return asdict(HTTP404Response(message=f"Flight Declaration with ID {flight_declaration_id} not found")), 404
+
+        fd = await self.repo.get_by_id(fd_uuid)
+        if fd is None:
+            return asdict(HTTP404Response(message=f"Flight Declaration with ID {flight_declaration_id} not found")), 404
+
+        if fd.state not in [0, 1, 2, 3, 4]:
+            return asdict(HTTP400Response(message="USSP network can only be queried for operational intents that are active")), 400
+
+        try:
+            operational_intent_volumes_raw = json.loads(fd.operational_intent)
+            operational_intent_volumes = operational_intent_volumes_raw["volumes"]
+        except (json.JSONDecodeError, KeyError):
+            return asdict(HTTP400Response(message="Flight declaration has invalid or missing operational intent volumes")), 400
+
+        my_operational_intent_parser = OperationalIntentReferenceHelper()
+        all_volumes = [my_operational_intent_parser.parse_volume_to_volume4D(volume=volume) for volume in operational_intent_volumes]
+
+        my_scd_helper = SCDOperations()
+        try:
+            operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=all_volumes)
+        except (ValueError, ConnectionError):
+            operational_intent_geojson = []
+
+        return operational_intent_geojson, 200
