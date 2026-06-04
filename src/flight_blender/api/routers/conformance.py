@@ -7,26 +7,9 @@ from fastapi.responses import JSONResponse
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE
-from flight_blender.conformance.data_definitions import ConformanceSummary
-from flight_blender.infrastructure.database.repositories.django_conformance import DjangoConformanceRepository
+from flight_blender.core.operations.conformance import ConformanceOperations
 
 router = APIRouter()
-
-
-def _serialize_record(record: Any) -> dict[str, Any]:
-    return {
-        "id": str(record.id),
-        "flight_declaration_id": str(record.flight_declaration_id),
-        "conformance_state": record.conformance_state,
-        "timestamp": record.timestamp,
-        "description": record.description,
-        "event_type": record.event_type,
-        "geofence_breach": record.geofence_breach,
-        "geofence_id": str(record.geofence_id) if record.geofence_id else None,
-        "resolved": record.resolved,
-        "created_at": record.created_at,
-        "updated_at": record.updated_at,
-    }
 
 
 def _parse_dates(start_date: str | None, end_date: str | None):
@@ -57,8 +40,7 @@ async def get_conformance_records(
     if error:
         return error
     start, end = dates
-    records = DjangoConformanceRepository().get_conformance_records_for_duration(start_time=start, end_time=end) or []
-    return {"conformance_records": [_serialize_record(record) for record in records]}
+    return {"conformance_records": await ConformanceOperations().get_records(start_time=start, end_time=end)}
 
 
 @router.get("/conformance_record_summary")
@@ -72,17 +54,10 @@ async def get_conformance_record_summary(
     if error:
         return error
     start, end = dates
-    records = list(DjangoConformanceRepository().get_conformance_records_for_duration(start_time=start, end_time=end) or [])
-    total_records = len(records)
-    conforming_records = sum(1 for record in records if record.conformance_state == 1)
-    non_conforming_records = total_records - conforming_records
-    conformance_rate = (conforming_records / total_records * 100) if total_records else 0
-    summary = ConformanceSummary(
-        total_records=total_records,
-        conforming_records=conforming_records,
-        non_conforming_records=non_conforming_records,
-        conformance_rate_percentage=conformance_rate,
-        start_date=start_date,
-        end_date=end_date,
+    summary = await ConformanceOperations().get_summary(
+        start_time=start,
+        end_time=end,
+        start_date=start_date or "",
+        end_date=end_date or "",
     )
     return {"summary": asdict(summary)}

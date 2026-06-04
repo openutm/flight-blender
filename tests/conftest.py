@@ -48,6 +48,11 @@ def auth_header(scopes: list[str]) -> dict:
     return {"HTTP_AUTHORIZATION": f"Bearer {_make_token(scopes)}"}
 
 
+def fastapi_auth_header(scopes: list[str]) -> dict[str, str]:
+    """Return an Authorization header dict for use with FastAPI TestClient (httpx)."""
+    return {"Authorization": f"Bearer {_make_token(scopes)}"}
+
+
 # ── Scope presets ────────────────────────────────────────────────────────────
 
 READ_SCOPE = ["flightblender.read"]
@@ -139,6 +144,18 @@ def _mock_all_redis(monkeypatch):
 def client():
     """Django test client for integration tests."""
     return Client(raise_request_exception=False)
+
+
+@pytest.fixture
+def mounted_sync_client(transactional_db):  # transactional_db: ordering guard + ensures committed writes are visible to ASGI thread
+    """Sync FastAPI client mounted at production ASGI prefixes.
+
+    Uses `transactional_db` so Django ORM writes in the test are committed and
+    visible to the ASGI handler thread spawned by TestClient.
+    """
+    mounted_app = Starlette(routes=[Mount(p, app=create_fastapi_app()) for p in MIGRATED_PREFIXES])
+    with TestClient(mounted_app, raise_server_exceptions=False) as c:
+        yield c
 
 
 @pytest.fixture
