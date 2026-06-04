@@ -14,11 +14,16 @@ from flight_blender.common.database_operations import FlightBlenderDatabaseReade
 from flight_blender.flight_feed import flight_stream_helper
 from flight_blender.flight_feed.data_definitions import FlightObservationsProcessingResponse, SingleAirtrafficObservation
 from flight_blender.flight_feed.rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
-from flight_blender.flight_feed.tasks import bulk_write_incoming_air_traffic_data, start_opensky_network_stream, write_incoming_air_traffic_data
+from flight_blender.flight_feed.tasks import bulk_write_incoming_air_traffic_data, start_opensky_network_stream
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.rid import view_port_ops
 from flight_blender.rid.data_definitions import SignedUnSignedTelemetryObservations
 from flight_blender.rid.tasks import stream_rid_telemetry_data
+
+
+def _dispatch_observations(all_parsed: list[dict]) -> None:
+    for i in range(0, len(all_parsed), 250):
+        bulk_write_incoming_air_traffic_data.delay(json.dumps(all_parsed[i : i + 250]))
 
 
 class FlightFeedOperations:
@@ -45,21 +50,13 @@ class FlightFeedOperations:
 
     async def set_air_traffic(self, session_id: uuid.UUID, body: ObservationRequest) -> tuple[dict, int]:
         all_parsed = [asdict(so) for so in self._to_observations(session_id, body)]
-        BATCH_SIZE = 250
-        batches = [all_parsed[i : i + BATCH_SIZE] for i in range(0, len(all_parsed), BATCH_SIZE)]
-        await asyncio.to_thread(
-            lambda: [bulk_write_incoming_air_traffic_data.delay(json.dumps(b)) for b in batches]
-        )
+        asyncio.create_task(asyncio.to_thread(_dispatch_observations, all_parsed))
         op = FlightObservationsProcessingResponse(message="OK", status=201)
         return asdict(op), 201
 
     async def bulk_set_air_traffic(self, session_id: uuid.UUID, body: ObservationRequest) -> tuple[dict, int]:
         all_parsed = [asdict(so) for so in self._to_observations(session_id, body)]
-        BATCH_SIZE = 250
-        batches = [all_parsed[i : i + BATCH_SIZE] for i in range(0, len(all_parsed), BATCH_SIZE)]
-        await asyncio.to_thread(
-            lambda: [bulk_write_incoming_air_traffic_data.delay(json.dumps(b)) for b in batches]
-        )
+        asyncio.create_task(asyncio.to_thread(_dispatch_observations, all_parsed))
         op = FlightObservationsProcessingResponse(message="OK", status=201)
         return asdict(op), 201
 
