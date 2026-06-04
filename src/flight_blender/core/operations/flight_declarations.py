@@ -118,6 +118,7 @@ async def _create_flight_declaration_record(
     default_state = 0 if ussp_network_enabled else 1
 
     provided_state = request_data.get("flight_state", default_state)
+    # TODO: Should this check flight_approved?
     is_approved = provided_state not in (0, 8)
 
     created = await repo.create(

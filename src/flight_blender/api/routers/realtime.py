@@ -23,11 +23,11 @@ async def _redis_pubsub_ws(websocket: WebSocket, channel_name: str) -> None:
         await redis_client.aclose()
 
 
-@router.websocket("/realtime/heartbeat/{session_id}")
+@router.websocket("/ws/surveillance/heartbeat/{session_id}")
 async def heartbeat_ws(websocket: WebSocket, session_id: str) -> None:
     await _redis_pubsub_ws(websocket, f"heartbeat_{session_id}")
 
 
-@router.websocket("/realtime/track/{session_id}")
+@router.websocket("/ws/surveillance/track/{session_id}")
 async def track_ws(websocket: WebSocket, session_id: str) -> None:
     await _redis_pubsub_ws(websocket, f"track_{session_id}")
