@@ -48,7 +48,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_celery_beat",
-    "rest_framework",
     "flight_blender.flight_declarations.apps.FlightDeclarationOperationsConfig",
     "flight_blender.constraint.apps.ConstraintOperationsConfig",
     "flight_blender.geo_fence.apps.GeoFenceOperationsConfig",

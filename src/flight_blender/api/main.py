@@ -6,6 +6,7 @@ from flight_blender.api.routers import (
     flight_declarations,
     flight_feed,
     geo_fence,
+    misc,
     notifications,
     rid,
     scd,
@@ -32,6 +33,7 @@ MIGRATED_PREFIXES: list[str] = [
 def create_fastapi_app() -> FastAPI:
     app = FastAPI(title="Flight Blender")
     # Routers declare NO prefix — asgi.py mount holds it
+    app.include_router(misc.router)
     app.include_router(geo_fence.router)
     app.include_router(weather.router)
     app.include_router(surveillance.router)

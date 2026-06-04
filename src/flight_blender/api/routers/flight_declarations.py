@@ -164,6 +164,35 @@ def _do_set_operational_intents_bulk(operational_intents_list: list) -> tuple[di
     return asdict(bulk_response), http_status
 
 
+def _serialize_flight_declaration(fd) -> dict:
+    """Pure-Python replacement for FlightDeclarationSerializer."""
+    from flight_blender.flight_declarations.utils import OperationalIntentsConverter
+    from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper
+
+    o = json.loads(fd.operational_intent)
+    volumes = o.get("volumes", [])
+    parser = OperationalIntentReferenceHelper()
+    converter = OperationalIntentsConverter()
+    volumes_list = [parser.parse_volume_to_volume4D(v) for v in volumes]
+    converter.convert_operational_intent_to_geo_json(volumes=volumes_list)
+
+    return {
+        "operational_intent": o,
+        "originating_party": fd.originating_party,
+        "type_of_operation": fd.type_of_operation,
+        "id": str(fd.id),
+        "state": fd.state,
+        "is_approved": fd.is_approved,
+        "start_datetime": fd.start_datetime.isoformat() if fd.start_datetime else None,
+        "end_datetime": fd.end_datetime.isoformat() if fd.end_datetime else None,
+        "flight_declaration_geojson": converter.geo_json,
+        "flight_declaration_raw_geojson": json.loads(fd.flight_declaration_raw_geojson) if fd.flight_declaration_raw_geojson else None,
+        "bounds": fd.bounds,
+        "approved_by": fd.approved_by,
+        "submitted_by": fd.submitted_by,
+    }
+
+
 def _do_list_flight_declarations(
     start_date: str | None,
     end_date: str | None,
@@ -172,8 +201,11 @@ def _do_list_flight_declarations(
     page: int = 1,
     page_size: int = 10,
 ) -> tuple[dict, int]:
-    from flight_blender.flight_declarations.serializers import FlightDeclarationSerializer
-    from flight_blender.flight_declarations.views import FlightDeclarationCreateList
+    import arrow
+
+    from flight_blender.common.data_definitions import FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH
+    from flight_blender.flight_declarations.flight_declarations_rtree_helper import FlightDeclarationRTreeIndexFactory
+    from flight_blender.flight_declarations.models import FlightDeclaration
 
     view_port = [float(i) for i in view.split(",")] if view else []
     states: list[int] | None = None
@@ -185,12 +217,24 @@ def _do_list_flight_declarations(
             except ValueError:
                 return {"error": "State values must be integers."}, 400
 
-    lister = FlightDeclarationCreateList()
-    qs = lister.get_relevant_flight_declaration(start_date=start_date, end_date=end_date, view_port=view_port, states=states)
+    present = arrow.now()
+    s_date = arrow.get(start_date, "YYYY-MM-DD") if start_date else present.shift(days=-1)
+    e_date = arrow.get(end_date, "YYYY-MM-DD") if end_date else present.shift(days=1)
+    qs = FlightDeclaration.objects.filter(start_datetime__gte=s_date.isoformat(), end_datetime__lte=e_date.isoformat())
+    if states:
+        qs = qs.filter(state__in=states)
+    if view_port:
+        my_rtree_helper = FlightDeclarationRTreeIndexFactory(index_name=FLIGHT_DECLARATION_OPINT_INDEX_BASEPATH)
+        my_rtree_helper.generate_flight_declaration_index(all_flight_declarations=qs)
+        all_relevant_fences = my_rtree_helper.check_flight_declaration_box_intersection(view_box=view_port)
+        relevant_id_set = [i["flight_declaration_id"] for i in all_relevant_fences]
+        my_rtree_helper.clear_rtree_index()
+        qs = FlightDeclaration.objects.filter(id__in=relevant_id_set)
+
     count = qs.count()
     offset = (page - 1) * page_size
-    data = FlightDeclarationSerializer(qs[offset : offset + page_size], many=True).data
-    return {"count": count, "next": None, "previous": None, "results": list(data)}, 200
+    data = [_serialize_flight_declaration(fd) for fd in qs[offset : offset + page_size]]
+    return {"count": count, "next": None, "previous": None, "results": data}, 200
 
 
 def _do_create_flight_declaration_via_list(request_data: dict) -> tuple[dict, int]:
@@ -217,47 +261,62 @@ def _do_create_flight_declaration_via_list(request_data: dict) -> tuple[dict, in
 
 def _do_get_flight_declaration(pk: str) -> tuple[dict | None, int]:
     from flight_blender.flight_declarations.models import FlightDeclaration
-    from flight_blender.flight_declarations.serializers import FlightDeclarationSerializer
 
     try:
         fd = FlightDeclaration.objects.get(pk=pk)
     except FlightDeclaration.DoesNotExist:
         return None, 404
-    data = FlightDeclarationSerializer(fd).data
-    return dict(data), 200
+    return _serialize_flight_declaration(fd), 200
 
 
 def _do_update_state(pk: str, state: int) -> tuple[dict, int]:
+    from flight_blender.common.data_definitions import OPERATION_STATES, OPERATOR_EVENT_LOOKUP
+    from flight_blender.conformance.conformance_checks_handler import FlightOperationConformanceHelper
     from flight_blender.flight_declarations.models import FlightDeclaration
-    from flight_blender.flight_declarations.serializers import FlightDeclarationStateSerializer
 
     try:
         fd = FlightDeclaration.objects.get(pk=pk)
     except FlightDeclaration.DoesNotExist:
         return {"detail": "Not found"}, 404
-    serializer = FlightDeclarationStateSerializer(fd, data={"state": state}, partial=True)
-    if not serializer.is_valid():
-        return {"detail": serializer.errors}, 400
-    serializer.save()
-    return dict(serializer.data), 200
+
+    if state not in list(OPERATOR_EVENT_LOOKUP.keys()):
+        return {"detail": "An operator can only set the state to Activated (2), Contingent (4), Ended (5), Withdrawn (6), or Cancelled (7) using this endpoint"}, 400
+
+    current_state = fd.state
+    event = OPERATOR_EVENT_LOOKUP[state]
+
+    if current_state in [5, 6, 7, 8]:
+        return {"detail": "Cannot change state of an operation that has already been set as ended, withdrawn, cancelled or rejected"}, 400
+
+    my_conformance_helper = FlightOperationConformanceHelper(str(fd.id))
+    if not my_conformance_helper.verify_operation_state_transition(original_state=current_state, new_state=state, event=event):
+        return {
+            "detail": f"State transition to {OPERATION_STATES[state][1]} from current state of {OPERATION_STATES[current_state][1]} is not allowed per the ASTM standards"
+        }, 400
+
+    fd.state = state
+    fd.save()
+    fd.add_state_history_entry(
+        original_state=current_state,
+        new_state=state,
+        notes=f"State changed by operator from {OPERATION_STATES[current_state][1]} to {OPERATION_STATES[state][1]}",
+    )
+    my_conformance_helper.manage_operation_state_transition(original_state=current_state, new_state=state, event=event)
+    return {"state": state, "submitted_by": fd.submitted_by}, 200
 
 
 def _do_update_approval(pk: str, is_approved: bool, approved_by: str | None) -> tuple[dict, int]:
     from flight_blender.flight_declarations.models import FlightDeclaration
-    from flight_blender.flight_declarations.serializers import FlightDeclarationApprovalSerializer
 
     try:
         fd = FlightDeclaration.objects.get(pk=pk)
     except FlightDeclaration.DoesNotExist:
         return {"detail": "Not found"}, 404
-    payload: dict = {"is_approved": is_approved}
+    fd.is_approved = is_approved
     if approved_by is not None:
-        payload["approved_by"] = approved_by
-    serializer = FlightDeclarationApprovalSerializer(fd, data=payload, partial=True)
-    if not serializer.is_valid():
-        return {"detail": serializer.errors}, 400
-    serializer.save()
-    return dict(serializer.data), 200
+        fd.approved_by = approved_by
+    fd.save()
+    return {"is_approved": fd.is_approved, "approved_by": fd.approved_by}, 200
 
 
 def _do_delete_flight_declaration(declaration_id: str) -> int:

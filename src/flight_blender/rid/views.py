@@ -14,7 +14,6 @@ from django.http import HttpResponse, JsonResponse
 from dotenv import find_dotenv, load_dotenv
 from implicitdict import ImplicitDict
 from loguru import logger
-from rest_framework.decorators import api_view
 from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiagonalKm
 from uas_standards.interuss.automated_testing.rid.v1.injection import Time, UserNotification
 
@@ -109,14 +108,12 @@ class SubscriptionsHelper:
         pass
 
 
-@api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_rid_capabilities(request):
     status = RIDCapabilitiesResponse(capabilities=["ASTMRID2022"])
     return JsonResponse(json.loads(json.dumps(status, cls=EnhancedJSONEncoder)), status=200)
 
 
-@api_view(["PUT"])
 @requires_scopes([FLIGHTBLENDER_WRITE_SCOPE])
 def create_dss_subscription(request, *args, **kwargs):
     """This module takes a lat, lng box from Flight Spotlight and puts in a subscription to the DSS for the ISA"""
@@ -183,7 +180,6 @@ def create_dss_subscription(request, *args, **kwargs):
     return HttpResponse(json.dumps(msg), status=status, content_type=RESPONSE_CONTENT_TYPE)
 
 
-@api_view(["GET"])
 @requires_scopes([FLIGHTBLENDER_READ_SCOPE])
 def get_rid_data(request, subscription_id):
     """This is the GET endpoint for remote id data given a DSS subscription id. Flight Blender will store flight URLs and every time the data is queried, it is mainly used by Flight Spotlight"""
@@ -227,7 +223,6 @@ def get_rid_data(request, subscription_id):
         return HttpResponse(json.dumps({}), status=404, content_type=RESPONSE_CONTENT_TYPE)
 
 
-@api_view(["POST"])
 @requires_scopes(["dss.write.identification_service_areas"])
 def dss_isa_callback(request, isa_id):
     """This is the call back end point that other USSes in the DSS network call once a subscription is updated"""
@@ -287,7 +282,6 @@ def dss_isa_callback(request, isa_id):
     return HttpResponse(status=204, content_type=RESPONSE_CONTENT_TYPE)
 
 
-@api_view(["GET"])
 @requires_scopes(["dss.read.identification_service_areas"])
 def get_flight_data(request, flight_id):
     """This is the end point for the rid_qualifier to get details of a flight"""
@@ -311,7 +305,6 @@ def get_flight_data(request, flight_id):
         return JsonResponse(json.loads(json.dumps(asdict(fd))), status=404)
 
 
-@api_view(["GET"])
 @requires_scopes(["dss.read.identification_service_areas"])
 def get_display_data(request):
     """This is the end point for the rid_qualifier test DSS network call once a subscription is updated"""
@@ -452,7 +445,6 @@ def get_display_data(request):
         return JsonResponse(view_port_error, status=400, content_type=RESPONSE_CONTENT_TYPE)
 
 
-@api_view(["PUT"])
 @requires_scopes(["rid.inject_test_data"])
 def create_test(request, test_id):
     """This is the end point for the rid_qualifier to get details of a flight"""
@@ -485,7 +477,6 @@ def create_test(request, test_id):
     return JsonResponse(asdict(create_test_response), status=200)
 
 
-@api_view(["DELETE"])
 @requires_scopes(["rid.inject_test_data"])
 def delete_test(request, test_id, version):
     """This is the end point for the rid_qualifier to get details of a flight"""
@@ -506,7 +497,6 @@ def delete_test(request, test_id, version):
     return JsonResponse({}, status=200)
 
 
-@api_view(["GET"])
 @requires_scopes(["rid.inject_test_data"])
 def user_notifications(request):
     try:

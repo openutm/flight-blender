@@ -170,12 +170,8 @@ def mounted_sync_client(transactional_db):  # transactional_db: ordering guard +
 
 
 @pytest.fixture
-async def fastapi_client(db):  # db: ordering guard — ensures pytest-django SQLite is ready first
-    """FastAPI test client backed by an in-memory async SQLite database.
-
-    `db` ensures pytest-django has set up its SQLite before we start,
-    keeping the two ORMs from racing on filesystem init.
-    """
+async def fastapi_client():
+    """FastAPI test client backed by an in-memory async SQLite database."""
     test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False})
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
@@ -201,7 +197,7 @@ async def fastapi_client(db):  # db: ordering guard — ensures pytest-django SQ
 
 
 @pytest.fixture
-async def mounted_fastapi_client(db):
+async def mounted_fastapi_client():
     """ASGI-mounted FastAPI client that matches production migrated prefixes."""
     test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False})
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)

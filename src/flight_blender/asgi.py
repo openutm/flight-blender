@@ -19,8 +19,13 @@ from flight_blender.surveillance.routing import websocket_urlpatterns  # noqa: E
 django_asgi_app = get_asgi_application()
 fastapi_app = create_fastapi_app()
 
+# Domain-specific prefixes → FastAPI
 _routes = [Mount(p, app=fastapi_app) for p in MIGRATED_PREFIXES]
-_routes.append(Mount("/", app=django_asgi_app))
+# Django admin: Starlette strips "/admin" prefix before passing to Django,
+# so Django's urls.py registers admin at path("", admin.site.urls).
+_routes.append(Mount("/admin", app=django_asgi_app))
+# Catch-all → FastAPI (handles /ping, /signing_public_key, etc.)
+_routes.append(Mount("/", app=fastapi_app))
 
 application = ProtocolTypeRouter(
     {
