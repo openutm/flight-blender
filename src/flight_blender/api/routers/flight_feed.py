@@ -2,11 +2,8 @@ import json
 import uuid
 from typing import Any
 
-from django.test import RequestFactory
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from rest_framework.parsers import JSONParser
-from rest_framework.request import Request as DRFRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
@@ -24,15 +21,6 @@ GA_TEST_SCOPE = "geo-awareness.test"
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> FlightFeedOperations:
     return FlightFeedOperations(repo=SQLAlchemyFlightFeedRepository(db))
-
-
-def _build_drf_request(path: str, body: bytes, headers: dict) -> DRFRequest:
-    """Wrap a raw FastAPI request body into a DRF request for http_message_signatures verification."""
-    rf = RequestFactory()
-    django_request = rf.put(path, data=body, content_type="application/json")
-    for k, v in headers.items():
-        django_request.META["HTTP_" + k.upper().replace("-", "_")] = v
-    return DRFRequest(django_request, parsers=[JSONParser()])
 
 
 # ── Air Traffic ───────────────────────────────────────────────────────────────
@@ -102,15 +90,15 @@ async def set_signed_telemetry(
 ):
     body = await request.body()
     headers = dict(request.headers)
-    drf_request = _build_drf_request("/flight_stream/set_signed_telemetry", body, headers)
+    url = str(request.url)
 
-    if not MessageVerifier().verify_message(drf_request):
+    if not MessageVerifier().verify_message(body=body, headers=headers, url=url):
         raise HTTPException(
             status_code=400,
             detail={"message": "Could not verify against public keys setup in Flight Blender"},
         )
 
-    result, status_code = await ops.submit_signed_telemetry(raw_data=drf_request.data)
+    result, status_code = await ops.submit_signed_telemetry(raw_data=json.loads(body))
     if status_code != 201:
         return JSONResponse(result, status_code=status_code)
 

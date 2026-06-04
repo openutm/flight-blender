@@ -156,27 +156,30 @@ class MessageVerifier:
 
         return public_keys
 
-    def verify_message(self, request) -> bool:
+    def verify_message(self, body: bytes, headers: dict, url: str) -> bool:
         """
-        Verifies the authenticity of a given HTTP request using stored public keys.
+        Verifies the authenticity of an HTTP request using stored public keys.
         Args:
-            request: The HTTP request object to be verified. It should contain the
-                     necessary data and headers for verification.
+            body: Raw request body bytes.
+            headers: HTTP headers dict.
+            url: Full request URL.
         Returns:
-            bool: True if the request is successfully verified using the stored
-                  public keys, False otherwise.
-        Raises:
-            HTTPMessageVerifierError: If the verification process fails for any reason.
+            bool: True if successfully verified, False otherwise.
         """
         stored_public_keys = self.get_public_keys()
         if not stored_public_keys:
             return False
 
+        try:
+            parsed_body = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            return False
+
         r = requests.Request(
             "PUT",
-            request.build_absolute_uri(),
-            json=request.data,
-            headers=request.headers,
+            url,
+            json=parsed_body,
+            headers=dict(headers),
         )
 
         for key_id, jwk_detail in stored_public_keys.items():

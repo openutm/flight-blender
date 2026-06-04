@@ -48,6 +48,7 @@ class TestSurveillanceSensorsFastAPI:
         assert data["active_sensors"] == []
 
 
+@pytest.mark.django_db
 class TestSurveillanceSessionFastAPI:
     def test_start_session_unauthenticated(self, fastapi_client):
         session_id = str(uuid.uuid4())

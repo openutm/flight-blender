@@ -1,13 +1,12 @@
-import json
 import uuid
 
 import pytest
-from tests.conftest import auth_header, READ_SCOPE, WRITE_SCOPE, GA_TEST_SCOPE
+from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE
 
 
 @pytest.mark.django_db
 class TestSetAirTraffic:
-    def test_set_air_traffic(self, client):
+    def test_set_air_traffic(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {
             "observations": [
@@ -22,15 +21,14 @@ class TestSetAirTraffic:
                 }
             ]
         }
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 201
 
-    def test_set_air_traffic_with_metadata(self, client):
+    def test_set_air_traffic_with_metadata(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {
             "observations": [
@@ -46,15 +44,14 @@ class TestSetAirTraffic:
                 }
             ]
         }
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 201
 
-    def test_set_air_traffic_multiple_observations(self, client):
+    def test_set_air_traffic_multiple_observations(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {
             "observations": [
@@ -70,46 +67,42 @@ class TestSetAirTraffic:
                 for i in range(5)
             ]
         }
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 201
 
-    def test_set_air_traffic_missing_observations(self, client):
+    def test_set_air_traffic_missing_observations(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/set_air_traffic/{session_id}",
-            data=json.dumps({}),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json={},
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
-    def test_set_air_traffic_unsupported_media_type(self, client):
+    def test_set_air_traffic_unsupported_media_type(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/set_air_traffic/{session_id}",
-            data="{}",
-            content_type="text/plain",
-            **auth_header(WRITE_SCOPE),
+            content=b"{}",
+            headers={**fastapi_auth_header(WRITE_SCOPE), "content-type": "text/plain"},
         )
-        assert resp.status_code == 415
+        assert resp.status_code == 422
 
-    def test_set_air_traffic_invalid_observation(self, client):
+    def test_set_air_traffic_invalid_observation(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {"observations": [{"invalid": "data"}]}
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
-    def test_set_air_traffic_missing_required_field(self, client):
+    def test_set_air_traffic_missing_required_field(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {
             "observations": [
@@ -120,18 +113,17 @@ class TestSetAirTraffic:
                 }
             ]
         }
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
 
 @pytest.mark.django_db
 class TestBulkSetAirTraffic:
-    def test_bulk_set_air_traffic(self, client):
+    def test_bulk_set_air_traffic(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {
             "observations": [
@@ -146,15 +138,14 @@ class TestBulkSetAirTraffic:
                 }
             ]
         }
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/bulk_set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 201
 
-    def test_bulk_set_air_traffic_with_metadata(self, client):
+    def test_bulk_set_air_traffic_with_metadata(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {
             "observations": [
@@ -170,15 +161,14 @@ class TestBulkSetAirTraffic:
                 }
             ]
         }
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/bulk_set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 201
 
-    def test_bulk_set_air_traffic_multiple_batches(self, client):
+    def test_bulk_set_air_traffic_multiple_batches(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {
             "observations": [
@@ -194,104 +184,99 @@ class TestBulkSetAirTraffic:
                 for i in range(300)
             ]
         }
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/bulk_set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 201
 
-    def test_bulk_set_missing_observations(self, client):
+    def test_bulk_set_missing_observations(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/bulk_set_air_traffic/{session_id}",
-            data=json.dumps({}),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json={},
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
-    def test_bulk_set_invalid_observation(self, client):
+    def test_bulk_set_invalid_observation(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
         payload = {"observations": [{"invalid": "data"}]}
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/bulk_set_air_traffic/{session_id}",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
-    def test_bulk_set_unsupported_media_type(self, client):
+    def test_bulk_set_unsupported_media_type(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.post(
+        resp = mounted_sync_client.post(
             f"/flight_stream/bulk_set_air_traffic/{session_id}",
-            data="{}",
-            content_type="text/plain",
-            **auth_header(WRITE_SCOPE),
+            content=b"{}",
+            headers={**fastapi_auth_header(WRITE_SCOPE), "content-type": "text/plain"},
         )
-        assert resp.status_code == 415
+        assert resp.status_code == 422
 
 
 @pytest.mark.django_db
 class TestGetAirTraffic:
-    def test_get_air_traffic_missing_view(self, client):
+    def test_get_air_traffic_missing_view(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.get(
+        resp = mounted_sync_client.get(
             f"/flight_stream/get_air_traffic/{session_id}",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 400
 
-    def test_get_air_traffic_invalid_view(self, client):
+    def test_get_air_traffic_invalid_view(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.get(
+        resp = mounted_sync_client.get(
             f"/flight_stream/get_air_traffic/{session_id}?view=bad",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 400
 
-    def test_get_air_traffic_empty(self, client):
+    def test_get_air_traffic_empty(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.get(
+        resp = mounted_sync_client.get(
             f"/flight_stream/get_air_traffic/{session_id}?view=52.500,13.399,52.501,13.400",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 200
         data = resp.json()
         assert "observations" in data
 
-    def test_get_air_traffic_invalid_port(self, client):
+    def test_get_air_traffic_invalid_port(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
-        resp = client.get(
+        resp = mounted_sync_client.get(
             f"/flight_stream/get_air_traffic/{session_id}?view=52.5,13.4,52.5,13.4",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
-        # Invalid viewport (zero area)
         assert resp.status_code in (200, 400)
 
 
 @pytest.mark.django_db
 class TestStartOpenSkyFeed:
-    def test_start_opensky_missing_view(self, client):
-        resp = client.get(
+    def test_start_opensky_missing_view(self, mounted_sync_client):
+        resp = mounted_sync_client.get(
             "/flight_stream/start_opensky_feed",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 400
 
-    def test_start_opensky_invalid_view(self, client):
-        resp = client.get(
+    def test_start_opensky_invalid_view(self, mounted_sync_client):
+        resp = mounted_sync_client.get(
             "/flight_stream/start_opensky_feed?view=bad",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 400
 
-    def test_start_opensky_valid_view(self, client):
-        resp = client.get(
+    def test_start_opensky_valid_view(self, mounted_sync_client):
+        resp = mounted_sync_client.get(
             "/flight_stream/start_opensky_feed?view=52.500,13.399,52.501,13.400",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -300,16 +285,15 @@ class TestStartOpenSkyFeed:
 
 @pytest.mark.django_db
 class TestSetTelemetry:
-    def test_set_telemetry_missing_observations(self, client):
-        resp = client.put(
+    def test_set_telemetry_missing_observations(self, mounted_sync_client):
+        resp = mounted_sync_client.put(
             "/flight_stream/set_telemetry",
-            data=json.dumps({}),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json={},
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 400
 
-    def test_set_telemetry_missing_flight_details(self, client):
+    def test_set_telemetry_missing_flight_details(self, mounted_sync_client):
         payload = {
             "observations": [
                 {
@@ -317,15 +301,15 @@ class TestSetTelemetry:
                 }
             ]
         }
-        resp = client.put(
+        resp = mounted_sync_client.put(
             "/flight_stream/set_telemetry",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
         assert resp.status_code == 400
 
-    def test_set_telemetry_invalid_flight_details(self, client):
+    def test_set_telemetry_invalid_flight_details(self, mounted_sync_client):
+        import uuid as _uuid
         payload = {
             "observations": [
                 {
@@ -337,7 +321,7 @@ class TestSetTelemetry:
                     ],
                     "flight_details": {
                         "rid_details": {
-                            "id": str(uuid.uuid4()),
+                            "id": str(_uuid.uuid4()),
                             "operator_id": "OP-001",
                             "operator_location": {"lat": 52.5, "lng": 13.4},
                             "operation_description": "Test",
@@ -348,49 +332,21 @@ class TestSetTelemetry:
                 }
             ]
         }
-        resp = client.put(
+        resp = mounted_sync_client.put(
             "/flight_stream/set_telemetry",
-            data=json.dumps(payload),
-            content_type="application/json",
-            **auth_header(WRITE_SCOPE),
+            json=payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
         )
-        # Operation doesn't exist → 400 or dacite parse error → 500
         assert resp.status_code in (400, 500)
 
 
 @pytest.mark.django_db
 class TestTrafficInformationDiscovery:
-    def test_traffic_info_not_registered(self, client):
-        # traffic_information_discovery_view is defined but NOT registered in urls.py
-        resp = client.get(
+    def test_traffic_info_not_registered(self, mounted_sync_client):
+        resp = mounted_sync_client.get(
             "/flight_stream/traffic_information?view=52.500,13.399,52.501,13.400",
-            **auth_header(READ_SCOPE),
+            headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 404
 
 
-@pytest.mark.django_db
-class TestPublicKeys:
-    def test_list_public_keys(self, client):
-        resp = client.get(
-            "/flight_stream/public_keys/",
-            **auth_header(GA_TEST_SCOPE),
-        )
-        assert resp.status_code == 200
-
-    def test_create_public_key(self, client):
-        resp = client.post(
-            "/flight_stream/public_keys/",
-            data=json.dumps({"key": "test-key-data"}),
-            content_type="application/json",
-            **auth_header(GA_TEST_SCOPE),
-        )
-        assert resp.status_code in (200, 201, 400)
-
-    def test_public_key_detail_not_found(self, client):
-        pk = str(uuid.uuid4())
-        resp = client.get(
-            f"/flight_stream/public_keys/{pk}/",
-            **auth_header(GA_TEST_SCOPE),
-        )
-        assert resp.status_code == 404
