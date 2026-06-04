@@ -164,7 +164,14 @@ def _do_set_operational_intents_bulk(operational_intents_list: list) -> tuple[di
     return asdict(bulk_response), http_status
 
 
-def _do_list_flight_declarations(start_date: str | None, end_date: str | None, view: str | None, states_raw: str | None) -> tuple[dict, int]:
+def _do_list_flight_declarations(
+    start_date: str | None,
+    end_date: str | None,
+    view: str | None,
+    states_raw: str | None,
+    page: int = 1,
+    page_size: int = 10,
+) -> tuple[dict, int]:
     from flight_blender.flight_declarations.serializers import FlightDeclarationSerializer
     from flight_blender.flight_declarations.views import FlightDeclarationCreateList
 
@@ -181,7 +188,8 @@ def _do_list_flight_declarations(start_date: str | None, end_date: str | None, v
     lister = FlightDeclarationCreateList()
     qs = lister.get_relevant_flight_declaration(start_date=start_date, end_date=end_date, view_port=view_port, states=states)
     count = qs.count()
-    data = FlightDeclarationSerializer(qs, many=True).data
+    offset = (page - 1) * page_size
+    data = FlightDeclarationSerializer(qs[offset : offset + page_size], many=True).data
     return {"count": count, "next": None, "previous": None, "results": list(data)}, 200
 
 
@@ -374,7 +382,7 @@ def _do_network_declarations_by_id(flight_declaration_id: str) -> tuple[dict, in
         operational_intent_volumes_raw = json.loads(flight_declaration.operational_intent)
         operational_intent_volumes = operational_intent_volumes_raw["volumes"]
     except (json.JSONDecodeError, KeyError):
-        return _asdict(HTTP400Response(message="Flight declaration has invalid or missing operational intent volumes")), 400
+        return asdict(HTTP400Response(message="Flight declaration has invalid or missing operational intent volumes")), 400
 
     my_operational_intent_parser = OperationalIntentReferenceHelper()
     all_volumes = [my_operational_intent_parser.parse_volume_to_volume4D(volume=volume) for volume in operational_intent_volumes]
@@ -437,9 +445,11 @@ async def list_flight_declarations(
     end_date: str | None = None,
     view: str | None = None,
     state: str | None = None,
+    page: int = 1,
+    page_size: int = 10,
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    data, status_code = await sync_to_async(_do_list_flight_declarations)(start_date, end_date, view, state)
+    data, status_code = await sync_to_async(_do_list_flight_declarations)(start_date, end_date, view, state, page, page_size)
     return JSONResponse(data, status_code=status_code)
 
 
