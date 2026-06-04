@@ -10,7 +10,7 @@ from flight_blender.config import settings
 from flight_blender.core.operations.weather import WeatherOperations
 from flight_blender.infrastructure.external.weather_client import WeatherClient
 
-router = APIRouter()
+router = APIRouter(prefix="/weather_monitoring_ops")
 
 
 def _ops() -> WeatherOperations:

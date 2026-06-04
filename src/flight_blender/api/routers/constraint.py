@@ -11,7 +11,7 @@ from flight_blender.infrastructure.database.session import async_get_db
 
 CONSTRAINT_SCOPE = "utm.constraint_processing"
 
-router = APIRouter()
+router = APIRouter(prefix="/constraint_ops")
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> ConstraintOperations:

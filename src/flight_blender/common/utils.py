@@ -1,6 +1,7 @@
 import datetime
 import json
 from dataclasses import asdict, is_dataclass
+from enum import Enum
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils.encoding import force_str
@@ -20,6 +21,8 @@ class EnhancedJSONEncoder(json.JSONEncoder):
             return o.isoformat()
         if is_dataclass(o):
             return asdict(o)
+        if isinstance(o, Enum):
+            return o.value
         return super().default(o)
 
 

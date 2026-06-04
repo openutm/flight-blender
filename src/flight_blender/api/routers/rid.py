@@ -16,9 +16,7 @@ from flight_blender.api.dependencies import require_scopes
 from flight_blender.api.schemas.rid import CreateTestBody, ISACallbackBody
 from flight_blender.auth.common import get_redis
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-from flight_blender.flight_feed import flight_stream_helper
-from flight_blender.rid import dss_rid_helper, view_port_ops
+from flight_blender.rid import view_port_ops
 from flight_blender.rid.rid_utils import (
     CreateTestResponse,
     IdentificationServiceArea,
@@ -32,11 +30,9 @@ from flight_blender.rid.rid_utils import (
     RIDVolume4D,
     SubscriptionState,
 )
-from flight_blender.rid.tasks import run_ussp_polling_for_rid, stream_rid_test_data
-from flight_blender.rid.views import RIDOutputHelper, SubscriptionsHelper
 from flight_blender.uss.uss_data_definitions import FlightDetailsNotFoundMessage, GenericErrorResponseMessage, OperatorDetailsSuccessResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/rid")
 
 
 @router.get("/capabilities")
@@ -46,6 +42,8 @@ async def get_rid_capabilities(_auth: Any = Depends(require_scopes([FLIGHTBLENDE
 
 @router.put("/create_dss_subscription")
 async def create_dss_subscription(view: str | None = None, _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE]))):
+    from flight_blender.rid.views import SubscriptionsHelper
+
     try:
         view_port = [float(i) for i in (view or "").split(",")]
     except Exception:
@@ -83,6 +81,8 @@ async def get_rid_data(subscription_id: uuid.UUID, _auth: Any = Depends(require_
     sub_id_str = str(subscription_id)
 
     def _fetch():
+        from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+
         reader = FlightBlenderDatabaseReader()
         if not reader.check_rid_subscription_record_by_subscription_id_exists(subscription_id=sub_id_str):
             return None
@@ -92,6 +92,8 @@ async def get_rid_data(subscription_id: uuid.UUID, _auth: Any = Depends(require_
     flight_details = await sync_to_async(_fetch)()
     if flight_details is None:
         return JSONResponse({}, status_code=404)
+
+    from flight_blender.flight_feed import flight_stream_helper
 
     observations = await sync_to_async(flight_stream_helper.ObservationReadOperations().get_temporal_flight_observations_by_session)(
         session_id=sub_id_str
@@ -112,6 +114,8 @@ async def dss_isa_callback(
         if updated_service_area:
 
             def _update(sub_id=subscription.subscription_id, sa=updated_service_area, isa=str(isa_id), ext=extents):
+                from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+
                 reader = FlightBlenderDatabaseReader()
                 existing_record = reader.get_rid_subscription_record_by_subscription_id(subscription_id=sub_id)
                 existing_flight_details = json.loads(existing_record.flight_details)
@@ -138,6 +142,8 @@ async def get_flight_data(flight_id: uuid.UUID, _auth: Any = Depends(require_sco
     fid_str = str(flight_id)
 
     def _fetch():
+        from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+
         reader = FlightBlenderDatabaseReader()
         if not reader.check_flight_details_exist(flight_detail_id=fid_str):
             return None
@@ -166,6 +172,10 @@ async def get_flight_data(flight_id: uuid.UUID, _auth: Any = Depends(require_sco
 
 @router.get("/display_data")
 async def get_display_data(view: str | None = None, _auth: Any = Depends(require_scopes(["dss.read.identification_service_areas"]))):
+    from flight_blender.rid import dss_rid_helper
+    from flight_blender.rid.tasks import run_ussp_polling_for_rid
+    from flight_blender.rid.views import RIDOutputHelper, SubscriptionsHelper
+
     try:
         view_port = [float(i) for i in (view or "").split(",")]
     except Exception:
@@ -198,6 +208,8 @@ async def get_display_data(view: str | None = None, _auth: Any = Depends(require
         run_ussp_polling_for_rid.delay(session_id=request_id, end_time=subscription_end_time)
 
     def _fetch_observations():
+        from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+
         now = arrow.utcnow()
         return list(
             FlightBlenderDatabaseReader().get_active_rid_observations_for_view(
@@ -243,6 +255,8 @@ async def get_display_data(view: str | None = None, _auth: Any = Depends(require
 
 @router.put("/tests/{test_id}")
 async def create_test(test_id: uuid.UUID, body: CreateTestBody, _auth: Any = Depends(require_scopes(["rid.inject_test_data"]))):
+    from flight_blender.rid.tasks import stream_rid_test_data
+
     redis_key = "rid-test_" + str(test_id)
     redis_client = get_redis()
     if redis_client.exists(redis_key):
@@ -261,6 +275,8 @@ async def delete_test(test_id: uuid.UUID, version: str, _auth: Any = Depends(req
         redis_client.delete(test_id_str)
 
     def _cleanup():
+        from flight_blender.common.database_operations import FlightBlenderDatabaseWriter
+
         writer = FlightBlenderDatabaseWriter()
         writer.delete_all_simulated_rid_subscription_records()
         writer.delete_all_flight_observations()
@@ -286,6 +302,8 @@ async def user_notifications(
         return JSONResponse({"message": "Invalid date format. Use ISO 8601 format."}, status_code=400)
 
     def _fetch_notifications():
+        from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+
         result = FlightBlenderDatabaseReader().get_active_user_notifications_between_interval(start_time=after_dt, end_time=before_dt)
         return list(result) if result else []
 

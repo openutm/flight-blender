@@ -8,22 +8,15 @@ All external I/O (Redis channel layer, Celery, DB) is mocked.
 """
 
 import uuid
-from datetime import timedelta
+from contextlib import ExitStack, contextmanager
 from unittest.mock import MagicMock, patch
 
 import arrow
 import pytest
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseWriter
 from flight_blender.common.redis_stream_operations import RedisStreamOperations
 from flight_blender.surveillance.metric_calculator import SurveillanceMetricCalculator
-from flight_blender.surveillance.models import SurveillanceHeartbeatEvent, SurveillanceTrackEvent
-from flight_blender.surveillance.tasks import (
-    cleanup_old_heartbeat_events,
-    send_heartbeat_to_consumer,
-    send_and_generate_track_to_consumer,
-)
-
+from flight_blender.surveillance.tasks import cleanup_old_heartbeat_events, send_and_generate_track_to_consumer, send_heartbeat_to_consumer
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -274,8 +267,6 @@ def _mock_sa_repo():
 
 def _sa_repo_patch(mock_repo):
     """Context manager: patch SessionLocal (via session_scope) + the repo class as looked up in tasks."""
-    from contextlib import ExitStack, contextmanager
-
     @contextmanager
     def _ctx():
         mock_session = MagicMock()
@@ -303,26 +294,24 @@ def _sa_repo_patch(mock_repo):
 @pytest.mark.django_db
 class TestSendHeartbeatToConsumer:
     def test_heartbeat_sent_successfully(self):
-        """send_heartbeat_to_consumer should record event when channel send succeeds."""
+        """send_heartbeat_to_consumer should record event when Redis publish succeeds."""
         mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
-        with patch("flight_blender.surveillance.tasks.RedisChannelLayer") as mock_layer_cls:
-            mock_layer_cls.return_value = MagicMock()
-            with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
-                mock_a2s.return_value = lambda *a, **kw: None
-                with _sa_repo_patch(mock_repo):
-                    send_heartbeat_to_consumer(session_id=session_id)
+        with patch("flight_blender.surveillance.tasks.redis.from_url") as mock_from_url:
+            mock_from_url.return_value.publish.return_value = 1
+            with _sa_repo_patch(mock_repo):
+                send_heartbeat_to_consumer(session_id=session_id)
         mock_repo.record_heartbeat_event.assert_called_once()
+        mock_from_url.return_value.publish.assert_called_once()
 
     def test_heartbeat_channel_error_still_records(self):
-        """send_heartbeat_to_consumer records the event even when channel send fails."""
+        """send_heartbeat_to_consumer records the event even when Redis publish fails."""
         mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
-        with patch("flight_blender.surveillance.tasks.RedisChannelLayer"):
-            with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
-                mock_a2s.return_value = MagicMock(side_effect=Exception("channel unavailable"))
-                with _sa_repo_patch(mock_repo):
-                    send_heartbeat_to_consumer(session_id=session_id)
+        with patch("flight_blender.surveillance.tasks.redis.from_url") as mock_from_url:
+            mock_from_url.return_value.publish.side_effect = Exception("redis unavailable")
+            with _sa_repo_patch(mock_repo):
+                send_heartbeat_to_consumer(session_id=session_id)
         # Even on error, we record the heartbeat
         mock_repo.record_heartbeat_event.assert_called_once()
         kwargs = mock_repo.record_heartbeat_event.call_args.kwargs
@@ -335,18 +324,18 @@ class TestSendAndGenerateTrackToConsumer:
         """send_and_generate_track_to_consumer calls record_track_event."""
         mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
-        with patch("flight_blender.surveillance.tasks.RedisChannelLayer"):
+        with patch("flight_blender.surveillance.tasks.redis.from_url") as mock_from_url:
+            mock_from_url.return_value.publish.return_value = 1
             with patch.object(RedisStreamOperations, "create_consumer_reader", return_value="consumer-1"):
                 with patch.object(RedisStreamOperations, "read_latest_air_traffic_data", return_value=[]):
-                    with patch("flight_blender.surveillance.tasks.async_to_sync") as mock_a2s:
-                        mock_a2s.return_value = lambda *a, **kw: None
-                        with patch("flight_blender.surveillance.tasks.load_plugin") as mock_load:
-                            mock_fuser = MagicMock()
-                            mock_fuser.return_value.generate_track_messages.return_value = []
-                            mock_load.return_value = mock_fuser
-                            with _sa_repo_patch(mock_repo):
-                                send_and_generate_track_to_consumer(session_id=session_id)
+                    with patch("flight_blender.surveillance.tasks.load_plugin") as mock_load:
+                        mock_fuser = MagicMock()
+                        mock_fuser.return_value.generate_track_messages.return_value = []
+                        mock_load.return_value = mock_fuser
+                        with _sa_repo_patch(mock_repo):
+                            send_and_generate_track_to_consumer(session_id=session_id)
         mock_repo.record_track_event.assert_called_once()
+        mock_from_url.return_value.publish.assert_called_once()
 
 
 @pytest.mark.django_db

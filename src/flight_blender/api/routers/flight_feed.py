@@ -10,11 +10,10 @@ from flight_blender.api.dependencies import require_scopes
 from flight_blender.api.schemas.flight_feed import ObservationRequest, SignedTelemetryKeyCreate, SignedTelemetryKeyUpdate
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.operations.flight_feed import FlightFeedOperations
-from flight_blender.flight_feed.pki_helper import MessageVerifier, ResponseSigningOperations
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
-router = APIRouter()
+router = APIRouter(prefix="/flight_stream")
 
 GA_TEST_SCOPE = "geo-awareness.test"
 
@@ -88,6 +87,8 @@ async def set_signed_telemetry(
     request: Request,
     ops: FlightFeedOperations = Depends(_ops),
 ):
+    from flight_blender.flight_feed.pki_helper import MessageVerifier, ResponseSigningOperations
+
     body = await request.body()
     headers = dict(request.headers)
     url = str(request.url)

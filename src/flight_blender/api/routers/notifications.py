@@ -12,7 +12,7 @@ from flight_blender.core.operations.notifications import NotificationsOperations
 from flight_blender.infrastructure.database.repositories.sa_notifications import SQLAlchemyNotificationsRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
-router = APIRouter()
+router = APIRouter(prefix="/notifications_ops")
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> NotificationsOperations:

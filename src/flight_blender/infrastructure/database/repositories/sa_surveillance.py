@@ -37,7 +37,12 @@ class SQLAlchemySurveillanceRepository:
             return False
         session = SurveillanceSessionORM(id=session_id, valid_until=valid_until)
         self.db.add(session)
-        await self.db.flush()
+        try:
+            await self.db.flush()
+        except Exception:
+            logger.exception("Failed to flush new surveillance session %s", session_id)
+            await self.db.rollback()
+            return False
         return True
 
     async def delete_session(self, session_id: uuid.UUID) -> None:

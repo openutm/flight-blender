@@ -14,7 +14,7 @@ from flight_blender.infrastructure.database.repositories.sa_flight_feed import S
 from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
-router = APIRouter()
+router = APIRouter(prefix="/surveillance_monitoring_ops")
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> SurveillanceOperations:

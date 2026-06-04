@@ -20,22 +20,8 @@ from flight_blender.scd.scd_data_definitions import (
     SCDTestStatusResponse,
     USSCapabilitiesResponseEnum,
 )
-from flight_blender.scd.scd_test_harness_helper import (
-    FlightPlanningDataProcessor,
-    FlightPlantoOperationalIntentProcessor,
-    SCDTestHarnessHelper,
-    failed_planning_response,
-    not_planned_activated_higher_priority_planning_response,
-    not_planned_activated_planning_response,
-    not_planned_already_planned_planning_response,
-    not_planned_planning_response,
-    planned_off_nominal_planning_response,
-    planned_planning_response,
-    planned_test_injection_response,
-    ready_to_fly_planning_response,
-)
 
-router = APIRouter()
+router = APIRouter(prefix="/scd")
 
 
 # ── sync helpers ─────────────────────────────────────────────────────────────
@@ -84,6 +70,20 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
     from flight_blender.common.data_definitions import OPERATION_STATES_LOOKUP
     from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
     from flight_blender.scd import dss_scd_helper
+    from flight_blender.scd.scd_test_harness_helper import (
+        FlightPlanningDataProcessor,
+        FlightPlantoOperationalIntentProcessor,
+        SCDTestHarnessHelper,
+        failed_planning_response,
+        not_planned_activated_higher_priority_planning_response,
+        not_planned_activated_planning_response,
+        not_planned_already_planned_planning_response,
+        not_planned_planning_response,
+        planned_off_nominal_planning_response,
+        planned_planning_response,
+        planned_test_injection_response,
+        ready_to_fly_planning_response,
+    )
     from flight_blender.scd.utils import DSSAreaClearHandler, OperatorRegistrationNumberValidator, UAVSerialNumberValidator
 
     my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
@@ -96,7 +96,10 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
     operation_id_str = str(flight_plan_id)
 
     scd_test_data = request_data
-    my_flight_plan_processor = FlightPlanningDataProcessor(incoming_flight_information=scd_test_data)
+    try:
+        my_flight_plan_processor = FlightPlanningDataProcessor(incoming_flight_information=scd_test_data)
+    except KeyError as ke:
+        return {"result": "Could not parse flight plan payload: %s" % ke}, 500
     scd_test_data = my_flight_plan_processor.process_incoming_flight_plan_data()
     my_flight_plan_op_intent_bridge = FlightPlantoOperationalIntentProcessor(flight_planning_request=scd_test_data)
 

@@ -15,7 +15,7 @@ from loguru import logger
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.utils import EnhancedJSONEncoder
 
-router = APIRouter()
+router = APIRouter(prefix="/uss")
 
 
 # ── sync helpers ─────────────────────────────────────────────────────────────
@@ -24,7 +24,10 @@ router = APIRouter()
 def _do_peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
     from flight_blender.uss.uss_data_definitions import ErrorReport
 
-    error_report = from_dict(data_class=ErrorReport, data=request_data, config=Config(cast=[Enum]))
+    try:
+        error_report = from_dict(data_class=ErrorReport, data=request_data, config=Config(cast=[Enum]))
+    except Exception as e:
+        return {"message": str(e)}, 500
     report_id = str(uuid.uuid4())
     error_report.report_id = report_id
     return json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)), 201
@@ -95,7 +98,10 @@ def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
     database_writer = FlightBlenderDatabaseWriter()
     my_geo_json_converter = VolumesConverter()
 
-    incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=request_data)
+    try:
+        incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=request_data)
+    except Exception as e:
+        return {"message": str(e)}, 500
     operation_id_str = incoming_update_payload.operational_intent_id
 
     if incoming_update_payload.operational_intent:
@@ -321,7 +327,7 @@ def _do_get_uss_flight_details(flight_id: str) -> tuple[dict, int]:
         eu_classification=eu_classification,
     )
     flight_details_full = OperatorDetailsSuccessResponse(details=f_detail)
-    return json.loads(json.dumps(asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}))), 200
+    return json.loads(json.dumps(asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}), cls=EnhancedJSONEncoder)), 200
 
 
 def _do_uss_telemetry(opint_id: str) -> dict:
