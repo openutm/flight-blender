@@ -93,9 +93,9 @@ async def get_rid_data(subscription_id: uuid.UUID, _auth: Any = Depends(require_
     if flight_details is None:
         return JSONResponse({}, status_code=404)
 
-    observations = await sync_to_async(
-        flight_stream_helper.ObservationReadOperations().get_temporal_flight_observations_by_session
-    )(session_id=sub_id_str)
+    observations = await sync_to_async(flight_stream_helper.ObservationReadOperations().get_temporal_flight_observations_by_session)(
+        session_id=sub_id_str
+    )
     return JSONResponse(observations or {}, status_code=200 if observations else 404)
 
 
@@ -110,14 +110,14 @@ async def dss_isa_callback(
         subscription = from_dict(SubscriptionState, _subscription)
         extents = from_dict(RIDVolume4D, body.extents) if body.extents else None
         if updated_service_area:
+
             def _update(sub_id=subscription.subscription_id, sa=updated_service_area, isa=str(isa_id), ext=extents):
                 reader = FlightBlenderDatabaseReader()
                 existing_record = reader.get_rid_subscription_record_by_subscription_id(subscription_id=sub_id)
                 existing_flight_details = json.loads(existing_record.flight_details)
                 existing_subscription = from_dict(RIDSubscription, existing_flight_details["subscription"])
                 updated_areas = [
-                    sa if area["id"] == isa else from_dict(IdentificationServiceArea, area)
-                    for area in existing_flight_details["service_areas"]
+                    sa if area["id"] == isa else from_dict(IdentificationServiceArea, area) for area in existing_flight_details["service_areas"]
                 ]
                 flights_record = RIDFlightsRecord(
                     service_areas=updated_areas,
@@ -126,9 +126,7 @@ async def dss_isa_callback(
                 )
                 FlightBlenderDatabaseWriter().update_flight_details_in_rid_subscription_record(
                     existing_subscription_record=existing_record,
-                    flights_dict=json.dumps(
-                        asdict(flights_record, dict_factory=lambda x: {k: v for (k, v) in x if v is not None})
-                    ),
+                    flights_dict=json.dumps(asdict(flights_record, dict_factory=lambda x: {k: v for (k, v) in x if v is not None})),
                 )
 
             await sync_to_async(_update)()
@@ -205,7 +203,8 @@ async def get_display_data(view: str | None = None, _auth: Any = Depends(require
             FlightBlenderDatabaseReader().get_active_rid_observations_for_view(
                 start_time=now.shift(seconds=-30).datetime,
                 end_time=now.datetime,
-            ) or []
+            )
+            or []
         )
 
     observations = await sync_to_async(_fetch_observations)()
@@ -220,10 +219,7 @@ async def get_display_data(view: str | None = None, _auth: Any = Depends(require
             recent_positions = json.loads(observation.metadata).get("recent_positions", [])
             recent_paths.append(
                 RIDPositions(
-                    positions=[
-                        Position(lat=p["position"]["lat"], lng=p["position"]["lng"], alt=p["position"]["alt"])
-                        for p in recent_positions
-                    ]
+                    positions=[Position(lat=p["position"]["lat"], lng=p["position"]["lng"], alt=p["position"]["alt"]) for p in recent_positions]
                 )
             )
         except Exception as exc:
@@ -290,15 +286,8 @@ async def user_notifications(
         return JSONResponse({"message": "Invalid date format. Use ISO 8601 format."}, status_code=400)
 
     def _fetch_notifications():
-        result = FlightBlenderDatabaseReader().get_active_user_notifications_between_interval(
-            start_time=after_dt, end_time=before_dt
-        )
+        result = FlightBlenderDatabaseReader().get_active_user_notifications_between_interval(start_time=after_dt, end_time=before_dt)
         return list(result) if result else []
 
     notifications = await sync_to_async(_fetch_notifications)()
-    return {
-        "user_notifications": [
-            {"message": n.message, "observed_at": {"value": n.created_at, "format": "RFC3339"}}
-            for n in notifications
-        ]
-    }
+    return {"user_notifications": [{"message": n.message, "observed_at": {"value": n.created_at, "format": "RFC3339"}} for n in notifications]}
