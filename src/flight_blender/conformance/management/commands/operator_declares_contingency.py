@@ -14,10 +14,7 @@ from flight_blender.conformance.data_definitions import PolygonAltitude
 from flight_blender.flight_declarations.utils import OperationalIntentsConverter
 from flight_blender.flight_feed import flight_stream_helper
 from flight_blender.scd.data_definitions import FlightDeclarationOperationalIntentStorageDetails
-from flight_blender.scd.dss_scd_helper import (
-    OperationalIntentReferenceHelper,
-    SCDOperations,
-)
+from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations
 
 load_dotenv(find_dotenv())
 

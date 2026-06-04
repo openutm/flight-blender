@@ -5,12 +5,9 @@ from typing import Optional
 from django.db.models import QuerySet
 from django.db.utils import IntegrityError
 
-from flight_blender.constraint.data_definitions import (
-    CompositeConstraintPayload,
-    Constraint as ConstraintData,
-    ConstraintDetails,
-    ConstraintReference as ConstraintReferencePayload,
-)
+from flight_blender.constraint.data_definitions import CompositeConstraintPayload, ConstraintDetails
+from flight_blender.constraint.data_definitions import Constraint as ConstraintData
+from flight_blender.constraint.data_definitions import ConstraintReference as ConstraintReferencePayload
 from flight_blender.constraint.models import CompositeConstraint, ConstraintDetail, ConstraintReference
 from flight_blender.geo_fence.models import GeoFence
 

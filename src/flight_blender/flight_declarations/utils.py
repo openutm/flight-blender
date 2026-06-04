@@ -11,13 +11,8 @@ from pyproj import Proj
 from shapely.geometry import Point, Polygon, shape
 from shapely.ops import unary_union
 
-from flight_blender.common.data_definitions import (
-    DEFAULT_UAV_CLIMB_RATE_M_PER_S,
-    DEFAULT_UAV_DESCENT_RATE_M_PER_S,
-    DEFAULT_UAV_SPEED_M_PER_S,
-)
+from flight_blender.common.data_definitions import DEFAULT_UAV_CLIMB_RATE_M_PER_S, DEFAULT_UAV_DESCENT_RATE_M_PER_S, DEFAULT_UAV_SPEED_M_PER_S
 from flight_blender.plugins.loader import load_plugin
-from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
 from flight_blender.scd.scd_data_definitions import (
     Altitude,
     LatLngPoint,
@@ -29,6 +24,7 @@ from flight_blender.scd.scd_data_definitions import (
     Volume4D,
 )
 from flight_blender.scd.scd_data_definitions import Polygon as Plgn
+from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:

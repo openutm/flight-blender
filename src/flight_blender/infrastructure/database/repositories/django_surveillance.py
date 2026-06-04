@@ -55,7 +55,9 @@ class DjangoSurveillanceRepository:
         except SurveillanceSensorHealth.DoesNotExist:
             return None
 
-    def get_health_tracking_records_for_sensor(self, sensor_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceSensortHealthTracking]:
+    def get_health_tracking_records_for_sensor(
+        self, sensor_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceSensortHealthTracking]:
         return SurveillanceSensortHealthTracking.objects.filter(
             sensor__id=sensor_id,
             recorded_at__gte=start_time,
@@ -79,21 +81,27 @@ class DjangoSurveillanceRepository:
             dispatched_at__lte=end_time,
         ).order_by("dispatched_at")
 
-    def get_heartbeat_events_for_session(self, surveillance_session_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceHeartbeatEvent]:
+    def get_heartbeat_events_for_session(
+        self, surveillance_session_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceHeartbeatEvent]:
         return SurveillanceHeartbeatEvent.objects.filter(
             session__id=surveillance_session_id,
             dispatched_at__gte=start_time,
             dispatched_at__lte=end_time,
         ).order_by("dispatched_at")
 
-    def get_track_events_for_session(self, surveillance_session_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceTrackEvent]:
+    def get_track_events_for_session(
+        self, surveillance_session_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceTrackEvent]:
         return SurveillanceTrackEvent.objects.filter(
             session__id=surveillance_session_id,
             dispatched_at__gte=start_time,
             dispatched_at__lte=end_time,
         ).order_by("dispatched_at")
 
-    def get_failure_notifications_for_sensor(self, sensor_id: str, start_time: datetime, end_time: datetime) -> QuerySet[SurveillanceSensorFailureNotification]:
+    def get_failure_notifications_for_sensor(
+        self, sensor_id: str, start_time: datetime, end_time: datetime
+    ) -> QuerySet[SurveillanceSensorFailureNotification]:
         return SurveillanceSensorFailureNotification.objects.filter(
             sensor__id=sensor_id,
             created_at__gte=start_time,

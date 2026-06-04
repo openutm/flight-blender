@@ -4,7 +4,11 @@ from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 
-from flight_blender.common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE, SURVEILLANCE_SENSOR_HEALTH_CHOICES, SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES
+from flight_blender.common.data_definitions import (
+    FLIGHT_OBSERVATION_TRAFFIC_SOURCE,
+    SURVEILLANCE_SENSOR_HEALTH_CHOICES,
+    SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES,
+)
 
 RECOVERY_TYPE_CHOICES = [
     ("automatic", "Automatic"),

@@ -4,9 +4,7 @@ from rest_framework import serializers
 
 from flight_blender.common.data_definitions import OPERATION_STATES, OPERATOR_EVENT_LOOKUP
 from flight_blender.common.database_operations import FlightBlenderDatabaseReader
-from flight_blender.conformance.conformance_checks_handler import (
-    FlightOperationConformanceHelper,
-)
+from flight_blender.conformance.conformance_checks_handler import FlightOperationConformanceHelper
 from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper
 from flight_blender.scd.scd_data_definitions import Volume4D
 

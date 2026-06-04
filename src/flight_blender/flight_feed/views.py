@@ -21,9 +21,7 @@ from flight_blender.auth.utils import requires_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.common.database_operations import FlightBlenderDatabaseReader
 from flight_blender.rid import view_port_ops
-from flight_blender.rid.data_definitions import (
-    SignedUnSignedTelemetryObservations,
-)
+from flight_blender.rid.data_definitions import SignedUnSignedTelemetryObservations
 from flight_blender.rid.tasks import stream_rid_telemetry_data
 
 from . import flight_stream_helper

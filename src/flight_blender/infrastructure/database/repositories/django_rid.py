@@ -83,18 +83,22 @@ class DjangoRIDRepository:
 
     def _serialize_operator_location(self, operator_location):
         from dataclasses import asdict
+
         return json.dumps(asdict(operator_location)) if operator_location else json.dumps({})
 
     def _serialize_auth_data(self, auth_data):
         from dataclasses import asdict
+
         return json.dumps(asdict(auth_data)) if auth_data else json.dumps({})
 
     def _serialize_eu_classification(self, eu_classification):
         from dataclasses import asdict
+
         return json.dumps(asdict(eu_classification)) if eu_classification else json.dumps({})
 
     def _serialize_uas_id(self, uas_id):
         from dataclasses import asdict
+
         return json.dumps(asdict(uas_id)) if uas_id else json.dumps({})
 
     def _create_rid_flight_details(self, rid_flight_details_payload: RIDFlightDetails) -> Optional[RIDFlightDetail]:

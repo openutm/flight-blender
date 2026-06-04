@@ -29,7 +29,7 @@ def close_db_connections_after_task(**kwargs):
     Under ASGI + prefork, Django's built-in fixup does not always release
     connections promptly, leading to PostgreSQL connection exhaustion.
     """
-    from django.db import close_old_connections
+    from django.db import close_old_connections  # noqa: PLC0415
 
     close_old_connections()
 

@@ -166,6 +166,7 @@ class DjangoFlightDeclarationRepository:
 
     def get_current_flight_accepted_activated_declaration_ids(self, now: str):
         import arrow
+
         n = arrow.get(now)
         two_minutes_before_now = n.shift(seconds=-120).isoformat()
         five_hours_from_now = n.shift(minutes=300).isoformat()
@@ -180,6 +181,7 @@ class DjangoFlightDeclarationRepository:
 
     def update_telemetry_timestamp(self, flight_declaration_id: str) -> bool:
         import arrow
+
         now = arrow.now().isoformat()
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
@@ -198,7 +200,9 @@ class DjangoFlightDeclarationRepository:
         except Exception:
             return False
 
-    def update_flight_operation_operational_intent(self, flight_declaration_id: str, operational_intent: PartialCreateOperationalIntentReference) -> bool:
+    def update_flight_operation_operational_intent(
+        self, flight_declaration_id: str, operational_intent: PartialCreateOperationalIntentReference
+    ) -> bool:
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
             flight_declaration.operational_intent = json.dumps(asdict(operational_intent))
@@ -245,7 +249,9 @@ class DjangoFlightDeclarationRepository:
 
     # --- operational intent references ---
 
-    def get_flight_operational_intent_reference_by_flight_declaration_id(self, flight_declaration_id: str) -> Optional[FlightOperationalIntentReference]:
+    def get_flight_operational_intent_reference_by_flight_declaration_id(
+        self, flight_declaration_id: str
+    ) -> Optional[FlightOperationalIntentReference]:
         try:
             flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
             return FlightOperationalIntentReference.objects.get(declaration=flight_declaration)
@@ -254,7 +260,9 @@ class DjangoFlightDeclarationRepository:
         except FlightOperationalIntentReference.DoesNotExist:
             return None
 
-    def get_flight_operational_intent_reference_by_flight_declaration_obj(self, flight_declaration: FlightDeclaration) -> Optional[FlightOperationalIntentReference]:
+    def get_flight_operational_intent_reference_by_flight_declaration_obj(
+        self, flight_declaration: FlightDeclaration
+    ) -> Optional[FlightOperationalIntentReference]:
         try:
             return FlightOperationalIntentReference.objects.get(declaration=flight_declaration)
         except FlightDeclaration.DoesNotExist:
@@ -282,7 +290,9 @@ class DjangoFlightDeclarationRepository:
         except IntegrityError:
             return False
 
-    def update_flight_operational_intent_reference_op_int(self, flight_operational_intent_reference: FlightOperationalIntentReference, dss_operational_intent_reference_id: str) -> bool:
+    def update_flight_operational_intent_reference_op_int(
+        self, flight_operational_intent_reference: FlightOperationalIntentReference, dss_operational_intent_reference_id: str
+    ) -> bool:
         try:
             flight_operational_intent_reference.id = dss_operational_intent_reference_id
             flight_operational_intent_reference.save()
@@ -290,7 +300,11 @@ class DjangoFlightDeclarationRepository:
         except Exception:
             return False
 
-    def update_flight_operational_intent_reference(self, flight_operational_intent_reference: FlightOperationalIntentReference, update_operational_intent_reference: OperationalIntentReferenceDSSResponse) -> bool:
+    def update_flight_operational_intent_reference(
+        self,
+        flight_operational_intent_reference: FlightOperationalIntentReference,
+        update_operational_intent_reference: OperationalIntentReferenceDSSResponse,
+    ) -> bool:
         try:
             flight_operational_intent_reference.ovn = update_operational_intent_reference.ovn
             flight_operational_intent_reference.state = update_operational_intent_reference.state
@@ -306,7 +320,9 @@ class DjangoFlightDeclarationRepository:
         except Exception:
             return False
 
-    def update_flight_operational_intent_reference_op_int_ovn(self, flight_operational_intent_reference: FlightOperationalIntentReference, dss_operational_intent_reference_id: str, ovn: str) -> bool:
+    def update_flight_operational_intent_reference_op_int_ovn(
+        self, flight_operational_intent_reference: FlightOperationalIntentReference, dss_operational_intent_reference_id: str, ovn: str
+    ) -> bool:
         try:
             flight_operational_intent_reference.id = dss_operational_intent_reference_id
             flight_operational_intent_reference.ovn = ovn
@@ -471,7 +487,7 @@ class DjangoFlightDeclarationRepository:
         for volume in operational_intent_details.volumes:
             _volumes.append(asdict(volume))
         _off_nominal_volumes = []
-        for volume in (operational_intent_details.off_nominal_volumes or []):
+        for volume in operational_intent_details.off_nominal_volumes or []:
             _off_nominal_volumes.append(asdict(volume))
         try:
             flight_operational_intent_detail.volumes = json.dumps(_volumes)

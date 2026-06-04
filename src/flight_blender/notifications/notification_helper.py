@@ -5,12 +5,12 @@ import pika
 from loguru import logger
 from pika.exceptions import ChannelClosedByBroker
 
+from flight_blender.config import settings
+
 from .data_definitions import FlightDeclarationUpdateMessage
 
 
 def _should_recreate_mismatched_exchange() -> bool:
-    from flight_blender.config import settings
-
     return settings.AMQP_RECREATE_MISMATCHED_EXCHANGE
 
 

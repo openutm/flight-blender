@@ -1,9 +1,7 @@
 from typing import List
 
 from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
-from flight_blender.surveillance.data_definitions import (
-    TrackMessage,
-)
+from flight_blender.surveillance.data_definitions import TrackMessage
 
 
 class SpecializedTrafficDataFuser:

@@ -1,10 +1,10 @@
-from jwt.algorithms import RSAAlgorithm
 import json
 from urllib.parse import urlparse
 
 import httpx
 import jwt
 from fastapi import HTTPException, status
+from jwt.algorithms import RSAAlgorithm
 from loguru import logger
 
 from flight_blender.config import settings

@@ -5,10 +5,14 @@ from decimal import Decimal
 from typing import Any
 
 import arrow
-from shapely.geometry import shape
+import pyproj
+from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
 from flight_blender.auth.common import get_async_redis
+from flight_blender.common.data_definitions import GEOFENCE_INDEX_BASEPATH
+from flight_blender.geo_fence import rtree_geo_fence_helper
+from flight_blender.geo_fence.buffer_helper import toFromUTM
 from flight_blender.geo_fence.data_definitions import (
     GeoAwarenessImportResponseEnum,
     GeoAwarenessStatusResponseEnum,
@@ -16,14 +20,12 @@ from flight_blender.geo_fence.data_definitions import (
     GeoSpatialMapTestHarnessStatus,
     GeoZoneCheckRequestBody,
     GeoZoneCheckResult,
+    GeozoneCheckResultEnum,
     GeoZoneChecksResponse,
     GeoZoneFilterPosition,
-    GeozoneCheckResultEnum,
 )
+from flight_blender.geo_fence.tasks import download_geozone_source
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
-
-from flight_blender.geo_fence import rtree_geo_fence_helper
-from flight_blender.common.data_definitions import GEOFENCE_INDEX_BASEPATH
 
 
 def _compute_bounds_and_times(features: list[dict]) -> tuple[str, str, str, Decimal, Decimal, str]:
@@ -35,11 +37,7 @@ def _compute_bounds_and_times(features: list[dict]) -> tuple[str, str, str, Deci
     last_feature = features[-1]
     props = last_feature.get("properties", {})
     start_time = arrow.now().isoformat() if "start_time" not in props else arrow.get(props["start_time"]).isoformat()
-    end_time = (
-        arrow.now().shift(hours=1).isoformat()
-        if "end_time" not in props
-        else arrow.get(props["end_time"]).isoformat()
-    )
+    end_time = arrow.now().shift(hours=1).isoformat() if "end_time" not in props else arrow.get(props["end_time"]).isoformat()
     upper_limit = Decimal(str(props.get("upper_limit", 100)))
     lower_limit = Decimal(str(props.get("lower_limit", 0)))
     name = props.get("name", "")
@@ -143,8 +141,6 @@ class GeoFenceOperations:
         return None
 
     async def put_geozone_source(self, geozone_source_id: str, geo_zone_url: str) -> dict:
-        from flight_blender.geo_fence.tasks import download_geozone_source
-
         r = get_async_redis()
         key = "geoawarenes_test." + geozone_source_id
         response = GeoAwarenessTestStatus(result=GeoAwarenessImportResponseEnum.Activating, message="")
@@ -167,11 +163,6 @@ class GeoFenceOperations:
         return asdict(deletion_status)
 
     async def check_geozones(self, body: GeoZoneCheckRequestBody) -> dict:
-        import pyproj
-        from shapely.geometry import Point
-
-        from flight_blender.geo_fence.buffer_helper import toFromUTM
-
         proj = pyproj.Proj("+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs ")
         geo_zones_of_interest = False
 

@@ -7,7 +7,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from flight_blender.api.main import create_fastapi_app
+from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM  # noqa: F401 — triggers metadata
+from flight_blender.infrastructure.database.models.surveillance import (  # noqa: F401 — triggers metadata
+    SurveillanceHeartbeatEventORM,
+    SurveillanceSensorFailureNotificationORM,
+    SurveillanceSensorHealthORM,
+    SurveillanceSensorHealthTrackingORM,
+    SurveillanceSensorORM,
+    SurveillanceSessionORM,
+    SurveillanceTrackEventORM,
+)
 from flight_blender.infrastructure.database.session import Base, async_get_db
 
 

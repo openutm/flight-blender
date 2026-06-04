@@ -1,4 +1,5 @@
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Iterator
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -20,8 +21,9 @@ class Base(DeclarativeBase):
     pass
 
 
-def get_db() -> Generator[Session, None, None]:
-    """Sync session for Celery tasks."""
+@contextmanager
+def session_scope() -> Iterator[Session]:
+    """Sync session scope for Celery tasks: commit on success, rollback on error, always close."""
     db = SessionLocal()
     try:
         yield db
@@ -31,6 +33,12 @@ def get_db() -> Generator[Session, None, None]:
         raise
     finally:
         db.close()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Sync session for FastAPI-style dependency injection."""
+    with session_scope() as db:
+        yield db
 
 
 async def async_get_db() -> AsyncGenerator[AsyncSession, None]:

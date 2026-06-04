@@ -21,13 +21,7 @@ from loguru import logger
 from pyproj import Geod
 from shapely.geometry import shape
 
-from flight_blender.scd.scd_data_definitions import (
-    Altitude,
-    LatLngPoint,
-    Time,
-    Volume3D,
-    Volume4D,
-)
+from flight_blender.scd.scd_data_definitions import Altitude, LatLngPoint, Time, Volume3D, Volume4D
 from flight_blender.scd.scd_data_definitions import Polygon as Plgn
 
 # Safety margin added around each geometry (degrees, ~55 m at equator).

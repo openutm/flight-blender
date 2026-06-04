@@ -1,13 +1,4 @@
-from flight_blender.scd.scd_data_definitions import (
-    Altitude,
-    Circle,
-    LatLngPoint,
-    Polygon,
-    Radius,
-    Time,
-    Volume3D,
-    Volume4D,
-)
+from flight_blender.scd.scd_data_definitions import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
 
 
 def cast_to_volume4d(volume) -> Volume4D:

@@ -1,6 +1,9 @@
+import json
 import uuid
 from typing import Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import URLValidator
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from implicitdict import ImplicitDict
@@ -11,11 +14,8 @@ from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.operations.geo_fence import GeoFenceOperations
 from flight_blender.geo_fence.common import validate_geo_zone
-from flight_blender.geo_fence.data_definitions import (
-    GeoFencePutSchema,
-    GeoZoneCheckRequestBody,
-    GeoZoneHttpsSource,
-)
+from flight_blender.geo_fence.data_definitions import GeoFencePutSchema, GeoZoneCheckRequestBody, GeoZoneHttpsSource
+from flight_blender.geo_fence.tasks import write_geo_zone
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
@@ -69,12 +69,8 @@ async def set_geozone(
             status_code=400,
         )
 
-    from flight_blender.geo_fence.tasks import write_geo_zone
-    import json as _json
-    import uuid as _uuid
-
-    write_geo_zone.delay(geo_zone=_json.dumps(body))
-    fence_id = str(_uuid.uuid4())
+    write_geo_zone.delay(geo_zone=json.dumps(body))
+    fence_id = str(uuid.uuid4())
     return JSONResponse({"message": "GeoZone Declaration submitted", "id": fence_id}, status_code=200)
 
 
@@ -157,9 +153,6 @@ async def put_geozone_source(
             {"result": "Rejected", "message": "A url and format key is required"},
             status_code=200,
         )
-
-    from django.core.validators import URLValidator
-    from django.core.exceptions import ValidationError as DjangoValidationError
 
     url_validator = URLValidator()
     try:
