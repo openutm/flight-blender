@@ -93,7 +93,6 @@ def _submission_dss_error(code=400):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestDSSOperationalIntentsCreatorValidateTime:
     def test_valid_start_end_time(self):
         """Declarations starting within 2 h return True."""
@@ -123,7 +122,6 @@ class TestDSSOperationalIntentsCreatorValidateTime:
             assert creator.validate_flight_declaration_start_end_time() is False
 
 
-@pytest.mark.django_db
 class TestDSSOperationalIntentsCreatorSubmit:
     def test_not_found_returns_declaration_not_found(self):
         creator = DSSOperationalIntentsCreator(flight_declaration_id=str(uuid.uuid4()))

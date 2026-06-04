@@ -24,7 +24,9 @@ from flight_blender.scd.scd_data_definitions import (
     Volume4D,
 )
 from flight_blender.scd.scd_data_definitions import Polygon as Plgn
-from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
+from flight_blender.config import settings as _fb_s
+
+FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = _fb_s.FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:

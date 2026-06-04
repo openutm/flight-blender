@@ -120,7 +120,6 @@ class TestBulkSetAirTrafficFastAPI:
         assert resp.status_code == 422
 
 
-@pytest.mark.django_db
 class TestGetAirTrafficFastAPI:
     def test_unauthenticated(self, fastapi_client):
         session_id = str(uuid.uuid4())

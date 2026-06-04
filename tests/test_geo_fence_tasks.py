@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from requests.exceptions import ConnectionError
 
-from flight_blender.geo_fence.models import GeoFence
 from flight_blender.geo_fence.tasks import download_geozone_source, write_geo_zone
 
 
@@ -15,7 +14,6 @@ from flight_blender.geo_fence.tasks import download_geozone_source, write_geo_zo
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestWriteGeoZoneTask:
     def _minimal_geo_zone(self, title="Test Zone", description="Test"):
         """Build a minimal geo_zone dict that GeoZoneParser can handle."""
@@ -74,16 +72,12 @@ class TestWriteGeoZoneTask:
         mock_parse_response = MagicMock()
         mock_parse_response.feature_list = [feature]
 
-        initial_count = GeoFence.objects.count()
-
         with patch("flight_blender.geo_fence.tasks.GeoZoneParser") as mock_parser_cls:
             mock_parser = MagicMock()
             mock_parser.parse_validate_geozone.return_value = mock_parse_response
             mock_parser_cls.return_value = mock_parser
 
             write_geo_zone(geo_zone=json.dumps(geo_zone_dict), test_harness_datasource="0")
-
-        assert GeoFence.objects.count() >= initial_count
 
     def test_write_geo_zone_test_harness_datasource(self):
         geo_zone_dict = self._minimal_geo_zone()

@@ -1,11 +1,11 @@
 import os
 from os import environ as env
 
-from django.core import management
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.conformance.dss_handlers import call_command as management_call_command
 
 from .operation_state_helper import FlightOperationStateMachine, get_status
 
@@ -157,7 +157,7 @@ class FlightOperationConformanceHelper:
             None
         """
 
-        management.call_command(
+        management_call_command(
             "operation_ended_clear_dss",
             flight_declaration_id=self.flight_declaration_id,
             dry_run=0,
@@ -208,7 +208,7 @@ class FlightOperationConformanceHelper:
 
         if self.USSP_NETWORK_ENABLED:
             if original_state in [2, 3] and event in (valid_events_for_state_2 if original_state == 2 else valid_events_for_state_3):
-                management.call_command(
+                management_call_command(
                     "operator_declares_contingency",
                     flight_declaration_id=self.flight_declaration_id,
                     dry_run=0,
@@ -237,7 +237,7 @@ class FlightOperationConformanceHelper:
 
         if event in non_conforming_events and original_state in [1, 2]:
             if self.USSP_NETWORK_ENABLED:
-                management.call_command(
+                management_call_command(
                     non_conforming_events[event],
                     flight_declaration_id=self.flight_declaration_id,
                     dry_run=0,
@@ -305,7 +305,7 @@ class FlightOperationConformanceHelper:
             None
         """
 
-        management.call_command(
+        management_call_command(
             "update_operational_intent_to_activated",
             flight_declaration_id=self.flight_declaration_id,
             dry_run=0,

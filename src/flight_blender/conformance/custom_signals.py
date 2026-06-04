@@ -1,16 +1,15 @@
-import django.dispatch
-from django.dispatch import receiver
 from loguru import logger
 
 from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.common.dispatch import Signal, receiver
 
 from .conformance_checks_handler import FlightOperationConformanceHelper
 from .conformance_state_helper import ConformanceChecksList
 from .operator_conformance_notifications import OperationConformanceNotification
 
 # Declare signals
-telemetry_non_conformance_signal = django.dispatch.Signal()
-flight_operational_intent_reference_non_conformance_signal = django.dispatch.Signal()
+telemetry_non_conformance_signal = Signal()
+flight_operational_intent_reference_non_conformance_signal = Signal()
 
 
 @receiver(telemetry_non_conformance_signal)
@@ -98,7 +97,8 @@ def process_telemetry_conformance_message(sender, **kwargs):
     # The operation is non-conforming, need to update the operational intent in the dss and notify peer USSP
     if event:
         original_state = fd.state
-        fd.add_state_history_entry(
+        my_database_writer.add_flight_declaration_state_history_entry(
+            flight_declaration_id=flight_declaration_id,
             original_state=original_state,
             new_state=new_state,
             notes="State changed by telemetry conformance checks because of telemetry non-conformance: %s" % non_conformance_state_code,

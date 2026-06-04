@@ -1,28 +1,15 @@
 from uuid import UUID
 
-import django.dispatch
-from django.dispatch import receiver
 from loguru import logger
 
 from flight_blender.common.database_operations import FlightBlenderDatabaseReader
-from flight_blender.surveillance.models import SurveillanceSensorFailureNotification
+from flight_blender.common.dispatch import Signal, receiver
 
-surveillance_sensor_failure_signal = django.dispatch.Signal()
+surveillance_sensor_failure_signal = Signal()
 
 
 @receiver(surveillance_sensor_failure_signal)
 def process_sensor_status_change(sender, **kwargs):
-    """
-    Creates a SurveillanceSensorFailureNotification DB record whenever a sensor's
-    health status changes. Fired by FlightBlenderDatabaseWriter.update_sensor_health_status().
-
-    Expected kwargs:
-        sensor_id (str): UUID of the SurveillanceSensor
-        previous_status (str): Status before the change
-        new_status (str): Status after the change
-        recovery_type (str | None): "automatic" or "manual" for operational recoveries; None otherwise
-    """
-
     sensor_id = kwargs["sensor_id"]
     previous_status = kwargs["previous_status"]
     new_status = kwargs["new_status"]
@@ -42,10 +29,15 @@ def process_sensor_status_change(sender, **kwargs):
         message = f"Sensor '{sensor.sensor_identifier}' recovered to {new_status} (was {previous_status}){recovery_label}"
         logger.info(message)
 
-    SurveillanceSensorFailureNotification.objects.create(
-        sensor=sensor,
-        previous_status=previous_status,
-        new_status=new_status,
-        recovery_type=recovery_type,
-        message=message,
-    )
+    from flight_blender.infrastructure.database.models.surveillance import SurveillanceSensorFailureNotificationORM  # noqa: PLC0415
+    from flight_blender.infrastructure.database.session import session_scope  # noqa: PLC0415
+
+    with session_scope() as db:
+        obj = SurveillanceSensorFailureNotificationORM(
+            sensor_id=UUID(sensor_id),
+            previous_status=previous_status,
+            new_status=new_status,
+            recovery_type=recovery_type,
+            message=message,
+        )
+        db.add(obj)

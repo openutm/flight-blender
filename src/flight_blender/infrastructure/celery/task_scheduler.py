@@ -1,3 +1,9 @@
+"""Celery task scheduling without django_celery_beat.
+
+Uses apply_async with countdown-based self-rescheduling tasks.
+Redis stop-signal keys are used for session cancellation.
+"""
+
 import os
 import uuid
 
@@ -7,62 +13,38 @@ from loguru import logger
 
 class TaskSchedulerService:
     """
-    Isolates all django_celery_beat / TaskScheduler coupling behind a stateless facade.
-    Instantiate fresh each call — never hold as a singleton.
+    Stateless factory for scheduling periodic Celery tasks.
+    Uses apply_async(countdown=N) instead of django_celery_beat PeriodicTask rows.
     """
 
     @staticmethod
     def schedule_conformance_check(flight_declaration_id: str, session_id: str, expires: str) -> bool:
-        from flight_blender.conformance.models import TaskScheduler
-        from flight_blender.flight_declarations.models import FlightDeclaration
+        from flight_blender.conformance.tasks import check_flight_conformance
 
-        try:
-            flight_declaration = FlightDeclaration.objects.get(id=flight_declaration_id)
-        except FlightDeclaration.DoesNotExist:
-            logger.error(f"TaskSchedulerService: flight declaration {flight_declaration_id} not found")
-            return False
-
-        conformance_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
-        task_name = "check_flight_conformance"
         logger.info("TaskSchedulerService: scheduling conformance check, expires at %s" % expires)
         try:
-            p_task = conformance_monitoring_job.schedule_every(
-                task_name=task_name,
-                period="seconds",
-                every=every,
-                expires=expires,
-                flight_declaration=flight_declaration,
-                session_id=session_id,
+            check_flight_conformance.apply_async(
+                args=[flight_declaration_id, session_id],
+                kwargs={"expires_iso": expires},
+                countdown=every,
             )
-            p_task.start()
             return True
         except Exception as e:
-            logger.debug(f"TaskSchedulerService: error scheduling conformance check: {e}")
-            logger.error("TaskSchedulerService: could not create periodic task")
+            logger.error("TaskSchedulerService: could not schedule conformance check: %s" % e)
             return False
 
     @staticmethod
     def schedule_rid_stream_monitoring(session_id: str, end_datetime: str) -> bool:
-        from flight_blender.conformance.models import TaskScheduler
+        from flight_blender.conformance.tasks import check_rid_stream_conformance
 
-        rid_stream_monitoring_job = TaskScheduler()
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
-        now = arrow.now()
-        stream_end = arrow.get(end_datetime)
-        delta = stream_end - now
-        expires = now.shift(seconds=delta.total_seconds())
-        task_name = "check_rid_stream_conformance"
         try:
-            p_task = rid_stream_monitoring_job.schedule_every(
-                task_name=task_name,
-                period="seconds",
-                every=every,
-                expires=expires.isoformat(),
-                session_id=session_id,
-                flight_declaration=None,
+            check_rid_stream_conformance.apply_async(
+                args=[session_id],
+                kwargs={"expires_iso": end_datetime},
+                countdown=every,
             )
-            p_task.start()
             return True
         except Exception as e:
             logger.error("TaskSchedulerService: could not create RID stream observation task: %s" % e)
@@ -70,65 +52,44 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_surveillance_heartbeat(surveillance_session_id: str) -> bool:
-        from flight_blender.conformance.models import TaskScheduler
+        from flight_blender.surveillance.tasks import send_heartbeat_to_consumer
 
-        surveillance_monitoring_job = TaskScheduler()
-        every = 1
-        now = arrow.now()
         session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
-        expires = now.shift(minutes=1)
-        task_name = "send_heartbeat_to_consumer"
+        expires = arrow.now().shift(minutes=1).isoformat()
         logger.info("TaskSchedulerService: scheduling surveillance heartbeat, expires at %s" % expires)
         try:
-            p_task = surveillance_monitoring_job.schedule_every(
-                task_name=task_name,
-                period="seconds",
-                every=every,
-                expires=expires.isoformat(),
-                session_id=session_id,
-                flight_declaration=None,
+            send_heartbeat_to_consumer.apply_async(
+                args=[session_id],
+                kwargs={"expires_iso": expires},
+                countdown=1,
             )
-            p_task.start()
             return True
         except Exception as e:
-            logger.debug(f"TaskSchedulerService: {e}")
-            logger.error("TaskSchedulerService: could not create surveillance heartbeat task")
+            logger.error("TaskSchedulerService: could not create surveillance heartbeat task: %s" % e)
             return False
 
     @staticmethod
     def schedule_surveillance_track(surveillance_session_id: str) -> bool:
-        from flight_blender.conformance.models import TaskScheduler
+        from flight_blender.surveillance.tasks import send_and_generate_track_to_consumer
 
-        surveillance_monitoring_job = TaskScheduler()
-        every = 1
-        now = arrow.now()
         session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
-        expires = now.shift(minutes=1)
-        task_name = "send_and_generate_track_to_consumer"
+        expires = arrow.now().shift(minutes=1).isoformat()
         logger.info("TaskSchedulerService: scheduling surveillance track task, expires at %s" % expires)
         try:
-            p_task = surveillance_monitoring_job.schedule_every(
-                task_name=task_name,
-                period="seconds",
-                every=every,
-                expires=expires.isoformat(),
-                session_id=session_id,
-                flight_declaration=None,
+            send_and_generate_track_to_consumer.apply_async(
+                args=[session_id],
+                kwargs={"expires_iso": expires},
+                countdown=1,
             )
-            p_task.start()
             return True
         except Exception as e:
-            logger.debug(f"TaskSchedulerService: {e}")
-            logger.error("TaskSchedulerService: could not create surveillance track task")
+            logger.error("TaskSchedulerService: could not create surveillance track task: %s" % e)
             return False
 
     @staticmethod
-    def cancel_task(task) -> None:
-        task.terminate()
-
-    @staticmethod
     def cancel_session_tasks(session_id: str) -> None:
-        from flight_blender.conformance.models import TaskScheduler
+        """Signal running tasks for session_id to stop via Redis stop-signal key."""
+        from flight_blender.auth.common import get_redis
 
-        for task in TaskScheduler.objects.filter(session_id=str(session_id)):
-            task.terminate()
+        r = get_redis()
+        r.set(f"stop_task_{session_id}", "1", ex=300)

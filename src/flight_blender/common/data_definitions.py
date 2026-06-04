@@ -1,6 +1,8 @@
 from os import environ as env
 
-from django.utils.translation import gettext_lazy as _
+
+def _(s):
+    return s
 
 FLIGHTBLENDER_READ_SCOPE = env.get("FLIGHTBLENDER_READ_SCOPE", "flightblender.read")
 

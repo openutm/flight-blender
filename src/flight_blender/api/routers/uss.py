@@ -34,7 +34,7 @@ def _do_peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
 
 
 def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.uss.uss_data_definitions import (
         OperationalIntentDetails,
         OperationalIntentDetailsUSSResponse,
@@ -44,7 +44,7 @@ def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
         Time,
     )
 
-    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_reader = SyncDatabaseFacade()
     flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(opint_id)
     if not flight_operational_intent_reference:
         not_found = OperationalIntentNotFoundResponse(message="Requested Operational intent with id %s not found" % opint_id)
@@ -90,12 +90,12 @@ def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
 
 
 def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseWriter
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.scd.dss_scd_helper import VolumesConverter
     from flight_blender.scd.scd_data_definitions import CompositeOperationalIntentPayload
     from flight_blender.uss.uss_data_definitions import UpdateChangedOpIntDetailsPost
 
-    database_writer = FlightBlenderDatabaseWriter()
+    database_writer = SyncDatabaseFacade()
     my_geo_json_converter = VolumesConverter()
 
     try:
@@ -149,10 +149,10 @@ def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
 
 
 def _do_uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.uss.uss_data_definitions import GenericErrorResponseMessage
 
-    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_reader = SyncDatabaseFacade()
     constraint_id_exists = my_database_reader.check_constraint_id_exists(constraint_id=constraint_id)
     if constraint_id_exists:
         constraint_details = my_database_reader.get_constraint_details(constraint_id=constraint_id)
@@ -167,11 +167,11 @@ def _do_uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
 
 
 def _do_uss_update_constraint_details(request_data: dict) -> int:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.constraint.data_definitions import PutConstraintDetailsParameters
 
-    my_database_reader = FlightBlenderDatabaseReader()
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_reader = SyncDatabaseFacade()
+    my_database_writer = SyncDatabaseFacade()
     constraint_update_detail = from_dict(data_class=PutConstraintDetailsParameters, data=request_data)
 
     constraint_id = constraint_update_detail.constraint_id
@@ -275,12 +275,12 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
 
 
 def _do_get_uss_flight_details(flight_id: str) -> tuple[dict, int]:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.rid.data_definitions import UASID, OperatorLocation, UAClassificationEU
     from flight_blender.rid.rid_utils import RIDAuthData, RIDFlightDetails
     from flight_blender.uss.uss_data_definitions import FlightDetailsNotFoundMessage, OperatorDetailsSuccessResponse
 
-    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_reader = SyncDatabaseFacade()
     flight_details_exists = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)
     if not flight_details_exists:
         fd = FlightDetailsNotFoundMessage(message="The requested flight could not be found")

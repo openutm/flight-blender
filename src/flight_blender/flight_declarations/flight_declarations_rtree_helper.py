@@ -1,9 +1,9 @@
 import hashlib
 import os
 from dataclasses import asdict
+from typing import Any
 
 import arrow
-from django.db.models import QuerySet
 from loguru import logger
 from rtree import index
 from rtree.exceptions import RTreeError
@@ -11,7 +11,6 @@ from rtree.exceptions import RTreeError
 from flight_blender.auth.common import get_redis
 
 from .data_definitions import FlightDeclarationMetadata
-from .models import FlightDeclaration
 
 
 def _open_or_recover_index(base_path: str) -> index.Index:
@@ -31,60 +30,18 @@ def _open_or_recover_index(base_path: str) -> index.Index:
 
 
 class FlightDeclarationRTreeIndexFactory:
-    """
-    A factory class for managing an RTree index of flight declarations.
-    Methods:
-        __init__(index_name: str):
-            Initializes the RTree index with the given name.
-        add_box_to_index(id: int, flight_declaration_id: str, view: List[float], start_date: str, end_date: str) -> None:
-        delete_from_index(enumerated_id: int, view: List[float]) -> None:
-        generate_flight_declaration_index(all_flight_declarations: Union[QuerySet, List[FlightDeclaration]]) -> None:
-        clear_rtree_index() -> None:
-        check_flight_declaration_box_intersection(view_box: List[float]) -> List[FlightDeclarationMetadata]:
-    """
-
     def __init__(self, index_name: str):
         self.r = get_redis()
         self.idx = _open_or_recover_index(index_name)
 
-    def add_box_to_index(
-        self,
-        id: int,
-        flight_declaration_id: str,
-        view: list[float],
-        start_date: str,
-        end_date: str,
-    ) -> None:
-        """
-        Adds a bounding box to the RTree index.
-
-        Args:
-            id (int): The unique identifier for the box.
-            flight_declaration_id (str): The flight declaration ID.
-            view (List[float]): The bounding box coordinates [minx, miny, maxx, maxy].
-            start_date (str): The start date of the flight declaration.
-            end_date (str): The end date of the flight declaration.
-        """
+    def add_box_to_index(self, id: int, flight_declaration_id: str, view: list[float], start_date: str, end_date: str) -> None:
         metadata = FlightDeclarationMetadata(start_date=start_date, end_date=end_date, flight_declaration_id=flight_declaration_id)
         self.idx.insert(id=id, coordinates=(view[0], view[1], view[2], view[3]), obj=asdict(metadata))
 
     def delete_from_index(self, enumerated_id: int, view: list[float]) -> None:
-        """
-        Deletes a bounding box from the RTree index.
-
-        Args:
-            enumerated_id (int): The unique identifier for the box.
-            view (List[float]): The bounding box coordinates [minx, miny, maxx, maxy].
-        """
         self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
 
-    def generate_flight_declaration_index(self, all_flight_declarations: QuerySet | list[FlightDeclaration]) -> None:
-        """
-        Generates an RTree index of currently active operational indexes.
-
-        Args:
-            all_flight_declarations (Union[QuerySet, List[FlightDeclaration]]): A list or queryset of flight declarations.
-        """
+    def generate_flight_declaration_index(self, all_flight_declarations: list[Any]) -> None:
         present = arrow.now()
         start_date = present.shift(days=-1).isoformat()
         end_date = present.shift(days=1).isoformat()
@@ -101,10 +58,9 @@ class FlightDeclarationRTreeIndexFactory:
             )
 
     def clear_rtree_index(self) -> None:
-        """
-        Deletes all boxes from the RTree index.
-        """
-        all_declarations = FlightDeclaration.objects.all()
+        from flight_blender.common.database_operations import FlightBlenderDatabaseReader  # noqa: PLC0415
+
+        all_declarations = FlightBlenderDatabaseReader().get_active_activated_flight_declarations()
         for declaration in all_declarations:
             declaration_idx_str = str(declaration.id)
             declaration_id = int(hashlib.sha256(declaration_idx_str.encode("utf-8")).hexdigest(), 16) % 10**8
@@ -112,17 +68,6 @@ class FlightDeclarationRTreeIndexFactory:
             self.delete_from_index(enumerated_id=declaration_id, view=view)
 
     def check_flight_declaration_box_intersection(self, view_box: list[float]) -> list[FlightDeclarationMetadata]:
-        """
-        Checks for intersections with a given bounding box.
-
-        Args:
-            view_box (List[float]): The bounding box coordinates [minx, miny, maxx, maxy].
-
-        Returns:
-            List[FlightDeclarationMetadata]: A list of metadata for intersecting boxes.
-        """
-        intersections = [
+        return [
             FlightDeclarationMetadata(**n.object) for n in self.idx.intersection((view_box[0], view_box[1], view_box[2], view_box[3]), objects=True)
         ]
-
-        return intersections

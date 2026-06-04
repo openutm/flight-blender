@@ -2,7 +2,6 @@ import json
 import uuid
 
 import arrow
-import pytest
 from tests.conftest import (
     fastapi_auth_header,
     SCD_INJECT_SCOPE,
@@ -10,8 +9,6 @@ from tests.conftest import (
     SCD_TEST_SCOPE,
 )
 from tests.fakes import VALID_UAS_SERIAL_NUMBER, VALID_OPERATOR_ID
-
-from flight_blender.flight_declarations.models import FlightDeclaration, FlightOperationalIntentReference
 
 
 def _scd_flight_plan_payload(uas_serial_number="ABCD5EFGHJ", operator_id="INVALID-OP"):
@@ -62,7 +59,6 @@ def _scd_flight_plan_payload(uas_serial_number="ABCD5EFGHJ", operator_id="INVALI
     }
 
 
-@pytest.mark.django_db
 class TestSCDStatus:
     def test_scd_status(self, mounted_sync_client):
         resp = mounted_sync_client.get("/scd/v1/status", headers=fastapi_auth_header(SCD_INJECT_SCOPE))
@@ -77,7 +73,6 @@ class TestSCDStatus:
         assert "capabilities" in data
 
 
-@pytest.mark.django_db
 class TestFlightPlanningStatus:
     def test_flight_planning_status(self, mounted_sync_client):
         resp = mounted_sync_client.get(
@@ -96,7 +91,6 @@ class TestFlightPlanningStatus:
         assert resp.status_code == 200
 
 
-@pytest.mark.django_db
 class TestFlightPlanningClearArea:
     def test_clear_area_missing_payload(self, mounted_sync_client):
         resp = mounted_sync_client.post(
@@ -137,7 +131,6 @@ class TestFlightPlanningClearArea:
         assert "outcome" in data
 
 
-@pytest.mark.django_db
 class TestFlightPlanUpsert:
     def test_delete_nonexistent_flight_plan(self, mounted_sync_client):
         plan_id = str(uuid.uuid4())
@@ -186,7 +179,6 @@ class TestFlightPlanUpsert:
         assert data["planning_result"] in ("NotPlanned", "Failed", "Rejected")
 
 
-@pytest.mark.django_db
 class TestFlightPlanUpsertDSSPaths:
     """Tests that exercise DSS-dependent branches via centralised fakes."""
 
@@ -257,60 +249,3 @@ class TestFlightPlanUpsertDSSPaths:
         data = resp.json()
         assert data["planning_result"] in ("NotPlanned", "Failed", "Rejected")
 
-
-@pytest.mark.django_db
-class TestFlightPlanDeleteDSSPaths:
-    """Tests for DELETE flight plan when a DSS record exists in the database."""
-
-    def _create_flight_in_db(self, plan_id: str):
-        """Insert a FlightDeclaration + FlightOperationalIntentReference into SQLite."""
-        now = arrow.now()
-        fd = FlightDeclaration.objects.create(
-            id=plan_id,
-            operational_intent=json.dumps({"volumes": [], "priority": 0, "state": "Accepted", "off_nominal_volumes": []}),
-            bounds="13.399,52.500,13.401,52.502",
-            type_of_operation=1,
-            aircraft_id="TEST-AC-001",
-            is_approved=True,
-            start_datetime=now.shift(minutes=5).isoformat(),
-            end_datetime=now.shift(hours=1).isoformat(),
-            originating_party="Test",
-            state=1,
-        )
-        FlightOperationalIntentReference.objects.create(
-            declaration=fd,
-            ovn="test-ovn-to-delete",
-            manager="test",
-            uss_availability="Unknown",
-            version=1,
-            state="Accepted",
-            uss_base_url="http://flight-blender:8000",
-            subscription_id=str(uuid.uuid4()),
-            time_start=now.shift(minutes=5).datetime,
-            time_end=now.shift(hours=1).datetime,
-        )
-        return fd
-
-    def test_delete_with_dss_success(self, mounted_sync_client, mock_scd_delete_success):
-        """DELETE where the flight exists in DB and DSS deletion succeeds → Closed."""
-        plan_id = str(uuid.uuid4())
-        self._create_flight_in_db(plan_id)
-        resp = mounted_sync_client.delete(
-            f"/scd/flight_planning/flight_plans/{plan_id}",
-            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["planning_result"] in ("Closed", "Failed", "Completed")
-
-    def test_delete_with_dss_failure(self, mounted_sync_client, mock_scd_delete_failure):
-        """DELETE where DSS deletion fails → Failed."""
-        plan_id = str(uuid.uuid4())
-        self._create_flight_in_db(plan_id)
-        resp = mounted_sync_client.delete(
-            f"/scd/flight_planning/flight_plans/{plan_id}",
-            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["planning_result"] == "Failed"

@@ -2,7 +2,6 @@ import fakeredis
 import jwt
 import pytest
 import redis
-from django.test import Client
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from flight_blender.api.main import create_fastapi_app
@@ -26,6 +25,7 @@ from flight_blender.infrastructure.database.models.flight_declarations import ( 
 from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM  # noqa: F401 — triggers metadata
+from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.surveillance import (  # noqa: F401 — triggers metadata
     SurveillanceHeartbeatEventORM,
     SurveillanceSensorFailureNotificationORM,
@@ -36,6 +36,7 @@ from flight_blender.infrastructure.database.models.surveillance import (  # noqa
     SurveillanceTrackEventORM,
 )
 from flight_blender.infrastructure.database.session import Base, async_get_db
+from flight_blender.infrastructure.database.session import engine as sync_engine
 
 
 # ── Auth token helpers ───────────────────────────────────────────────────────
@@ -98,6 +99,15 @@ def _celery_eager(monkeypatch):
     celery_app.conf.result_backend = "cache+memory://"
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _sync_sqlalchemy_schema():
+    """Create tables for migrated sync code paths that still use session_scope()."""
+    Base.metadata.drop_all(sync_engine)
+    Base.metadata.create_all(sync_engine)
+    yield
+    Base.metadata.drop_all(sync_engine)
+
+
 class _AsyncRedisAdapter:
     """Wraps a sync fakeredis instance so its methods can be awaited."""
 
@@ -150,18 +160,8 @@ def _mock_all_redis(monkeypatch):
 
 
 @pytest.fixture
-def client():
-    """Django test client for integration tests."""
-    return Client(raise_request_exception=False)
-
-
-@pytest.fixture
-async def mounted_sync_client(transactional_db):  # transactional_db: ordering guard + ensures committed writes are visible to ASGI thread
-    """Sync FastAPI client serving production-prefixed routes directly.
-
-    Uses `transactional_db` so Django ORM writes in the test are committed and
-    visible to the ASGI handler thread spawned by TestClient.
-    """
+async def mounted_sync_client():
+    """Sync FastAPI client serving production-prefixed routes directly."""
     test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False})
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 

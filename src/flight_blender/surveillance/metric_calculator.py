@@ -112,9 +112,13 @@ class SurveillanceMetricCalculator:
 
         sensor = None
         try:
-            from flight_blender.surveillance.models import SurveillanceSensor
+            from flight_blender.infrastructure.database.models.surveillance import SurveillanceSensorORM  # noqa: PLC0415
+            from flight_blender.infrastructure.database.session import session_scope  # noqa: PLC0415
 
-            sensor = SurveillanceSensor.objects.get(id=sensor_id)
+            with session_scope() as db:
+                sensor = db.get(SurveillanceSensorORM, sensor_id)
+                if sensor is not None:
+                    db.expunge(sensor)
         except Exception:
             logger.warning(f"calculate_sensor_health_metrics: sensor {sensor_id} not found")
 

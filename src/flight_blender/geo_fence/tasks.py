@@ -10,10 +10,11 @@ from shapely.ops import unary_union
 
 from flight_blender.auth.common import get_redis
 from flight_blender.celery import app
+from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
+from flight_blender.infrastructure.database.session import session_scope
 
 from .common import GeoZoneParser
 from .data_definitions import GeoAwarenessTestStatus, GeoZone
-from .models import GeoFence
 
 
 @app.task(name="download_geozone_source")
@@ -81,17 +82,19 @@ def write_geo_zone(geo_zone: str, test_harness_datasource: str = "0"):
         end_time = start_time.shift(years=1)
         upper_limit = geo_zone_feature["upperLimit"] if "upperLimit" in geo_zone_feature else 300
         lower_limit = geo_zone_feature["lowerLimit"] if "lowerLimit" in geo_zone_feature else 10
-        geo_f = GeoFence(
-            geozone=json.dumps(geo_zone_feature),
-            raw_geo_fence=json.dumps(fc),
-            start_datetime=start_time.isoformat(),
-            end_datetime=end_time.isoformat(),
-            upper_limit=upper_limit,
-            lower_limit=lower_limit,
-            bounds=bounds_str,
-            name=name,
-            is_test_dataset=test_harness_datasource,
-        )
-        geo_f.save()
+        with session_scope() as db:
+            db.add(
+                GeoFenceORM(
+                    geozone=json.dumps(geo_zone_feature),
+                    raw_geo_fence=json.dumps(fc),
+                    start_datetime=start_time.datetime,
+                    end_datetime=end_time.datetime,
+                    upper_limit=upper_limit,
+                    lower_limit=lower_limit,
+                    bounds=bounds_str,
+                    name=name,
+                    is_test_dataset=bool(test_harness_datasource),
+                )
+            )
 
         logger.info("Saved Geofence to database ..")

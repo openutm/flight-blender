@@ -78,75 +78,31 @@ class SurveillanceOperations:
             if session is None:
                 return {"error": f"Invalid surveillance_session_id provided: {session_id}"}, 400
 
-            surveillance_tasks = await self._get_periodic_tasks_for_session(str(session_id))
-            if not surveillance_tasks:
-                return {"error": f"No active surveillance monitoring tasks found for {session_id}"}, 400
+            from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService  # noqa: PLC0415
 
-            from asgiref.sync import sync_to_async  # noqa: PLC0415
-
-            await sync_to_async(lambda: [task.terminate() for task in surveillance_tasks])()
+            TaskSchedulerService.cancel_session_tasks(str(session_id))
             return {"status": "Surveillance monitoring tasks removed successfully"}, 200
 
     async def _create_heartbeat_task(self, session_id: str) -> bool:
-        import arrow as _arrow  # noqa: PLC0415
-        from asgiref.sync import sync_to_async  # noqa: PLC0415
-
-        from flight_blender.conformance.models import TaskScheduler  # noqa: PLC0415
-
-        def _create():
-            job = TaskScheduler()
-            now = _arrow.now()
-            expires = now.shift(minutes=1)
-            p_task = job.schedule_every(
-                task_name="send_heartbeat_to_consumer",
-                period="seconds",
-                every=1,
-                expires=expires.isoformat(),
-                session_id=session_id,
-                flight_declaration=None,
-            )
-            p_task.start()
-            return True
+        from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService  # noqa: PLC0415
 
         try:
-            return await sync_to_async(_create)()
+            return TaskSchedulerService.schedule_surveillance_heartbeat(session_id)
         except Exception:
             logger.exception("Failed to create heartbeat periodic task for session %s", session_id)
             return False
 
     async def _create_track_task(self, session_id: str) -> bool:
-        import arrow as _arrow  # noqa: PLC0415
-        from asgiref.sync import sync_to_async  # noqa: PLC0415
-
-        from flight_blender.conformance.models import TaskScheduler  # noqa: PLC0415
-
-        def _create():
-            job = TaskScheduler()
-            now = _arrow.now()
-            expires = now.shift(minutes=1)
-            p_task = job.schedule_every(
-                task_name="send_and_generate_track_to_consumer",
-                period="seconds",
-                every=1,
-                expires=expires.isoformat(),
-                session_id=session_id,
-                flight_declaration=None,
-            )
-            p_task.start()
-            return True
+        from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService  # noqa: PLC0415
 
         try:
-            return await sync_to_async(_create)()
+            return TaskSchedulerService.schedule_surveillance_track(session_id)
         except Exception:
             logger.exception("Failed to create track periodic task for session %s", session_id)
             return False
 
     async def _get_periodic_tasks_for_session(self, session_id: str):
-        from asgiref.sync import sync_to_async  # noqa: PLC0415
-
-        from flight_blender.conformance.models import TaskScheduler  # noqa: PLC0415
-
-        return await sync_to_async(lambda: list(TaskScheduler.objects.filter(session_id=session_id).select_related("periodic_task")))()
+        return []
 
     async def list_surveillance_sensors(self) -> list[dict]:
         sensors = await self.repo.get_active_surveillance_sensors()

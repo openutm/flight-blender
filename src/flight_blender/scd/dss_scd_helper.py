@@ -3,6 +3,7 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime
 from os import environ as env
+from typing import Any
 
 import arrow
 import requests
@@ -24,7 +25,6 @@ from flight_blender.common.database_operations import FlightBlenderDatabaseReade
 from flight_blender.common.utils import LazyEncoder
 from flight_blender.constraint.data_definitions import CompositeConstraintPayload, Constraint
 from flight_blender.constraint.dss_constraints_helper import ConstraintOperations
-from flight_blender.flight_declarations.models import FlightDeclaration
 from flight_blender.geo_fence.data_definitions import GeofencePayload
 from flight_blender.rid import rtree_helper
 
@@ -353,7 +353,7 @@ class ConstraintsWriter:
     # def parse_and_load_stored_constraint_reference(self, geozone_id: str) -> ConstraintReference | None:
     #     pass
 
-    def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: FlightDeclaration):
+    def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: Any):
         # This method writes the constraint reference and constraint details to the database
         my_volumes_converter = VolumesConverter()
         for constraint in constraints:

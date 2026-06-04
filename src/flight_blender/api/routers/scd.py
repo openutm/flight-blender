@@ -68,7 +68,7 @@ def _do_flight_planning_clear_area(request_data: dict) -> tuple[dict, int]:
 
 def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dict, int]:
     from flight_blender.common.data_definitions import OPERATION_STATES_LOOKUP
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.scd import dss_scd_helper
     from flight_blender.scd.scd_test_harness_helper import (
         FlightPlanningDataProcessor,
@@ -90,8 +90,8 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
     my_scd_dss_helper = dss_scd_helper.SCDOperations()
     my_geo_json_converter = dss_scd_helper.VolumesConverter()
     my_volumes_validator = dss_scd_helper.VolumesValidator()
-    my_database_writer = FlightBlenderDatabaseWriter()
-    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_writer = SyncDatabaseFacade()
+    my_database_reader = SyncDatabaseFacade()
 
     operation_id_str = str(flight_plan_id)
 
@@ -364,7 +364,7 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
 def _do_delete_flight_plan(flight_plan_id: str) -> tuple[dict, int]:
     from dataclasses import asdict
 
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.scd import dss_scd_helper
     from flight_blender.scd.scd_test_harness_helper import (
         flight_planning_deletion_failure_response,
@@ -373,8 +373,8 @@ def _do_delete_flight_plan(flight_plan_id: str) -> tuple[dict, int]:
 
     operation_id_str = str(flight_plan_id)
     my_scd_dss_helper = dss_scd_helper.SCDOperations()
-    my_database_reader = FlightBlenderDatabaseReader()
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_reader = SyncDatabaseFacade()
+    my_database_writer = SyncDatabaseFacade()
 
     flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
         flight_declaration_id=operation_id_str

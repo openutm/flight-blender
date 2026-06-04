@@ -11,12 +11,15 @@ This class satisfies :class:`~flight_blender.flight_declarations.deconfliction_p
 without inheriting from it (structural subtyping).
 """
 
+from sqlalchemy import select
+
 from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
 from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
 from flight_blender.flight_declarations.flight_declarations_rtree_helper import FlightDeclarationRTreeIndexFactory
-from flight_blender.flight_declarations.models import FlightDeclaration
 from flight_blender.geo_fence import rtree_geo_fence_helper
-from flight_blender.geo_fence.models import GeoFence
+from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
+from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
+from flight_blender.infrastructure.database.session import session_scope
 
 
 class DefaultDeconflictionEngine:
@@ -50,12 +53,19 @@ class DefaultDeconflictionEngine:
         declaration_state = 0 if ussp_network_enabled else 1
 
         # ── GeoFence spatial check ───────────────────────────────────────
-        all_fences = list(
-            GeoFence.objects.filter(
-                start_datetime__lte=start_datetime,
-                end_datetime__gte=end_datetime,
+        import uuid
+
+        with session_scope() as db:
+            all_fences = list(
+                db.execute(
+                    select(GeoFenceORM).where(
+                        GeoFenceORM.start_datetime <= start_datetime,
+                        GeoFenceORM.end_datetime >= end_datetime,
+                    )
+                )
+                .scalars()
+                .all()
             )
-        )
 
         if all_fences:
             geo_fence_index = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(
@@ -68,18 +78,19 @@ class DefaultDeconflictionEngine:
                     is_approved = False
                     declaration_state = 8
             finally:
-                geo_fence_index.clear_rtree_index()
+                geo_fence_index.clear_rtree_index(all_fences=all_fences)
 
         # ── Flight declaration intersection ──────────────────────────────
-        declaration_qs = FlightDeclaration.objects.filter(
-            state__in=ACTIVE_OPERATIONAL_STATES,
-            start_datetime__lte=end_datetime,
-            end_datetime__gte=start_datetime,
-        )
-        current_declaration_id = request.declaration_id
-        if current_declaration_id is not None:
-            declaration_qs = declaration_qs.exclude(id=current_declaration_id)
-        declaration_list = list(declaration_qs)
+        with session_scope() as db:
+            stmt = select(FlightDeclarationORM).where(
+                FlightDeclarationORM.state.in_(ACTIVE_OPERATIONAL_STATES),
+                FlightDeclarationORM.start_datetime <= end_datetime,
+                FlightDeclarationORM.end_datetime >= start_datetime,
+            )
+            current_declaration_id = request.declaration_id
+            if current_declaration_id is not None:
+                stmt = stmt.where(FlightDeclarationORM.id != uuid.UUID(str(current_declaration_id)))
+            declaration_list = list(db.execute(stmt).scalars().all())
 
         if declaration_list:
             fd_rtree_helper = FlightDeclarationRTreeIndexFactory(

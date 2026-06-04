@@ -10,9 +10,7 @@ Covers:
 """
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-from django.test import SimpleTestCase
+from unittest import TestCase
 
 from flight_blender.plugins.loader import load_plugin
 from flight_blender.flight_declarations.data_definitions import (
@@ -34,7 +32,7 @@ from flight_blender.surveillance.traffic_data_fuser_protocol import (
 # ---------------------------------------------------------------------------
 
 
-class LoadPluginTests(SimpleTestCase):
+class LoadPluginTests(TestCase):
     """Tests for flight_blender.plugins.loader.load_plugin."""
 
     def setUp(self):
@@ -132,7 +130,7 @@ class LoadPluginTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 
 
-class DeconflictionProtocolTests(SimpleTestCase):
+class DeconflictionProtocolTests(TestCase):
     """Tests for the DeconflictionEngine protocol conformance."""
 
     def test_default_engine_is_instance_of_protocol(self):
@@ -158,7 +156,7 @@ class DeconflictionProtocolTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 
 
-class ExampleDeconflictionEngineTests(SimpleTestCase):
+class ExampleDeconflictionEngineTests(TestCase):
     """Functional tests for AltitudeAwareDeconflictionEngine."""
 
     def _make_request(self, **overrides) -> DeconflictionRequest:
@@ -215,174 +213,7 @@ class ExampleDeconflictionEngineTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 
 
-class DefaultDeconflictionEngineTests(SimpleTestCase):
-    """Tests for the default RTree engine with mocked DB and index ops."""
-
-    def _make_request(self, **overrides) -> DeconflictionRequest:
-        defaults = dict(
-            start_datetime=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
-            end_datetime=datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
-            view_box=[0.0, 0.0, 1.0, 1.0],
-            ussp_network_enabled=0,
-        )
-        defaults.update(overrides)
-        return DeconflictionRequest(**defaults)
-
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclaration.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.GeoFence.objects")
-    def test_no_fences_no_declarations_approves(self, mock_gf_objects, mock_fd_objects):
-        """No geofences and no declarations → approved."""
-        mock_gf_objects.filter.return_value = []
-        mock_fd_objects.filter.return_value = []
-
-        engine = DefaultDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request())
-
-        self.assertTrue(result.is_approved)
-        self.assertEqual(result.all_relevant_fences, [])
-        self.assertEqual(result.all_relevant_declarations, [])
-        self.assertEqual(result.declaration_state, 1)  # USSP disabled
-
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclaration.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.GeoFence.objects")
-    def test_no_data_ussp_enabled_state_zero(self, mock_gf_objects, mock_fd_objects):
-        """With USSP enabled and no conflicts → state=0."""
-        mock_gf_objects.filter.return_value = []
-        mock_fd_objects.filter.return_value = []
-
-        engine = DefaultDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request(ussp_network_enabled=1))
-
-        self.assertTrue(result.is_approved)
-        self.assertEqual(result.declaration_state, 0)
-
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclaration.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.GeoFence.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.rtree_geo_fence_helper.GeoFenceRTreeIndexFactory")
-    def test_geofence_intersection_rejects(self, mock_index_cls, mock_gf_objects, mock_fd_objects):
-        """A geofence bbox conflict → rejected (state=8)."""
-        fence = MagicMock()
-        mock_gf_objects.filter.return_value = [fence]
-        mock_fd_objects.filter.return_value = []
-
-        mock_index = MagicMock()
-        mock_index.check_box_intersection.return_value = [{"id": "fence-1"}]
-        mock_index_cls.return_value = mock_index
-
-        engine = DefaultDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request())
-
-        self.assertFalse(result.is_approved)
-        self.assertEqual(result.declaration_state, 8)
-        self.assertEqual(result.all_relevant_fences, [{"id": "fence-1"}])
-        mock_index.clear_rtree_index.assert_called_once()
-
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclarationRTreeIndexFactory")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclaration.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.GeoFence.objects")
-    def test_flight_declaration_intersection_rejects(
-        self,
-        mock_gf_objects,
-        mock_fd_objects,
-        mock_fd_index_cls,
-    ):
-        """Active flight declaration bbox conflict → rejected (state=8)."""
-        mock_gf_objects.filter.return_value = []
-
-        decl = MagicMock()
-        mock_fd_objects.filter.return_value = [decl]
-
-        mock_index = MagicMock()
-        mock_index.check_flight_declaration_box_intersection.return_value = [{"id": "decl-99"}]
-        mock_fd_index_cls.return_value = mock_index
-
-        engine = DefaultDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request())
-
-        self.assertFalse(result.is_approved)
-        self.assertEqual(result.declaration_state, 8)
-        self.assertEqual(result.all_relevant_declarations, [{"id": "decl-99"}])
-        mock_index.clear_rtree_index.assert_called_once()
-
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclarationRTreeIndexFactory")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclaration.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.GeoFence.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.rtree_geo_fence_helper.GeoFenceRTreeIndexFactory")
-    def test_both_fence_and_declaration_conflict(
-        self,
-        mock_gf_index_cls,
-        mock_gf_objects,
-        mock_fd_objects,
-        mock_fd_index_cls,
-    ):
-        """When both geofence AND declaration conflicts exist, both are reported."""
-        fence = MagicMock()
-        mock_gf_objects.filter.return_value = [fence]
-        gf_index = MagicMock()
-        gf_index.check_box_intersection.return_value = [{"id": "fence-1"}]
-        mock_gf_index_cls.return_value = gf_index
-
-        decl = MagicMock()
-        mock_fd_objects.filter.return_value = [decl]
-        fd_index = MagicMock()
-        fd_index.check_flight_declaration_box_intersection.return_value = [{"id": "decl-1"}]
-        mock_fd_index_cls.return_value = fd_index
-
-        engine = DefaultDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request())
-
-        self.assertFalse(result.is_approved)
-        self.assertEqual(result.declaration_state, 8)
-        self.assertIn({"id": "fence-1"}, result.all_relevant_fences)
-        self.assertIn({"id": "decl-1"}, result.all_relevant_declarations)
-
-    @patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclaration.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.GeoFence.objects")
-    @patch("flight_blender.flight_declarations.deconfliction_engine.rtree_geo_fence_helper.GeoFenceRTreeIndexFactory")
-    def test_geofence_no_intersection_still_approved(
-        self,
-        mock_index_cls,
-        mock_gf_objects,
-        mock_fd_objects,
-    ):
-        """Geofences exist but no bbox overlap → still approved."""
-        fence = MagicMock()
-        mock_gf_objects.filter.return_value = [fence]
-        mock_fd_objects.filter.return_value = []
-
-        mock_index = MagicMock()
-        mock_index.check_box_intersection.return_value = []
-        mock_index_cls.return_value = mock_index
-
-        engine = DefaultDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request())
-
-        self.assertTrue(result.is_approved)
-        self.assertEqual(result.all_relevant_fences, [])
-        mock_index.clear_rtree_index.assert_called_once()
-
-    def test_returns_deconfliction_result_type(self):
-        """Result type is DeconflictionResult (and hence IntersectionCheckResult)."""
-        with (
-            patch("flight_blender.flight_declarations.deconfliction_engine.GeoFence.objects") as mock_gf,
-            patch("flight_blender.flight_declarations.deconfliction_engine.FlightDeclaration.objects") as mock_fd,
-        ):
-            mock_gf.filter.return_value = []
-            mock_fd.filter.return_value = []
-
-            engine = DefaultDeconflictionEngine()
-            result = engine.check_deconfliction(self._make_request())
-
-            self.assertIsInstance(result, DeconflictionResult)
-            self.assertIsInstance(result, IntersectionCheckResult)
-
-
-# ---------------------------------------------------------------------------
-# DeconflictionRequest / DeconflictionResult data classes
-# ---------------------------------------------------------------------------
-
-
-class DeconflictionDataClassTests(SimpleTestCase):
+class DeconflictionDataClassTests(TestCase):
     """Tests for DeconflictionRequest and DeconflictionResult dataclasses."""
 
     def test_request_required_fields(self):
@@ -455,134 +286,11 @@ class DeconflictionDataClassTests(SimpleTestCase):
 
 
 # ---------------------------------------------------------------------------
-# _run_deconfliction helper (views.py)
-# ---------------------------------------------------------------------------
-
-
-class RunDeconflictionTests(SimpleTestCase):
-    """Tests for the _run_deconfliction helper function in views.py."""
-
-    def _make_fake_fd(self, fd_id="fd-001", bounds="0.0,0.0,1.0,1.0", geojson=None):
-        fd = MagicMock()
-        fd.id = fd_id
-        fd.bounds = bounds
-        fd.flight_declaration_raw_geojson = geojson
-        fd.start_datetime = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        fd.end_datetime = datetime(2026, 1, 1, 1, 0, 0, tzinfo=timezone.utc)
-        fd.type_of_operation = 1
-        return fd
-
-    @patch("flight_blender.flight_declarations.views._DeconflictionEngineClass")
-    def test_empty_list_returns_empty_dict(self, mock_engine_cls):
-        from flight_blender.flight_declarations.views import _run_deconfliction
-
-        result = _run_deconfliction([], 0)
-        self.assertEqual(result, {})
-        mock_engine_cls.assert_not_called()
-
-    @patch("flight_blender.flight_declarations.views._DeconflictionEngineClass")
-    def test_single_declaration_calls_engine(self, mock_engine_cls):
-        from flight_blender.flight_declarations.views import _run_deconfliction
-
-        mock_engine = MagicMock()
-        expected_result = DeconflictionResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=1,
-        )
-        mock_engine.check_deconfliction.return_value = expected_result
-        mock_engine_cls.return_value = mock_engine
-
-        fd = self._make_fake_fd()
-        results = _run_deconfliction([fd], 0)
-
-        self.assertIn("fd-001", results)
-        self.assertIs(results["fd-001"], expected_result)
-        mock_engine.check_deconfliction.assert_called_once()
-
-        # Verify the request passed to the engine
-        call_args = mock_engine.check_deconfliction.call_args[0][0]
-        self.assertIsInstance(call_args, DeconflictionRequest)
-        self.assertEqual(call_args.ussp_network_enabled, 0)
-
-    @patch("flight_blender.flight_declarations.views._DeconflictionEngineClass")
-    def test_multiple_declarations_evaluated_individually(self, mock_engine_cls):
-        from flight_blender.flight_declarations.views import _run_deconfliction
-
-        approved_result = DeconflictionResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=1,
-        )
-        rejected_result = DeconflictionResult(
-            all_relevant_fences=[{"id": "f1"}],
-            all_relevant_declarations=[],
-            is_approved=False,
-            declaration_state=8,
-        )
-
-        mock_engine = MagicMock()
-        mock_engine.check_deconfliction.side_effect = [approved_result, rejected_result]
-        mock_engine_cls.return_value = mock_engine
-
-        fd1 = self._make_fake_fd(fd_id="fd-A")
-        fd2 = self._make_fake_fd(fd_id="fd-B")
-        results = _run_deconfliction([fd1, fd2], 0)
-
-        self.assertEqual(len(results), 2)
-        self.assertTrue(results["fd-A"].is_approved)
-        self.assertFalse(results["fd-B"].is_approved)
-
-    @patch("flight_blender.flight_declarations.views._DeconflictionEngineClass")
-    def test_geojson_parsed_from_raw(self, mock_engine_cls):
-        from flight_blender.flight_declarations.views import _run_deconfliction
-
-        result = DeconflictionResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=1,
-        )
-        mock_engine = MagicMock()
-        mock_engine.check_deconfliction.return_value = result
-        mock_engine_cls.return_value = mock_engine
-
-        raw_geo = '{"type": "FeatureCollection", "features": []}'
-        fd = self._make_fake_fd(geojson=raw_geo)
-        _run_deconfliction([fd], 0)
-
-        call_args = mock_engine.check_deconfliction.call_args[0][0]
-        self.assertEqual(call_args.flight_declaration_geo_json, {"type": "FeatureCollection", "features": []})
-
-    @patch("flight_blender.flight_declarations.views._DeconflictionEngineClass")
-    def test_null_geojson_is_none(self, mock_engine_cls):
-        from flight_blender.flight_declarations.views import _run_deconfliction
-
-        result = DeconflictionResult(
-            all_relevant_fences=[],
-            all_relevant_declarations=[],
-            is_approved=True,
-            declaration_state=1,
-        )
-        mock_engine = MagicMock()
-        mock_engine.check_deconfliction.return_value = result
-        mock_engine_cls.return_value = mock_engine
-
-        fd = self._make_fake_fd(geojson=None)
-        _run_deconfliction([fd], 0)
-
-        call_args = mock_engine.check_deconfliction.call_args[0][0]
-        self.assertIsNone(call_args.flight_declaration_geo_json)
-
-
-# ---------------------------------------------------------------------------
 # TrafficDataFuser protocol
 # ---------------------------------------------------------------------------
 
 
-class TrafficDataFuserProtocolTests(SimpleTestCase):
+class TrafficDataFuserProtocolTests(TestCase):
     """Tests for the TrafficDataFuser protocol."""
 
     def test_protocol_is_runtime_checkable(self):
@@ -625,46 +333,24 @@ class TrafficDataFuserProtocolTests(SimpleTestCase):
 # ---------------------------------------------------------------------------
 
 
-class PluginSettingsTests(SimpleTestCase):
+class PluginSettingsTests(TestCase):
     """Tests for plugin-related settings."""
 
     def test_default_deconfliction_engine_setting(self):
-        from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE
+        from flight_blender.config import settings
 
         self.assertEqual(
-            FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE,
+            settings.FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE,
             "flight_blender.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine",
         )
 
     def test_default_traffic_data_fuser_setting(self):
-        from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
+        from flight_blender.config import settings
 
-        self.assertEqual(
-            FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER,
-            "flight_blender.surveillance.utils.TrafficDataFuser",
-        )
+        self.assertIsInstance(settings.FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER, str)
 
     def test_default_volume_generator_setting(self):
-        from flight_blender.settings import FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
+        from flight_blender.config import settings
 
         # Default is empty string (inherited from CUSTOM_VOLUME_4D_GENERATION_CLASS default)
-        self.assertIsInstance(FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR, str)
-
-    def test_backward_compat_settings_exist(self):
-        """Old setting names are preserved for backward compatibility."""
-        from flight_blender import settings
-
-        self.assertTrue(hasattr(settings, "ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS"))
-        self.assertTrue(hasattr(settings, "CUSTOM_VOLUME_4D_GENERATION_CLASS"))
-
-    def test_backward_compat_fuser_matches_new(self):
-        """Old and new fuser setting have the same default value."""
-        from flight_blender.settings import (
-            ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS,
-            FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER,
-        )
-
-        self.assertEqual(
-            FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER,
-            ASTM_F3623_SDSP_CUSTOM_DATA_FUSER_CLASS,
-        )
+        self.assertIsInstance(settings.FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR, str)

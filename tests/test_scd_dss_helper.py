@@ -336,7 +336,6 @@ class TestVolumesValidator:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestVolumesConverter:
     def test_convert_polygon_volume(self):
         vol = _make_volume4d()

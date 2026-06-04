@@ -13,7 +13,10 @@ from flight_blender.common.redis_stream_operations import RedisStreamOperations
 from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceSyncRepository
 from flight_blender.infrastructure.database.session import session_scope
 from flight_blender.plugins.loader import load_plugin
-from flight_blender.settings import BROKER_URL, FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
+from flight_blender.config import settings as _s
+
+BROKER_URL = _s.REDIS_BROKER_URL
+FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = _s.FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
 from flight_blender.surveillance.traffic_data_fuser_protocol import TrafficDataFuser as TrafficDataFuserProtocol
 
 from .data_definitions import HeartbeatMessage
@@ -34,7 +37,15 @@ def _publish_realtime_message(channel_name: str, payload: object) -> None:
 
 
 @app.task(name="send_and_generate_track_to_consumer")
-def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
+def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: None | str = None, expires_iso: str | None = None) -> None:
+    from flight_blender.auth.common import get_redis
+
+    r = get_redis()
+    if r.exists(f"stop_task_{session_id}"):
+        return
+    if expires_iso and arrow.utcnow() > arrow.get(expires_iso):
+        return
+
     surveillance_session_id = session_id
 
     expected_at = arrow.utcnow().datetime
@@ -64,9 +75,23 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
             had_active_tracks=len(track_messages) > 0,
         )
 
+    send_and_generate_track_to_consumer.apply_async(
+        args=[session_id, flight_declaration_id],
+        kwargs={"expires_iso": expires_iso},
+        countdown=1,
+    )
+
 
 @app.task(name="send_heartbeat_to_consumer")
-def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None) -> None:
+def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None, expires_iso: str | None = None) -> None:
+    from flight_blender.auth.common import get_redis
+
+    r = get_redis()
+    if r.exists(f"stop_task_{session_id}"):
+        return
+    if expires_iso and arrow.utcnow() > arrow.get(expires_iso):
+        return
+
     surveillance_session_id = session_id
 
     logger.info(f"Preparing to send heartbeat for surveillance session with id: {surveillance_session_id}")
@@ -111,6 +136,12 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
             expected_at=expected_at,
             delivered_on_time=delivered_on_time,
         )
+
+    send_heartbeat_to_consumer.apply_async(
+        args=[session_id, flight_declaration_id],
+        kwargs={"expires_iso": expires_iso},
+        countdown=1,
+    )
 
 
 @app.task(name="cleanup_old_heartbeat_events")

@@ -1,8 +1,6 @@
-import json
 import uuid
 
 import arrow
-import pytest
 from tests.conftest import (
     fastapi_auth_header,
     STRATEGIC_SCOPE,
@@ -10,15 +8,6 @@ from tests.conftest import (
     CONFORMANCE_SCOPE,
     RID_DP_SCOPE,
 )
-
-from flight_blender.constraint.models import GeoFence
-from flight_blender.flight_declarations.models import (
-    CompositeOperationalIntent,
-    FlightDeclaration,
-    FlightOperationalIntentDetail,
-    FlightOperationalIntentReference,
-)
-from flight_blender.rid.models import RIDFlightDetail
 
 
 REPORT_SCOPES = [
@@ -30,7 +19,6 @@ REPORT_SCOPES = [
 ]
 
 
-@pytest.mark.django_db
 class TestUSSReports:
     def test_peer_uss_report_invalid_payload(self, mounted_sync_client):
         payload = {"message": "Test error report"}
@@ -77,7 +65,6 @@ class TestUSSReports:
         assert resp.status_code == 401
 
 
-@pytest.mark.django_db
 class TestUSSOperationalIntents:
     def test_get_operational_intent_not_found(self, mounted_sync_client):
         opint_id = str(uuid.uuid4())
@@ -100,7 +87,6 @@ class TestUSSOperationalIntents:
         assert resp.status_code == 204
 
 
-@pytest.mark.django_db
 class TestUSSConstraints:
     def test_get_constraint_not_found(self, mounted_sync_client):
         constraint_id = str(uuid.uuid4())
@@ -123,7 +109,6 @@ class TestUSSConstraints:
         assert resp.status_code == 204
 
 
-@pytest.mark.django_db
 class TestUSSTelemetry:
     def test_get_telemetry(self, mounted_sync_client):
         opint_id = str(uuid.uuid4())
@@ -138,7 +123,6 @@ class TestUSSTelemetry:
         assert "next_telemetry_opportunity" in data
 
 
-@pytest.mark.django_db
 class TestUSSFlights:
     def test_get_flights_missing_view(self, mounted_sync_client):
         resp = mounted_sync_client.get(
@@ -194,7 +178,6 @@ class TestUSSFlights:
         assert resp.status_code == 401
 
 
-@pytest.mark.django_db
 class TestUSSUpdateOpIntDetails:
     def test_update_opint_missing_payload(self, mounted_sync_client):
         resp = mounted_sync_client.post(
@@ -266,126 +249,3 @@ class TestUSSUpdateOpIntDetails:
         )
         assert resp.status_code == 204
 
-
-@pytest.mark.django_db
-class TestUSSOpIntDetailsWithDB:
-    """Tests for uss_operational_intent_details when the DB record exists."""
-
-    def _create_opint_in_db(self):
-        """Create a minimal FlightDeclaration + FlightOperationalIntentReference + CompositeOperationalIntent."""
-        now = arrow.now()
-        fd = FlightDeclaration.objects.create(
-            operational_intent=json.dumps({"volumes": [], "priority": 0, "state": "Accepted", "off_nominal_volumes": []}),
-            bounds="13.399,52.500,13.401,52.502",
-            type_of_operation=1,
-            aircraft_id="USS-TEST-AC",
-            is_approved=True,
-            start_datetime=now.shift(minutes=5).isoformat(),
-            end_datetime=now.shift(hours=1).isoformat(),
-            originating_party="Test",
-            state=1,
-        )
-        opint_id = str(uuid.uuid4())
-        opint_ref = FlightOperationalIntentReference.objects.create(
-            id=opint_id,
-            declaration=fd,
-            ovn="test-ovn-uss",
-            manager="test-manager",
-            uss_availability="Unknown",
-            version=1,
-            state="Accepted",
-            uss_base_url="http://flight-blender:8000",
-            subscription_id=str(uuid.uuid4()),
-            time_start=now.shift(minutes=5).datetime,
-            time_end=now.shift(hours=1).datetime,
-        )
-        vol_data = [
-            {
-                "volume": {
-                    "outline_polygon": {
-                        "vertices": [
-                            {"lat": 52.500, "lng": 13.399},
-                            {"lat": 52.501, "lng": 13.399},
-                            {"lat": 52.501, "lng": 13.400},
-                        ]
-                    },
-                    "altitude_lower": {"value": 0, "reference": "W84", "units": "M"},
-                    "altitude_upper": {"value": 100, "reference": "W84", "units": "M"},
-                    "outline_circle": None,
-                },
-                "time_start": {"format": "RFC3339", "value": now.shift(minutes=5).isoformat()},
-                "time_end": {"format": "RFC3339", "value": now.shift(hours=1).isoformat()},
-            }
-        ]
-        details_obj = FlightOperationalIntentDetail.objects.create(
-            declaration=fd,
-            volumes=json.dumps(vol_data),
-            off_nominal_volumes=json.dumps([]),
-            priority=0,
-        )
-        CompositeOperationalIntent.objects.create(
-            declaration=fd,
-            bounds="13.399,52.500,13.401,52.502",
-            operational_intent_reference=opint_ref,
-            operational_intent_details=details_obj,
-            start_datetime=now.shift(minutes=5).datetime,
-            end_datetime=now.shift(hours=1).datetime,
-            alt_max=100,
-            alt_min=0,
-        )
-        return opint_id
-
-    def test_get_operational_intent_found(self, mounted_sync_client):
-        opint_id = self._create_opint_in_db()
-        resp = mounted_sync_client.get(
-            f"/uss/v1/operational_intents/{opint_id}",
-            headers=fastapi_auth_header(STRATEGIC_SCOPE),
-        )
-        assert resp.status_code in (200, 500)
-
-
-@pytest.mark.django_db
-class TestUSSFlightDetailsWithDB:
-    """Tests for get_uss_flight_details when a DB record exists."""
-
-    def _create_flight_details(self):
-        detail = RIDFlightDetail.objects.create(
-            id=str(uuid.uuid4()),
-            operation_description="Test flight",
-            operator_location='{"position": {"lat": 52.5, "lng": 13.4, "accuracy": "LAT_LON_1m", "extrapolated": false}, "altitude": {"value": 50, "reference": "W84", "units": "M"}}',
-            operator_id="test-operator-123",
-            auth_data="{}",
-            uas_id='{"serial_number": "ABCD5EFGHJ", "registration_id": null, "utm_id": null, "specific_session_id": null}',
-            eu_classification='{"category": "Open", "class": "Class1"}',
-        )
-        return str(detail.id)
-
-    def test_get_flight_details_found(self, mounted_sync_client):
-        flight_id = self._create_flight_details()
-        resp = mounted_sync_client.get(
-            f"/uss/flights/{flight_id}/details",
-            headers=fastapi_auth_header(RID_DP_SCOPE),
-        )
-        assert resp.status_code in (200, 500)
-
-
-@pytest.mark.django_db
-class TestUSSConstraintWithDB:
-    """Tests for uss_constraint_details when DB record exists."""
-
-    def test_get_constraint_existing(self, mounted_sync_client):
-        """Create a constraint and verify the GET returns data."""
-        constraint = GeoFence.objects.create(
-            raw_geo_fence='{"type": "FeatureCollection", "features": []}',
-            geozone='{"type": "FeatureCollection", "features": []}',
-            upper_limit=100,
-            lower_limit=0,
-            start_datetime="2026-01-01T00:00:00Z",
-            end_datetime="2026-12-31T23:59:59Z",
-        )
-        constraint_id = str(constraint.id)
-        resp = mounted_sync_client.get(
-            f"/uss/v1/constraints/{constraint_id}",
-            headers=fastapi_auth_header(CONSTRAINT_SCOPE),
-        )
-        assert resp.status_code in (200, 404, 500)

@@ -4,7 +4,6 @@ import pytest
 from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE, READ_WRITE_SCOPE
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationCreate:
     def test_create_flight_declaration(self, mounted_sync_client, flight_declaration_payload):
         resp = mounted_sync_client.post(
@@ -68,7 +67,6 @@ class TestFlightDeclarationCreate:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestSetFlightDeclaration:
     def test_set_flight_declaration(self, mounted_sync_client, flight_declaration_payload):
         resp = mounted_sync_client.post(
@@ -107,7 +105,6 @@ class TestSetFlightDeclaration:
         assert resp.status_code == 200
 
 
-@pytest.mark.django_db
 class TestSetOperationalIntent:
     def test_set_operational_intent(self, mounted_sync_client, operational_intent_payload):
         resp = mounted_sync_client.post(
@@ -127,7 +124,6 @@ class TestSetOperationalIntent:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestBulkFlightDeclarations:
     def test_bulk_create(self, mounted_sync_client, flight_declaration_payload):
         resp = mounted_sync_client.post(
@@ -194,7 +190,6 @@ class TestBulkFlightDeclarations:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationList:
     def test_list_empty(self, mounted_sync_client):
         resp = mounted_sync_client.get(
@@ -239,7 +234,6 @@ class TestFlightDeclarationList:
         assert resp.status_code == 401
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationDetail:
     def test_get_nonexistent(self, mounted_sync_client):
         pk = str(uuid.uuid4())
@@ -268,7 +262,6 @@ class TestFlightDeclarationDetail:
         assert "bounds" in data
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationStateUpdate:
     def test_update_state(self, mounted_sync_client, flight_declaration_payload):
         create_resp = mounted_sync_client.post(
@@ -295,7 +288,6 @@ class TestFlightDeclarationStateUpdate:
         assert resp.status_code in (400, 404)
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationApproval:
     def test_update_approval(self, mounted_sync_client, flight_declaration_payload):
         create_resp = mounted_sync_client.post(
@@ -313,7 +305,6 @@ class TestFlightDeclarationApproval:
         assert resp.status_code == 200
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationDelete:
     def test_delete_nonexistent(self, mounted_sync_client):
         pk = str(uuid.uuid4())
@@ -345,7 +336,6 @@ class TestFlightDeclarationDelete:
         assert resp.status_code == 404
 
 
-@pytest.mark.django_db
 class TestSubmitToDSS:
     def test_submit_not_enabled(self, mounted_sync_client, flight_declaration_payload):
         create_resp = mounted_sync_client.post(
@@ -371,7 +361,6 @@ class TestSubmitToDSS:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestNetworkFlightDeclarations:
     def test_network_by_view_not_enabled(self, mounted_sync_client):
         resp = mounted_sync_client.get(
@@ -409,7 +398,6 @@ class TestNetworkFlightDeclarations:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestSubmitToDSSEnabled:
     """Tests for submit_flight_declaration_to_dss when USSP_NETWORK_ENABLED=1."""
 
@@ -469,7 +457,6 @@ class TestSubmitToDSSEnabled:
         assert "id" in resp.json()
 
 
-@pytest.mark.django_db
 class TestNetworkFlightDeclarationsByViewEnabled:
     """Tests network_flight_declaration_details_by_view with USSP_NETWORK_ENABLED=1."""
 

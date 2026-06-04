@@ -110,7 +110,6 @@ class TestParseRidTimestampUs:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestWriteOperatorRidNotification:
     def test_creates_notification_record(self):
         """write_operator_rid_notification should write to the database."""
@@ -124,7 +123,6 @@ class TestWriteOperatorRidNotification:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestProcessRequestedFlight:
     def test_basic_flight_processing(self, fakeredis_server):
         """process_requested_flight returns a RIDTestInjection and positions/altitudes."""
@@ -242,7 +240,6 @@ class TestProcessRequestedFlight:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestStreamRidTelemetryData:
     def _make_observation_payload(self, operation_id="op-001"):
         return [
@@ -301,7 +298,6 @@ class TestStreamRidTelemetryData:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestCheckRidStreamConformance:
     def test_conformant_stream(self):
         """check_rid_stream_conformance with a conformant stream logs OK."""
@@ -323,7 +319,6 @@ class TestCheckRidStreamConformance:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestFlightTelemetryRIDEngine:
     def test_check_rid_stream_ok_no_observations(self):
         """When there are no recent observations the stream is considered OK."""

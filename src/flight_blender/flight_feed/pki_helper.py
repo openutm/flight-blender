@@ -7,8 +7,6 @@ import jwt
 import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from django.core.signing import Signer
-from django.http import HttpRequest, HttpResponse
 from dotenv import find_dotenv, load_dotenv
 from http_message_signatures import HTTPMessageSigner, HTTPMessageVerifier, HTTPSignatureKeyResolver, algorithms
 from jwcrypto import jwk, jws
@@ -16,8 +14,6 @@ from jwcrypto.common import json_encode
 from loguru import logger
 
 from flight_blender.auth.common import get_redis
-
-from .models import SignedTelmetryPublicKey
 
 load_dotenv(find_dotenv())
 
@@ -130,7 +126,18 @@ class MessageVerifier:
         s = requests.Session()
 
         public_keys = {}
-        all_public_keys = SignedTelmetryPublicKey.objects.filter(is_active=1)
+        from flight_blender.infrastructure.database.models.flight_feed import SignedTelmetryPublicKeyORM  # noqa: PLC0415
+        from flight_blender.infrastructure.database.session import session_scope, SessionLocal  # noqa: PLC0415
+        from sqlalchemy import select  # noqa: PLC0415
+
+        _db = SessionLocal()
+        try:
+            _result = _db.execute(select(SignedTelmetryPublicKeyORM).where(SignedTelmetryPublicKeyORM.is_active == True))  # noqa: E712
+            all_public_keys = list(_result.scalars().all())
+            for o in all_public_keys:
+                _db.expunge(o)
+        finally:
+            _db.close()
         for current_public_key in all_public_keys:
             redis_jwks_key = str(current_public_key.id) + "-jwks"
             current_kid = current_public_key.key_id
@@ -236,9 +243,13 @@ class ResponseSigningOperations:
         return str(http_sfv.Dictionary({"sha-256": hashlib.sha256(payload_str.encode("utf-8")).digest()}))
 
     def sign_json_via_django(self, data_to_sign):
-        signer = Signer()
-        signed_obj = signer.sign_object(data_to_sign)
-        return signed_obj
+        import hmac
+        import hashlib as _hashlib
+
+        secret = env.get("SECRET_KEY", "changeme")
+        payload = json.dumps(data_to_sign, separators=(",", ":"))
+        sig = hmac.new(secret.encode(), payload.encode(), _hashlib.sha256).hexdigest()
+        return f"{payload}:{sig}"
 
     def sign_json_via_jose(self, payload):
         """
@@ -285,7 +296,7 @@ class ResponseSigningOperations:
 
         return {"signature": f"{signature['protected']}.{signature['payload']}.{signature['signature']}"}
 
-    def sign_http_message(self, json_payload, original_request: HttpRequest) -> HttpResponse:
+    def sign_http_message(self, json_payload, original_request) -> dict:
         """
         Sign the HTTP response message using IETF standard and return an HttpResponse object.
         This method takes a JSON payload and an original HttpRequest, creates an HttpResponse
@@ -299,27 +310,5 @@ class ResponseSigningOperations:
             - IETF HTTP Message Signatures: https://datatracker.ietf.org/doc/draft-ietf-httpbis-message-signatures/
 
         """
-        response = HttpResponse(json.dumps(json_payload), content_type="application/json")
-        response.url = original_request.build_absolute_uri()
-        response.request = original_request
-
         content_digest = self.generate_content_digest(payload=json_payload)
-        response["Content-Digest"] = content_digest
-
-        signer = HTTPMessageSigner(
-            signature_algorithm=algorithms.RSA_PSS_SHA512,
-            key_resolver=MyHTTPSignatureKeyResolver(jwk=None),
-        )
-        signer.sign(
-            response,
-            key_id=self.signing_key_id,
-            covered_component_ids=(
-                "@method",
-                "@authority",
-                "@target-uri",
-                "content-digest",
-            ),
-            label=self.signing_key_label,
-        )
-
-        return response
+        return {"payload": json.dumps(json_payload), "content-digest": content_digest}

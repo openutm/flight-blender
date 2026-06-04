@@ -12,7 +12,6 @@ from contextlib import ExitStack, contextmanager
 from unittest.mock import MagicMock, patch
 
 import arrow
-import pytest
 
 from flight_blender.common.redis_stream_operations import RedisStreamOperations
 from flight_blender.surveillance.metric_calculator import SurveillanceMetricCalculator
@@ -170,13 +169,11 @@ class TestSensorHealthMetrics:
         reader = _mock_db_reader(health_records=[], pre_window_status=None)
         calc = SurveillanceMetricCalculator(database_reader=reader)
         now = arrow.utcnow()
-        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
-            mock_sensor_cls.objects.get.side_effect = Exception("not found")
-            result = calc.calculate_sensor_health_metrics(
-                sensor_id=str(uuid.uuid4()),
-                start_time=now.shift(hours=-1).datetime,
-                end_time=now.datetime,
-            )
+        result = calc.calculate_sensor_health_metrics(
+            sensor_id=str(uuid.uuid4()),
+            start_time=now.shift(hours=-1).datetime,
+            end_time=now.datetime,
+        )
         assert result.mttr_seconds is None
         assert result.auto_recovery_time_seconds is None
 
@@ -195,13 +192,11 @@ class TestSensorHealthMetrics:
 
         reader = _mock_db_reader(health_records=[failure_rec, recovery_rec], pre_window_status="operational")
         calc = SurveillanceMetricCalculator(database_reader=reader)
-        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
-            mock_sensor_cls.objects.get.side_effect = Exception("not found")
-            result = calc.calculate_sensor_health_metrics(
-                sensor_id=str(uuid.uuid4()),
-                start_time=now.shift(hours=-1).datetime,
-                end_time=now.datetime,
-            )
+        result = calc.calculate_sensor_health_metrics(
+            sensor_id=str(uuid.uuid4()),
+            start_time=now.shift(hours=-1).datetime,
+            end_time=now.datetime,
+        )
         assert result.mttr_seconds == 10 * 60  # 10 minutes = 600 seconds
         assert result.auto_recovery_time_seconds is None
 
@@ -220,13 +215,11 @@ class TestSensorHealthMetrics:
 
         reader = _mock_db_reader(health_records=[failure_rec, recovery_rec], pre_window_status="operational")
         calc = SurveillanceMetricCalculator(database_reader=reader)
-        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
-            mock_sensor_cls.objects.get.side_effect = Exception("not found")
-            result = calc.calculate_sensor_health_metrics(
-                sensor_id=str(uuid.uuid4()),
-                start_time=now.shift(hours=-1).datetime,
-                end_time=now.datetime,
-            )
+        result = calc.calculate_sensor_health_metrics(
+            sensor_id=str(uuid.uuid4()),
+            start_time=now.shift(hours=-1).datetime,
+            end_time=now.datetime,
+        )
         assert result.auto_recovery_time_seconds == 5 * 60  # 5 minutes = 300 seconds
 
     def test_pre_window_failure_state(self):
@@ -239,13 +232,11 @@ class TestSensorHealthMetrics:
 
         reader = _mock_db_reader(health_records=[recovery_rec], pre_window_status="outage")
         calc = SurveillanceMetricCalculator(database_reader=reader)
-        with patch("flight_blender.surveillance.models.SurveillanceSensor") as mock_sensor_cls:
-            mock_sensor_cls.objects.get.side_effect = Exception("not found")
-            result = calc.calculate_sensor_health_metrics(
-                sensor_id=str(uuid.uuid4()),
-                start_time=now.shift(hours=-1).datetime,
-                end_time=now.datetime,
-            )
+        result = calc.calculate_sensor_health_metrics(
+            sensor_id=str(uuid.uuid4()),
+            start_time=now.shift(hours=-1).datetime,
+            end_time=now.datetime,
+        )
         assert result.mttr_seconds is not None
         assert result.mttr_seconds > 0
 
@@ -291,7 +282,6 @@ def _sa_repo_patch(mock_repo):
     return _ctx()
 
 
-@pytest.mark.django_db
 class TestSendHeartbeatToConsumer:
     def test_heartbeat_sent_successfully(self):
         """send_heartbeat_to_consumer should record event when Redis publish succeeds."""
@@ -299,10 +289,12 @@ class TestSendHeartbeatToConsumer:
         session_id = str(uuid.uuid4())
         with patch("flight_blender.surveillance.tasks.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.return_value = 1
-            with _sa_repo_patch(mock_repo):
-                send_heartbeat_to_consumer(session_id=session_id)
+            with patch.object(send_heartbeat_to_consumer, "apply_async") as mock_apply_async:
+                with _sa_repo_patch(mock_repo):
+                    send_heartbeat_to_consumer(session_id=session_id)
         mock_repo.record_heartbeat_event.assert_called_once()
         mock_from_url.return_value.publish.assert_called_once()
+        mock_apply_async.assert_called_once()
 
     def test_heartbeat_channel_error_still_records(self):
         """send_heartbeat_to_consumer records the event even when Redis publish fails."""
@@ -310,15 +302,16 @@ class TestSendHeartbeatToConsumer:
         session_id = str(uuid.uuid4())
         with patch("flight_blender.surveillance.tasks.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.side_effect = Exception("redis unavailable")
-            with _sa_repo_patch(mock_repo):
-                send_heartbeat_to_consumer(session_id=session_id)
+            with patch.object(send_heartbeat_to_consumer, "apply_async") as mock_apply_async:
+                with _sa_repo_patch(mock_repo):
+                    send_heartbeat_to_consumer(session_id=session_id)
         # Even on error, we record the heartbeat
         mock_repo.record_heartbeat_event.assert_called_once()
+        mock_apply_async.assert_called_once()
         kwargs = mock_repo.record_heartbeat_event.call_args.kwargs
         assert kwargs.get("delivered_on_time") is False
 
 
-@pytest.mark.django_db
 class TestSendAndGenerateTrackToConsumer:
     def test_track_consumer_runs(self):
         """send_and_generate_track_to_consumer calls record_track_event."""
@@ -332,13 +325,14 @@ class TestSendAndGenerateTrackToConsumer:
                         mock_fuser = MagicMock()
                         mock_fuser.return_value.generate_track_messages.return_value = []
                         mock_load.return_value = mock_fuser
-                        with _sa_repo_patch(mock_repo):
-                            send_and_generate_track_to_consumer(session_id=session_id)
+                        with patch.object(send_and_generate_track_to_consumer, "apply_async") as mock_apply_async:
+                            with _sa_repo_patch(mock_repo):
+                                send_and_generate_track_to_consumer(session_id=session_id)
         mock_repo.record_track_event.assert_called_once()
         mock_from_url.return_value.publish.assert_called_once()
+        mock_apply_async.assert_called_once()
 
 
-@pytest.mark.django_db
 class TestCleanupOldHeartbeatEvents:
     def test_cleanup_deletes_old_records(self):
         """cleanup_old_heartbeat_events deletes records older than retention period."""
