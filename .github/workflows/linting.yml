@@ -185,7 +185,7 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: "sqlite://:memory:"
+      DATABASE_URL: "sqlite:///:memory:"
       BYPASS_AUTH_TOKEN_VERIFICATION: "1"
     steps:
       - uses: actions/checkout@v6

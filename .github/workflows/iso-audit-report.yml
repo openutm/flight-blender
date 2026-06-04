@@ -13,7 +13,7 @@ permissions:
   security-events: write
 
 env:
-  DATABASE_URL: "sqlite://:memory:"
+  DATABASE_URL: "sqlite:///:memory:"
   BYPASS_AUTH_TOKEN_VERIFICATION: "1"
 
 jobs:
