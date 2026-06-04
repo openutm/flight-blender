@@ -96,7 +96,10 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
     operation_id_str = str(flight_plan_id)
 
     scd_test_data = request_data
-    my_flight_plan_processor = FlightPlanningDataProcessor(incoming_flight_information=scd_test_data)
+    try:
+        my_flight_plan_processor = FlightPlanningDataProcessor(incoming_flight_information=scd_test_data)
+    except KeyError as ke:
+        return {"result": "Could not parse flight plan payload: %s" % ke}, 500
     scd_test_data = my_flight_plan_processor.process_incoming_flight_plan_data()
     my_flight_plan_op_intent_bridge = FlightPlantoOperationalIntentProcessor(flight_planning_request=scd_test_data)
 

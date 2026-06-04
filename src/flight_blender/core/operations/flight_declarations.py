@@ -118,8 +118,7 @@ async def _create_flight_declaration_record(
     default_state = 0 if ussp_network_enabled else 1
 
     provided_state = request_data.get("flight_state", default_state)
-    # Infer approval from state when not explicitly provided: active states (1-7) are approved, 0 and 8 are not.
-    is_approved = bool(request_data.get("flight_approved", provided_state not in (0, 8)))
+    is_approved = provided_state not in (0, 8)
 
     created = await repo.create(
         operational_intent=json.dumps(partial_op_int),

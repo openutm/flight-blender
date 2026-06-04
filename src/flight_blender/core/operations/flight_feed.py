@@ -164,8 +164,8 @@ class FlightFeedOperations:
                 return {
                     "message": f"A states object with a fully valid current states is necessary, the parsing the following key encountered errors {ke}"
                 }, 400
-            except dacite.exceptions.WrongTypeError as wte:
-                return {"message": f"The parsing of telemetry object raised the following errors {wte}"}, 400
+            except (dacite.exceptions.WrongTypeError, dacite.exceptions.MissingValueError) as ve:
+                return {"message": f"The parsing of telemetry object raised the following errors {ve}"}, 400
 
             unsigned_telemetry_observations.append(SignedUnSignedTelemetryObservations(current_states=all_states, flight_details=f_details))
 
