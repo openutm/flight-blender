@@ -14,6 +14,17 @@ from flight_blender.infrastructure.database.models.constraint import (  # noqa: 
     ConstraintDetailORM,
     ConstraintReferenceORM,
 )
+from flight_blender.infrastructure.database.models.flight_declarations import (  # noqa: F401 — triggers metadata
+    CompositeOperationalIntentORM,
+    FlightDeclarationORM,
+    FlightOperationalIntentDetailORM,
+    FlightOperationalIntentReferenceORM,
+    FlightOperationTrackingORM,
+    PeerCompositeOperationalIntentORM,
+    PeerOperationalIntentDetailORM,
+    PeerOperationalIntentReferenceORM,
+    SubscriberORM,
+)
 from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM  # noqa: F401 — triggers metadata
