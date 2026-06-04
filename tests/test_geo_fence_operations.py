@@ -52,7 +52,7 @@ GEO_FENCE_PAYLOAD = {
 
 class TestGeoFenceCRUD:
     def test_list_geo_fences_empty(self, fastapi_client):
-        resp = fastapi_client.get("/geo_fence", headers=_fastapi_auth(READ_SCOPE))
+        resp = fastapi_client.get("/geo_fence_ops/geo_fence", headers=_fastapi_auth(READ_SCOPE))
         assert resp.status_code == 200
         data = resp.json()
         assert "results" in data
@@ -60,7 +60,7 @@ class TestGeoFenceCRUD:
 
     def test_set_geo_fence_success(self, fastapi_client):
         resp = fastapi_client.put(
-            "/set_geo_fence",
+            "/geo_fence_ops/set_geo_fence",
             json=GEO_FENCE_PAYLOAD,
             headers=_fastapi_auth(WRITE_SCOPE),
         )
@@ -71,7 +71,7 @@ class TestGeoFenceCRUD:
 
     def test_set_geo_fence_unsupported_media_type(self, fastapi_client):
         resp = fastapi_client.put(
-            "/set_geo_fence",
+            "/geo_fence_ops/set_geo_fence",
             content="{}",
             headers={**_fastapi_auth(WRITE_SCOPE), "content-type": "text/plain"},
         )
@@ -106,13 +106,13 @@ class TestGeoFenceCRUD:
                 }
             ],
         }
-        resp = fastapi_client.put("/set_geo_fence", json=payload, headers=_fastapi_auth(WRITE_SCOPE))
+        resp = fastapi_client.put("/geo_fence_ops/set_geo_fence", json=payload, headers=_fastapi_auth(WRITE_SCOPE))
         assert resp.status_code == 200
         assert "id" in resp.json()
 
     def test_set_geo_fence_invalid_schema(self, fastapi_client):
         resp = fastapi_client.put(
-            "/set_geo_fence",
+            "/geo_fence_ops/set_geo_fence",
             json={"type": "FeatureCollection", "features": []},
             headers=_fastapi_auth(WRITE_SCOPE),
         )
@@ -122,7 +122,7 @@ class TestGeoFenceCRUD:
         import uuid
 
         resp = fastapi_client.get(
-            f"/geo_fence/{uuid.uuid4()}",
+            f"/geo_fence_ops/geo_fence/{uuid.uuid4()}",
             headers=_fastapi_auth(READ_SCOPE),
         )
         assert resp.status_code == 404
@@ -131,7 +131,7 @@ class TestGeoFenceCRUD:
         import uuid
 
         resp = fastapi_client.delete(
-            f"/geo_fence/{uuid.uuid4()}/delete",
+            f"/geo_fence_ops/geo_fence/{uuid.uuid4()}/delete",
             headers=_fastapi_auth(WRITE_SCOPE),
         )
         assert resp.status_code == 404
@@ -139,7 +139,7 @@ class TestGeoFenceCRUD:
     def test_create_then_get_then_delete(self, fastapi_client):
         # create
         resp = fastapi_client.put(
-            "/set_geo_fence",
+            "/geo_fence_ops/set_geo_fence",
             json=GEO_FENCE_PAYLOAD,
             headers=_fastapi_auth(WRITE_SCOPE),
         )
@@ -147,20 +147,20 @@ class TestGeoFenceCRUD:
         fence_id = resp.json()["id"]
 
         # get
-        resp = fastapi_client.get(f"/geo_fence/{fence_id}", headers=_fastapi_auth(READ_SCOPE))
+        resp = fastapi_client.get(f"/geo_fence_ops/geo_fence/{fence_id}", headers=_fastapi_auth(READ_SCOPE))
         assert resp.status_code == 200
         assert resp.json()["name"] == "Test GeoFence"
 
         # list — should appear
-        resp = fastapi_client.get("/geo_fence", headers=_fastapi_auth(READ_SCOPE))
+        resp = fastapi_client.get("/geo_fence_ops/geo_fence", headers=_fastapi_auth(READ_SCOPE))
         assert resp.status_code == 200
 
         # delete
-        resp = fastapi_client.delete(f"/geo_fence/{fence_id}/delete", headers=_fastapi_auth(WRITE_SCOPE))
+        resp = fastapi_client.delete(f"/geo_fence_ops/geo_fence/{fence_id}/delete", headers=_fastapi_auth(WRITE_SCOPE))
         assert resp.status_code == 204
 
         # gone
-        resp = fastapi_client.get(f"/geo_fence/{fence_id}", headers=_fastapi_auth(READ_SCOPE))
+        resp = fastapi_client.get(f"/geo_fence_ops/geo_fence/{fence_id}", headers=_fastapi_auth(READ_SCOPE))
         assert resp.status_code == 404
 
 
@@ -168,23 +168,23 @@ class TestGeoFenceAuthEnforcement:
     """Auth enforcement — BYPASS_AUTH_TOKEN_VERIFICATION must be True (default in tests)."""
 
     def test_missing_token_returns_401(self, fastapi_client):
-        resp = fastapi_client.get("/geo_fence")
+        resp = fastapi_client.get("/geo_fence_ops/geo_fence")
         assert resp.status_code == 401
 
     def test_wrong_scope_returns_403(self, fastapi_client):
         resp = fastapi_client.get(
-            "/geo_fence",
+            "/geo_fence_ops/geo_fence",
             headers=_fastapi_auth(["wrong.scope"]),
         )
         assert resp.status_code == 403
 
     def test_read_scope_allows_list(self, fastapi_client):
-        resp = fastapi_client.get("/geo_fence", headers=_fastapi_auth(READ_SCOPE))
+        resp = fastapi_client.get("/geo_fence_ops/geo_fence", headers=_fastapi_auth(READ_SCOPE))
         assert resp.status_code == 200
 
     def test_read_scope_rejected_for_write(self, fastapi_client):
         resp = fastapi_client.put(
-            "/set_geo_fence",
+            "/geo_fence_ops/set_geo_fence",
             json=GEO_FENCE_PAYLOAD,
             headers=_fastapi_auth(READ_SCOPE),
         )
@@ -194,7 +194,7 @@ class TestGeoFenceAuthEnforcement:
 class TestGeoAwarenessTestHarness:
     def test_status_endpoint(self, fastapi_client):
         resp = fastapi_client.get(
-            "/geo_awareness/status",
+            "/geo_fence_ops/geo_awareness/status",
             headers=_fastapi_auth(GA_TEST_SCOPE),
         )
         assert resp.status_code == 200
@@ -203,7 +203,7 @@ class TestGeoAwarenessTestHarness:
 
     def test_geospatial_data_sources_empty(self, fastapi_client):
         resp = fastapi_client.get(
-            "/geo_awareness/geospatial_data_sources",
+            "/geo_fence_ops/geo_awareness/geospatial_data_sources",
             headers=_fastapi_auth(GA_TEST_SCOPE),
         )
         assert resp.status_code == 200
@@ -212,7 +212,7 @@ class TestGeoAwarenessTestHarness:
 
     def test_geozone_source_not_found(self, fastapi_client):
         resp = fastapi_client.get(
-            "/geo_awareness/geospatial_data_sources/nonexistent-id",
+            "/geo_fence_ops/geo_awareness/geospatial_data_sources/nonexistent-id",
             headers=_fastapi_auth(GA_TEST_SCOPE),
         )
         assert resp.status_code == 404

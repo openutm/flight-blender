@@ -70,7 +70,7 @@ class TestRIDDisplayData:
                 "flight_blender.rid.views.SubscriptionsHelper.create_new_rid_subscription",
                 return_value=mock_sub,
             ) as mock_create:
-                with patch("flight_blender.api.routers.rid.run_ussp_polling_for_rid") as mock_poll:
+                with patch("flight_blender.rid.tasks.run_ussp_polling_for_rid") as mock_poll:
                     with patch(
                         "flight_blender.common.database_operations.FlightBlenderDatabaseReader.get_active_rid_observations_for_view",
                         return_value=[],

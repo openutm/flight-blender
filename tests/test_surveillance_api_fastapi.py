@@ -22,11 +22,11 @@ WRITE_SCOPE = ["flightblender.write"]
 
 class TestSurveillanceHealthFastAPI:
     def test_health_unauthenticated(self, fastapi_client):
-        resp = fastapi_client.get("/health/")
+        resp = fastapi_client.get("/surveillance_monitoring_ops/health/")
         assert resp.status_code == 401
 
     def test_health_ok(self, fastapi_client):
-        resp = fastapi_client.get("/health/", headers=_auth(READ_SCOPE))
+        resp = fastapi_client.get("/surveillance_monitoring_ops/health/", headers=_auth(READ_SCOPE))
         assert resp.status_code == 200
         data = resp.json()
         assert "current_status" in data
@@ -37,11 +37,11 @@ class TestSurveillanceHealthFastAPI:
 
 class TestSurveillanceSensorsFastAPI:
     def test_list_sensors_unauthenticated(self, fastapi_client):
-        resp = fastapi_client.get("/list_surveillance_sensors")
+        resp = fastapi_client.get("/surveillance_monitoring_ops/list_surveillance_sensors")
         assert resp.status_code == 401
 
     def test_list_sensors_empty(self, fastapi_client):
-        resp = fastapi_client.get("/list_surveillance_sensors", headers=_auth(READ_SCOPE))
+        resp = fastapi_client.get("/surveillance_monitoring_ops/list_surveillance_sensors", headers=_auth(READ_SCOPE))
         assert resp.status_code == 200
         data = resp.json()
         assert "active_sensors" in data
@@ -53,7 +53,7 @@ class TestSurveillanceSessionFastAPI:
     def test_start_session_unauthenticated(self, fastapi_client):
         session_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/start_stop_surveillance_heartbeat_track/{session_id}",
+            f"/surveillance_monitoring_ops/start_stop_surveillance_heartbeat_track/{session_id}",
             json={"action": "start"},
         )
         assert resp.status_code == 401
@@ -61,7 +61,7 @@ class TestSurveillanceSessionFastAPI:
     def test_start_session(self, fastapi_client):
         session_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/start_stop_surveillance_heartbeat_track/{session_id}",
+            f"/surveillance_monitoring_ops/start_stop_surveillance_heartbeat_track/{session_id}",
             json={"action": "start"},
             headers=_auth(WRITE_SCOPE),
         )
@@ -71,12 +71,12 @@ class TestSurveillanceSessionFastAPI:
     def test_start_session_duplicate(self, fastapi_client):
         session_id = str(uuid.uuid4())
         fastapi_client.put(
-            f"/start_stop_surveillance_heartbeat_track/{session_id}",
+            f"/surveillance_monitoring_ops/start_stop_surveillance_heartbeat_track/{session_id}",
             json={"action": "start"},
             headers=_auth(WRITE_SCOPE),
         )
         resp = fastapi_client.put(
-            f"/start_stop_surveillance_heartbeat_track/{session_id}",
+            f"/surveillance_monitoring_ops/start_stop_surveillance_heartbeat_track/{session_id}",
             json={"action": "start"},
             headers=_auth(WRITE_SCOPE),
         )
@@ -85,7 +85,7 @@ class TestSurveillanceSessionFastAPI:
     def test_stop_session_not_started(self, fastapi_client):
         session_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/start_stop_surveillance_heartbeat_track/{session_id}",
+            f"/surveillance_monitoring_ops/start_stop_surveillance_heartbeat_track/{session_id}",
             json={"action": "stop"},
             headers=_auth(WRITE_SCOPE),
         )
@@ -94,7 +94,7 @@ class TestSurveillanceSessionFastAPI:
     def test_invalid_action(self, fastapi_client):
         session_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/start_stop_surveillance_heartbeat_track/{session_id}",
+            f"/surveillance_monitoring_ops/start_stop_surveillance_heartbeat_track/{session_id}",
             json={"action": "invalid"},
             headers=_auth(WRITE_SCOPE),
         )
@@ -103,11 +103,11 @@ class TestSurveillanceSessionFastAPI:
 
 class TestServiceMetricsFastAPI:
     def test_service_metrics_unauthenticated(self, fastapi_client):
-        resp = fastapi_client.get("/service_metrics")
+        resp = fastapi_client.get("/surveillance_monitoring_ops/service_metrics")
         assert resp.status_code == 401
 
     def test_service_metrics(self, fastapi_client):
-        resp = fastapi_client.get("/service_metrics", headers=_auth(READ_SCOPE))
+        resp = fastapi_client.get("/surveillance_monitoring_ops/service_metrics", headers=_auth(READ_SCOPE))
         assert resp.status_code == 200
         data = resp.json()
         assert "heartbeat_rates" in data
@@ -117,14 +117,14 @@ class TestServiceMetricsFastAPI:
 
     def test_service_metrics_with_dates(self, fastapi_client):
         resp = fastapi_client.get(
-            "/service_metrics?start_date=2025-01-01&end_date=2025-12-31",
+            "/surveillance_monitoring_ops/service_metrics?start_date=2025-01-01&end_date=2025-12-31",
             headers=_auth(READ_SCOPE),
         )
         assert resp.status_code == 200
 
     def test_service_metrics_invalid_date(self, fastapi_client):
         resp = fastapi_client.get(
-            "/service_metrics?start_date=not-a-date",
+            "/surveillance_monitoring_ops/service_metrics?start_date=not-a-date",
             headers=_auth(READ_SCOPE),
         )
         assert resp.status_code == 400
@@ -134,7 +134,7 @@ class TestSensorHealthFastAPI:
     def test_update_sensor_health_unauthenticated(self, fastapi_client):
         sensor_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/update_sensor_health/{sensor_id}",
+            f"/surveillance_monitoring_ops/update_sensor_health/{sensor_id}",
             json={"status": "operational"},
         )
         assert resp.status_code == 401
@@ -142,7 +142,7 @@ class TestSensorHealthFastAPI:
     def test_update_sensor_health_not_found(self, fastapi_client):
         sensor_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/update_sensor_health/{sensor_id}",
+            f"/surveillance_monitoring_ops/update_sensor_health/{sensor_id}",
             json={"status": "operational", "recovery_type": "automatic"},
             headers=_auth(WRITE_SCOPE),
         )
@@ -151,7 +151,7 @@ class TestSensorHealthFastAPI:
     def test_update_sensor_health_invalid_status(self, fastapi_client):
         sensor_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/update_sensor_health/{sensor_id}",
+            f"/surveillance_monitoring_ops/update_sensor_health/{sensor_id}",
             json={"status": "invalid_status"},
             headers=_auth(WRITE_SCOPE),
         )
@@ -160,7 +160,7 @@ class TestSensorHealthFastAPI:
     def test_update_sensor_health_invalid_recovery_type(self, fastapi_client):
         sensor_id = str(uuid.uuid4())
         resp = fastapi_client.put(
-            f"/update_sensor_health/{sensor_id}",
+            f"/surveillance_monitoring_ops/update_sensor_health/{sensor_id}",
             json={"status": "operational", "recovery_type": "invalid"},
             headers=_auth(WRITE_SCOPE),
         )
@@ -169,11 +169,11 @@ class TestSensorHealthFastAPI:
 
 class TestSensorHealthNotificationsFastAPI:
     def test_list_notifications_unauthenticated(self, fastapi_client):
-        resp = fastapi_client.get("/list_sensor_health_notifications")
+        resp = fastapi_client.get("/surveillance_monitoring_ops/list_sensor_health_notifications")
         assert resp.status_code == 401
 
     def test_list_notifications_empty(self, fastapi_client):
-        resp = fastapi_client.get("/list_sensor_health_notifications", headers=_auth(READ_SCOPE))
+        resp = fastapi_client.get("/surveillance_monitoring_ops/list_sensor_health_notifications", headers=_auth(READ_SCOPE))
         assert resp.status_code == 200
         data = resp.json()
         assert "notifications" in data
@@ -181,7 +181,7 @@ class TestSensorHealthNotificationsFastAPI:
 
     def test_list_notifications_with_dates(self, fastapi_client):
         resp = fastapi_client.get(
-            "/list_sensor_health_notifications?start_date=2025-01-01&end_date=2025-12-31",
+            "/surveillance_monitoring_ops/list_sensor_health_notifications?start_date=2025-01-01&end_date=2025-12-31",
             headers=_auth(READ_SCOPE),
         )
         assert resp.status_code == 200
@@ -189,7 +189,7 @@ class TestSensorHealthNotificationsFastAPI:
     def test_list_notifications_with_sensor_id(self, fastapi_client):
         sensor_id = str(uuid.uuid4())
         resp = fastapi_client.get(
-            f"/list_sensor_health_notifications?sensor_id={sensor_id}",
+            f"/surveillance_monitoring_ops/list_sensor_health_notifications?sensor_id={sensor_id}",
             headers=_auth(READ_SCOPE),
         )
         assert resp.status_code == 200

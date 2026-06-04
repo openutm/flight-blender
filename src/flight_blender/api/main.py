@@ -16,25 +16,9 @@ from flight_blender.api.routers import (
     weather,
 )
 
-# Public API prefixes now live on each router directly.
-MIGRATED_PREFIXES: list[str] = [
-    "/geo_fence_ops",
-    "/weather_monitoring_ops",
-    "/surveillance_monitoring_ops",
-    "/flight_stream",
-    "/constraint_ops",
-    "/notifications_ops",
-    "/conformance_monitoring_ops",
-    "/rid",
-    "/flight_declaration_ops",
-    "/scd",
-    "/uss",
-]
-
 
 def create_fastapi_app() -> FastAPI:
     app = FastAPI(title="Flight Blender")
-    # Routers declare their own public prefixes.
     app.include_router(misc.router)
     app.include_router(geo_fence.router)
     app.include_router(weather.router)
