@@ -1,6 +1,7 @@
 from os import environ as env
 
 import redis
+import redis.asyncio as aioredis
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
@@ -31,6 +32,17 @@ def get_redis() -> redis.Redis:
             port=redis_port,
             decode_responses=True,
         )
+
+
+def get_async_redis() -> aioredis.Redis:
+    """Return an async Redis client with configured connection parameters."""
+    redis_host: str = env.get("REDIS_HOST", "redis")
+    redis_port: int = int(env.get("REDIS_PORT", 6379))
+    redis_password: str | None = env.get("REDIS_PASSWORD", None)
+
+    if redis_password:
+        return aioredis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
+    return aioredis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
 
 class RedisHelper:

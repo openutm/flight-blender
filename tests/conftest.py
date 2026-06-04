@@ -1,20 +1,14 @@
-import os
-import sys
-
-# Ensure src/ is first on the path so flight_blender resolves to src/flight_blender/
-# before the legacy root-level flight_blender/ package.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 import fakeredis
 import jwt
 import pytest
 import redis
 from django.test import Client
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-
-# ── Environment setup ────────────────────────────────────────────────────────
-os.environ.setdefault("BYPASS_AUTH_TOKEN_VERIFICATION", "1")
-os.environ.setdefault("USE_LOCAL_SQLITE_DATABASE", "1")
+from flight_blender.api.main import create_fastapi_app
+from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM  # noqa: F401 — triggers metadata
+from flight_blender.infrastructure.database.session import Base, async_get_db
 
 
 # ── Auth token helpers ───────────────────────────────────────────────────────
@@ -72,21 +66,45 @@ def _celery_eager(monkeypatch):
     celery_app.conf.result_backend = "cache+memory://"
 
 
+class _AsyncRedisAdapter:
+    """Wraps a sync fakeredis instance so its methods can be awaited."""
+
+    def __init__(self, r):
+        self._r = r
+
+    async def exists(self, *a, **kw):
+        return self._r.exists(*a, **kw)
+
+    async def get(self, *a, **kw):
+        return self._r.get(*a, **kw)
+
+    async def set(self, *a, **kw):
+        return self._r.set(*a, **kw)
+
+    async def expire(self, *a, **kw):
+        return self._r.expire(*a, **kw)
+
+
 @pytest.fixture(autouse=True)
 def _mock_all_redis(monkeypatch):
     """Mock all Redis connections to use fakeredis.
 
     Patches auth_helper.common.get_redis and redis.Redis so that any code
-    creating a Redis connection gets a fakeredis instance.
+    creating a Redis connection gets a fakeredis instance. Also patches
+    get_async_redis with an async-compatible wrapper over the same store.
     """
-    fake = fakeredis.FakeRedis(decode_responses=True)
+    server = fakeredis.FakeServer()
+    fake = fakeredis.FakeRedis(server=server, decode_responses=True)
+    fake_async = _AsyncRedisAdapter(fake)
 
     import flight_blender.auth.common
 
     monkeypatch.setattr(flight_blender.auth.common, "get_redis", lambda: fake)
+    monkeypatch.setattr(flight_blender.auth.common, "get_async_redis", lambda: fake_async)
 
-    # Patch the Redis class so any instantiation returns our fakeredis
-    original_redis_cls = redis.Redis
+    import flight_blender.core.operations.geo_fence as _geo_fence_ops
+
+    monkeypatch.setattr(_geo_fence_ops, "get_async_redis", lambda: fake_async)
 
     class FakeRedisWrapper:
         """Stand-in for redis.Redis that delegates to a shared fakeredis."""
@@ -103,6 +121,37 @@ def _mock_all_redis(monkeypatch):
 def client():
     """Django test client for integration tests."""
     return Client(raise_request_exception=False)
+
+
+@pytest.fixture
+async def fastapi_client(db):  # db: ordering guard — ensures pytest-django SQLite is ready first
+    """FastAPI test client backed by an in-memory async SQLite database.
+
+    `db` ensures pytest-django has set up its SQLite before we start,
+    keeping the two ORMs from racing on filesystem init.
+    """
+    test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async def override_get_db():
+        async with TestSessionLocal() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app = create_fastapi_app()
+    app.dependency_overrides[async_get_db] = override_get_db
+
+    with TestClient(app, raise_server_exceptions=True) as c:
+        yield c
+
+    await test_engine.dispose()
 
 
 @pytest.fixture

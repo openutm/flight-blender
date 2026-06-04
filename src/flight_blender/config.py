@@ -17,6 +17,9 @@ class FlightBlenderSettings(BaseSettings):
     FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE: str = ""
     FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER: str = ""
     FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR: str = ""
+    WEATHER_API_BASE_URL: str = "https://api.open-meteo.com/v1/forecast"
+    AMQP_URL: str = ""
+    AMQP_RECREATE_MISMATCHED_EXCHANGE: bool = False
 
 
 settings = FlightBlenderSettings()

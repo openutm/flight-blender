@@ -23,19 +23,19 @@ from flight_blender.notifications.notification_helper import (
 
 class TestShouldRecreateFlag:
     def test_returns_false_when_unset(self, monkeypatch):
-        monkeypatch.delenv("AMQP_RECREATE_MISMATCHED_EXCHANGE", raising=False)
+        monkeypatch.setattr("flight_blender.config.settings.AMQP_RECREATE_MISMATCHED_EXCHANGE", False)
         assert _should_recreate_mismatched_exchange() is False
 
     def test_returns_true_for_1(self, monkeypatch):
-        monkeypatch.setenv("AMQP_RECREATE_MISMATCHED_EXCHANGE", "1")
+        monkeypatch.setattr("flight_blender.config.settings.AMQP_RECREATE_MISMATCHED_EXCHANGE", True)
         assert _should_recreate_mismatched_exchange() is True
 
     def test_returns_true_for_true(self, monkeypatch):
-        monkeypatch.setenv("AMQP_RECREATE_MISMATCHED_EXCHANGE", "true")
+        monkeypatch.setattr("flight_blender.config.settings.AMQP_RECREATE_MISMATCHED_EXCHANGE", True)
         assert _should_recreate_mismatched_exchange() is True
 
     def test_returns_false_for_0(self, monkeypatch):
-        monkeypatch.setenv("AMQP_RECREATE_MISMATCHED_EXCHANGE", "0")
+        monkeypatch.setattr("flight_blender.config.settings.AMQP_RECREATE_MISMATCHED_EXCHANGE", False)
         assert _should_recreate_mismatched_exchange() is False
 
 
@@ -117,7 +117,7 @@ class TestInitialNotificationFactory:
         )
 
     def test_declare_exchange_mismatched_type_recreate_disabled_raises(self, mock_pika, monkeypatch):
-        monkeypatch.delenv("AMQP_RECREATE_MISMATCHED_EXCHANGE", raising=False)
+        monkeypatch.setattr("flight_blender.config.settings.AMQP_RECREATE_MISMATCHED_EXCHANGE", False)
         _, mock_conn, mock_channel = mock_pika
         mock_channel.exchange_declare.side_effect = ChannelClosedByBroker(406, "PRECONDITION_FAILED")
 
@@ -126,7 +126,7 @@ class TestInitialNotificationFactory:
             factory.declare_exchange()
 
     def test_declare_exchange_mismatched_type_recreate_enabled(self, mock_pika, monkeypatch):
-        monkeypatch.setenv("AMQP_RECREATE_MISMATCHED_EXCHANGE", "1")
+        monkeypatch.setattr("flight_blender.config.settings.AMQP_RECREATE_MISMATCHED_EXCHANGE", True)
         _, mock_conn, new_channel = mock_pika
 
         # First call raises, second call succeeds

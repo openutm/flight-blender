@@ -195,7 +195,9 @@ def send_operational_update_message(
     """
 
     update_message = FlightDeclarationUpdateMessage(body=message_text, level=level, timestamp=timestamp)
-    amqp_connection_url = env.get("AMQP_URL", "")
+    from flight_blender.config import settings
+
+    amqp_connection_url = settings.AMQP_URL
     if amqp_connection_url:
         my_notification_helper = NotificationFactory(
             flight_declaration_id=flight_declaration_id,

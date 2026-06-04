@@ -3,7 +3,6 @@ import os
 from dataclasses import asdict
 
 import arrow
-from django.db.models import QuerySet
 from loguru import logger
 from rtree import index
 from rtree.exceptions import RTreeError
@@ -11,7 +10,6 @@ from rtree.exceptions import RTreeError
 from flight_blender.auth.common import get_redis
 
 from .data_definitions import GeoFenceMetadata
-from .models import GeoFence
 
 
 def _open_or_recover_index(base_path: str) -> index.Index:
@@ -71,7 +69,7 @@ class GeoFenceRTreeIndexFactory:
         """
         self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
 
-    def generate_geo_fence_index(self, all_fences: QuerySet | list[GeoFence]) -> None:
+    def generate_geo_fence_index(self, all_fences) -> None:
         """
         This method generates an RTree index of currently active operational geo-fences.
 
@@ -97,13 +95,8 @@ class GeoFenceRTreeIndexFactory:
                 end_date=end_date,
             )
 
-    def clear_rtree_index(self):
-        """
-        Method to delete all boxes from the RTree index.
-        This method retrieves all GeoFence objects, calculates their unique IDs,
-        and deletes each corresponding box from the RTree index.
-        """
-        all_fences = GeoFence.objects.all()
+    def clear_rtree_index(self, all_fences) -> None:
+        """Delete all indexed boxes using the same fence list passed to generate_geo_fence_index."""
         for fence in all_fences:
             fence_idx_str = str(fence.id)
             fence_id = int(hashlib.sha256(fence_idx_str.encode("utf-8")).hexdigest(), 16) % 10**8

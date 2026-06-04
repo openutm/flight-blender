@@ -29,9 +29,7 @@ urlpatterns = [
     path("rid/", include("flight_blender.rid.urls")),
     path("scd/", include("flight_blender.scd.urls")),
     path("uss/", include("flight_blender.uss.urls")),
-    path("geo_fence_ops/", include("flight_blender.geo_fence.urls")),
     path("flight_declaration_ops/", include("flight_blender.flight_declarations.urls")),
-    path("weather_monitoring_ops/", include("flight_blender.weather.urls")),
     path("surveillance_monitoring_ops/", include("flight_blender.surveillance.urls")),
     path("conformance_monitoring_ops/", include("flight_blender.conformance.urls")),
     # UTM Adapter endpoints

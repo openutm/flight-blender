@@ -1,20 +1,17 @@
 import json
-import os
 from dataclasses import asdict
 
 import pika
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from pika.exceptions import ChannelClosedByBroker
 
-# import signal, sys
 from .data_definitions import FlightDeclarationUpdateMessage
-
-load_dotenv(find_dotenv())
 
 
 def _should_recreate_mismatched_exchange() -> bool:
-    return os.getenv("AMQP_RECREATE_MISMATCHED_EXCHANGE", "").strip().lower() in {"1", "true", "yes", "on"}
+    from flight_blender.config import settings
+
+    return settings.AMQP_RECREATE_MISMATCHED_EXCHANGE
 
 
 # def signal_handler(signal, frame):
