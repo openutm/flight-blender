@@ -88,10 +88,11 @@ jobs:
       - name: Collect Flight Blender logs
         if: always()
         run: |
-          docker compose \
-            --env-file .env.tests \
-            -f docker-compose.fb.yml \
-            logs --no-color > ../flight-blender-stack.log 2>&1 || true
+          mkdir -p ../logs
+          for service in $(docker compose --env-file .env.tests -f docker-compose.fb.yml ps --services 2>/dev/null); do
+            docker compose --env-file .env.tests -f docker-compose.fb.yml \
+              logs --no-color "$service" > "../logs/${service}.log" 2>&1 || true
+          done
         working-directory: verification/tests
 
       - name: Upload Flight Blender stack logs
@@ -99,7 +100,7 @@ jobs:
         if: always()
         with:
           name: flight-blender-logs-${{ github.event.pull_request.number || github.run_id }}
-          path: verification/flight-blender-stack.log
+          path: verification/logs/
           retention-days: 14
 
       - name: Stop containers
