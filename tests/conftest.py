@@ -156,14 +156,34 @@ def client():
 
 
 @pytest.fixture
-def mounted_sync_client(transactional_db):  # transactional_db: ordering guard + ensures committed writes are visible to ASGI thread
+async def mounted_sync_client(transactional_db):  # transactional_db: ordering guard + ensures committed writes are visible to ASGI thread
     """Sync FastAPI client serving production-prefixed routes directly.
 
     Uses `transactional_db` so Django ORM writes in the test are committed and
     visible to the ASGI handler thread spawned by TestClient.
     """
-    with TestClient(create_fastapi_app(), raise_server_exceptions=False) as c:
+    test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async def override_get_db():
+        async with TestSessionLocal() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app = create_fastapi_app()
+    app.dependency_overrides[async_get_db] = override_get_db
+
+    with TestClient(app, raise_server_exceptions=True) as c:
         yield c
+
+    await test_engine.dispose()
 
 
 @pytest.fixture

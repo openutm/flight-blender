@@ -128,7 +128,10 @@ class OperationalIntentsConverter:
 
         A helper function to convert from lat / lon to UTM coordinates for buffering. tracks. This is the UTM projection (https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system), we use Zone 54N which encompasses Japan, this zone has to be set for each locale / city. Adapted from https://gis.stackexchange.com/questions/325926/buffering-geometry-with-points-in-wgs84-using-shapely"
         """
-        proj = Proj(proj="utm", zone=self.utm_zone, ellps="WGS84", datum="WGS84")
+        zone_str = self.utm_zone.strip()
+        zone_num = int("".join(c for c in zone_str if c.isdigit()))
+        is_south = zone_str.upper().endswith("S")
+        proj = Proj(proj="utm", zone=zone_num, south=is_south, ellps="WGS84", datum="WGS84")
 
         geo_interface = shapely_shape.__geo_interface__
         point_or_polygon = geo_interface["type"]
