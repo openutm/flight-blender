@@ -17,7 +17,7 @@ from flight_blender.geo_fence.data_definitions import GeoFencePutSchema, GeoZone
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
-router = APIRouter()
+router = APIRouter(prefix="/geo_fence_ops")
 
 GA_TEST_SCOPE = "geo-awareness.test"
 

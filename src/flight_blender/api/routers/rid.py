@@ -32,7 +32,7 @@ from flight_blender.rid.rid_utils import (
 )
 from flight_blender.uss.uss_data_definitions import FlightDetailsNotFoundMessage, GenericErrorResponseMessage, OperatorDetailsSuccessResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/rid")
 
 
 @router.get("/capabilities")

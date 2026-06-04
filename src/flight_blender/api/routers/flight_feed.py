@@ -13,7 +13,7 @@ from flight_blender.core.operations.flight_feed import FlightFeedOperations
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
-router = APIRouter()
+router = APIRouter(prefix="/flight_stream")
 
 GA_TEST_SCOPE = "geo-awareness.test"
 

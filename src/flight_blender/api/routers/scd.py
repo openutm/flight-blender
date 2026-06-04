@@ -21,7 +21,7 @@ from flight_blender.scd.scd_data_definitions import (
     USSCapabilitiesResponseEnum,
 )
 
-router = APIRouter()
+router = APIRouter(prefix="/scd")
 
 
 # ── sync helpers ─────────────────────────────────────────────────────────────

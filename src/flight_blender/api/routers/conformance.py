@@ -12,7 +12,7 @@ from flight_blender.core.operations.conformance import ConformanceOperations
 from flight_blender.infrastructure.database.repositories.sa_conformance import SQLAlchemyConformanceRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
-router = APIRouter()
+router = APIRouter(prefix="/conformance_monitoring_ops")
 
 
 def _parse_dates(start_date: str | None, end_date: str | None):

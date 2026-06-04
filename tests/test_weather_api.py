@@ -47,12 +47,12 @@ MOCK_WEATHER = {
 
 class TestWeatherEndpoint:
     def test_weather_missing_longitude(self, fastapi_client):
-        resp = fastapi_client.get("/weather/?latitude=52.5", headers=_fastapi_auth(READ_SCOPE))
+        resp = fastapi_client.get("/weather_monitoring_ops/weather/?latitude=52.5", headers=_fastapi_auth(READ_SCOPE))
         assert resp.status_code == 400
         assert "longitude" in resp.json()["error"].lower()
 
     def test_weather_missing_latitude(self, fastapi_client):
-        resp = fastapi_client.get("/weather/?longitude=13.4", headers=_fastapi_auth(READ_SCOPE))
+        resp = fastapi_client.get("/weather_monitoring_ops/weather/?longitude=13.4", headers=_fastapi_auth(READ_SCOPE))
         assert resp.status_code == 400
         assert "latitude" in resp.json()["error"].lower()
 
@@ -61,7 +61,7 @@ class TestWeatherEndpoint:
             instance = MockWS.return_value
             instance.get_weather = AsyncMock(return_value=MOCK_WEATHER)
             resp = fastapi_client.get(
-                "/weather/?longitude=13.4&latitude=52.5",
+                "/weather_monitoring_ops/weather/?longitude=13.4&latitude=52.5",
                 headers=_fastapi_auth(READ_SCOPE),
             )
         assert resp.status_code == 200
@@ -70,5 +70,5 @@ class TestWeatherEndpoint:
         assert "hourly" in data
 
     def test_weather_missing_auth(self, fastapi_client):
-        resp = fastapi_client.get("/weather/?longitude=13.4&latitude=52.5")
+        resp = fastapi_client.get("/weather_monitoring_ops/weather/?longitude=13.4&latitude=52.5")
         assert resp.status_code == 401

@@ -15,7 +15,7 @@ from loguru import logger
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.utils import EnhancedJSONEncoder
 
-router = APIRouter()
+router = APIRouter(prefix="/uss")
 
 
 # ── sync helpers ─────────────────────────────────────────────────────────────

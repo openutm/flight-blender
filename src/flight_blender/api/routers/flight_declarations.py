@@ -14,7 +14,7 @@ from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.flight_declarations.data_definitions import BulkFlightDeclarationCreateResponse, HTTP400Response, HTTP404Response
 
-router = APIRouter()
+router = APIRouter(prefix="/flight_declaration_ops")
 
 
 # ── sync helpers (run inside sync_to_async) ──────────────────────────────────
