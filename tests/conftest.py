@@ -5,10 +5,18 @@ import redis
 from django.test import Client
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from starlette.applications import Starlette
+from starlette.routing import Mount
 
-from flight_blender.api.main import create_fastapi_app
+from flight_blender.api.main import MIGRATED_PREFIXES, create_fastapi_app
+from flight_blender.infrastructure.database.models.constraint import (  # noqa: F401 — triggers metadata
+    CompositeConstraintORM,
+    ConstraintDetailORM,
+    ConstraintReferenceORM,
+)
 from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM  # noqa: F401 — triggers metadata
+from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM  # noqa: F401 — triggers metadata
 from flight_blender.infrastructure.database.models.surveillance import (  # noqa: F401 — triggers metadata
     SurveillanceHeartbeatEventORM,
     SurveillanceSensorFailureNotificationORM,
@@ -159,6 +167,34 @@ async def fastapi_client(db):  # db: ordering guard — ensures pytest-django SQ
     app.dependency_overrides[async_get_db] = override_get_db
 
     with TestClient(app, raise_server_exceptions=True) as c:
+        yield c
+
+    await test_engine.dispose()
+
+
+@pytest.fixture
+async def mounted_fastapi_client(db):
+    """ASGI-mounted FastAPI client that matches production migrated prefixes."""
+    test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False})
+    TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
+
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async def override_get_db():
+        async with TestSessionLocal() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    fastapi_app = create_fastapi_app()
+    fastapi_app.dependency_overrides[async_get_db] = override_get_db
+    mounted_app = Starlette(routes=[Mount(prefix, app=fastapi_app) for prefix in MIGRATED_PREFIXES])
+
+    with TestClient(mounted_app, raise_server_exceptions=True) as c:
         yield c
 
     await test_engine.dispose()

@@ -1,7 +1,14 @@
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
+from uuid import UUID
 
 from flight_blender.rid.data_definitions import OperatorRIDNotificationCreationPayload
+
+
+@runtime_checkable
+class AsyncNotificationsRepository(Protocol):
+    async def get_active_notifications_between(self, start_time: datetime, end_time: datetime) -> Any: ...
+    async def create_notification(self, message: str, session_id: UUID | None = None) -> Any: ...
 
 
 @runtime_checkable
