@@ -110,8 +110,8 @@ class SurveillanceOperations:
 
         try:
             return await sync_to_async(_create)()
-        except Exception as e:
-            logger.error(f"Failed to create heartbeat periodic task: {e}")
+        except Exception:
+            logger.exception("Failed to create heartbeat periodic task for session %s", session_id)
             return False
 
     async def _create_track_task(self, session_id: str) -> bool:
@@ -137,8 +137,8 @@ class SurveillanceOperations:
 
         try:
             return await sync_to_async(_create)()
-        except Exception as e:
-            logger.error(f"Failed to create track periodic task: {e}")
+        except Exception:
+            logger.exception("Failed to create track periodic task for session %s", session_id)
             return False
 
     async def _get_periodic_tasks_for_session(self, session_id: str):

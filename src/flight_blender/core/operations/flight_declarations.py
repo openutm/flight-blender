@@ -117,13 +117,17 @@ async def _create_flight_declaration_record(
     ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
     default_state = 0 if ussp_network_enabled else 1
 
+    provided_state = request_data.get("flight_state", default_state)
+    # Infer approval from state when not explicitly provided: active states (1-7) are approved, 0 and 8 are not.
+    is_approved = bool(request_data.get("flight_approved", provided_state not in (0, 8)))
+
     created = await repo.create(
         operational_intent=json.dumps(partial_op_int),
         flight_declaration_raw_geojson=json.dumps(request_data["flight_declaration_geo_json"]),
         bounds=bounds,
         aircraft_id=request_data["aircraft_id"],
-        state=request_data.get("flight_state", default_state),
-        is_approved=bool(request_data.get("flight_approved", False)),
+        state=provided_state,
+        is_approved=is_approved,
         originating_party=request_data.get("originating_party", "No Flight Information"),
         submitted_by=request_data.get("submitted_by"),
         approved_by=request_data.get("approved_by"),
