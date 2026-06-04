@@ -8,7 +8,11 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from flight_blender.config import settings
 
 _sync_url = settings.DATABASE_URL.replace("postgres://", "postgresql://", 1)
-_async_url = settings.DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1).replace("postgresql://", "postgresql+asyncpg://", 1)
+_async_url = (
+    settings.DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+    .replace("postgresql://", "postgresql+asyncpg://", 1)
+    .replace("sqlite://", "sqlite+aiosqlite://", 1)
+)
 
 engine = create_engine(_sync_url)
 async_engine = create_async_engine(_async_url)
