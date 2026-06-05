@@ -10,8 +10,8 @@ from shapely.ops import unary_union
 
 from flight_blender.auth.common import get_redis
 from flight_blender.celery import app
-from flight_blender.geo_fence.common import GeoZoneParser
-from flight_blender.geo_fence.data_definitions import GeoAwarenessTestStatus, GeoZone
+from flight_blender.core.operations.geo_fence import GeoZoneParser
+from flight_blender.core.entities.geo_fence import GeoAwarenessTestStatus, GeoZone
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
 from flight_blender.infrastructure.database.session import session_scope
 

@@ -15,22 +15,22 @@ from shapely.geometry import MultiPoint, Point, box
 
 from flight_blender.auth.common import get_redis
 from flight_blender.celery import app
-from flight_blender.common.altitude_helper import wgs84_to_barometric
-from flight_blender.flight_feed.data_definitions import SingleRIDObservation
+from flight_blender.core.operations.altitude import wgs84_to_barometric
+from flight_blender.core.entities.flight_feed import SingleRIDObservation
 from flight_blender.infrastructure.celery.tasks.flight_feed import write_incoming_air_traffic_data
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.infrastructure.dss import rid as dss_rid_helper
-from flight_blender.rid.data_definitions import (
+from flight_blender.core.entities.rid import (
     UASID,
     LatLngPoint,
     OperatorRIDNotificationCreationPayload,
     SignedUnsignedTelemetryObservation,
     UAClassificationEU,
 )
-from flight_blender.rid.data_definitions import RIDAircraftState as LocalRIDAircraftState
-from flight_blender.rid.data_definitions import RIDFlightDetails as LocalRIDFlightDetails
-from flight_blender.rid.rid_telemetry_monitoring import FlightTelemetryRIDEngine
-from flight_blender.rid.rid_utils import (
+from flight_blender.core.entities.rid import RIDAircraftState as LocalRIDAircraftState
+from flight_blender.core.entities.rid import RIDFlightDetails as LocalRIDFlightDetails
+from flight_blender.core.operations.rid import FlightTelemetryRIDEngine
+from flight_blender.core.operations.rid import (
     OperatorLocation,
     RIDAircraftPosition,
     RIDAircraftState,

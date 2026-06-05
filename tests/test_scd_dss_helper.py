@@ -22,8 +22,8 @@ from flight_blender.infrastructure.dss.scd import (
     VolumesConverter,
     VolumesValidator,
 )
-from flight_blender.scd.flight_planning_data_definitions import FlightPlanningInjectionData
-from flight_blender.scd.scd_data_definitions import (
+from flight_blender.core.entities.scd import FlightPlanningInjectionData
+from flight_blender.core.entities.scd import (
     Altitude,
     Circle,
     LatLngPoint,
@@ -36,7 +36,7 @@ from flight_blender.scd.scd_data_definitions import (
     Volume3D,
     Volume4D,
 )
-from flight_blender.scd.scd_data_definitions import Polygon as Plgn
+from flight_blender.core.entities.scd import Polygon as Plgn
 
 
 # ---------------------------------------------------------------------------

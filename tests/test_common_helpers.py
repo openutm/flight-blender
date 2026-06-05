@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 import pytest
 
-from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
+from flight_blender.infrastructure.auth.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.plugins.loader import load_plugin
 from flight_blender.common.utils import EnhancedJSONDecoder, EnhancedJSONEncoder, LazyEncoder
 

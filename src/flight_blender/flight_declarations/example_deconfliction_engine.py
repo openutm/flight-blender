@@ -15,7 +15,7 @@ and returns a
 :class:`~flight_blender.flight_declarations.data_definitions.DeconflictionResult`.
 """
 
-from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
+from flight_blender.core.entities.flight_declarations import DeconflictionRequest, DeconflictionResult
 
 
 class AltitudeAwareDeconflictionEngine:

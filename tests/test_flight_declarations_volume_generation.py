@@ -4,9 +4,9 @@ import arrow
 import pytest
 from geojson import Feature, FeatureCollection
 
-from flight_blender.conformance.data_helper import cast_to_volume4d
-from flight_blender.flight_declarations.custom_volume_generation import CustomVolumeGenerator
-from flight_blender.scd.scd_data_definitions import LatLngPoint
+from flight_blender.core.operations.conformance import cast_to_volume4d
+from flight_blender.core.operations.flight_declarations import CustomVolumeGenerator
+from flight_blender.core.entities.scd import LatLngPoint
 
 
 # ---------------------------------------------------------------------------

@@ -1,13 +1,18 @@
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional
 
 import arrow
 from loguru import logger
+from pyproj import Geod
 
+from flight_blender.common.base_traffic_data_fuser import BaseTrafficDataFuser
+from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
 from flight_blender.core.entities.surveillance import (
     FLIGHT_OBSERVATION_TRAFFIC_SOURCE,
+    ActiveTrack,
     AggregateHealthMetrics,
     HealthMessage,
     HeartbeatDeliveryProbability,
@@ -17,10 +22,14 @@ from flight_blender.core.entities.surveillance import (
     SurveillanceSensorDetail,
     SurveillanceSensorFailureNotificationDetail,
     SurveillanceStatus,
+    TrackMessage,
     TrackUpdateProbability,
 )
 from flight_blender.core.repositories.flight_feed import FlightFeedRepository
 from flight_blender.core.repositories.surveillance import SurveillanceRepository, SurveillanceTaskScheduler
+
+if TYPE_CHECKING:
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 
 class SurveillanceOperations:
@@ -383,3 +392,223 @@ def _calculate_aggregate_health_metrics(
         window_start=start_time.isoformat(),
         window_end=end_time.isoformat(),
     )
+
+
+class SurveillanceMetricCalculator:
+    """Calculates ASTM F3623 SDSP surveillance metrics from database records."""
+
+    def __init__(self, database_reader: "SyncDatabaseFacade"):
+        self.db = database_reader
+
+    def calculate_heartbeat_rate(self, session_id: str, start_time: datetime, end_time: datetime) -> HeartbeatRateMetric:
+        events = self.db.get_heartbeat_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
+        total = events.count()
+        if total >= 2:
+            first_event = events.first()
+            last_event = events.last()
+            if first_event is None or last_event is None:
+                rate_hz = 0.0
+            else:
+                span_seconds = (last_event.dispatched_at - first_event.dispatched_at).total_seconds()
+                rate_hz = round((total - 1) / span_seconds, 2) if span_seconds > 0 else 0.0
+        else:
+            rate_hz = 0.0
+        return HeartbeatRateMetric(
+            measured_rate_hz=rate_hz,
+            target_rate_hz=1.0,
+            session_id=session_id,
+            window_start=start_time.isoformat(),
+            window_end=end_time.isoformat(),
+            total_heartbeats_in_window=total,
+        )
+
+    def calculate_heartbeat_delivery_probability(self, session_id: str, start_time: datetime, end_time: datetime) -> HeartbeatDeliveryProbability:
+        events = self.db.get_heartbeat_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
+        total = events.count()
+        on_time = events.filter(delivered_on_time=True).count()
+        probability = round(on_time / total, 6) if total > 0 else 0.0
+        return HeartbeatDeliveryProbability(
+            probability=probability,
+            delivered_on_time=on_time,
+            total_expected=total,
+            session_id=session_id,
+            window_start=start_time.isoformat(),
+            window_end=end_time.isoformat(),
+        )
+
+    def calculate_track_update_probability(self, session_id: str, start_time: datetime, end_time: datetime) -> TrackUpdateProbability:
+        observations = self.db.get_all_flight_observations_in_window(start_time=start_time, end_time=end_time)
+        total = observations.count()
+        with_tracks = total
+        probability = round(with_tracks / total, 6) if total > 0 else 0.0
+        return TrackUpdateProbability(
+            probability=probability,
+            ticks_with_active_tracks=with_tracks,
+            total_ticks=total,
+            session_id=session_id,
+            window_start=start_time.isoformat(),
+            window_end=end_time.isoformat(),
+        )
+
+    def calculate_sensor_health_metrics(self, sensor_id: str, start_time: datetime, end_time: datetime) -> SensorHealthMetrics:
+        records = list(self.db.get_health_tracking_records_for_sensor(sensor_id=sensor_id, start_time=start_time, end_time=end_time))
+
+        sensor = None
+        try:
+            from flight_blender.infrastructure.database.models.surveillance import SurveillanceSensorORM  # noqa: PLC0415
+            from flight_blender.infrastructure.database.session import session_scope  # noqa: PLC0415
+
+            with session_scope() as db:
+                sensor = db.get(SurveillanceSensorORM, sensor_id)
+                if sensor is not None:
+                    db.expunge(sensor)
+        except Exception:
+            logger.warning(f"calculate_sensor_health_metrics: sensor {sensor_id} not found")
+
+        sensor_identifier = sensor.sensor_identifier if sensor else str(sensor_id)
+        pre_window_status = self.db.get_sensor_status_before_time(sensor_id=sensor_id, before_time=start_time)
+        failure_states = {"degraded", "outage"}
+        current_failure_onset: Optional[datetime] = None
+        operational_start: Optional[datetime] = None
+
+        if pre_window_status in failure_states:
+            current_failure_onset = start_time
+        elif pre_window_status == "operational":
+            operational_start = start_time
+
+        recovery_durations: list[float] = []
+        auto_recovery_durations: list[float] = []
+        operational_intervals: list[tuple[float, Optional[str]]] = []
+
+        for record in records:
+            status = record.status
+            rec_time: datetime = record.recorded_at
+
+            if status in failure_states:
+                if current_failure_onset is None:
+                    if operational_start is not None:
+                        interval_secs = (rec_time - operational_start).total_seconds()
+                        operational_intervals.append((interval_secs, getattr(record, "_preceding_recovery_type", None)))
+                    current_failure_onset = rec_time
+                    operational_start = None
+            elif status == "operational":
+                if current_failure_onset is not None:
+                    duration = (rec_time - current_failure_onset).total_seconds()
+                    recovery_durations.append(duration)
+                    if record.recovery_type == "automatic":
+                        auto_recovery_durations.append(duration)
+                    operational_start = rec_time
+                    current_failure_onset = None
+                    if operational_intervals:
+                        last_interval = operational_intervals[-1]
+                        operational_intervals[-1] = (last_interval[0], record.recovery_type)
+                else:
+                    if operational_start is None:
+                        operational_start = rec_time
+
+        mttr: Optional[float] = round(sum(recovery_durations) / len(recovery_durations), 2) if recovery_durations else None
+        avg_auto_recovery: Optional[float] = round(sum(auto_recovery_durations) / len(auto_recovery_durations), 2) if auto_recovery_durations else None
+        auto_intervals = [d for d, rt in operational_intervals if rt == "automatic"]
+        mtbf_auto: Optional[float] = round(sum(auto_intervals) / len(auto_intervals), 2) if auto_intervals else None
+        manual_intervals = [d for d, rt in operational_intervals if rt == "manual"]
+        mtbf_manual: Optional[float] = round(sum(manual_intervals) / len(manual_intervals), 2) if manual_intervals else None
+        auto_recovery_count = len(auto_recovery_durations)
+        manual_recovery_count = len(recovery_durations) - auto_recovery_count
+
+        return SensorHealthMetrics(
+            sensor_id=str(sensor_id),
+            sensor_identifier=sensor_identifier,
+            mttr_seconds=mttr,
+            auto_recovery_time_seconds=avg_auto_recovery,
+            mtbf_with_auto_recovery_seconds=mtbf_auto,
+            mtbf_without_auto_recovery_seconds=mtbf_manual,
+            failure_count=len(recovery_durations),
+            auto_recovery_count=auto_recovery_count,
+            manual_recovery_count=manual_recovery_count,
+            window_start=start_time.isoformat(),
+            window_end=end_time.isoformat(),
+        )
+
+    def calculate_aggregate_health_metrics(
+        self,
+        sensor_metrics_list: list[SensorHealthMetrics],
+        start_time: datetime,
+        end_time: datetime,
+    ) -> AggregateHealthMetrics:
+        def _avg(values: list[float]) -> Optional[float]:
+            return round(sum(values) / len(values), 2) if values else None
+
+        mttrs = [m.mttr_seconds for m in sensor_metrics_list if m.mttr_seconds is not None]
+        auto_recoveries = [m.auto_recovery_time_seconds for m in sensor_metrics_list if m.auto_recovery_time_seconds is not None]
+        mtbf_autos = [m.mtbf_with_auto_recovery_seconds for m in sensor_metrics_list if m.mtbf_with_auto_recovery_seconds is not None]
+        mtbf_manuals = [m.mtbf_without_auto_recovery_seconds for m in sensor_metrics_list if m.mtbf_without_auto_recovery_seconds is not None]
+
+        return AggregateHealthMetrics(
+            avg_mttr_seconds=_avg(mttrs),
+            avg_auto_recovery_time_seconds=_avg(auto_recoveries),
+            avg_mtbf_with_auto_recovery_seconds=_avg(mtbf_autos),
+            avg_mtbf_without_auto_recovery_seconds=_avg(mtbf_manuals),
+            total_sensors=len(sensor_metrics_list),
+            window_start=start_time.isoformat(),
+            window_end=end_time.isoformat(),
+        )
+
+
+class SpecializedTrafficDataFuser:
+    """Placeholder data fuser — override generate_track_messages for custom fusion.
+
+    Set ``FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER`` to
+    ``flight_blender.core.operations.surveillance.SpecializedTrafficDataFuser``.
+    """
+
+    def __init__(self, raw_observations: List[SingleAirtrafficObservation]):
+        self.raw_observations = raw_observations
+
+    def fuse_raw_observations(self) -> List[SingleAirtrafficObservation]:
+        raise NotImplementedError
+
+    def generate_track_messages(self, fused_observations: List[SingleAirtrafficObservation]) -> List[TrackMessage]:
+        raise NotImplementedError
+
+
+# ── Default TrafficDataFuser (from surveillance/utils.py) ─────────────────────
+
+
+class TrafficDataFuser(BaseTrafficDataFuser):
+    """Default data fuser — generates track messages from raw observations."""
+
+    def __init__(self, session_id: str, raw_observations: List[SingleAirtrafficObservation]):
+        self.raw_observations = raw_observations
+        self.SDSP_IDENTIFIER = "SDSP123"
+        self.redis_stream_helper = RedisStreamOperations()
+        self.session_id = session_id
+        self.geod = Geod(ellps="WGS84")
+
+    def _fuse_raw_observations(self) -> List[SingleAirtrafficObservation]:
+        return self.raw_observations
+
+    def _generate_active_tracks(self, fused_observations: List[SingleAirtrafficObservation]):
+        my_redis_stream_helper = RedisStreamOperations()
+        active_tracks_in_session = {}
+        for observation in fused_observations:
+            icao_address = observation.icao_address
+            if icao_address not in active_tracks_in_session:
+                active_tracks_in_session[icao_address] = []
+            active_tracks_in_session[icao_address].append(observation)
+        for icao_address, observations in active_tracks_in_session.items():
+            track_for_icao_address_exists = my_redis_stream_helper.check_active_track_exists(
+                session_id=self.session_id, unique_aircraft_identifier=icao_address
+            )
+            if track_for_icao_address_exists:
+                existing_active_track = my_redis_stream_helper.get_active_track(session_id=self.session_id, unique_aircraft_identifier=icao_address)
+                existing_active_track.observations.extend([asdict(obs) for obs in observations])
+                existing_active_track.last_updated_timestamp = arrow.utcnow().isoformat()
+                my_redis_stream_helper.update_active_track(session_id=self.session_id, active_track=existing_active_track)
+            else:
+                active_track = ActiveTrack(
+                    session_id=self.session_id,
+                    unique_aircraft_identifier=icao_address,
+                    last_updated_timestamp=arrow.utcnow().isoformat(),
+                    observations=[asdict(obs) for obs in observations],
+                )
+                my_redis_stream_helper.add_active_track_to_session(session_id=self.session_id, active_track=active_track)

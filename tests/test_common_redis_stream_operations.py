@@ -5,7 +5,7 @@ import json
 import pytest
 
 from flight_blender.common.redis_stream_operations import RedisStreamOperations
-from flight_blender.surveillance.data_definitions import ActiveTrack
+from flight_blender.core.entities.surveillance import ActiveTrack
 
 
 # ---------------------------------------------------------------------------

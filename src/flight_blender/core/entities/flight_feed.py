@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from marshmallow import Schema, fields as ma_fields
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -55,3 +56,61 @@ class SingleAirtrafficObservation:
 class FlightObservationsProcessingResponse:
     message: str
     status: int
+
+
+class ObservationSchema(Schema):
+    lat_dd = ma_fields.Float(required=True)
+    lon_dd = ma_fields.Float(required=True)
+    altitude_mm = ma_fields.Float(required=True)
+    icao_address = ma_fields.String(required=True)
+    traffic_source = ma_fields.Integer(required=True)
+    timestamp = ma_fields.Integer(required=True)
+    source_type = ma_fields.Integer(required=False)
+    metadata = ma_fields.Dict(required=False)
+
+
+@dataclass
+class SingleObservationMetadata:
+    aircraft_type: str
+
+
+@dataclass
+class Observation:
+    timestamp: str
+    seq: int
+    msg_data: dict
+    address: str
+    metadata: dict
+
+
+@dataclass
+class StoredFlightMessage:
+    timestamp: str
+    seq: int
+    msg_data: dict
+    icao_address: str
+
+
+@dataclass
+class SingleRIDObservation:
+    lat_dd: float
+    lon_dd: float
+    altitude_mm: float
+    traffic_source: int
+    source_type: int
+    icao_address: str
+    timestamp: int = 0
+    metadata: dict = field(default_factory=dict)
+    session_id: str | None = ""
+
+
+@dataclass
+class MessageVerificationFailedResponse:
+    message: str
+
+
+@dataclass
+class TrafficInformationDiscoveryResponse:
+    message: str
+    url: str
+    description: str

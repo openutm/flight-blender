@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 
 FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (0, "1090ES"),
@@ -123,3 +124,89 @@ class SurveillanceMetrics:
     active_sessions: int
     window_start: str
     window_end: str
+
+
+class SpeedAccuracy(str, Enum):
+    SAUnknown = "SAUnknown"
+    SA10mpsPlus = "SA10mpsPlus"
+    SA10mps = "SA10mps"
+    SA3mps = "SA3mps"
+    SA1mps = "SA1mps"
+    SA03mps = "SA03mps"
+
+
+@dataclass
+class SurveillanceServiceStatus:
+    status: SurveillanceStatus
+
+
+@dataclass
+class LatLangAltPoint:
+    lat: float
+    lng: float
+    alt: float
+
+
+@dataclass
+class AircraftPosition:
+    lat: float
+    lng: float
+    alt: float
+    accuracy_h: str
+    accuracy_v: str
+    extrapolated: bool | None
+    pressure_altitude: float | None
+
+
+@dataclass
+class AircraftState:
+    position: AircraftPosition
+    speed_accuracy: SpeedAccuracy
+    speed: float | None = 255
+    track: float | None = 361
+    vertical_speed: float | None = 63
+
+
+@dataclass
+class TrackMessage:
+    sdsdp_identifier: str
+    unique_aircraft_identifier: str
+    state: AircraftState
+    timestamp: str
+    source: str
+    track_state: str
+
+
+@dataclass
+class HeartbeatCode:
+    service_degraded: int
+    service_outage: int
+    upcoming_degradation: int
+    sensor_operational: int
+
+
+@dataclass
+class HeartbeatMessage:
+    surveillance_sdsp_name: str
+    meets_sla_surveillance_requirements: bool
+    meets_sla_rr_lr_requirements: bool
+    average_latency_or_95_percentile_latency_ms: int
+    horizontal_or_vertical_95_percentile_accuracy_m: int
+    timestamp: str
+
+
+@dataclass
+class FlightPoint:
+    lat: float
+    lng: float
+    alt: float
+    speed: float
+    bearing: float
+
+
+@dataclass
+class ActiveTrack:
+    session_id: str
+    unique_aircraft_identifier: str
+    last_updated_timestamp: str
+    observations: list[dict]

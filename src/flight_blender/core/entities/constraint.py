@@ -18,39 +18,29 @@ EntityID = UUIDv4Format
 
 @dataclass
 class LatLngPoint:
-    """A clas to hold information about LatLngPoint"""
-
     lat: float
     lng: float
 
 
 @dataclass
 class Radius:
-    """A class to hold the radius object"""
-
     value: float
     units: str
 
 
 @dataclass
 class Polygon:
-    """A class to hold the polygon object"""
-
-    vertices: list[LatLngPoint]  # A minimum of three LatLngPoints
+    vertices: list[LatLngPoint]
 
 
 @dataclass
 class Circle:
-    """Hold the details of a circle object"""
-
     center: LatLngPoint
     radius: Radius
 
 
 @dataclass
 class Altitude:
-    """A class to hold altitude"""
-
     value: int | float
     reference: str
     units: str
@@ -58,8 +48,6 @@ class Altitude:
 
 @dataclass
 class Volume3D:
-    """A class to hold Volume3D objects"""
-
     outline_polygon: Polygon
     altitude_lower: Altitude
     altitude_upper: Altitude
@@ -80,8 +68,6 @@ class Time:
 
 @dataclass
 class Volume4D:
-    """A class to hold Volume4D objects"""
-
     volume: Volume3D
     time_start: Time
     time_end: Time

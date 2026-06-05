@@ -3,11 +3,16 @@ import json
 import os
 import uuid
 from dataclasses import asdict
+from enum import Enum
+from itertools import zip_longest
 from typing import Optional
 
 import arrow
+import dacite
 import dacite.exceptions
 import shapely
+from dacite import from_dict
+from loguru import logger
 from shapely.geometry import Point
 from shapely.geometry import box as shapely_box
 
@@ -18,7 +23,14 @@ from flight_blender.core.entities.flight_feed import (
     ObservationRequest,
     SingleAirtrafficObservation,
 )
-from flight_blender.core.entities.rid import NestedDict, SignedUnSignedTelemetryObservations
+from flight_blender.core.entities.rid import (
+    NestedDict,
+    RIDAircraftState,
+    RIDFlightDetails,
+    SignedTelemetryRequest,
+    SignedUnSignedTelemetryObservations,
+    SubmittedTelemetryFlightDetails,
+)
 from flight_blender.core.repositories.flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, TelemetryValidator
 
 
@@ -277,3 +289,226 @@ def _key_to_dict(key) -> dict:
         "created_at": key.created_at.isoformat() if key.created_at else None,
         "updated_at": key.updated_at.isoformat() if key.updated_at else None,
     }
+
+
+# ── RID telemetry helpers (from flight_feed/rid_telemetry_helper.py) ──────────
+
+
+def generate_rid_telemetry_objects(
+    signed_telemetry_request: SignedTelemetryRequest,
+) -> list[SubmittedTelemetryFlightDetails]:
+    all_rid_data = []
+    for current_signed_telemetry_request in signed_telemetry_request:
+        s = from_dict(
+            data_class=SubmittedTelemetryFlightDetails,
+            data=current_signed_telemetry_request,
+            config=dacite.Config(cast=[Enum]),
+        )
+        all_rid_data.append(s)
+    return all_rid_data
+
+
+def generate_unsigned_rid_telemetry_objects(
+    telemetry_request: list[SignedUnSignedTelemetryObservations],
+) -> list[SubmittedTelemetryFlightDetails]:
+    all_rid_data = []
+    for current_unsigned_telemetry_request in telemetry_request:
+        s = from_dict(
+            data_class=SubmittedTelemetryFlightDetails,
+            data=current_unsigned_telemetry_request,
+            config=dacite.Config(cast=[Enum]),
+        )
+        all_rid_data.append(s)
+    return all_rid_data
+
+
+class FlightBlenderTelemetryValidator:
+    def parse_validate_current_states(self, current_states) -> list[RIDAircraftState]:
+        all_states = []
+        for state in current_states:
+            aircraft_state = from_dict(
+                data_class=RIDAircraftState,
+                data=state,
+                config=dacite.Config(cast=[Enum]),
+            )
+            all_states.append(aircraft_state)
+        return all_states
+
+    def parse_validate_rid_details(self, rid_flight_details) -> RIDFlightDetails:
+        return from_dict(
+            data_class=RIDFlightDetails,
+            data=rid_flight_details,
+            config=dacite.Config(cast=[Enum]),
+        )
+
+    def validate_flight_details_current_states_exist(self, flight) -> bool:
+        return "flight_details" in flight and "current_states" in flight
+
+    def validate_observation_key_exists(self, raw_request_data) -> bool:
+        return "observations" in raw_request_data
+
+
+# ── Observation read helpers (from flight_feed/flight_stream_helper.py) ────────
+
+
+def batcher(iterable, n):
+    args = [iter(iterable)] * n
+    return zip_longest(*args)
+
+
+class ObservationReadOperations:
+    def __init__(self, view_port_box=None):
+        self.view_port_box: shapely_box = view_port_box
+
+    def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
+        my_database_reader = SyncDatabaseFacade()
+        r = get_redis()
+        key = f"last_reading_for_{session_id}"
+        if r.exists(key):
+            last_reading_time = r.get(key)
+            after_datetime = arrow.get(last_reading_time)
+        else:
+            now = arrow.now()
+            after_datetime = now.shift(seconds=-20)
+
+        r.set(key, arrow.now().isoformat())
+        r.expire(key, 300)
+        pending_messages = []
+        all_flight_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
+        logger.info("Retrieved all flight observations..")
+        for message in all_flight_observations:
+            observation = FlightObservationSchema(
+                id=message["id"],
+                session_id=message["session_id"],
+                latitude_dd=message["latitude_dd"],
+                longitude_dd=message["longitude_dd"],
+                altitude_mm=message["altitude_mm"],
+                traffic_source=message["traffic_source"],
+                source_type=message["source_type"],
+                icao_address=message["icao_address"],
+                created_at=message["created_at"],
+                updated_at=message["updated_at"],
+                metadata=json.loads(message["metadata"]),
+            )
+            if self.view_port_box:
+                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
+                    pending_messages.append(observation)
+            else:
+                pending_messages.append(observation)
+        return pending_messages
+
+    def get_closest_observation_for_now(self, now: arrow.arrow.Arrow):
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
+        my_database_reader = SyncDatabaseFacade()
+        all_observations = []
+        closest_observations = my_database_reader.get_closest_flight_observation_for_now(now=now)
+        logger.info("Retrieved closest_observations..")
+        for closest_observation in closest_observations:
+            single_observation = FlightObservationSchema(
+                id=str(closest_observation.id),
+                session_id=str(closest_observation.session_id),
+                latitude_dd=closest_observation.latitude_dd,
+                longitude_dd=closest_observation.longitude_dd,
+                altitude_mm=closest_observation.altitude_mm,
+                traffic_source=closest_observation.traffic_source,
+                source_type=closest_observation.source_type,
+                icao_address=closest_observation.icao_address,
+                created_at=closest_observation.created_at.isoformat(),
+                updated_at=closest_observation.updated_at.isoformat(),
+                metadata=json.loads(closest_observation.metadata),
+            )
+            if self.view_port_box:
+                if shapely.contains(self.view_port_box, Point(single_observation.latitude_dd, single_observation.longitude_dd)):
+                    all_observations.append(single_observation)
+            else:
+                all_observations.append(single_observation)
+        return all_observations
+
+    def get_all_flight_observations(self) -> list[FlightObservationSchema]:
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
+        my_database_reader = SyncDatabaseFacade()
+        pending_messages = []
+        all_flight_observations = my_database_reader.get_flight_observation_objects()
+        for message in all_flight_observations:
+            observation = FlightObservationSchema(
+                id=message["id"],
+                session_id=message["session_id"],
+                latitude_dd=message["latitude_dd"],
+                longitude_dd=message["longitude_dd"],
+                altitude_mm=message["altitude_mm"],
+                traffic_source=message["traffic_source"],
+                source_type=message["source_type"],
+                icao_address=message["icao_address"],
+                created_at=message["created_at"],
+                updated_at=message["updated_at"],
+                metadata=json.loads(message["metadata"]),
+            )
+            if self.view_port_box:
+                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
+                    pending_messages.append(observation)
+            else:
+                pending_messages.append(observation)
+        return pending_messages
+
+    def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
+        my_database_reader = SyncDatabaseFacade()
+        latest_observation = my_database_reader.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
+        if latest_observation:
+            return FlightObservationSchema(
+                id=str(latest_observation.id),
+                session_id=str(latest_observation.session_id),
+                latitude_dd=latest_observation.latitude_dd,
+                longitude_dd=latest_observation.longitude_dd,
+                altitude_mm=latest_observation.altitude_mm,
+                traffic_source=latest_observation.traffic_source,
+                source_type=latest_observation.source_type,
+                icao_address=latest_observation.icao_address,
+                created_at=latest_observation.created_at.isoformat(),
+                updated_at=latest_observation.updated_at.isoformat(),
+                metadata=json.loads(latest_observation.metadata),
+            )
+        return None
+
+    def get_temporal_flight_observations_by_session(self, session_id: str) -> list[FlightObservationSchema]:
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
+        my_database_reader = SyncDatabaseFacade()
+        r = get_redis()
+        key = f"last_reading_for_{session_id}"
+        if r.exists(key):
+            last_reading_time = r.get(key)
+            after_datetime = arrow.get(last_reading_time)
+        else:
+            now = arrow.now()
+            after_datetime = now.shift(seconds=-20)
+
+        r.set(key, arrow.now().isoformat())
+        r.expire(key, 300)
+        pending_messages = []
+        all_flight_observations = my_database_reader.get_temporal_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
+        for message in all_flight_observations:
+            observation = FlightObservationSchema(
+                id=message["id"],
+                session_id=message["session_id"],
+                latitude_dd=message["latitude_dd"],
+                longitude_dd=message["longitude_dd"],
+                altitude_mm=message["altitude_mm"],
+                traffic_source=message["traffic_source"],
+                source_type=message["source_type"],
+                icao_address=message["icao_address"],
+                created_at=message["created_at"],
+                updated_at=message["updated_at"],
+                metadata=json.loads(message["metadata"]),
+            )
+            if self.view_port_box:
+                if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
+                    pending_messages.append(observation)
+            else:
+                pending_messages.append(observation)
+        return pending_messages

@@ -2,6 +2,17 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
+from flight_blender.core.entities.surveillance import TrackMessage
+
+
+@runtime_checkable
+class TrafficDataFuser(Protocol):
+    """Structural interface for traffic data fusion implementations."""
+
+    def generate_track_messages(self) -> list[TrackMessage]:
+        """Run the full fusion pipeline and return track messages."""
+        ...
+
 
 @runtime_checkable
 class SurveillanceRepository(Protocol):

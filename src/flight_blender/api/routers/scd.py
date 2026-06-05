@@ -9,9 +9,9 @@ from fastapi.responses import JSONResponse
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.utils import EnhancedJSONEncoder
-from flight_blender.scd.data_definitions import FlightDeclarationCreationPayload
-from flight_blender.scd.flight_planning_data_definitions import FlightPlanningInjectionData, FlightPlanningStatusResponse, FlightPlanningTestStatus
-from flight_blender.scd.scd_data_definitions import (
+from flight_blender.core.entities.scd import FlightDeclarationCreationPayload
+from flight_blender.core.entities.scd import FlightPlanningInjectionData, FlightPlanningStatusResponse, FlightPlanningTestStatus
+from flight_blender.core.entities.scd import (
     CapabilitiesResponse,
     CompositeOperationalIntentPayload,
     OperationalIntentState,
@@ -54,7 +54,7 @@ def _do_flight_planning_status() -> dict:
 
 
 def _do_flight_planning_clear_area(request_data: dict) -> tuple[dict, int]:
-    from flight_blender.scd.utils import DSSAreaClearHandler
+    from flight_blender.infrastructure.dss.scd import DSSAreaClearHandler
 
     try:
         request_id = request_data["request_id"]
@@ -70,10 +70,9 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
     from flight_blender.common.data_definitions import OPERATION_STATES_LOOKUP
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.infrastructure.dss import scd as dss_scd_helper
-    from flight_blender.scd.scd_test_harness_helper import (
+    from flight_blender.core.operations.scd import (
         FlightPlanningDataProcessor,
         FlightPlantoOperationalIntentProcessor,
-        SCDTestHarnessHelper,
         failed_planning_response,
         not_planned_activated_higher_priority_planning_response,
         not_planned_activated_planning_response,
@@ -84,7 +83,8 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
         planned_test_injection_response,
         ready_to_fly_planning_response,
     )
-    from flight_blender.scd.utils import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
+    from flight_blender.infrastructure.dss.scd import SCDTestHarnessHelper
+    from flight_blender.core.operations.scd import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
 
     my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
     my_scd_dss_helper = dss_scd_helper.SCDOperations()
@@ -365,7 +365,7 @@ def _do_delete_flight_plan(flight_plan_id: str) -> tuple[dict, int]:
 
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.infrastructure.dss import scd as dss_scd_helper
-    from flight_blender.scd.scd_test_harness_helper import flight_planning_deletion_failure_response, flight_planning_deletion_success_response
+    from flight_blender.core.operations.scd import flight_planning_deletion_failure_response, flight_planning_deletion_success_response
 
     operation_id_str = str(flight_plan_id)
     my_scd_dss_helper = dss_scd_helper.SCDOperations()

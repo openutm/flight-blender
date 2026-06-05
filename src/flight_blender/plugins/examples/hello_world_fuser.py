@@ -20,8 +20,8 @@ from typing import List
 import arrow
 from loguru import logger
 
-from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
-from flight_blender.surveillance.data_definitions import AircraftPosition, AircraftState, SpeedAccuracy, TrackMessage
+from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
+from flight_blender.core.entities.surveillance import AircraftPosition, AircraftState, SpeedAccuracy, TrackMessage
 
 # Observations older than this many seconds are considered stale.
 _STALE_THRESHOLD_SECS = 60

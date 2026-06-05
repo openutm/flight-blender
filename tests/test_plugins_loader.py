@@ -13,17 +13,17 @@ from datetime import datetime, timezone
 from unittest import TestCase
 
 from flight_blender.plugins.loader import load_plugin
-from flight_blender.flight_declarations.data_definitions import (
+from flight_blender.core.entities.flight_declarations import (
     DeconflictionRequest,
     DeconflictionResult,
     IntersectionCheckResult,
 )
 from flight_blender.flight_declarations.deconfliction_engine import DefaultDeconflictionEngine
-from flight_blender.flight_declarations.deconfliction_protocol import DeconflictionEngine
+from flight_blender.core.operations.flight_declarations import DeconflictionEngine
 from flight_blender.flight_declarations.example_deconfliction_engine import (
     AltitudeAwareDeconflictionEngine,
 )
-from flight_blender.surveillance.traffic_data_fuser_protocol import (
+from flight_blender.core.repositories.surveillance import (
     TrafficDataFuser as TrafficDataFuserProtocol,
 )
 
@@ -78,7 +78,7 @@ class LoadPluginTests(TestCase):
         """A class that doesn't implement check_deconfliction raises TypeError."""
         with self.assertRaises(TypeError):
             load_plugin(
-                "flight_blender.flight_declarations.data_definitions.DeconflictionRequest",
+                "flight_blender.core.entities.flight_declarations.DeconflictionRequest",
                 expected_protocol=DeconflictionEngine,
             )
 
@@ -98,7 +98,7 @@ class LoadPluginTests(TestCase):
 
     def test_no_protocol_skips_validation(self):
         """Without expected_protocol any class is accepted."""
-        cls = load_plugin("flight_blender.flight_declarations.data_definitions.DeconflictionRequest")
+        cls = load_plugin("flight_blender.core.entities.flight_declarations.DeconflictionRequest")
         self.assertIs(cls, DeconflictionRequest)
 
     # -- caching -----------------------------------------------------------
@@ -310,7 +310,7 @@ class TrafficDataFuserProtocolTests(TestCase):
 
     def test_default_fuser_has_correct_method(self):
         """The default TrafficDataFuser in utils.py has generate_track_messages."""
-        from flight_blender.surveillance.utils import TrafficDataFuser
+        from flight_blender.core.operations.surveillance import TrafficDataFuser
 
         self.assertTrue(hasattr(TrafficDataFuser, "generate_track_messages"))
         self.assertTrue(callable(getattr(TrafficDataFuser, "generate_track_messages")))
@@ -319,10 +319,10 @@ class TrafficDataFuserProtocolTests(TestCase):
         """load_plugin accepts the default fuser class against the protocol."""
         load_plugin.cache_clear()
         cls = load_plugin(
-            "flight_blender.surveillance.utils.TrafficDataFuser",
+            "flight_blender.core.operations.surveillance.TrafficDataFuser",
             expected_protocol=TrafficDataFuserProtocol,
         )
-        from flight_blender.surveillance.utils import TrafficDataFuser
+        from flight_blender.core.operations.surveillance import TrafficDataFuser
 
         self.assertIs(cls, TrafficDataFuser)
         load_plugin.cache_clear()

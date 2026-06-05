@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from implicitdict import ImplicitDict
+from marshmallow import Schema, fields
 
 GEOFENCE_INDEX_BASEPATH = "/tmp/blender_geofence_idx"  # nosec B108
 
@@ -91,3 +92,138 @@ class GeoZoneCheckResult:
 class GeoZoneChecksResponse:
     applicableGeozone: list[GeoZoneCheckResult]
     message: str | None
+
+
+class GeoJSONFeatureProperties(Schema):
+    name = fields.Str(required=True)
+    upper_limit = fields.Int(required=True)
+    lower_limit = fields.Int(required=True)
+    start_time = fields.Str(required=False)
+    end_time = fields.Str(required=False)
+
+
+class GeoJSONFeatureGeometry(Schema):
+    type = fields.Str(required=True)
+    coordinates = fields.List(fields.List(fields.List(fields.Float()), required=True))
+
+
+class GeoJSONFeature(Schema):
+    type = fields.Str(required=True)
+    properties = fields.Nested(GeoJSONFeatureProperties)
+    geometry = fields.Nested(GeoJSONFeatureGeometry)
+
+
+class GeoFencePutSchema(Schema):
+    type = fields.Str(required=True)
+    features = fields.List(fields.Nested(lambda: GeoJSONFeature()), required=True)
+
+
+class GeoAwarenessRestrictions(str, enum.Enum):
+    PROHIBITED = "PROHIBITED"
+    REQ_AUTHORISATION = "REQ_AUTHORISATION"
+    CONDITIONAL = "CONDITIONAL"
+    NO_RESTRICTION = "NO_RESTRICTION"
+
+
+class HTTPSSource(ImplicitDict):
+    url: str
+    format: str
+
+
+class GeoZoneHttpsSource(ImplicitDict):
+    https_source: HTTPSSource
+
+
+class ED269Filter(ImplicitDict):
+    uSpaceClass: str
+    acceptableRestrictions: Literal[
+        GeoAwarenessRestrictions.PROHIBITED,
+        GeoAwarenessRestrictions.REQ_AUTHORISATION,
+        GeoAwarenessRestrictions.CONDITIONAL,
+        GeoAwarenessRestrictions.NO_RESTRICTION,
+    ]
+
+
+class ResultingOperationalImpactEnum(str, enum.Enum):
+    Block = "Block"
+    Advise = "Advise"
+    BlockOrAdvise = "BlockOrAdvise"
+
+
+class ZoneAuthority(ImplicitDict):
+    name: str
+    service: str
+    email: str
+    contactName: str
+    siteURL: str
+    phone: str
+    purpose: str
+    intervalBefore: str
+
+
+class HorizontalProjection(ImplicitDict):
+    type: str
+    coordinates: list[list]
+
+
+class ED269Geometry(ImplicitDict):
+    uomDimensions: str
+    lowerLimit: int
+    lowerVerticalReference: str
+    upperLimit: float
+    upperVerticalReference: str
+    horizontalProjection: HorizontalProjection
+
+
+class GeoZoneFeature(ImplicitDict):
+    identifier: str
+    country: str
+    name: str
+    type: str
+    restriction: str
+    restrictionConditions: str
+    region: int
+    reason: list[str]
+    otherReasonInfo: str
+    regulationExemption: str
+    uSpaceClass: str
+    message: str
+    applicability: list[dict[str, str]]
+    zoneAuthority: list[ZoneAuthority]
+    geometry: list[ED269Geometry]
+
+
+@dataclass
+class ParseValidateResponse:
+    all_zones: list[bool]
+    feature_list: None | list[GeoZoneFeature]
+
+
+class GeoZone(ImplicitDict):
+    title: str
+    description: str
+    features: list[GeoZoneFeature]
+
+
+@dataclass
+class GeofencePayload:
+    id: str
+    upper_limit: str
+    lower_limit: str
+    altitude_ref: str
+    name: str
+    bounds: str
+    status: str
+    message: str
+    is_test_dataset: bool
+    start_datetime: str
+    end_datetime: str
+    raw_geo_fence: dict
+    geozone: dict
+
+
+@dataclass
+class GeoFenceMetadata:
+    start_date: str
+    end_date: str
+    geo_fence_id: str

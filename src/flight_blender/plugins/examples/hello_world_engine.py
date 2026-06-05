@@ -19,7 +19,7 @@ from loguru import logger
 from sqlalchemy import select
 
 from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
-from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
+from flight_blender.core.entities.flight_declarations import DeconflictionRequest, DeconflictionResult
 from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
 from flight_blender.infrastructure.database.session import session_scope
 

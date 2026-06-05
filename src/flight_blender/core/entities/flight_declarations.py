@@ -98,3 +98,16 @@ class HTTP404Response:
 @dataclass
 class HTTP400Response:
     message: str
+
+
+@dataclass
+class Altitude:
+    meters: int
+    datum: str
+
+
+@dataclass
+class FlightDeclarationMetadata:
+    start_date: str
+    end_date: str
+    flight_declaration_id: str

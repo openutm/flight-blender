@@ -9,12 +9,12 @@ from loguru import logger
 from flight_blender.celery import app
 from flight_blender.common.data_definitions import OPERATION_STATES
 from flight_blender.config import settings
-from flight_blender.conformance.conformance_checks_handler import FlightOperationConformanceHelper
+from flight_blender.core.operations.conformance import FlightOperationConformanceHelper
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.infrastructure.messaging.notification_helper import NotificationFactory
-from flight_blender.notifications.data_definitions import FlightDeclarationUpdateMessage
-from flight_blender.scd.opint_helper import DSSOperationalIntentsCreator
-from flight_blender.scd.scd_data_definitions import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
+from flight_blender.core.entities.notifications import FlightDeclarationUpdateMessage
+from flight_blender.infrastructure.dss.scd import DSSOperationalIntentsCreator
+from flight_blender.core.entities.scd import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
 
 load_dotenv(find_dotenv())
 

@@ -1,6 +1,27 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+from uuid import UUID
+
+from implicitdict import ImplicitDict
+from uas_standards.interuss.automated_testing.rid.v1.injection import UserNotification
+
+URL = str
+SubscriptionNotificationIndex = int
+UUIDv4 = str
+Version = str
+EntityUUID = UUIDv4
+SubscriptionUUID = UUIDv4
+RIDFlightID = str
+Latitude = float
+Longitude = float
+SpecificSessionID = str
+USSBaseURL = str
+SubscriptionUSSBaseURL = USSBaseURL
+FlightsUSSBaseURL = USSBaseURL
+GeoPolygonString = str
 
 
 class NestedDict(dict):
@@ -13,7 +34,351 @@ class NestedDict(dict):
         super().__init__(self.convert_value(x) for x in data if x[1] is not None)
 
 
+class Format(str, Enum):
+    RFC3339 = "RFC3339"
+
+
+class Reference(Enum):
+    TakeoffLocation = "TakeoffLocation"
+    GroundLevel = "GroundLevel"
+
+
+class SpeedAccuracy(str, Enum):
+    SAUnknown = "SAUnknown"
+    SA10mpsPlus = "SA10mpsPlus"
+    SA10mps = "SA10mps"
+    SA3mps = "SA3mps"
+    SA1mps = "SA1mps"
+    SA03mps = "SA03mps"
+
+
+class HorizontalAccuracy(str, Enum):
+    HAUnknown = "HAUnknown"
+    HA10NMPlus = "HA10NMPlus"
+    HA10NM = "HA10NM"
+    HA4NM = "HA4NM"
+    HA2NM = "HA2NM"
+    HA1NM = "HA1NM"
+    HA05NM = "HA05NM"
+    HA03NM = "HA03NM"
+    HA01NM = "HA01NM"
+    HA005NM = "HA005NM"
+    HA30m = "HA30m"
+    HA10m = "HA10m"
+    HA3m = "HA3m"
+    HA1m = "HA1m"
+
+
+class VerticalAccuracy(str, Enum):
+    VAUnknown = "VAUnknown"
+    VA150mPlus = "VA150mPlus"
+    VA150m = "VA150m"
+    VA45m = "VA45m"
+    VA25m = "VA25m"
+    VA10m = "VA10m"
+    VA3m = "VA3m"
+    VA1m = "VA1m"
+
+
+class RIDOperationalStatus(str, Enum):
+    Undeclared = "Undeclared"
+    Ground = "Ground"
+    Airborne = "Airborne"
+    Emergency = "Emergency"
+    RemoteIDSystemFailure = "RemoteIDSystemFailure"
+
+
+class AltitudeType(str, Enum):
+    Takeoff = "Takeoff"
+    Dynamic = "Dynamic"
+    Fixed = "Fixed"
+
+
+class Category(str, Enum):
+    EUCategoryUndefined = "EUCategoryUndefined"
+    Open = "Open"
+    Specific = "Specific"
+    Certified = "Certified"
+
+
+class Class(str, Enum):
+    EUClassUndefined = "EUClassUndefined"
+    Class0 = "Class0"
+    Class1 = "Class1"
+    Class2 = "Class2"
+    Class3 = "Class3"
+    Class4 = "Class4"
+    Class5 = "Class5"
+    Class6 = "Class6"
+
+
+class UAType(str, Enum):
+    NotDeclared = "NotDeclared"
+    Aeroplane = "Aeroplane"
+    Helicopter = "Helicopter"
+    Gyroplane = "Gyroplane"
+    HybridLift = "HybridLift"
+    Ornithopter = "Ornithopter"
+    Glider = "Glider"
+    Kite = "Kite"
+    FreeBalloon = "FreeBalloon"
+    CaptiveBalloon = "CaptiveBalloon"
+    Airship = "Airship"
+    FreeFallOrParachute = "FreeFallOrParachute"
+    Rocket = "Rocket"
+    TetheredPoweredAircraft = "TetheredPoweredAircraft"
+    GroundObstacle = "GroundObstacle"
+    Other = "Other"
+
+
+class Units(str, Enum):
+    M = "M"
+
+
+class AltitudeReference(Enum):
+    W84 = "W84"
+
+
+@dataclass
+class Time:
+    value: str
+    format: str = "RFC3339"
+
+
+@dataclass
+class Radius:
+    value: float
+    units: Units
+
+
+@dataclass
+class RIDAuthData:
+    data: str | None = ""
+    format: int | None = 0
+
+
+@dataclass
+class ErrorResponse:
+    message: str | None = ""
+
+
+@dataclass
+class RIDHeight:
+    reference: Reference
+    distance: float | None = 0
+
+
+@dataclass
+class LatLngPoint:
+    lng: Longitude
+    lat: Latitude
+
+
+@dataclass
+class Altitude:
+    value: float
+    reference: AltitudeReference
+    units: Units
+
+
+@dataclass
+class OperatingArea:
+    aircraft_count: int | None = None
+    volumes: list[OperatingArea] | None = None
+
+
+@dataclass
+class Polygon:
+    vertices: list[LatLngPoint]
+
+
+@dataclass
+class UASID:
+    specific_session_id: SpecificSessionID | None = None
+    serial_number: str | None = ""
+    registration_id: str | None = ""
+    utm_id: str | None = ""
+
+
+@dataclass
+class OperatorLocation:
+    position: LatLngPoint
+    altitude: Altitude | None = None
+    altitude_type: AltitudeType | None = None
+
+
+@dataclass
+class UAClassificationEU:
+    category: Category | None = "EUCategoryUndefined"
+    class_: Class | None = "EUClassUndefined"
+
+
+@dataclass
+class RIDFlightDetails:
+    id: str
+    eu_classification: UAClassificationEU | None = None
+    uas_id: UASID | None = None
+    operator_location: OperatorLocation | None = None
+    auth_data: RIDAuthData | None = None
+    operator_id: str | None = ""
+    operation_description: str | None = ""
+
+
+@dataclass
+class Circle:
+    center: LatLngPoint | None = None
+    radius: Radius | None = None
+
+
+@dataclass
+class Volume3D:
+    outline_circle: Circle | None = None
+    outline_polygon: Polygon | None = None
+    altitude_lower: Altitude | None = None
+    altitude_upper: Altitude | None = None
+
+
+@dataclass
+class Volume4D:
+    volume: Volume3D
+    time_start: Time | None = None
+    time_end: Time | None = None
+
+
+@dataclass
+class SubscriptionState:
+    subscription_id: SubscriptionUUID
+    notification_index: SubscriptionNotificationIndex | None = 0
+
+
+@dataclass
+class GetFlightDetailsResponse:
+    details: RIDFlightDetails
+
+
+@dataclass
+class RIDAircraftPosition:
+    lat: Latitude
+    lng: Longitude
+    accuracy_h: HorizontalAccuracy
+    accuracy_v: VerticalAccuracy
+    height: RIDHeight | None
+    alt: float | None = -1000
+    pressure_altitude: float | None = -1000
+    extrapolated: bool | None = False
+
+
+@dataclass
+class SubscriberToNotify:
+    subscriptions: list[SubscriptionState]
+    url: URL
+
+
+@dataclass
+class RIDRecentAircraftPosition:
+    time: Time
+    position: RIDAircraftPosition
+
+
+@dataclass
+class GetIdentificationServiceAreaDetailsResponse:
+    extents: Volume4D
+
+
+@dataclass
+class CreateIdentificationServiceAreaParameters:
+    extents: Volume4D
+    uss_base_url: FlightsUSSBaseURL
+
+
+@dataclass
+class UpdateIdentificationServiceAreaParameters:
+    extents: Volume4D
+    uss_base_url: FlightsUSSBaseURL
+
+
+@dataclass
+class CreateSubscriptionParameters:
+    extents: Volume4D
+    uss_base_url: SubscriptionUSSBaseURL
+
+
+@dataclass
+class UpdateSubscriptionParameters:
+    extents: Volume4D
+    uss_base_url: SubscriptionUSSBaseURL
+
+
+@dataclass
+class Subscription:
+    id: SubscriptionUUID
+    uss_base_url: SubscriptionUSSBaseURL
+    owner: str
+    version: Version
+    time_end: Time | None
+    time_start: Time | SubscriptionNotificationIndex = 0
+    notification_index: int | None = 0
+
+
+@dataclass
+class IdentificationServiceArea:
+    uss_base_url: FlightsUSSBaseURL
+    owner: str
+    time_start: Time
+    time_end: Time
+    version: Version
+    id: EntityUUID
+
+
+@dataclass
+class RIDAircraftState:
+    timestamp: Time
+    timestamp_accuracy: float
+    position: RIDAircraftPosition
+    speed_accuracy: SpeedAccuracy
+    operational_status: RIDOperationalStatus | None = "Undeclared"
+    speed: float | None = 255
+    track: float | None = 361
+    vertical_speed: float | None = 63
+
+
+@dataclass
+class SignedUnsignedTelemetryObservation:
+    current_state: RIDAircraftState
+    flight_details: RIDFlightDetails
+
+
 @dataclass
 class SignedUnSignedTelemetryObservations:
-    current_states: list[Any]
-    flight_details: Any
+    current_states: list[RIDAircraftState]
+    flight_details: RIDFlightDetails
+
+
+@dataclass
+class SignedTelemetryRequest:
+    observations: list[SignedUnsignedTelemetryObservation]
+
+
+@dataclass
+class SubmittedTelemetryFlightDetails:
+    id: str
+    aircraft_type: str
+    current_state: RIDAircraftState
+    simulated: bool
+    recent_positions: list[RIDRecentAircraftPosition]
+    operator_details: RIDFlightDetails
+
+
+@dataclass
+class RIDStreamErrorDetail:
+    error_code: int
+    error_description: str
+
+
+class ServiceProviderUserNotifications(ImplicitDict):
+    user_notifications: list[UserNotification] = []
+
+
+class OperatorRIDNotificationCreationPayload(ImplicitDict):
+    message: str
+    session_id: UUID

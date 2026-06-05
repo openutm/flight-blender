@@ -1,4 +1,4 @@
-"""Direct DSS operation handlers — replaces Django management command dispatch."""
+"""DSS operation handlers for conformance — replaces Django management command dispatch."""
 
 from loguru import logger
 

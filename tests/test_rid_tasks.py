@@ -14,8 +14,8 @@ import arrow
 import pytest
 
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-from flight_blender.rid.data_definitions import RIDStreamErrorDetail
-from flight_blender.rid.rid_telemetry_monitoring import FlightTelemetryRIDEngine
+from flight_blender.core.entities.rid import RIDStreamErrorDetail
+from flight_blender.core.operations.rid import FlightTelemetryRIDEngine
 from flight_blender.infrastructure.celery.tasks.rid import (
     _parse_rid_timestamp_us,
     check_rid_stream_conformance,

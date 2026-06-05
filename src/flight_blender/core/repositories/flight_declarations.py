@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
-from flight_blender.scd.scd_data_definitions import (
+from flight_blender.core.entities.scd import (
     CompositeOperationalIntentPayload,
     OperationalIntentReferenceDSSResponse,
     OperationalIntentUSSDetails,

@@ -19,16 +19,16 @@ from shapely.ops import unary_union
 
 from flight_blender.auth.common import get_redis
 from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
-from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
+from flight_blender.infrastructure.auth.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.common.data_definitions import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
 from flight_blender.common.utils import LazyEncoder
-from flight_blender.constraint.data_definitions import CompositeConstraintPayload, Constraint
-from flight_blender.geo_fence.data_definitions import GeofencePayload
+from flight_blender.core.entities.constraint import CompositeConstraintPayload, Constraint
+from flight_blender.core.entities.geo_fence import GeofencePayload
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.infrastructure.dss.constraint import ConstraintOperations
 from flight_blender.infrastructure.spatial import rid as rtree_helper
-from flight_blender.scd.flight_planning_data_definitions import FlightPlanningInjectionData
-from flight_blender.scd.scd_data_definitions import (
+from flight_blender.core.entities.scd import FlightPlanningInjectionData
+from flight_blender.core.entities.scd import (
     Altitude,
     Circle,
     CommonDSS2xxResponse,
@@ -68,7 +68,7 @@ from flight_blender.scd.scd_data_definitions import (
     Volume3D,
     Volume4D,
 )
-from flight_blender.scd.scd_data_definitions import Polygon as Plgn
+from flight_blender.core.entities.scd import Polygon as Plgn
 
 load_dotenv(find_dotenv())
 
@@ -1652,3 +1652,298 @@ class SCDOperations:
             logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
 
         return d_r
+
+
+# ── DSSAreaClearHandler (from scd/utils.py) ───────────────────────────────────
+
+
+class DSSAreaClearHandler:
+    def __init__(self, request_id):
+        self.request_id = request_id
+
+    def clear_area_request(self, extent_raw):
+        from flight_blender.common.data_definitions import OPINT_INDEX_BASEPATH  # noqa: PLC0415
+        from flight_blender.core.entities.scd import ClearAreaResponse, ClearAreaResponseOutcome  # noqa: PLC0415
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+        from flight_blender.infrastructure.spatial import rid as rtree_helper  # noqa: PLC0415
+
+        import arrow  # noqa: PLC0415
+
+        my_database_writer = SyncDatabaseFacade()
+        my_database_reader = SyncDatabaseFacade()
+        my_scd_dss_helper = SCDOperations()
+        my_operational_intent_parser = OperationalIntentReferenceHelper()
+        volume4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=extent_raw)
+        my_geo_json_converter = VolumesConverter()
+        my_geo_json_converter.convert_volumes_to_geojson(volumes=[volume4D])
+        view_rect_bounds = my_geo_json_converter.get_bounds()
+        my_rtree_helper = rtree_helper.OperationalIntentsIndexFactory(index_name=OPINT_INDEX_BASEPATH)
+        my_rtree_helper.generate_active_flights_operational_intents_index()
+        op_ints_exist = my_rtree_helper.check_op_ints_exist()
+        all_existing_op_ints_in_area = []
+        if op_ints_exist:
+            all_existing_op_ints_in_area = my_rtree_helper.check_box_intersection(view_box=view_rect_bounds)
+
+        all_deletion_requests_status = []
+        if all_existing_op_ints_in_area:
+            for existing_op_ints_in_area in all_existing_op_ints_in_area:
+                if existing_op_ints_in_area:
+                    deletion_success = False
+                    operation_id = existing_op_ints_in_area["flight_id"]
+                    composite_operational_intent = my_database_reader.get_composite_operational_intent_by_declaration_id(
+                        flight_declaration_id=operation_id
+                    )
+                    if composite_operational_intent:
+                        ovn = composite_operational_intent.operational_intent_reference.ovn
+                        opint_id = composite_operational_intent.id
+                        ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
+                        logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
+                        deletion_request = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)
+                        if deletion_request.status == 200:
+                            logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
+                            deletion_success = True
+                            my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id)
+                        else:
+                            logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
+                            logger.error(deletion_request.dss_response)
+                            deletion_success = False
+                        all_deletion_requests_status.append(deletion_success)
+
+            message = (
+                "Some operational intents in the area failed to clear"
+                if not all(all_deletion_requests_status)
+                else "All operational intents in the area cleared successfully"
+            )
+            clear_area_status = ClearAreaResponseOutcome(
+                success=all(all_deletion_requests_status),
+                message=message,
+                timestamp=arrow.now().isoformat(),
+            )
+        else:
+            clear_area_status = ClearAreaResponseOutcome(
+                success=True,
+                message="All operational intents in the area cleared successfully",
+                timestamp=arrow.now().isoformat(),
+            )
+        my_rtree_helper.clear_rtree_index()
+        return ClearAreaResponse(outcome=clear_area_status)
+
+
+# ── DSSOperationalIntentsCreator (from scd/opint_helper.py) ──────────────────
+
+
+class DSSOperationalIntentsCreator:
+    """Helper to submit an operational intent to the DSS based on an operation ID."""
+
+    def __init__(self, flight_declaration_id: str):
+        from flight_blender.core.operations.flight_declarations import OperationalIntentsConverter  # noqa: PLC0415
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
+        self.flight_declaration_id = flight_declaration_id
+        self.my_scd_dss_helper = SCDOperations()
+        self.my_operational_intent_reference_helper = OperationalIntentsConverter()
+        self.my_database_reader = SyncDatabaseFacade()
+        self.my_database_writer = SyncDatabaseFacade()
+
+    def validate_flight_declaration_start_end_time(self) -> bool:
+        import arrow  # noqa: PLC0415
+
+        flight_declaration = self.my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
+        now = arrow.now()
+        two_hours_from_now = now.shift(hours=2)
+        op_start_time = arrow.get(flight_declaration.start_datetime)
+        op_end_time = arrow.get(flight_declaration.end_datetime)
+        start_time_ok = op_start_time <= two_hours_from_now and op_start_time >= now
+        end_time_ok = op_end_time <= two_hours_from_now and op_end_time >= now
+        start_end_time_oks = [start_time_ok, end_time_ok]
+        return False not in start_end_time_oks
+
+    def submit_flight_declaration_to_dss(self):
+        import json as _json  # noqa: PLC0415
+        import uuid as _uuid  # noqa: PLC0415
+
+        import arrow  # noqa: PLC0415
+        from dacite import from_dict  # noqa: PLC0415
+
+        from flight_blender.core.entities.scd import (  # noqa: PLC0415
+            CompositeOperationalIntentPayload,
+            FlightDeclarationOperationalIntentStorageDetails,
+            NotifyPeerUSSPostPayload,
+            OperationalIntentSubmissionStatus,
+            OperationalIntentUSSDetails,
+            OtherError,
+        )
+
+        new_entity_id = str(_uuid.uuid4())
+        flight_declaration = self.my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
+        if not flight_declaration:
+            logger.error("Flight Declaration with ID %s not found in the database" % self.flight_declaration_id)
+            return OperationalIntentSubmissionStatus(
+                status="declaration_not_found",
+                status_code=404,
+                message="Flight Declaration with ID %s not found in the database" % self.flight_declaration_id,
+                dss_response=OtherError(notes="Flight Declaration with ID %s not found in the database" % self.flight_declaration_id),
+                operational_intent_id=new_entity_id,
+            )
+
+        current_state = flight_declaration.state
+        operational_intent = _json.loads(flight_declaration.operational_intent)
+        operational_intent_data = from_dict(
+            data_class=FlightDeclarationOperationalIntentStorageDetails,
+            data=operational_intent,
+        )
+
+        auth_token = self.my_scd_dss_helper.get_auth_token()
+
+        if "error" in auth_token:
+            logger.error("Error in retrieving auth_token, check if the auth server is running properly, error details displayed above")
+            notes = "Error in getting a token from the Auth server, flight not submitted to the DSS, check if the auth server is running properly"
+            logger.error(auth_token["error"])
+            op_int_submission_result = OperationalIntentSubmissionStatus(
+                status="auth_server_error",
+                status_code=500,
+                message="Error in getting a token from the Auth server",
+                dss_response=OtherError(notes=notes),
+                operational_intent_id=new_entity_id,
+            )
+            self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
+            flight_declaration.add_state_history_entry(
+                new_state=8,
+                original_state=current_state,
+                notes=notes,
+            )
+        else:
+            op_int_submission_result = self.my_scd_dss_helper.create_and_submit_operational_intent_reference(
+                state=operational_intent_data.state,
+                volumes=operational_intent_data.volumes,
+                off_nominal_volumes=operational_intent_data.off_nominal_volumes,
+                priority=operational_intent_data.priority,
+            )
+
+            if op_int_submission_result.status_code == 201:
+                logger.info("Successfully created operational intent in the DSS, updating database..")
+                created_flight_operational_intent_reference = self.my_database_writer.create_flight_operational_intent_reference(
+                    flight_declaration=flight_declaration,
+                    created_operational_intent_reference=op_int_submission_result.dss_response.operational_intent_reference,
+                )
+                operational_intent_details_payload = OperationalIntentUSSDetails(
+                    volumes=operational_intent_data.volumes,
+                    off_nominal_volumes=operational_intent_data.off_nominal_volumes,
+                    priority=operational_intent_data.priority,
+                )
+                created_flight_operational_intent_detail = (
+                    self.my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
+                        flight_declaration=flight_declaration, operational_intent_details_payload=operational_intent_details_payload
+                    )
+                )
+                if created_flight_operational_intent_detail and created_flight_operational_intent_reference:
+                    generated_composite_operational_intent_data = (
+                        self.my_operational_intent_reference_helper.generate_bounds_altitude_time_for_volumes(
+                            operational_intent_details_payload=operational_intent_details_payload,
+                            flight_declaration_id=self.flight_declaration_id,
+                        )
+                    )
+                    composite_operational_intent_data = CompositeOperationalIntentPayload(
+                        bounds=generated_composite_operational_intent_data.bounds,
+                        start_datetime=generated_composite_operational_intent_data.start_datetime,
+                        end_datetime=generated_composite_operational_intent_data.end_datetime,
+                        alt_max=generated_composite_operational_intent_data.alt_max,
+                        alt_min=generated_composite_operational_intent_data.alt_min,
+                        operational_intent_reference_id=str(created_flight_operational_intent_reference.id),
+                        operational_intent_details_id=str(created_flight_operational_intent_detail.id),
+                    )
+                    self.my_database_writer.create_or_update_composite_operational_intent(
+                        flight_declaration=flight_declaration, composite_operational_intent_payload=composite_operational_intent_data
+                    )
+                if op_int_submission_result.constraints:
+                    my_constraints_writer = ConstraintsWriter()
+                    my_constraints_writer.write_nearby_constraints(
+                        flight_declaration=flight_declaration,
+                        constraints=op_int_submission_result.constraints,
+                    )
+                logger.info("Updating state from Processing to Accepted...")
+                self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=1)
+                flight_declaration.add_state_history_entry(
+                    new_state=1,
+                    original_state=current_state,
+                    notes="Operational Intent successfully submitted to DSS and is Accepted",
+                )
+            elif op_int_submission_result.status_code in [400, 409, 401, 403, 412, 413, 429]:
+                if op_int_submission_result.status_code == 400:
+                    notes = "Error during submission of operational intent, the DSS rejected because one or more parameters was missing"
+                elif op_int_submission_result.status_code == 409:
+                    notes = "Error during submission of operational intent, the DSS rejected it with because the latest airspace keys was not present"
+                elif op_int_submission_result.status_code == 401:
+                    notes = "There was a error in submitting the operational intent to the DSS, the token was invalid"
+                elif op_int_submission_result.status_code == 403:
+                    notes = "There was a error in submitting the operational intent to the DSS, the appropriate scope was not present"
+                elif op_int_submission_result.status_code == 413:
+                    notes = "There was a error in submitting the operational intent to the DSS, the operational intent was too large"
+                elif op_int_submission_result.status_code == 429:
+                    notes = "There was a error in submitting the operational intent to the DSS, too many requests were submitted to the DSS"
+                logger.info(
+                    "There was a error in submitting the operational intent to the DSS, the DSS rejected our submission with a {status_code} response code".format(
+                        status_code=op_int_submission_result.status_code
+                    )
+                )
+                self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
+                flight_declaration.add_state_history_entry(
+                    new_state=8,
+                    original_state=current_state,
+                    notes=notes,
+                )
+            elif op_int_submission_result.status_code == 500 and op_int_submission_result.message == "conflict_with_flight":
+                logger.info("Flight is not deconflicted, updating state from Processing to Rejected ..")
+                self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
+                flight_declaration.add_state_history_entry(
+                    new_state=8,
+                    original_state=current_state,
+                    notes="Flight was not deconflicted correctly",
+                )
+
+        return op_int_submission_result
+
+    def notify_peer_uss(self, uss_base_url: str, notification_payload):
+        import tldextract  # noqa: PLC0415
+
+        my_scd_dss_helper = SCDOperations()
+        try:
+            ext = tldextract.extract(uss_base_url)
+        except Exception:
+            uss_audience = "localhost"
+        else:
+            if ext.domain in ["localhost", "internal"]:
+                uss_audience = "localhost"
+            else:
+                uss_audience = ".".join([ext.subdomain, ext.domain, ext.suffix])
+
+        if ext.subdomain != "dummy" and ext.domain != "uss":
+            my_scd_dss_helper.notify_peer_uss_of_created_updated_operational_intent(
+                uss_base_url=uss_base_url,
+                notification_payload=notification_payload,
+                audience=uss_audience,
+            )
+
+
+# ── SCDTestHarnessHelper (from scd/scd_test_harness_helper.py) ───────────────
+
+
+class SCDTestHarnessHelper:
+    """Used in the SCD Test harness to include transformations."""
+
+    def __init__(self):
+        from flight_blender.auth.common import get_redis  # noqa: PLC0415
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+        from flight_blender.infrastructure.spatial import rid as rtree_helper  # noqa: PLC0415
+
+        self.my_operational_intent_helper = OperationalIntentReferenceHelper()
+        self.r = get_redis()
+        self.my_volumes_converter = VolumesConverter()
+        self.my_database_reader = SyncDatabaseFacade()
+        self.my_operational_intent_comparator = rtree_helper.OperationalIntentComparisonFactory()
+
+    def check_if_same_flight_id_exists(self, operation_id: str) -> bool:
+        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
+            flight_declaration_id=operation_id
+        )
+        return bool(flight_operational_intent_reference)

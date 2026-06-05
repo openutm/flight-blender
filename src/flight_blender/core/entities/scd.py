@@ -1,56 +1,47 @@
 import enum
 from dataclasses import dataclass
-from typing import Literal, Optional
+from enum import Enum
+from typing import Any, Literal, Optional
 
 from implicitdict import StringBasedDateTime
 from shapely.geometry import Polygon as Plgn
 
-from flight_blender.constraint.data_definitions import Constraint
+from flight_blender.core.entities.constraint import Constraint
 
+
+# --- Geometric primitives (from scd_data_definitions) ---
 
 @dataclass
 class LatLngPoint:
-    """A clas to hold information about LatLngPoint"""
-
     lat: float
     lng: float
 
 
 @dataclass
 class Radius:
-    """A class to hold the radius object"""
-
     value: float
     units: str
 
 
 @dataclass
 class Time:
-    """A class to hold time objects"""
-
     format: str
     value: str
 
 
 @dataclass
 class Polygon:
-    """A class to hold the polygon object"""
-
-    vertices: list[LatLngPoint]  # A minimum of three LatLngPoints
+    vertices: list[LatLngPoint]
 
 
 @dataclass
 class Circle:
-    """Hold the details of a circle object"""
-
     center: LatLngPoint
     radius: Radius
 
 
 @dataclass
 class Altitude:
-    """A class to hold altitude"""
-
     value: int | float
     reference: str
     units: str
@@ -58,8 +49,6 @@ class Altitude:
 
 @dataclass
 class Volume3D:
-    """A class to hold Volume3D objects"""
-
     outline_polygon: Polygon
     altitude_lower: Altitude
     altitude_upper: Altitude
@@ -67,8 +56,6 @@ class Volume3D:
 
 
 class OperationalIntentState(str, enum.Enum):
-    """A test is either pass or fail or could not be processed, currently not"""
-
     Accepted = "Accepted"
     Activated = "Activated"
     Nonconforming = "Nonconforming"
@@ -77,8 +64,6 @@ class OperationalIntentState(str, enum.Enum):
 
 @dataclass
 class Volume4D:
-    """A class to hold Volume4D objects"""
-
     volume: Volume3D
     time_start: Time
     time_end: Time
@@ -91,8 +76,6 @@ class OperationalIntentStorageVolumes:
 
 @dataclass
 class OperationalIntentTestInjection:
-    """Class for keeping track of an operational intent test injections"""
-
     volumes: list[Volume4D]
     priority: int
     off_nominal_volumes: list[Volume4D] | None
@@ -105,15 +88,11 @@ class OperationalIntentTestInjection:
 
 
 class OperationCategory(str, enum.Enum):
-    """A enum to hold all categories of an operation"""
-
     Vlos = "vlos"
     Bvlos = "bvlos"
 
 
 class UASClass(str, enum.Enum):
-    """A enum to hold all UAS Classes"""
-
     C0 = "C0"
     C1 = "C1"
     C2 = "C2"
@@ -127,8 +106,6 @@ class DeleteFlightStatus(str, enum.Enum):
 
 
 class TestInjectionResultState(str, enum.Enum):
-    """A test is either pass or fail or could not be processed, currently not"""
-
     Planned = "Planned"
     Rejected = "Rejected"
     ConflictWithFlight = "ConflictWithFlight"
@@ -137,29 +114,21 @@ class TestInjectionResultState(str, enum.Enum):
 
 
 class IDTechnology(str, enum.Enum):
-    """A enum to hold ID technologies for an operation"""
-
     Network = "network"
     Broadcast = "broadcast"
 
 
 class StatusResponseEnum(str, enum.Enum):
-    """A enum to specify if the USS is ready (or not)"""
-
     Starting = "Starting"
     Ready = "Ready"
 
 
 class DeleteFlightStatusResponseEnum(str, enum.Enum):
-    """A enum to hold Flight Status"""
-
     Closed = "Closed"
     Failed = "Failed"
 
 
 class USSCapabilitiesResponseEnum(str, enum.Enum):
-    """A enum to hold USS capabilities operation"""
-
     BasicStrategicConflictDetection = "BasicStrategicConflictDetection"
     FlightAuthorisationValidation = "FlightAuthorisationValidation"
     HighPriorityFlights = "HighPriorityFlights"
@@ -167,18 +136,10 @@ class USSCapabilitiesResponseEnum(str, enum.Enum):
 
 @dataclass
 class FlightAuthorizationDataPayload:
-    """A class to hold information about Flight Authorization Test"""
-
     uas_serial_number: str
     operation_mode: Literal[OperationCategory.Vlos, OperationCategory.Bvlos]
     operation_category: str
-    uas_class: Literal[
-        UASClass.C0,
-        UASClass.C1,
-        UASClass.C2,
-        UASClass.C3,
-        UASClass.C4,
-    ]
+    uas_class: Literal[UASClass.C0, UASClass.C1, UASClass.C2, UASClass.C3, UASClass.C4]
     identification_technologies: Literal[IDTechnology.Network, IDTechnology.Broadcast]
     connectivity_methods: list[str]
     endurance_minutes: int
@@ -224,16 +185,12 @@ class CapabilitiesResponse:
 
 @dataclass
 class DeleteFlightResponse:
-    """Delete flight status response"""
-
     result: Literal[DeleteFlightStatusResponseEnum.Failed, DeleteFlightStatusResponseEnum.Closed]
     notes: str
 
 
 @dataclass
 class ClearAreaResponseOutcome:
-    """Response after clearing flights in an area"""
-
     success: bool
     message: str
     timestamp: StringBasedDateTime
@@ -246,8 +203,6 @@ class ClearAreaResponse:
 
 @dataclass
 class ClearAreaRequestData:
-    """Request to clear flights in an area"""
-
     request_id: str
     extent: Volume4D
 
@@ -260,8 +215,6 @@ class ImplicitSubscriptionParameters:
 
 @dataclass
 class OperationalIntentReference:
-    """A operational intent reference for the DSS"""
-
     extents: list[Volume4D]
     key: list[str]
     state: str
@@ -271,8 +224,6 @@ class OperationalIntentReference:
 
 @dataclass
 class PartialCreateOperationalIntentReference:
-    """A operational intent reference for the DSS that is stored in the Database"""
-
     volumes: list[Volume4D]
     priority: int
     state: str
@@ -391,8 +342,6 @@ class OtherError:
 
 @dataclass
 class EmtptyResponse:
-    """This method holds details of the data the DSS provides once a operational intent is deleted"""
-
     message: str
 
 
@@ -415,16 +364,12 @@ class NotifyPeerUSSPostPayload:
 
 @dataclass
 class DeleteOperationalIntentConstuctor:
-    """This method holds information to send to the DSS to delete a Operational intent"""
-
     entity_id: str
     ovn: str
 
 
 @dataclass
 class DeleteOperationalIntentResponseSuccess:
-    """This method holds details of the data the DSS provides once a operational intent is deleted"""
-
     subscribers: list[str]
     operational_intent_reference: OperationalIntentReferenceDSSResponse
 
@@ -473,20 +418,10 @@ class FlightPlanCurrentStatus(str, enum.Enum):
     OkToFly = "OkToFly"
     OffNominal = "OffNominal"
     Closed = "Closed"
-    Processing = "Processing"  # Internal Flight Blender status
+    Processing = "Processing"
 
 
 class OpIntUpdateCheckResultCodes(str, enum.Enum):
-    """A set of codes to specify why an operational update should not be sent to the DSS by the USS.
-    A - If the current state is Activate and new state is Non-conforming or Contingent an update request should be sent to DSS
-    B - If the current state is activated and new state is also activated but the new extents conflict with existing DSS volumes, the update request should not be sent to the DSS
-    C - If the current state is activate and new state is also activate and the volumes dont intersect with the volumes in the DSS the update request should be sent to the DSS
-    D - If the priority of the updated request is 100 then it should be submitted to the DSS
-    E - If the extents conflict then dont submit
-    F-  If the extents dont conflict then submit it
-    Z - Default state
-    """
-
     A = "A"
     B = "B"
     C = "C"
@@ -547,3 +482,271 @@ class OpInttoCheckDetails:
     id: str
     time_start: Optional[str] = None
     time_end: Optional[str] = None
+
+
+# --- Flight planning types (from flight_planning_data_definitions) ---
+
+class FlightPlanningStatusResponse(str, enum.Enum):
+    Starting = "Starting"
+    Ready = "Ready"
+
+
+class AdvisoryInclusion(str, enum.Enum):
+    Unknown = "Unknown"
+    AtLeastOneAdvisoryOrCondition = "AtLeastOneAdvisoryOrCondition"
+    NoAdvisoriesOrConditions = "NoAdvisoriesOrConditions"
+
+
+class PlanningActivityResult(str, enum.Enum):
+    Completed = "Completed"
+    Rejected = "Rejected"
+    Failed = "Failed"
+    NotSupported = "NotSupported"
+
+
+@dataclass
+class CloseFlightPlanResponse:
+    planning_result: PlanningActivityResult
+    notes: str | None
+    flight_plan_status: FlightPlanCurrentStatus
+    includes_advisories: AdvisoryInclusion | None
+
+
+@dataclass
+class UpsertFlightPlanResponse:
+    flight_plan_status: FlightPlanCurrentStatus
+    notes: str
+    includes_advisories: AdvisoryInclusion | None
+    planning_result: PlanningActivityResult
+
+
+@dataclass
+class FlightPlanningTestStatus:
+    status: FlightPlanningStatusResponse
+    system_version: str
+    api_name: str
+    api_version: str
+
+
+class OperatorType(Enum):
+    Recreational = "Recreational"
+    CommercialExcluded = "CommercialExcluded"
+    ReOC = "ReOC"
+
+
+class AircraftType(Enum):
+    NotDeclared = "NotDeclared"
+    Aeroplane = "Aeroplane"
+    Helicopter = "Helicopter"
+    Gyroplane = "Gyroplane"
+    HybridLift = "HybridLift"
+    Ornithopter = "Ornithopter"
+    Glider = "Glider"
+    Kite = "Kite"
+    FreeBalloon = "FreeBalloon"
+    CaptiveBalloon = "CaptiveBalloon"
+    Airship = "Airship"
+    FreeFallOrParachute = "FreeFallOrParachute"
+    Rocket = "Rocket"
+    TetheredPoweredAircraft = "TetheredPoweredAircraft"
+    GroundObstacle = "GroundObstacle"
+    Other = "Other"
+
+
+class FlightProfile(Enum):
+    AutomatedGrid = "AutomatedGrid"
+    AutomatedWaypoint = "AutomatedWaypoint"
+    Manual = "Manual"
+
+
+class UsageState(Enum):
+    Planned = "Planned"
+    InUse = "InUse"
+    Closed = "Closed"
+
+
+class OperationCategoryFP(Enum):
+    Unknown = "Unknown"
+    Open = "Open"
+    Specific = "Specific"
+    Certified = "Certified"
+
+
+class UasState(Enum):
+    Nominal = "Nominal"
+    OffNominal = "OffNominal"
+    Contingent = "Contingent"
+    NotSpecified = "NotSpecified"
+
+
+class OperationMode(Enum):
+    Undeclared = "Undeclared"
+    Vlos = "Vlos"
+    Bvlos = "Bvlos"
+
+
+class Result(Enum):
+    Planned = "Planned"
+    ReadyToFly = "ReadyToFly"
+    Rejected = "Rejected"
+    Failed = "Failed"
+    NotSupported = "NotSupported"
+
+
+class IncludesAdvisories(Enum):
+    Unknown = "Unknown"
+    True_ = True
+    False_ = False
+
+
+class UASClassFP(Enum):
+    Other = "Other"
+    C0 = "C0"
+    C1 = "C1"
+    C2 = "C2"
+    C3 = "C3"
+    C4 = "C4"
+    C5 = "C5"
+    C6 = "C6"
+
+
+@dataclass
+class FlightAuthorisationData:
+    uas_serial_number: str
+    operation_mode: OperationMode
+    operation_category: OperationCategoryFP
+    uas_class: UASClassFP
+    identification_technologies: list[str]
+    uas_type_certificate: str | None
+    connectivity_methods: list[str]
+    endurance_minutes: float
+    emergency_procedure_url: str
+    operator_id: str
+    uas_id: str | None
+
+
+@dataclass
+class BasicFlightPlanInformation:
+    usage_state: UsageState
+    uas_state: UasState
+    area: list[Volume4D] | None
+
+
+@dataclass
+class ASTMF354821OpIntentInformation:
+    priority: int
+
+
+@dataclass
+class RPAS26FlightDetails:
+    operator_type: OperatorType | None
+    uas_serial_numbers: list[str] | None
+    uas_registration_numbers: list[str] | None
+    aircraft_type: AircraftType | None
+    flight_profile: FlightProfile | None
+    pilot_license_number: str | None
+    pilot_phone_number: str | None
+    operator_number: str | None
+
+
+@dataclass
+class FlightPlan:
+    basic_information: BasicFlightPlanInformation
+    astm_f3548_21: ASTMF354821OpIntentInformation | None
+    uspace_flight_authorisation: FlightAuthorisationData | None
+    rpas_operating_rules_2_6: RPAS26FlightDetails | None = None
+    additional_information: dict[str, Any] | None = None
+
+
+@dataclass
+class FlightPlanningRequest:
+    intended_flight: FlightPlan
+    request_id: str
+
+
+@dataclass
+class FlightPlanningInjectionData:
+    volumes: list[Volume4D] | None
+    priority: int
+    off_nominal_volumes: list[Volume4D] | None
+    uas_state: UasState
+    usage_state: UsageState
+    state: str
+
+
+@dataclass
+class FlightPlanningUSSDetails:
+    volumes: list[Volume4D]
+    priority: int
+    off_nominal_volumes: list[Volume4D] | None
+
+
+# --- SCD-prefixed types (from scd/data_definitions.py) ---
+
+@dataclass
+class FlightDeclarationCreationPayload:
+    id: str
+    operational_intent: str
+    flight_declaration_raw_geojson: str
+    bounds: str
+    aircraft_id: str
+    state: int
+
+
+@dataclass
+class SCDLatLngPoint:
+    lat: float
+    lng: float
+
+
+@dataclass
+class SCDRadius:
+    value: float
+    units: str
+
+
+@dataclass
+class SCDPolygon:
+    vertices: list[SCDLatLngPoint]
+
+
+@dataclass
+class SCDCircle:
+    center: SCDLatLngPoint
+    radius: SCDRadius
+
+
+@dataclass
+class SCDAltitude:
+    value: float
+    reference: Literal["W84"]
+    units: str
+
+
+@dataclass
+class SCDTime:
+    value: str
+    format: Literal["RFC3339"]
+
+
+@dataclass
+class SCDVolume3D:
+    outline_circle: SCDCircle | None
+    outline_polygon: SCDPolygon | None
+    altitude_lower: SCDAltitude | None
+    altitude_upper: SCDAltitude | None
+
+
+@dataclass
+class SCDVolume4D:
+    volume: SCDVolume3D
+    time_start: SCDTime | None
+    time_end: SCDTime | None
+
+
+@dataclass
+class FlightDeclarationOperationalIntentStorageDetails:
+    volumes: list[SCDVolume4D]
+    off_nominal_volumes: list[SCDVolume4D]
+    priority: int
+    state: str

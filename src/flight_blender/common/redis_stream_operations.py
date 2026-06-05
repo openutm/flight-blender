@@ -7,8 +7,8 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 from flight_blender.auth.common import get_redis
-from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
-from flight_blender.surveillance.data_definitions import ActiveTrack
+from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
+from flight_blender.core.entities.surveillance import ActiveTrack
 
 load_dotenv(find_dotenv())
 

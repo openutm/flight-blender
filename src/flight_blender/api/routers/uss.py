@@ -22,7 +22,7 @@ router = APIRouter(prefix="/uss")
 
 
 def _do_peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
-    from flight_blender.uss.uss_data_definitions import ErrorReport
+    from flight_blender.core.entities.uss import ErrorReport
 
     try:
         error_report = from_dict(data_class=ErrorReport, data=request_data, config=Config(cast=[Enum]))
@@ -35,7 +35,7 @@ def _do_peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
 
 def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-    from flight_blender.uss.uss_data_definitions import (
+    from flight_blender.core.entities.uss import (
         OperationalIntentDetails,
         OperationalIntentDetailsUSSResponse,
         OperationalIntentNotFoundResponse,
@@ -92,8 +92,8 @@ def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
 def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.infrastructure.dss.scd import VolumesConverter
-    from flight_blender.scd.scd_data_definitions import CompositeOperationalIntentPayload
-    from flight_blender.uss.uss_data_definitions import UpdateChangedOpIntDetailsPost
+    from flight_blender.core.entities.scd import CompositeOperationalIntentPayload
+    from flight_blender.core.entities.uss import UpdateChangedOpIntDetailsPost
 
     database_writer = SyncDatabaseFacade()
     my_geo_json_converter = VolumesConverter()
@@ -150,7 +150,7 @@ def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
 
 def _do_uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-    from flight_blender.uss.uss_data_definitions import GenericErrorResponseMessage
+    from flight_blender.core.entities.uss import GenericErrorResponseMessage
 
     my_database_reader = SyncDatabaseFacade()
     constraint_id_exists = my_database_reader.check_constraint_id_exists(constraint_id=constraint_id)
@@ -167,7 +167,7 @@ def _do_uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
 
 
 def _do_uss_update_constraint_details(request_data: dict) -> int:
-    from flight_blender.constraint.data_definitions import PutConstraintDetailsParameters
+    from flight_blender.core.entities.constraint import PutConstraintDetailsParameters
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
     my_database_reader = SyncDatabaseFacade()
@@ -187,9 +187,9 @@ def _do_uss_update_constraint_details(request_data: dict) -> int:
 
 
 def _do_get_uss_flights(view: str) -> tuple[dict, int]:
-    from flight_blender.flight_feed import flight_stream_helper
-    from flight_blender.rid import view_port_ops
-    from flight_blender.uss.rid_data_definitions import (
+    from flight_blender.core.operations import flight_feed as flight_stream_helper
+    from flight_blender.core.operations import rid as view_port_ops
+    from flight_blender.core.entities.uss import (
         GetFlightsResponse,
         RIDAircraftPosition,
         RIDAircraftState,
@@ -198,7 +198,7 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
         RIDHeight,
         RIDTime,
     )
-    from flight_blender.uss.uss_data_definitions import GenericErrorResponseMessage
+    from flight_blender.core.entities.uss import GenericErrorResponseMessage
 
     try:
         view_port = [float(i) for i in view.split(",")]
@@ -276,9 +276,8 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
 
 def _do_get_uss_flight_details(flight_id: str) -> tuple[dict, int]:
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-    from flight_blender.rid.data_definitions import UASID, OperatorLocation, UAClassificationEU
-    from flight_blender.rid.rid_utils import RIDAuthData, RIDFlightDetails
-    from flight_blender.uss.uss_data_definitions import FlightDetailsNotFoundMessage, OperatorDetailsSuccessResponse
+    from flight_blender.core.entities.rid import UASID, OperatorLocation, UAClassificationEU
+    from flight_blender.core.entities.uss import RIDAuthData, RIDFlightDetails, FlightDetailsNotFoundMessage, OperatorDetailsSuccessResponse
 
     my_database_reader = SyncDatabaseFacade()
     flight_details_exists = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)
@@ -333,7 +332,7 @@ def _do_get_uss_flight_details(flight_id: str) -> tuple[dict, int]:
 
 
 def _do_uss_telemetry(opint_id: str) -> dict:
-    from flight_blender.uss.uss_data_definitions import Time, VehicleTelemetry, VehicleTelemetryResponse
+    from flight_blender.core.entities.uss import Time, VehicleTelemetry, VehicleTelemetryResponse
 
     now = arrow.now()
     five_seconds_from_now = now.shift(seconds=5)

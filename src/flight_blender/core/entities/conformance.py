@@ -1,6 +1,15 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from shapely.geometry import Polygon as ShapelyPolygon
+
+
+@dataclass
+class PolygonAltitude:
+    polygon: ShapelyPolygon
+    altitude_upper: float
+    altitude_lower: float
+
 
 @dataclass
 class ConformanceRecord:

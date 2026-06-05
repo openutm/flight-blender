@@ -18,21 +18,25 @@ from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLI
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.infrastructure.database.repositories.sa_rid import SQLAlchemyRIDRepository
 from flight_blender.infrastructure.database.session import async_get_db
-from flight_blender.rid import view_port_ops
-from flight_blender.rid.rid_utils import (
+from flight_blender.core.operations import rid as view_port_ops
+from flight_blender.core.entities.uss import (
+    FlightDetailsNotFoundMessage,
+    GenericErrorResponseMessage,
+    OperatorDetailsSuccessResponse,
+    RIDFlightDetails,
+)
+from flight_blender.core.operations.rid import (
     CreateTestResponse,
     IdentificationServiceArea,
     Position,
     RIDDisplayDataResponse,
     RIDFlight,
-    RIDFlightDetails,
     RIDFlightsRecord,
     RIDPositions,
     RIDSubscription,
     RIDVolume4D,
     SubscriptionState,
 )
-from flight_blender.uss.uss_data_definitions import FlightDetailsNotFoundMessage, GenericErrorResponseMessage, OperatorDetailsSuccessResponse
 
 router = APIRouter(prefix="/rid")
 
@@ -104,7 +108,7 @@ async def get_rid_data(
     if not record or not record.flight_details or not json.loads(record.flight_details):
         return JSONResponse({}, status_code=404)
 
-    from flight_blender.flight_feed import flight_stream_helper
+    from flight_blender.core.operations import flight_feed as flight_stream_helper
 
     observations = flight_stream_helper.ObservationReadOperations().get_temporal_flight_observations_by_session(session_id=sub_id_str)
     return JSONResponse(observations or {}, status_code=200 if observations else 404)

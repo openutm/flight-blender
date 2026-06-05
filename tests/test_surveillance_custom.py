@@ -5,10 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
-from flight_blender.surveillance.custom_utils import SpecializedTrafficDataFuser
-from flight_blender.surveillance.data_definitions import ActiveTrack
-from flight_blender.surveillance.utils import TrafficDataFuser
+from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
+from flight_blender.core.operations.surveillance import SpecializedTrafficDataFuser
+from flight_blender.core.entities.surveillance import ActiveTrack
+from flight_blender.core.operations.surveillance import TrafficDataFuser
 
 
 # ===========================================================================
@@ -44,7 +44,7 @@ class TestSpecializedTrafficDataFuser:
 
 class TestTrafficDataFuserInstantiation:
     def test_instantiation(self):
-        with patch("flight_blender.surveillance.utils.RedisStreamOperations"):
+        with patch("flight_blender.core.operations.surveillance.RedisStreamOperations"):
             fuser = TrafficDataFuser(session_id="test-session", raw_observations=[])
             assert fuser.session_id == "test-session"
             assert fuser.raw_observations == []
@@ -52,7 +52,7 @@ class TestTrafficDataFuserInstantiation:
 
     def test_fuse_raw_observations_returns_same_list(self):
         obs = MagicMock()
-        with patch("flight_blender.surveillance.utils.RedisStreamOperations"):
+        with patch("flight_blender.core.operations.surveillance.RedisStreamOperations"):
             fuser = TrafficDataFuser(session_id="test-session", raw_observations=[obs])
             result = fuser._fuse_raw_observations()
             assert result == [obs]
@@ -72,7 +72,7 @@ class TestTrafficDataFuserInstantiation:
         mock_redis = MagicMock()
         mock_redis.check_active_track_exists.return_value = False
 
-        with patch("flight_blender.surveillance.utils.RedisStreamOperations", return_value=mock_redis):
+        with patch("flight_blender.core.operations.surveillance.RedisStreamOperations", return_value=mock_redis):
             fuser = TrafficDataFuser(session_id="test-session", raw_observations=[obs])
             # Should not raise
             fuser._generate_active_tracks([obs])
@@ -100,7 +100,7 @@ class TestTrafficDataFuserInstantiation:
         mock_redis.check_active_track_exists.return_value = True
         mock_redis.get_active_track.return_value = existing_track
 
-        with patch("flight_blender.surveillance.utils.RedisStreamOperations", return_value=mock_redis):
+        with patch("flight_blender.core.operations.surveillance.RedisStreamOperations", return_value=mock_redis):
             fuser = TrafficDataFuser(session_id="test-session", raw_observations=[obs])
             fuser._generate_active_tracks([obs])
             mock_redis.update_active_track.assert_called_once()

@@ -3,31 +3,283 @@ import json
 import uuid
 from dataclasses import asdict
 from os import environ as env
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import arrow
+import geojson
+import shapely.geometry
 from geojson import Feature, FeatureCollection, Polygon
 from loguru import logger
 from marshmallow.exceptions import ValidationError
-from shapely.geometry import box as shapely_box
+from pyproj import Geod, Proj
+from shapely.geometry import Point, Polygon as ShapelyPolygon, box as shapely_box
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
+from flight_blender.common.data_definitions import DEFAULT_UAV_CLIMB_RATE_M_PER_S, DEFAULT_UAV_DESCENT_RATE_M_PER_S, DEFAULT_UAV_SPEED_M_PER_S
 from flight_blender.config import settings
 from flight_blender.core.entities.flight_declarations import (
     BulkFlightDeclarationCreateResponse,
     CreateFlightDeclarationRequestSchema,
     CreateFlightDeclarationViaOperationalIntentRequestSchema,
     DeconflictionRequest,
+    DeconflictionResult,
     FlightDeclarationCreateResponse,
     HTTP400Response,
     HTTP404Response,
     IntersectionCheckResult,
 )
+from flight_blender.core.entities.scd import (
+    Altitude,
+    LatLngPoint,
+    OperationalIntentBoundsTimeAltitude,
+    OperationalIntentUSSDetails,
+    PartialCreateOperationalIntentReference,
+    Time,
+    Volume3D,
+    Volume4D,
+)
+from flight_blender.core.entities.scd import Polygon as Plgn
 from flight_blender.core.repositories.flight_declarations import FlightDeclarationRepository
-from flight_blender.flight_declarations.deconfliction_protocol import DeconflictionEngine
-from flight_blender.flight_declarations.utils import OperationalIntentsConverter
 from flight_blender.plugins.loader import load_plugin
+
+FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = settings.FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
+
+
+# ── DeconflictionEngine Protocol (from flight_declarations/deconfliction_protocol.py) ─
+
+
+@runtime_checkable
+class DeconflictionEngine(Protocol):
+    """Structural interface for flight de-confliction engines."""
+
+    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
+        ...
+
+
+# ── OperationalIntentsConverter (from flight_declarations/utils.py) ───────────
+
+
+class OperationalIntentsConverter:
+    def __init__(self):
+        self.geo_json = {"type": "FeatureCollection", "features": []}
+        self.utm_zone = env.get("UTM_ZONE", "54N")
+        self.all_features = []
+
+    def generate_bounds_altitude_time_for_volumes(
+        self,
+        operational_intent_details_payload: OperationalIntentUSSDetails,
+        flight_declaration_id: str,
+    ) -> OperationalIntentBoundsTimeAltitude:
+        all_volumes = operational_intent_details_payload.volumes
+        min_altitude = float("inf")
+        max_altitude = float("-inf")
+        start_time = None
+        end_time = None
+
+        for volume in all_volumes:
+            if volume.volume.altitude_lower.value < min_altitude:
+                min_altitude = volume.volume.altitude_lower.value
+            if volume.volume.altitude_upper.value > max_altitude:
+                max_altitude = volume.volume.altitude_upper.value
+            start_time = min(
+                start_time or arrow.get(volume.time_start.value),
+                arrow.get(volume.time_start.value),
+            )
+            end_time = max(
+                end_time or arrow.get(volume.time_end.value),
+                arrow.get(volume.time_end.value),
+            )
+
+        self.convert_operational_intent_to_geo_json(all_volumes)
+        bounds = self.get_geo_json_bounds()
+        return OperationalIntentBoundsTimeAltitude(
+            bounds=bounds,
+            alt_min=min_altitude,
+            alt_max=max_altitude,
+            start_datetime=start_time.isoformat(),
+            end_datetime=end_time.isoformat(),
+            flight_declaration_id=flight_declaration_id,
+        )
+
+    def utm_converter(self, shapely_shape: shapely.geometry.base.BaseGeometry, inverse: bool = False) -> shapely.geometry.base.BaseGeometry:
+        zone_str = self.utm_zone.strip()
+        zone_num = int("".join(c for c in zone_str if c.isdigit()))
+        is_south = zone_str.upper().endswith("S")
+        proj = Proj(proj="utm", zone=zone_num, south=is_south, ellps="WGS84", datum="WGS84")
+
+        geo_interface = shapely_shape.__geo_interface__
+        point_or_polygon = geo_interface["type"]
+        coordinates = geo_interface["coordinates"]
+
+        if point_or_polygon == "Polygon":
+            new_coordinates = [[proj(*point, inverse=inverse) for point in linring] for linring in coordinates]
+        elif point_or_polygon == "Point":
+            new_coordinates = proj(*coordinates, inverse=inverse)
+        else:
+            raise RuntimeError(f"Unexpected geo_interface type: {point_or_polygon}")
+
+        return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
+
+    def convert_operational_intent_to_geo_json(self, volumes: list[Volume4D]):
+        for volume in volumes:
+            geo_json_features = self._convert_operational_intent_to_geojson_features(volume)
+            _seralized_features = [json.loads(geojson.dumps(feature)) for feature in geo_json_features]
+            for _serialized_feature in _seralized_features:
+                self.geo_json["features"].append(_serialized_feature)
+
+    def create_partial_operational_intent_ref(
+        self,
+        start_datetime: str,
+        end_datetime: str,
+        geo_json_fc: FeatureCollection,
+        priority: int,
+        state: str = "Accepted",
+    ) -> PartialCreateOperationalIntentReference:
+        all_v4d = self.convert_geo_json_to_volume_4_d(
+            geo_json_fc=geo_json_fc,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+        )
+        return PartialCreateOperationalIntentReference(volumes=all_v4d, state=state, priority=priority, off_nominal_volumes=[])
+
+    def parse_volume4ds_to_V4D_list(self, operational_intent_volume4ds: list[dict]) -> list[Volume4D]:
+        volume4d_list = []
+        for volume_dict in operational_intent_volume4ds:
+            volume_3d_dict = volume_dict.get("volume", {})
+            outline_polygon_dict = volume_3d_dict.get("outline_polygon")
+            outline_circle_dict = volume_3d_dict.get("outline_circle")
+
+            outline_polygon = None
+            if outline_polygon_dict:
+                vertices = [LatLngPoint(lat=vertex["lat"], lng=vertex["lng"]) for vertex in outline_polygon_dict.get("vertices", [])]
+                outline_polygon = Plgn(vertices=vertices)
+
+            outline_circle = None
+            if outline_circle_dict:
+                center_dict = outline_circle_dict.get("center", {})
+                radius_dict = outline_circle_dict.get("radius", {})
+                center = LatLngPoint(lat=center_dict.get("lat"), lng=center_dict.get("lng"))
+                radius = Altitude(
+                    value=radius_dict.get("value"),
+                    reference=radius_dict.get("reference"),
+                    units=radius_dict.get("units"),
+                )
+                outline_circle = {"center": center, "radius": radius}
+
+            volume_3d = Volume3D(
+                outline_polygon=outline_polygon,
+                outline_circle=outline_circle,
+                altitude_lower=Altitude(**volume_3d_dict.get("altitude_lower", {})),
+                altitude_upper=Altitude(**volume_3d_dict.get("altitude_upper", {})),
+            )
+            time_start = Time(**volume_dict.get("time_start", {}))
+            time_end = Time(**volume_dict.get("time_end", {}))
+            volume4d_list.append(Volume4D(volume=volume_3d, time_start=time_start, time_end=time_end))
+        return volume4d_list
+
+    def convert_geo_json_to_volume_4_d(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
+        if FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR:
+            CustomVolumeGenerator = load_plugin(FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR)
+            custom_volume_generator = CustomVolumeGenerator(
+                default_uav_speed_m_per_s=DEFAULT_UAV_SPEED_M_PER_S,
+                default_uav_climb_rate_m_per_s=DEFAULT_UAV_CLIMB_RATE_M_PER_S,
+                default_uav_descent_rate_m_per_s=DEFAULT_UAV_DESCENT_RATE_M_PER_S,
+            )
+            for feature in geo_json_fc["features"]:
+                geom = feature["geometry"]
+                shapely_geom = shape(geom)
+                buffered_geom = shapely_geom.buffer(0.0005)
+                self.all_features.append(buffered_geom)
+            all_volumes = custom_volume_generator.build_v4d_from_geojson(
+                geo_json_fc=geo_json_fc,
+                start_datetime=start_datetime,
+                end_datetime=end_datetime,
+            )
+            self.convert_operational_intent_to_geo_json(all_volumes)
+            return all_volumes
+        else:
+            all_v4d = []
+            for feature in geo_json_fc["features"]:
+                geom = feature["geometry"]
+                max_altitude = feature["properties"]["max_altitude"]["meters"]
+                min_altitude = feature["properties"]["min_altitude"]["meters"]
+                shapely_geom = shape(geom)
+                buffered_geom = shapely_geom.buffer(0.0005)
+                self.all_features.append(buffered_geom)
+                coordinates = list(zip(*buffered_geom.exterior.coords.xy))
+                polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+                volume_3d = Volume3D(
+                    outline_polygon=Plgn(vertices=polygon_vertices),
+                    altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+                    altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+                )
+                time_start = feature["properties"].get("start_time", start_datetime)
+                time_end = feature["properties"].get("end_time", end_datetime)
+                volume_4d = Volume4D(
+                    volume=volume_3d,
+                    time_start=Time(format="RFC3339", value=time_start),
+                    time_end=Time(format="RFC3339", value=time_end),
+                )
+                all_v4d.append(volume_4d)
+            return all_v4d
+
+    def buffer_point_to_volume4d(self, lat: float, lng: float, max_altitude: float, min_altitude: float, start_datetime: str, end_datetime: str) -> Volume4D:
+        point = Point(lng, lat)
+        buffered_shape = point.buffer(0.0001)
+        coordinates = list(zip(*buffered_shape.exterior.coords.xy))
+        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+        volume_3d = Volume3D(
+            outline_polygon=Plgn(vertices=polygon_vertices),
+            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+        )
+        return Volume4D(
+            volume=volume_3d,
+            time_start=Time(format="RFC3339", value=start_datetime),
+            time_end=Time(format="RFC3339", value=end_datetime),
+        )
+
+    def get_geo_json_bounds(self) -> str:
+        combined_features = unary_union(self.all_features)
+        bnd_tuple = combined_features.bounds
+        return ",".join([f"{x:.7f}" for x in bnd_tuple])
+
+    def _convert_operational_intent_to_geojson_features(self, volume: Volume4D) -> list[Feature]:
+        geo_json_features = []
+        volume_dict = asdict(volume.volume)
+        time_start = volume.time_start.value
+        time_end = volume.time_end.value
+
+        if "outline_polygon" in volume_dict and volume_dict["outline_polygon"] is not None:
+            outline_polygon = volume_dict["outline_polygon"]
+            point_list = [Point(vertex["lng"], vertex["lat"]) for vertex in outline_polygon["vertices"]]
+            outline_polygon = ShapelyPolygon([[p.x, p.y] for p in point_list])
+            self.all_features.append(outline_polygon)
+            oriented_polygon = shapely.geometry.polygon.orient(outline_polygon)
+            outline_polygon_geojson = shapely.geometry.mapping(oriented_polygon)
+            polygon_feature = Feature(
+                properties={"time_start": time_start, "time_end": time_end},
+                geometry=outline_polygon_geojson,
+            )
+            geo_json_features.append(polygon_feature)
+
+        if "outline_circle" in volume_dict and volume_dict["outline_circle"] is not None:
+            outline_circle = volume_dict["outline_circle"]
+            circle_radius = outline_circle["radius"]["value"]
+            center_point = Point(outline_circle["center"]["lng"], outline_circle["center"]["lat"])
+            utm_center = self.utm_converter(shapely_shape=center_point)
+            buffered_circle = utm_center.buffer(circle_radius)
+            converted_circle = self.utm_converter(buffered_circle, inverse=True)
+            self.all_features.append(converted_circle)
+            outline_circle_geojson = shapely.geometry.mapping(converted_circle)
+            circle_feature = Feature(
+                properties={"time_start": time_start, "time_end": time_end},
+                geometry=outline_circle_geojson,
+            )
+            geo_json_features.append(circle_feature)
+
+        return geo_json_features
 
 
 def _check_view_port(view_port_coords: list[float]) -> bool:
@@ -578,3 +830,207 @@ class FlightDeclarationOperations:
             operational_intent_geojson = []
 
         return operational_intent_geojson, 200
+
+
+# ── CustomVolumeGenerator (from flight_declarations/custom_volume_generation.py) ─
+
+
+class CustomVolumeGenerator:
+    def __init__(
+        self,
+        default_uav_speed_m_per_s: float,
+        default_uav_climb_rate_m_per_s: float,
+        default_uav_descent_rate_m_per_s: float,
+    ):
+        self.default_uav_speed_m_per_s = default_uav_speed_m_per_s
+        self.default_uav_climb_rate_m_per_s = default_uav_climb_rate_m_per_s
+        self.default_uav_descent_rate_m_per_s = default_uav_descent_rate_m_per_s
+        self.all_features = []
+
+    def _break_linestring_to_smaller_pieces(self, line_feature: Feature, piece_length_m: float = 5.5) -> list[Feature]:
+        geod = Geod(ellps="WGS84")
+        line_coords = line_feature["geometry"]["coordinates"]
+        if len(line_coords) < 2:
+            return [line_feature]
+
+        pieces = []
+        current_piece = [line_coords[0]]
+        current_length = 0.0
+        i = 1
+
+        while i < len(line_coords):
+            start_point = current_piece[-1]
+            end_point = line_coords[i]
+            az12, az21, dist = geod.inv(start_point[0], start_point[1], end_point[0], end_point[1])
+
+            if current_length + dist <= piece_length_m:
+                current_piece.append(end_point)
+                current_length += dist
+                i += 1
+            else:
+                remaining = piece_length_m - current_length
+                lon2, lat2, az = geod.fwd(start_point[0], start_point[1], az12, remaining)
+                interp_point = [lon2, lat2]
+                current_piece.append(interp_point)
+                pieces.append(current_piece)
+                current_piece = [interp_point]
+                current_length = 0.0
+
+        if current_piece:
+            pieces.append(current_piece)
+
+        new_features = []
+        for piece in pieces:
+            new_feature = Feature(
+                geometry={"type": "LineString", "coordinates": piece},
+                properties=line_feature["properties"],
+            )
+            new_features.append(new_feature)
+        logger.info(f"Broken into {len(new_features)} pieces.")
+        return new_features
+
+    def build_v4d_from_geojson(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
+        feature_types = set(feature["geometry"]["type"] for feature in geo_json_fc["features"])
+        if len(feature_types) == 1 and "LineString" in feature_types:
+            collection_type = "all_linesstrings"
+        elif len(feature_types) == 1 and "Polygon" in feature_types:
+            collection_type = "all_polygons"
+        else:
+            collection_type = "linestrings_and_polygons"
+
+        if collection_type == "all_linesstrings":
+            return self.build_v4d_from_linestrings(
+                geo_json_fc=geo_json_fc,
+                start_datetime=start_datetime,
+                end_datetime=end_datetime,
+            )
+        else:
+            return self.build_v4d_from_mixed_polygons_and_linestrings(
+                geo_json_fc=geo_json_fc,
+                start_datetime=start_datetime,
+                end_datetime=end_datetime,
+            )
+
+    def build_v4d_from_mixed_polygons_and_linestrings(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
+        all_v4d = []
+        for feature in geo_json_fc["features"]:
+            geom = feature["geometry"]
+            max_altitude = feature["properties"]["max_altitude"]["meters"]
+            min_altitude = feature["properties"]["min_altitude"]["meters"]
+            shapely_geom = shape(geom)
+            buffered_geom = shapely_geom.buffer(0.0005)
+            self.all_features.append(buffered_geom)
+
+            coordinates = list(zip(*buffered_geom.exterior.coords.xy))
+            polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+
+            volume_3d = Volume3D(
+                outline_polygon=Plgn(vertices=polygon_vertices),
+                altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+                altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+            )
+
+            time_start = feature["properties"].get("start_time", start_datetime)
+            time_end = feature["properties"].get("end_time", end_datetime)
+
+            volume_4d = Volume4D(
+                volume=volume_3d,
+                time_start=Time(format="RFC3339", value=time_start),
+                time_end=Time(format="RFC3339", value=time_end),
+            )
+
+            all_v4d.append(volume_4d)
+
+        return all_v4d
+
+    def build_v4d_from_linestrings(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
+        geo_json_features = geo_json_fc["features"]
+        geo_json_features.sort(key=lambda x: x["properties"].get("id", 0))
+        geo_json_fc["features"] = geo_json_features
+        all_v4d = []
+        _takeoff_start = arrow.get(start_datetime).shift(seconds=1).isoformat()
+        _landing_time = arrow.get(end_datetime).shift(seconds=-1).isoformat()
+
+        first_feature = geo_json_fc["features"][0]
+        last_feature = geo_json_fc["features"][-1]
+        first_coord = first_feature["geometry"]["coordinates"][0]
+        last_coord = last_feature["geometry"]["coordinates"][-1]
+        takeoff_location = LatLngPoint(lat=first_coord[1], lng=first_coord[0])
+        landing_location = LatLngPoint(lat=last_coord[1], lng=last_coord[0])
+
+        max_altitude = first_feature["properties"]["max_altitude"]["meters"]
+        min_altitude = first_feature["properties"]["min_altitude"]["meters"]
+
+        takeoff_volume_4d = self._create_buffered_volume_4d(
+            point=takeoff_location,
+            max_altitude=max_altitude,
+            min_altitude=min_altitude,
+            time_start=start_datetime,
+            time_end=_takeoff_start,
+        )
+        all_v4d.append(takeoff_volume_4d)
+
+        landing_volume_4d = self._create_buffered_volume_4d(
+            point=landing_location,
+            max_altitude=max_altitude,
+            min_altitude=min_altitude,
+            time_start=_landing_time,
+            time_end=end_datetime,
+        )
+        all_v4d.append(landing_volume_4d)
+
+        for feature in geo_json_fc["features"]:
+            max_altitude = feature["properties"]["max_altitude"]["meters"]
+            min_altitude = feature["properties"]["min_altitude"]["meters"]
+
+            broken_down_features = self._break_linestring_to_smaller_pieces(line_feature=feature, piece_length_m=self.default_uav_speed_m_per_s * 3)
+
+            climb_time_s = abs(max_altitude - min_altitude) / self.default_uav_climb_rate_m_per_s
+
+            for idx, piece in enumerate(broken_down_features):
+                piece_start_time = arrow.get(_takeoff_start).shift(seconds=int(idx * 3 + climb_time_s)).isoformat()
+                piece_end_time = arrow.get(piece_start_time).shift(seconds=3).isoformat()
+
+                piece_geom = piece["geometry"]
+                shapely_piece_geom = shape(piece_geom)
+                buffered_shape = shapely_piece_geom.buffer(0.0001)
+
+                coordinates = list(zip(*buffered_shape.exterior.coords.xy))
+                polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+
+                volume_3d = Volume3D(
+                    outline_polygon=Plgn(vertices=polygon_vertices),
+                    altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+                    altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+                )
+
+                volume_4d = Volume4D(
+                    volume=volume_3d,
+                    time_start=Time(format="RFC3339", value=piece_start_time),
+                    time_end=Time(format="RFC3339", value=piece_end_time),
+                )
+                all_v4d.append(volume_4d)
+
+        if all_v4d and all_v4d[-1].time_end.value != _landing_time:
+            logger.warning(f"Piece end time {all_v4d[-1].time_end.value} does not match landing time {_landing_time}")
+            logger.info("The landing time has been changed and is computed using the default UAV speed.")
+
+        return all_v4d
+
+    def _create_buffered_volume_4d(self, point: LatLngPoint, max_altitude: float, min_altitude: float, time_start: str, time_end: str) -> Volume4D:
+        shapely_point = Point(point.lng, point.lat)
+        buffered_geom = shapely_point.buffer(0.0005)
+        coordinates = list(zip(*buffered_geom.exterior.coords.xy))
+        polygon_vertices = [LatLngPoint(lat=coord[1], lng=coord[0]) for coord in coordinates[:-1]]
+
+        volume_3d = Volume3D(
+            outline_polygon=Plgn(vertices=polygon_vertices),
+            altitude_lower=Altitude(value=min_altitude, reference="W84", units="M"),
+            altitude_upper=Altitude(value=max_altitude, reference="W84", units="M"),
+        )
+
+        return Volume4D(
+            volume=volume_3d,
+            time_start=Time(format="RFC3339", value=time_start),
+            time_end=Time(format="RFC3339", value=time_end),
+        )

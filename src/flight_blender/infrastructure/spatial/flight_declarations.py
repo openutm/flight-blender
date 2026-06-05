@@ -9,7 +9,7 @@ from rtree import index
 from rtree.exceptions import RTreeError
 
 from flight_blender.auth.common import get_redis
-from flight_blender.flight_declarations.data_definitions import FlightDeclarationMetadata
+from flight_blender.core.entities.flight_declarations import FlightDeclarationMetadata
 
 
 def _open_or_recover_index(base_path: str) -> index.Index:

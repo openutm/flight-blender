@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pika.exceptions import ChannelClosedByBroker
 
-from flight_blender.notifications.data_definitions import FlightDeclarationUpdateMessage, NotificationLevel
+from flight_blender.core.entities.notifications import FlightDeclarationUpdateMessage, NotificationLevel
 from flight_blender.infrastructure.messaging.notification_helper import (
     InitialNotificationFactory,
     NotificationFactory,

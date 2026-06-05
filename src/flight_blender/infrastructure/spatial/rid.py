@@ -6,7 +6,7 @@ from shapely.geometry import Polygon
 
 from flight_blender.auth.common import get_redis
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-from flight_blender.scd.scd_data_definitions import Altitude, OpInttoCheckDetails, Time
+from flight_blender.core.entities.scd import Altitude, OpInttoCheckDetails, Time
 
 
 class OperationalIntentComparisonFactory:

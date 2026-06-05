@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
-from flight_blender.conformance.conformance_state_helper import ConformanceChecksList
-from flight_blender.conformance.operation_state_helper import (
+from flight_blender.core.operations.conformance import ConformanceChecksList
+from flight_blender.core.operations.conformance import (
     AcceptedState,
     ActivatedState,
     CancelledState,
@@ -29,10 +29,10 @@ from flight_blender.conformance.operation_state_helper import (
     get_status,
     match_state,
 )
-from flight_blender.conformance.operator_conformance_notifications import OperationConformanceNotification
+from flight_blender.core.operations.conformance import OperationConformanceNotification
 from flight_blender.infrastructure.celery.tasks.conformance import check_flight_conformance, check_operation_telemetry_conformance
-from flight_blender.conformance.utils import FlightBlenderConformanceEngine, is_time_between
-from flight_blender.scd.scd_data_definitions import LatLngPoint
+from flight_blender.core.operations.conformance import FlightBlenderConformanceEngine, is_time_between
+from flight_blender.core.entities.scd import LatLngPoint
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +290,7 @@ class TestOperationConformanceNotification:
 
     def test_with_amqp_calls_task(self):
         with patch("flight_blender.config.settings.AMQP_URL", "amqp://localhost"):
-            with patch("flight_blender.conformance.operator_conformance_notifications.send_operational_update_message") as mock_task:
+            with patch("flight_blender.infrastructure.celery.tasks.flight_declarations.send_operational_update_message") as mock_task:
                 mock_delay = MagicMock()
                 mock_task.delay = mock_delay
                 notif = OperationConformanceNotification(flight_declaration_id="fd-amqp")

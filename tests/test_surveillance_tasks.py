@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import arrow
 
 from flight_blender.common.redis_stream_operations import RedisStreamOperations
-from flight_blender.surveillance.metric_calculator import SurveillanceMetricCalculator
+from flight_blender.core.operations.surveillance import SurveillanceMetricCalculator
 from flight_blender.infrastructure.celery.tasks.surveillance import cleanup_old_heartbeat_events, send_and_generate_track_to_consumer, send_heartbeat_to_consumer
 
 # ---------------------------------------------------------------------------
