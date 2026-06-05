@@ -56,10 +56,7 @@ class FlightDeclarationRTreeIndexFactory:
                 end_date=end_date,
             )
 
-    def clear_rtree_index(self) -> None:
-        from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo  # noqa: PLC0415
-
-        all_declarations = SyncDatabaseFacade().get_active_activated_flight_declarations()
+    def clear_rtree_index(self, all_declarations: list[Any]) -> None:
         for declaration in all_declarations:
             declaration_idx_str = str(declaration.id)
             declaration_id = int(hashlib.sha256(declaration_idx_str.encode("utf-8")).hexdigest(), 16) % 10**8

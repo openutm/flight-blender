@@ -324,7 +324,7 @@ async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> Non
             subscription_id = str(subscription_record.subscription_id)
             view = subscription_record.view
             flight_details = subscription_record.flight_details
-            my_dss_subscriber.query_uss_for_rid(
+            await my_dss_subscriber.query_uss_for_rid(
                 flight_details=flight_details,
                 subscription_id=subscription_id,
                 view=view,

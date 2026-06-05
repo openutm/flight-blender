@@ -2,6 +2,7 @@
 ## For more information review: https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/uastech/standards/astm_rid_1.0/remoteid/canonical.yaml
 ## and this diagram https://github.com/interuss/dss/blob/master/assets/generated/rid_display.png
 
+import asyncio
 import hashlib
 import json
 import math
@@ -21,6 +22,7 @@ from flight_blender.auth import dss_auth as dss_auth_helper
 from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
+from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.common import RESPONSE_CONTENT_TYPE
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 from flight_blender.domain_types.rid import UASID, OperatorLocation, UAClassificationEU
@@ -47,7 +49,8 @@ from flight_blender.domain_types.rid_operations import (
     SubscriptionState,
 )
 from flight_blender.domain_types.scd import Volume4D
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 
 geod = Geod(ellps="WGS84")
 
@@ -402,22 +405,27 @@ class RemoteIDOperations:
                 flights_dict = RIDFlightsRecord(service_areas=service_areas, subscription=dss_subscription_details)
 
                 view_hash = int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
-
-                my_database_writer = SyncDatabaseFacade()
-                my_database_writer.create_rid_subscription_record(
-                    subscription_id=subscription_id,
-                    record_id=request_uuid,
-                    view_hash=view_hash,
-                    end_datetime=fifteen_seconds_from_now_isoformat,
-                    is_simulated=is_simulated,
-                    view=view,
-                    flights_dict=json.dumps(
-                        asdict(
-                            flights_dict,
-                            dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)},
-                        )
-                    ),
+                flights_dict_str = json.dumps(
+                    asdict(
+                        flights_dict,
+                        dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)},
+                    )
                 )
+
+                async def _write_subscription() -> None:
+                    async with async_session_scope() as db:
+                        rid_repo = SQLAlchemyRIDRepository(db)
+                        await rid_repo.create_subscription(
+                            subscription_id=subscription_id,
+                            record_id=request_uuid,
+                            view_hash=view_hash,
+                            end_datetime=fifteen_seconds_from_now_isoformat,
+                            is_simulated=is_simulated,
+                            view=view,
+                            flights_dict=flights_dict_str,
+                        )
+
+                asyncio.run(_write_subscription())
 
                 return subscription_response
 
@@ -426,27 +434,12 @@ class RemoteIDOperations:
 
         pass
 
-    def query_uss_for_rid_details(self, rid_flight_details_query_url: str, flight_id: str, headers: dict):
-        """
-        Queries the USS (UAS Service Supplier) for Remote ID (RID) flight details and stores the details in Redis.
-        Args:
-            rid_flight_details_query_url (str): The URL to query the USS for RID flight details.
-            flight_id (str): The unique identifier for the flight.
-            headers (dict): The headers to include in the request to the USS.
-        Returns:
-            None
-        Raises:
-            requests.exceptions.RequestException: If there is an issue with the HTTP request to the USS.
-            KeyError: If the expected keys are not found in the response from the USS.
-        Notes:
-            - The flight details are stored in Redis with a key in the format "flight_details:<flight_id>".
-            - The stored flight details expire after 5 minutes (3000 seconds).
-        """
+    async def query_uss_for_rid_details(self, rid_flight_details_query_url: str, flight_id: str, headers: dict):
+        """Queries USS for RID flight details and persists them."""
+        async with async_session_scope() as db:
+            rid_repo = SQLAlchemyRIDRepository(db)
+            flight_details_exist = await rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
 
-        my_database_reader = SyncDatabaseFacade()
-        my_database_writer = SyncDatabaseFacade()
-
-        flight_details_exist = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)
         if not flight_details_exist:
             # Get and store the flight details
             flight_details_request = requests.get(rid_flight_details_query_url, headers=headers, timeout=30)
@@ -489,12 +482,13 @@ class RemoteIDOperations:
                 uas_id=uas_id,
                 eu_classification=eu_classification,
             )
-            my_database_writer.create_or_update_rid_flight_details(rid_flight_details_payload=flight_detail)
+            async with async_session_scope() as db:
+                rid_repo = SQLAlchemyRIDRepository(db)
+                await rid_repo.create_or_update_flight_detail(rid_flight_details_payload=flight_detail)
 
-    def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
+    async def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
         _flight_details = from_dict(data_class=RIDFlightsRecord, data=json.loads(flight_details))
 
-        my_database_writer = SyncDatabaseFacade()
         authority_credentials = dss_auth_helper.AuthorityCredentialsGetter()
 
         all_flights_url = []
@@ -521,7 +515,7 @@ class RemoteIDOperations:
 
                     rid_flight_details_query_url = f"{_service_area.uss_base_url}/uss/flights/{flight_id}/details"
 
-                    self.query_uss_for_rid_details(
+                    await self.query_uss_for_rid_details(
                         rid_flight_details_query_url=rid_flight_details_query_url,
                         flight_id=flight_id,
                         headers=headers,
@@ -562,7 +556,9 @@ class RemoteIDOperations:
                                 data=single_observation,
                             )
                             logger.debug("Writing flight remote-id data..")
-                            my_database_writer.write_flight_observation(single_observation=single_observation)
+                            async with async_session_scope() as db:
+                                feed_repo = SQLAlchemyFlightFeedRepository(db)
+                                await feed_repo.write_flight_observation(single_observation=single_observation)
 
                         else:
                             logger.error("Error in received flights data: %{url}s ".format(**flight))

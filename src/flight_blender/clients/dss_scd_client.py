@@ -1657,6 +1657,7 @@ class DSSAreaClearHandler:
         self.request_id = request_id
 
     def clear_area_request(self, extent_raw):
+        import asyncio  # noqa: PLC0415
         import arrow  # noqa: PLC0415
 
         from flight_blender.domain_types.common import OPINT_INDEX_BASEPATH  # noqa: PLC0415
@@ -1673,8 +1674,8 @@ class DSSAreaClearHandler:
         my_geo_json_converter.convert_volumes_to_geojson(volumes=[volume4D])
         view_rect_bounds = my_geo_json_converter.get_bounds()
         my_rtree_helper = rtree_helper.OperationalIntentsIndexFactory(index_name=OPINT_INDEX_BASEPATH)
-        my_rtree_helper.generate_active_flights_operational_intents_index()
-        op_ints_exist = my_rtree_helper.check_op_ints_exist()
+        asyncio.run(my_rtree_helper.generate_active_flights_operational_intents_index())
+        op_ints_exist = asyncio.run(my_rtree_helper.check_op_ints_exist())
         all_existing_op_ints_in_area = []
         if op_ints_exist:
             all_existing_op_ints_in_area = my_rtree_helper.check_box_intersection(view_box=view_rect_bounds)
@@ -1720,7 +1721,7 @@ class DSSAreaClearHandler:
                 message="All operational intents in the area cleared successfully",
                 timestamp=arrow.now().isoformat(),
             )
-        my_rtree_helper.clear_rtree_index()
+        asyncio.run(my_rtree_helper.clear_rtree_index())
         return ClearAreaResponse(outcome=clear_area_status)
 
 

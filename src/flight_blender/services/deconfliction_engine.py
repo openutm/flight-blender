@@ -83,7 +83,7 @@ class DefaultDeconflictionEngine:
                         is_approved = False
                         declaration_state = 8
                 finally:
-                    fd_rtree_helper.clear_rtree_index()
+                    fd_rtree_helper.clear_rtree_index(declaration_list)
 
         return DeconflictionResult(
             all_relevant_fences=all_relevant_fences,

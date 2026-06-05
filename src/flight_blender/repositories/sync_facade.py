@@ -35,7 +35,6 @@ from flight_blender.models.geo_fence_orm import GeoFenceORM
 from flight_blender.models.notifications_orm import OperatorRIDNotificationORM
 from flight_blender.models.rid_orm import ISASubscriptionORM, RIDFlightDetailORM
 from flight_blender.models.surveillance_orm import SurveillanceSensorORM
-from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedSyncRepository
 from flight_blender.repositories.flight_feed_repo import _normalize_timestamp as _sa_normalize_timestamp
 
 
@@ -755,29 +754,6 @@ class SyncDatabaseFacade:
                 db.expunge(o)
             return objs
 
-    def create_rid_subscription_record(
-        self,
-        subscription_id: str,
-        record_id: str,
-        view: str,
-        view_hash: int,
-        end_datetime: str,
-        flights_dict: str,
-        is_simulated: bool,
-    ) -> bool:
-        with session_scope() as db:
-            obj = ISASubscriptionORM(
-                id=uuid.UUID(record_id),
-                subscription_id=uuid.UUID(subscription_id),
-                view=view,
-                view_hash=view_hash,
-                end_datetime=end_datetime,
-                flight_details=flights_dict,
-                is_simulated=is_simulated,
-            )
-            db.add(obj)
-            return True
-
     def update_flight_details_in_rid_subscription_record(self, existing_subscription_record, flights_dict: str) -> bool:
         with session_scope() as db:
             result = db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.subscription_id == existing_subscription_record.subscription_id))
@@ -791,36 +767,6 @@ class SyncDatabaseFacade:
         with session_scope() as db:
             db.execute(delete(ISASubscriptionORM).where(ISASubscriptionORM.is_simulated == True))  # noqa: E712
             return True
-
-    # ─── RID flight details ───────────────────────────────────────────────────
-
-    def create_or_update_rid_flight_details(self, rid_flight_details_payload) -> None:
-        with session_scope() as db:
-            detail_id = uuid.UUID(str(rid_flight_details_payload.id))
-            existing = db.get(RIDFlightDetailORM, detail_id)
-            ol = _serialize_dc(rid_flight_details_payload.operator_location)
-            ad = _serialize_dc(rid_flight_details_payload.auth_data)
-            ec = _serialize_dc(rid_flight_details_payload.eu_classification)
-            ui = _serialize_dc(rid_flight_details_payload.uas_id)
-            if existing:
-                existing.operation_description = rid_flight_details_payload.operation_description
-                existing.operator_location = ol
-                existing.operator_id = rid_flight_details_payload.operator_id
-                existing.auth_data = ad
-                existing.uas_id = ui
-                existing.eu_classification = ec
-            else:
-                db.add(
-                    RIDFlightDetailORM(
-                        id=detail_id,
-                        operation_description=rid_flight_details_payload.operation_description,
-                        operator_location=ol,
-                        operator_id=rid_flight_details_payload.operator_id,
-                        auth_data=ad,
-                        uas_id=ui,
-                        eu_classification=ec,
-                    )
-                )
 
     def delete_all_flight_details(self) -> bool:
         with session_scope() as db:
@@ -989,11 +935,6 @@ class SyncDatabaseFacade:
             db.execute(delete(FlightObservationORM))
             return True
 
-    def write_flight_observation(self, single_observation) -> None:
-        with session_scope() as db:
-            repo = SQLAlchemyFlightFeedSyncRepository(db)
-            repo.write_flight_observation(single_observation)
-
     # ─── Notifications ────────────────────────────────────────────────────────
 
     def get_active_user_notifications_between_interval(self, start_time, end_time) -> list:
@@ -1090,19 +1031,6 @@ class SyncDatabaseFacade:
                 )
             )
             return result.scalar_one_or_none() is not None
-
-    def check_active_activated_flights_exist(self) -> bool:
-        with session_scope() as db:
-            result = db.execute(select(FlightDeclarationORM).where(FlightDeclarationORM.state.in_([1, 2])))
-            return result.scalar_one_or_none() is not None
-
-    def get_active_activated_flight_declarations(self) -> list:
-        with session_scope() as db:
-            result = db.execute(select(FlightDeclarationORM).where(FlightDeclarationORM.state.in_([1, 2])))
-            objs = list(result.scalars().all())
-            for o in objs:
-                db.expunge(o)
-            return objs
 
     def update_telemetry_timestamp(self, flight_declaration_id: str) -> bool:
         with session_scope() as db:
