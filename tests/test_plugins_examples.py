@@ -1,5 +1,7 @@
 """Tests for example_plugins: HelloWorldFuser, HelloWorldEngine, HelloWorldVolumeGenerator."""
 
+from unittest.mock import MagicMock
+
 import pytest
 import arrow
 from geojson import Feature, FeatureCollection
@@ -122,7 +124,7 @@ class TestHelloWorldEngine:
             declaration_id=None,
             ussp_network_enabled=False,
         )
-        result = engine.check_deconfliction(req)
+        result = engine.check_deconfliction(req, db=MagicMock())
         assert result.is_approved is True
 
     def test_ussp_network_enabled_sets_not_submitted(self):
@@ -135,7 +137,7 @@ class TestHelloWorldEngine:
             ussp_network_enabled=True,
         )
         engine = HelloWorldEngine()
-        result = engine.check_deconfliction(req)
+        result = engine.check_deconfliction(req, db=MagicMock())
         # With USSP network enabled and no conflict, state should be NOT_SUBMITTED (0)
         assert result.is_approved is True
         assert result.declaration_state == 0

@@ -6,13 +6,13 @@ import uuid
 from loguru import logger
 
 from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
-from flight_blender.db.session import async_session_scope
+from flight_blender.db.session import async_task_session
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
 async def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> None:
     my_scd_dss_helper = SCDOperations()
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         fd_repo = SQLAlchemyFlightDeclarationRepository(db)
         flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
         if not flight_declaration:
@@ -39,7 +39,7 @@ async def update_operational_intent_to_activated(flight_declaration_id: str, dry
     if dry_run:
         return
     my_operational_intents_helper = OperationalIntentReferenceHelper()
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         fd_repo = SQLAlchemyFlightDeclarationRepository(db)
         flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
         if not flight_declaration:

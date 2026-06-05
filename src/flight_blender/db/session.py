@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator, Generator, Iterator
+from collections.abc import AsyncGenerator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy import create_engine
@@ -44,12 +44,6 @@ def session_scope() -> Iterator[Session]:
         db.close()
 
 
-def get_db() -> Generator[Session, None, None]:
-    """Sync session for Celery tasks."""
-    with session_scope() as db:
-        yield db
-
-
 async def async_get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as db:
         try:
@@ -61,8 +55,8 @@ async def async_get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 @asynccontextmanager
-async def async_session_scope() -> AsyncGenerator[AsyncSession, None]:
-    """Async session scope for Celery tasks via asyncio.run(): commit on success, rollback on error."""
+async def async_task_session() -> AsyncGenerator[AsyncSession, None]:
+    """Async session for Celery tasks / non-DI contexts. Commit on success, rollback on error."""
     async with _TaskAsyncSessionLocal() as db:
         try:
             yield db

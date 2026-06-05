@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import json
 import uuid
 from dataclasses import asdict
@@ -19,6 +18,7 @@ from shapely.ops import unary_union
 
 from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
 from flight_blender.config import settings
+from flight_blender.db.session import session_scope
 from flight_blender.domain_types.flight_declarations import (
     DEFAULT_UAV_CLIMB_RATE_M_PER_S,
     DEFAULT_UAV_DESCENT_RATE_M_PER_S,
@@ -452,7 +452,8 @@ def _run_deconfliction_sa(
             logger.warning("No deconfliction engine configured; skipping deconfliction for %s", fd.id)
             continue
         engine = engine_cls()
-        result = engine.check_deconfliction(request)
+        with session_scope() as db:
+            result = engine.check_deconfliction(request, db)
         results[str(fd.id)] = result
     return results
 

@@ -9,7 +9,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.config import settings
-from flight_blender.db.session import async_session_scope
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.conformance import ConformanceRecord, ConformanceSummary
 from flight_blender.domain_types.scd import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
 from flight_blender.repositories.conformance_repo import SQLAlchemyConformanceRepository
@@ -545,7 +545,7 @@ async def _process_telemetry_conformance_db_work(
     event,
     new_state: int | None,
 ) -> None:
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         fd_repo = SQLAlchemyFlightDeclarationRepository(db)
         conformance_repo = SQLAlchemyConformanceRepository(db)
         fd = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
@@ -581,7 +581,7 @@ async def _process_opint_reference_conformance_db_work(
     event,
     new_state: int | None,
 ) -> None:
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         fd_repo = SQLAlchemyFlightDeclarationRepository(db)
         conformance_repo = SQLAlchemyConformanceRepository(db)
         fd = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
@@ -764,26 +764,17 @@ def is_time_between(begin_time, end_time, check_time=None):
 
 
 class FlightBlenderConformanceEngine:
-    def __init__(self, db: AsyncSession | None = None):
-        self.db: Optional[AsyncSession] = db
+    def __init__(self, db: AsyncSession):
+        self.db: AsyncSession = db
 
     async def _get_flight_declaration(self, flight_declaration_id: str):
-        if self.db is not None:
-            return await SQLAlchemyFlightDeclarationRepository(self.db).get_by_id(uuid.UUID(flight_declaration_id))
-        async with async_session_scope() as db:
-            return await SQLAlchemyFlightDeclarationRepository(db).get_by_id(uuid.UUID(flight_declaration_id))
+        return await SQLAlchemyFlightDeclarationRepository(self.db).get_by_id(uuid.UUID(flight_declaration_id))
 
     async def _get_opint_reference(self, flight_declaration_id: str):
-        if self.db is not None:
-            return await SQLAlchemyFlightDeclarationRepository(self.db).get_opint_reference_by_declaration_id(uuid.UUID(flight_declaration_id))
-        async with async_session_scope() as db:
-            return await SQLAlchemyFlightDeclarationRepository(db).get_opint_reference_by_declaration_id(uuid.UUID(flight_declaration_id))
+        return await SQLAlchemyFlightDeclarationRepository(self.db).get_opint_reference_by_declaration_id(uuid.UUID(flight_declaration_id))
 
     async def _get_active_geofences(self):
-        if self.db is not None:
-            return await SQLAlchemyConformanceRepository(self.db).get_active_geofences()
-        async with async_session_scope() as db:
-            return await SQLAlchemyConformanceRepository(db).get_active_geofences()
+        return await SQLAlchemyConformanceRepository(self.db).get_active_geofences()
 
     async def is_operation_conformant_via_telemetry(
         self,

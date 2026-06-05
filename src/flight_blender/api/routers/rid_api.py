@@ -60,6 +60,8 @@ async def get_rid_capabilities(_auth: Any = Depends(require_scopes([FLIGHTBLENDE
 @router.put("/create_dss_subscription")
 async def create_dss_subscription(
     view: str | None = None,
+    repo: SQLAlchemyRIDRepository = Depends(_rid_ops),
+    feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
     try:
@@ -74,7 +76,7 @@ async def create_dss_subscription(
     request_id = str(uuid.uuid4())
 
     subscription_r = await asyncio.to_thread(
-        RemoteIDOperations().create_dss_subscription,
+        RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).create_dss_subscription,
         vertex_list,
         view or "",
         request_id,
@@ -100,6 +102,7 @@ async def create_dss_subscription(
 async def get_rid_data(
     subscription_id: uuid.UUID,
     repo: SQLAlchemyRIDRepository = Depends(_rid_ops),
+    feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
     sub_id_str = str(subscription_id)
@@ -109,7 +112,9 @@ async def get_rid_data(
     if not record or not record.flight_details or not json.loads(record.flight_details):
         return JSONResponse({}, status_code=404)
 
-    observations = await ObservationReadOperations(redis=get_redis()).get_temporal_flight_observations_by_session(session_id=sub_id_str)
+    observations = await ObservationReadOperations(repo=feed_repo, redis=get_redis()).get_temporal_flight_observations_by_session(
+        session_id=sub_id_str
+    )
     return JSONResponse(observations or {}, status_code=200 if observations else 404)
 
 
@@ -203,7 +208,7 @@ async def get_display_data(
         vertex_list = view_port_ops.build_vertex_list_from_box(box)
         subscription_end_time = arrow.utcnow().shift(seconds=subscription_duration_seconds).isoformat()
         await asyncio.to_thread(
-            dss_rid_helper.RemoteIDOperations().create_dss_subscription,
+            dss_rid_helper.RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).create_dss_subscription,
             vertex_list,
             view or "",
             request_id,
@@ -220,7 +225,9 @@ async def get_display_data(
 
     clusters = []
     if should_cluster:
-        clusters = dss_rid_helper.RemoteIDOperations().generate_cluster_details(rid_flights=rid_flights, view_box=box)
+        clusters = dss_rid_helper.RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).generate_cluster_details(
+            rid_flights=rid_flights, view_box=box
+        )
         rid_flights = []
 
     response = view_port_ops.make_json_compatible(RIDDisplayDataResponse(flights=rid_flights, clusters=clusters))

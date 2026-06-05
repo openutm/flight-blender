@@ -22,7 +22,7 @@ from flight_blender.auth import dss_auth as dss_auth_helper
 from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
-from flight_blender.db.session import async_session_scope
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import RESPONSE_CONTENT_TYPE
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 from flight_blender.domain_types.rid import UASID, OperatorLocation, UAClassificationEU
@@ -56,9 +56,15 @@ geod = Geod(ellps="WGS84")
 
 
 class RemoteIDOperations:
-    def __init__(self):
+    def __init__(
+        self,
+        rid_repo: SQLAlchemyRIDRepository | None = None,
+        feed_repo: SQLAlchemyFlightFeedRepository | None = None,
+    ):
         self.dss_base_url = settings.DSS_BASE_URL
         self.r = get_redis()
+        self.rid_repo = rid_repo
+        self.feed_repo = feed_repo
 
     def compute_polygon_area(self, polygon: Polygon):
         poly_area_m2, poly_perimeter = geod.geometry_area_perimeter(polygon)
@@ -413,7 +419,7 @@ class RemoteIDOperations:
                 )
 
                 async def _write_subscription() -> None:
-                    async with async_session_scope() as db:
+                    async with async_task_session() as db:
                         rid_repo = SQLAlchemyRIDRepository(db)
                         await rid_repo.create_subscription(
                             subscription_id=subscription_id,
@@ -436,9 +442,7 @@ class RemoteIDOperations:
 
     async def query_uss_for_rid_details(self, rid_flight_details_query_url: str, flight_id: str, headers: dict):
         """Queries USS for RID flight details and persists them."""
-        async with async_session_scope() as db:
-            rid_repo = SQLAlchemyRIDRepository(db)
-            flight_details_exist = await rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
+        flight_details_exist = await self.rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
 
         if not flight_details_exist:
             # Get and store the flight details
@@ -482,9 +486,7 @@ class RemoteIDOperations:
                 uas_id=uas_id,
                 eu_classification=eu_classification,
             )
-            async with async_session_scope() as db:
-                rid_repo = SQLAlchemyRIDRepository(db)
-                await rid_repo.create_or_update_flight_detail(rid_flight_details_payload=flight_detail)
+            await self.rid_repo.create_or_update_flight_detail(rid_flight_details_payload=flight_detail)
 
     async def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
         _flight_details = from_dict(data_class=RIDFlightsRecord, data=json.loads(flight_details))
@@ -556,9 +558,7 @@ class RemoteIDOperations:
                                 data=single_observation,
                             )
                             logger.debug("Writing flight remote-id data..")
-                            async with async_session_scope() as db:
-                                feed_repo = SQLAlchemyFlightFeedRepository(db)
-                                await feed_repo.write_flight_observation(single_observation=single_observation)
+                            await self.feed_repo.write_flight_observation(single_observation=single_observation)
 
                         else:
                             logger.error("Error in received flights data: %{url}s ".format(**flight))

@@ -3,6 +3,7 @@ import json
 import uuid
 from dataclasses import asdict
 from enum import Enum
+from typing import Optional
 
 import arrow
 from dacite import Config, from_dict
@@ -10,7 +11,6 @@ from loguru import logger
 
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.clients.dss_scd_client import VolumesConverter
-from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.constraint import PutConstraintDetailsParameters
 from flight_blender.domain_types.rid import UASID, OperatorLocation, UAClassificationEU
 from flight_blender.domain_types.scd import CompositeOperationalIntentPayload
@@ -40,89 +40,86 @@ from flight_blender.domain_types.uss import (
 )
 from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.services import flight_feed_svc as flight_stream_helper
 from flight_blender.services import rid_svc as view_port_ops
 from flight_blender.utils.json_codecs import EnhancedJSONEncoder
 
 
-def peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
-    try:
-        error_report = from_dict(data_class=ErrorReport, data=request_data, config=Config(cast=[Enum]))
-    except Exception as e:
-        return {"message": str(e)}, 500
-    report_id = str(uuid.uuid4())
-    error_report.report_id = report_id
-    return json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)), 201
+class USSService:
+    def __init__(
+        self,
+        fd_repo: SQLAlchemyFlightDeclarationRepository,
+        constraint_repo: SQLAlchemyConstraintRepository,
+        rid_repo: Optional[SQLAlchemyRIDRepository] = None,
+    ) -> None:
+        self.fd_repo = fd_repo
+        self.constraint_repo = constraint_repo
+        self.rid_repo = rid_repo
 
-
-async def uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
-    async with async_session_scope() as db:
-        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-        flight_operational_intent_reference = await fd_repo.get_opint_reference_by_id(uuid.UUID(opint_id))
+    async def uss_operational_intent_details(self, opint_id: str) -> tuple[dict, int]:
+        flight_operational_intent_reference = await self.fd_repo.get_opint_reference_by_id(uuid.UUID(opint_id))
         if not flight_operational_intent_reference:
             not_found = OperationalIntentNotFoundResponse(message="Requested Operational intent with id %s not found" % opint_id)
             return json.loads(json.dumps(not_found, cls=EnhancedJSONEncoder)), 404
 
         operational_intent_id = flight_operational_intent_reference.declaration_id
-        stored_details = await fd_repo.get_composite_opint_by_declaration_id(operational_intent_id)
-    details_full = stored_details.operational_intent_details
-    reference_full = stored_details.operational_intent_reference
+        stored_details = await self.fd_repo.get_composite_opint_by_declaration_id(operational_intent_id)
+        details_full = stored_details.operational_intent_details
+        reference_full = stored_details.operational_intent_reference
 
-    stored_volumes = json.loads(details_full.volumes)
-    for v in stored_volumes:
-        if "outline_circle" in v["volume"].keys():
-            if not v["volume"]["outline_circle"]:
-                v["volume"].pop("outline_circle")
+        stored_volumes = json.loads(details_full.volumes)
+        for v in stored_volumes:
+            if "outline_circle" in v["volume"].keys():
+                if not v["volume"]["outline_circle"]:
+                    v["volume"].pop("outline_circle")
 
-    stored_off_nominal_volumes = json.loads(details_full.off_nominal_volumes)
-    for v in stored_off_nominal_volumes:
-        if "outline_circle" in v["volume"].keys():
-            if not v["volume"]["outline_circle"]:
-                v["volume"].pop("outline_circle")
+        stored_off_nominal_volumes = json.loads(details_full.off_nominal_volumes)
+        for v in stored_off_nominal_volumes:
+            if "outline_circle" in v["volume"].keys():
+                if not v["volume"]["outline_circle"]:
+                    v["volume"].pop("outline_circle")
 
-    reference = OperationalIntentReferenceDSSResponse(
-        id=str(reference_full.id),
-        manager=reference_full.manager,
-        uss_availability=reference_full.uss_availability,
-        version=int(reference_full.version),
-        state=reference_full.state,
-        ovn=reference_full.ovn,
-        time_start=Time(format="RFC3339", value=reference_full.time_start.isoformat()),
-        time_end=Time(format="RFC3339", value=reference_full.time_end.isoformat()),
-        uss_base_url=reference_full.uss_base_url,
-        subscription_id=reference_full.subscription_id,
-    )
-    details = OperationalIntentUSSDetails(
-        volumes=stored_volumes,
-        priority=details_full.priority,
-        off_nominal_volumes=stored_off_nominal_volumes,
-    )
-    operational_intent = OperationalIntentDetailsUSSResponse(reference=reference, details=details)
-    response = OperationalIntentDetails(operational_intent=operational_intent)
-    return json.loads(json.dumps(response, cls=EnhancedJSONEncoder)), 200
+        reference = OperationalIntentReferenceDSSResponse(
+            id=str(reference_full.id),
+            manager=reference_full.manager,
+            uss_availability=reference_full.uss_availability,
+            version=int(reference_full.version),
+            state=reference_full.state,
+            ovn=reference_full.ovn,
+            time_start=Time(format="RFC3339", value=reference_full.time_start.isoformat()),
+            time_end=Time(format="RFC3339", value=reference_full.time_end.isoformat()),
+            uss_base_url=reference_full.uss_base_url,
+            subscription_id=reference_full.subscription_id,
+        )
+        details = OperationalIntentUSSDetails(
+            volumes=stored_volumes,
+            priority=details_full.priority,
+            off_nominal_volumes=stored_off_nominal_volumes,
+        )
+        operational_intent = OperationalIntentDetailsUSSResponse(reference=reference, details=details)
+        response = OperationalIntentDetails(operational_intent=operational_intent)
+        return json.loads(json.dumps(response, cls=EnhancedJSONEncoder)), 200
 
+    async def uss_update_opint_details(self, request_data: dict) -> tuple[dict, int]:
+        my_geo_json_converter = VolumesConverter()
 
-async def uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
-    my_geo_json_converter = VolumesConverter()
+        try:
+            incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=request_data)
+        except Exception as e:
+            return {"message": str(e)}, 500
+        operation_id_str = incoming_update_payload.operational_intent_id
 
-    try:
-        incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=request_data)
-    except Exception as e:
-        return {"message": str(e)}, 500
-    operation_id_str = incoming_update_payload.operational_intent_id
+        if incoming_update_payload.operational_intent:
+            updated_operational_intent_reference = incoming_update_payload.operational_intent.reference
+            update_operational_intent_details = incoming_update_payload.operational_intent.details
 
-    if incoming_update_payload.operational_intent:
-        updated_operational_intent_reference = incoming_update_payload.operational_intent.reference
-        update_operational_intent_details = incoming_update_payload.operational_intent.details
-
-        async with async_session_scope() as db:
-            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            await fd_repo.create_or_update_peer_opint_detail(
+            await self.fd_repo.create_or_update_peer_opint_detail(
                 peer_id=uuid.UUID(operation_id_str),
                 payload=update_operational_intent_details,
             )
-            await fd_repo.create_or_update_peer_opint_reference(
+            await self.fd_repo.create_or_update_peer_opint_reference(
                 peer_id=uuid.UUID(operation_id_str),
                 payload=updated_operational_intent_reference,
             )
@@ -150,49 +147,109 @@ async def uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
                     operational_intent_reference_id=operation_id_str,
                     operational_intent_details_id=operation_id_str,
                 )
-                await fd_repo.create_or_update_peer_composite_opint(
+                await self.fd_repo.create_or_update_peer_composite_opint(
                     operation_id=uuid.UUID(operation_id_str),
                     payload=operational_intent_full_details,
                 )
 
-    return {}, 204
+        return {}, 204
 
+    async def uss_constraint_details(self, constraint_id: str) -> tuple[dict, int]:
+        constraint_detail = await self.constraint_repo.get_constraint_detail_by_id(uuid.UUID(constraint_id))
+        if constraint_detail is not None:
+            return json.loads(json.dumps(constraint_detail, cls=EnhancedJSONEncoder)), 200
+        else:
+            not_found = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % constraint_id)
+            return json.loads(json.dumps(not_found, cls=EnhancedJSONEncoder)), 404
 
-async def uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
-    async with async_session_scope() as db:
-        constraint_repo = SQLAlchemyConstraintRepository(db)
-        constraint_detail = await constraint_repo.get_constraint_detail_by_id(uuid.UUID(constraint_id))
-    if constraint_detail is not None:
-        return json.loads(json.dumps(constraint_detail, cls=EnhancedJSONEncoder)), 200
-    else:
-        not_found = GenericErrorResponseMessage(message="Requested Constraint with id %s not found" % constraint_id)
-        return json.loads(json.dumps(not_found, cls=EnhancedJSONEncoder)), 404
+    async def uss_update_constraint_details(self, request_data: dict) -> int:
+        from dataclasses import asdict as _asdict  # noqa: PLC0415
 
+        constraint_update_detail = from_dict(data_class=PutConstraintDetailsParameters, data=request_data)
+        constraint_id = constraint_update_detail.constraint_id
 
-async def uss_update_constraint_details(request_data: dict) -> int:
-    from dataclasses import asdict as _asdict  # noqa: PLC0415
-
-    constraint_update_detail = from_dict(data_class=PutConstraintDetailsParameters, data=request_data)
-    constraint_id = constraint_update_detail.constraint_id
-
-    async with async_session_scope() as db:
-        constraint_repo = SQLAlchemyConstraintRepository(db)
-        constraint_detail_exists = await constraint_repo.get_constraint_detail_by_id(uuid.UUID(constraint_id)) is not None
+        constraint_detail_exists = await self.constraint_repo.get_constraint_detail_by_id(uuid.UUID(constraint_id)) is not None
         if constraint_detail_exists and constraint_update_detail.constraint:
             details_json = json.dumps(_asdict(constraint_update_detail.constraint))
-            await constraint_repo.write_constraint_details(
+            await self.constraint_repo.write_constraint_details(
                 constraint_id=uuid.UUID(constraint_id),
                 details_json=details_json,
             )
 
-        constraint_reference_exists = await constraint_repo.get_constraint_reference_by_id(uuid.UUID(constraint_id)) is not None
+        constraint_reference_exists = await self.constraint_repo.get_constraint_reference_by_id(uuid.UUID(constraint_id)) is not None
         if constraint_reference_exists and constraint_update_detail.constraint:
-            await constraint_repo.write_constraint_reference_details(details_json=json.dumps(_asdict(constraint_update_detail.constraint)))
+            await self.constraint_repo.write_constraint_reference_details(details_json=json.dumps(_asdict(constraint_update_detail.constraint)))
 
-    return 204
+        return 204
+
+    async def get_uss_flight_details(self, flight_id: str) -> tuple[dict, int]:
+        if self.rid_repo is None:
+            fd = FlightDetailsNotFoundMessage(message="RID repository not configured")
+            return json.loads(json.dumps(asdict(fd))), 500
+
+        flight_details_exists = await self.rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
+        if not flight_details_exists:
+            fd = FlightDetailsNotFoundMessage(message="The requested flight could not be found")
+            return json.loads(json.dumps(asdict(fd))), 404
+
+        flight_details = await self.rid_repo.get_flight_detail_by_id(flight_detail_id=flight_id)
+
+        _operator_location = json.loads(flight_details.operator_location)
+        operator_location = from_dict(
+            data_class=OperatorLocation,
+            data=_operator_location,
+            config=Config(cast=[Enum]),
+        )
+
+        eu_classification = None
+        _eu_classification = json.loads(flight_details.eu_classification)
+        if _eu_classification:
+            eu_classification = UAClassificationEU(
+                category=_eu_classification["category"],
+                class_=_eu_classification["class"],
+            )
+        uas_id = None
+        _uas_id = json.loads(flight_details.uas_id)
+        if _uas_id:
+            uas_id = UASID(
+                specific_session_id=_uas_id["specific_session_id"],
+                serial_number=_uas_id["serial_number"],
+                registration_id=_uas_id["registration_id"],
+                utm_id=_uas_id["utm_id"],
+            )
+        auth_data = None
+        _auth_data = json.loads(flight_details.auth_data)
+        if _auth_data:
+            auth_data = RIDAuthData(
+                format=int(_auth_data["format"]),
+                data=_auth_data["data"],
+            )
+        f_detail = RIDFlightDetails(
+            id=str(flight_details.id),
+            operator_id=flight_details.operator_id,
+            operator_location=operator_location,
+            operation_description=flight_details.operation_description,
+            auth_data=auth_data,
+            uas_id=uas_id,
+            eu_classification=eu_classification,
+        )
+        flight_details_full = OperatorDetailsSuccessResponse(details=f_detail)
+        return json.loads(
+            json.dumps(asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}), cls=EnhancedJSONEncoder)
+        ), 200
 
 
-async def get_uss_flights(view: str) -> tuple[dict, int]:
+def peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
+    try:
+        error_report = from_dict(data_class=ErrorReport, data=request_data, config=Config(cast=[Enum]))
+    except Exception as e:
+        return {"message": str(e)}, 500
+    report_id = str(uuid.uuid4())
+    error_report.report_id = report_id
+    return json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)), 201
+
+
+async def get_uss_flights(view: str, repo: SQLAlchemyFlightFeedRepository) -> tuple[dict, int]:
     try:
         view_port = [float(i) for i in view.split(",")]
     except Exception:
@@ -209,7 +266,7 @@ async def get_uss_flights(view: str) -> tuple[dict, int]:
 
     await asyncio.sleep(0.5)
 
-    obs_helper = flight_stream_helper.ObservationReadOperations(redis=get_redis(), view_port_box=view_box)
+    obs_helper = flight_stream_helper.ObservationReadOperations(repo=repo, redis=get_redis(), view_port_box=view_box)
     all_flights_telemetry_data = await obs_helper.get_closest_observation_for_now(now=arrow.now())
 
     now = arrow.now().isoformat()
@@ -265,61 +322,6 @@ async def get_uss_flights(view: str) -> tuple[dict, int]:
         rid_response = GetFlightsResponse(timestamp=RIDTime(value=now, format=RIDFormat.RFC3339), flights=[])
 
     return json.loads(json.dumps(asdict(rid_response))), 200
-
-
-async def get_uss_flight_details(flight_id: str) -> tuple[dict, int]:
-    async with async_session_scope() as db:
-        rid_repo = SQLAlchemyRIDRepository(db)
-        flight_details_exists = await rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
-        if not flight_details_exists:
-            fd = FlightDetailsNotFoundMessage(message="The requested flight could not be found")
-            return json.loads(json.dumps(asdict(fd))), 404
-
-        flight_details = await rid_repo.get_flight_detail_by_id(flight_detail_id=flight_id)
-
-        _operator_location = json.loads(flight_details.operator_location)
-        operator_location = from_dict(
-            data_class=OperatorLocation,
-            data=_operator_location,
-            config=Config(cast=[Enum]),
-        )
-
-        eu_classification = None
-        _eu_classification = json.loads(flight_details.eu_classification)
-        if _eu_classification:
-            eu_classification = UAClassificationEU(
-                category=_eu_classification["category"],
-                class_=_eu_classification["class"],
-            )
-        uas_id = None
-        _uas_id = json.loads(flight_details.uas_id)
-        if _uas_id:
-            uas_id = UASID(
-                specific_session_id=_uas_id["specific_session_id"],
-                serial_number=_uas_id["serial_number"],
-                registration_id=_uas_id["registration_id"],
-                utm_id=_uas_id["utm_id"],
-            )
-        auth_data = None
-        _auth_data = json.loads(flight_details.auth_data)
-        if _auth_data:
-            auth_data = RIDAuthData(
-                format=int(_auth_data["format"]),
-                data=_auth_data["data"],
-            )
-        f_detail = RIDFlightDetails(
-            id=str(flight_details.id),
-            operator_id=flight_details.operator_id,
-            operator_location=operator_location,
-            operation_description=flight_details.operation_description,
-            auth_data=auth_data,
-            uas_id=uas_id,
-            eu_classification=eu_classification,
-        )
-    flight_details_full = OperatorDetailsSuccessResponse(details=f_detail)
-    return json.loads(
-        json.dumps(asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}), cls=EnhancedJSONEncoder)
-    ), 200
 
 
 def uss_telemetry(opint_id: str) -> dict:

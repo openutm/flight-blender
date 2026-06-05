@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 import hashlib
+from typing import TYPE_CHECKING
 
 import arrow
 from rtree import index
 from shapely.geometry import Polygon
 
 from flight_blender.auth.token_cache import get_redis
-from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.scd import Altitude, OpInttoCheckDetails, Time
-from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+
+if TYPE_CHECKING:
+    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
 class OperationalIntentComparisonFactory:
@@ -26,9 +30,10 @@ class OperationalIntentComparisonFactory:
 
 
 class OperationalIntentsIndexFactory:
-    def __init__(self, index_name: str):
+    def __init__(self, index_name: str, fd_repo: "SQLAlchemyFlightDeclarationRepository"):
         self.idx = index.Index(index_name)
         self.r = get_redis()
+        self.fd_repo = fd_repo
 
     def add_box_to_index(
         self,
@@ -54,15 +59,11 @@ class OperationalIntentsIndexFactory:
 
     async def check_op_ints_exist(self) -> bool:
         """This method checks if any active/activated operational intents exist."""
-        async with async_session_scope() as db:
-            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            return bool(await fd_repo.list(states=[1, 2]))
+        return bool(await self.fd_repo.list(states=[1, 2]))
 
     async def generate_active_flights_operational_intents_index(self) -> None:
         """This method generates a rTree index of currently active operational intents."""
-        async with async_session_scope() as db:
-            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            flight_declarations = await fd_repo.list(states=[1, 2])
+        flight_declarations = await self.fd_repo.list(states=[1, 2])
 
         for flight_declaration in flight_declarations:
             flight_id_str = str(flight_declaration.id)
@@ -84,9 +85,7 @@ class OperationalIntentsIndexFactory:
 
     async def clear_rtree_index(self) -> None:
         """Method to delete all boxes from the index."""
-        async with async_session_scope() as db:
-            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            flight_declarations = await fd_repo.list(states=[1, 2])
+        flight_declarations = await self.fd_repo.list(states=[1, 2])
 
         for flight_declaration in flight_declarations:
             flight_id_str = str(flight_declaration.id)

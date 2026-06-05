@@ -11,7 +11,7 @@ from shapely.ops import unary_union
 
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
-from flight_blender.db.session import async_session_scope
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus
 from flight_blender.models.geo_fence_orm import GeoFenceORM
 from flight_blender.services.geo_fence_svc import GeoZoneParser
@@ -80,7 +80,7 @@ async def _async_write_geo_zone(geo_zone: str, test_harness_datasource: str = "0
         end_time = start_time.shift(years=1)
         upper_limit = geo_zone_feature["upperLimit"] if "upperLimit" in geo_zone_feature else 300
         lower_limit = geo_zone_feature["lowerLimit"] if "lowerLimit" in geo_zone_feature else 10
-        async with async_session_scope() as db:
+        async with async_task_session() as db:
             db.add(
                 GeoFenceORM(
                     geozone=json.dumps(geo_zone_feature),

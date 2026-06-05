@@ -10,7 +10,7 @@ from flight_blender.celery import app
 from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator
 from flight_blender.clients.notification_client import NotificationFactory
 from flight_blender.config import settings
-from flight_blender.db.session import async_session_scope
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import OPERATION_STATES
 from flight_blender.domain_types.notifications import FlightDeclarationUpdateMessage
 from flight_blender.domain_types.scd import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
@@ -97,7 +97,7 @@ async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) ->
             level="info",
         )
 
-        async with async_session_scope() as db:
+        async with async_task_session() as db:
             fd_repo = SQLAlchemyFlightDeclarationRepository(db)
             flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
 

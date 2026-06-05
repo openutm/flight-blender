@@ -225,7 +225,7 @@ def _stub_conformance_deps():
 class TestFlightBlenderConformanceEngineC2C3:
     @pytest.mark.asyncio
     async def test_c2_no_flight_declaration(self):
-        engine = FlightBlenderConformanceEngine()
+        engine = FlightBlenderConformanceEngine(db=MagicMock())
         # Non-existent flight declaration ID
         with (
             patch.object(FlightBlenderConformanceEngine, "_get_flight_declaration", new_callable=AsyncMock, return_value=None),
@@ -244,7 +244,7 @@ class TestFlightBlenderConformanceEngineC2C3:
 class TestCheckFlightOperationalIntentReferenceConformance:
     @pytest.mark.asyncio
     async def test_nonexistent_declaration_returns_c11(self):
-        engine = FlightBlenderConformanceEngine()
+        engine = FlightBlenderConformanceEngine(db=MagicMock())
         with (
             patch.object(FlightBlenderConformanceEngine, "_get_flight_declaration", new_callable=AsyncMock, return_value=None),
             patch.object(FlightBlenderConformanceEngine, "_get_opint_reference", new_callable=AsyncMock, return_value=None),

@@ -16,7 +16,6 @@ from shapely.geometry import Point
 from shapely.geometry import box as shapely_box
 
 from flight_blender.config import settings
-from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.flight_feed import (
     FlightObservationSchema,
     FlightObservationsProcessingResponse,
@@ -364,7 +363,8 @@ def batcher(iterable, n):
 
 
 class ObservationReadOperations:
-    def __init__(self, redis: Any, view_port_box=None):
+    def __init__(self, repo: SQLAlchemyFlightFeedRepository, redis: Any, view_port_box=None):
+        self.repo = repo
         self.view_port_box: shapely_box = view_port_box
         self.redis: Any = redis
 
@@ -380,9 +380,7 @@ class ObservationReadOperations:
         self.redis.set(key, arrow.now().isoformat())
         self.redis.expire(key, 300)
         pending_messages = []
-        async with async_session_scope() as db:
-            feed_repo = SQLAlchemyFlightFeedRepository(db)
-            rows = await feed_repo.get_recent_flight_observations(after_datetime=after_datetime)
+        rows = await self.repo.get_recent_flight_observations(after_datetime=after_datetime)
         logger.info("Retrieved all flight observations..")
         for row in rows:
             observation = FlightObservationSchema(
@@ -407,9 +405,7 @@ class ObservationReadOperations:
 
     async def get_closest_observation_for_now(self, now: arrow.arrow.Arrow):
         all_observations = []
-        async with async_session_scope() as db:
-            feed_repo = SQLAlchemyFlightFeedRepository(db)
-            closest_observations = await feed_repo.get_closest_flight_observation_for_now(now=now)
+        closest_observations = await self.repo.get_closest_flight_observation_for_now(now=now)
         logger.info("Retrieved closest_observations..")
         for closest_observation in closest_observations:
             single_observation = FlightObservationSchema(
@@ -434,9 +430,7 @@ class ObservationReadOperations:
 
     async def get_all_flight_observations(self) -> list[FlightObservationSchema]:
         pending_messages = []
-        async with async_session_scope() as db:
-            feed_repo = SQLAlchemyFlightFeedRepository(db)
-            all_flight_observations = await feed_repo.get_flight_observation_dicts()
+        all_flight_observations = await self.repo.get_flight_observation_dicts()
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],
@@ -459,9 +453,7 @@ class ObservationReadOperations:
         return pending_messages
 
     async def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
-        async with async_session_scope() as db:
-            feed_repo = SQLAlchemyFlightFeedRepository(db)
-            latest_observation = await feed_repo.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
+        latest_observation = await self.repo.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
         if latest_observation:
             return FlightObservationSchema(
                 id=str(latest_observation.id),
@@ -490,11 +482,9 @@ class ObservationReadOperations:
         self.redis.set(key, arrow.now().isoformat())
         self.redis.expire(key, 300)
         pending_messages = []
-        async with async_session_scope() as db:
-            feed_repo = SQLAlchemyFlightFeedRepository(db)
-            all_flight_observations = await feed_repo.get_temporal_flight_observations_by_session_dicts(
-                session_id=session_id, after_datetime=after_datetime
-            )
+        all_flight_observations = await self.repo.get_temporal_flight_observations_by_session_dicts(
+            session_id=session_id, after_datetime=after_datetime
+        )
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],

@@ -167,24 +167,24 @@ class ExampleDeconflictionEngineTests(TestCase):
 
     def test_example_engine_returns_deconfliction_result(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request())
+        result = engine.check_deconfliction(self._make_request(), db=None)
         self.assertIsInstance(result, DeconflictionResult)
 
     def test_example_engine_always_approves(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request())
+        result = engine.check_deconfliction(self._make_request(), db=None)
         self.assertTrue(result.is_approved)
         self.assertEqual(result.all_relevant_fences, [])
         self.assertEqual(result.all_relevant_declarations, [])
 
     def test_example_engine_state_with_ussp_disabled(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request(ussp_network_enabled=0))
+        result = engine.check_deconfliction(self._make_request(ussp_network_enabled=0), db=None)
         self.assertEqual(result.declaration_state, 1)
 
     def test_example_engine_state_with_ussp_enabled(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request(ussp_network_enabled=1))
+        result = engine.check_deconfliction(self._make_request(ussp_network_enabled=1), db=None)
         self.assertEqual(result.declaration_state, 0)
 
     def test_example_engine_receives_geojson(self):
@@ -193,14 +193,14 @@ class ExampleDeconflictionEngineTests(TestCase):
         engine = AltitudeAwareDeconflictionEngine()
         req = self._make_request(flight_declaration_geo_json=geo)
         # The example engine doesn't use it, but it shouldn't raise
-        result = engine.check_deconfliction(req)
+        result = engine.check_deconfliction(req, db=None)
         self.assertTrue(result.is_approved)
 
     def test_example_engine_with_priority_and_type(self):
         """Extra fields on the request are accessible."""
         engine = AltitudeAwareDeconflictionEngine()
         req = self._make_request(type_of_operation=2, priority=5)
-        result = engine.check_deconfliction(req)
+        result = engine.check_deconfliction(req, db=None)
         self.assertTrue(result.is_approved)
 
 

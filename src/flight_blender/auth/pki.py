@@ -14,6 +14,7 @@ from loguru import logger
 
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
+from flight_blender.db.session import session_scope
 
 
 class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):
@@ -126,17 +127,13 @@ class MessageVerifier:
         public_keys = {}
         from sqlalchemy import select  # noqa: PLC0415
 
-        from flight_blender.db.session import SessionLocal  # noqa: PLC0415
         from flight_blender.models.flight_feed_orm import SignedTelmetryPublicKeyORM  # noqa: PLC0415
 
-        _db = SessionLocal()
-        try:
+        with session_scope() as _db:
             _result = _db.execute(select(SignedTelmetryPublicKeyORM).where(SignedTelmetryPublicKeyORM.is_active == True))  # noqa: E712
             all_public_keys = list(_result.scalars().all())
             for o in all_public_keys:
                 _db.expunge(o)
-        finally:
-            _db.close()
         for current_public_key in all_public_keys:
             redis_jwks_key = str(current_public_key.id) + "-jwks"
             current_kid = current_public_key.key_id

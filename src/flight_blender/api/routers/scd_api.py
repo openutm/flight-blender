@@ -3,11 +3,19 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
+from flight_blender.db.session import async_get_db
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.services import scd_svc
+from flight_blender.services.scd_svc import SCDService
 
 router = APIRouter(prefix="/scd")
+
+
+async def _ops(db: AsyncSession = Depends(async_get_db)) -> SCDService:
+    return SCDService(fd_repo=SQLAlchemyFlightDeclarationRepository(db))
 
 
 @router.get("/v1/status")
@@ -45,8 +53,9 @@ async def upsert_flight_plan(
     flight_plan_id: UUID,
     body: dict = Body(...),
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
+    ops: SCDService = Depends(_ops),
 ):
-    data, status_code = await scd_svc.upsert_flight_plan(str(flight_plan_id), body)
+    data, status_code = await ops.upsert_flight_plan(str(flight_plan_id), body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -55,6 +64,7 @@ async def upsert_flight_plan(
 async def delete_flight_plan(
     flight_plan_id: UUID,
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
+    ops: SCDService = Depends(_ops),
 ):
-    data, status_code = await scd_svc.delete_flight_plan(str(flight_plan_id))
+    data, status_code = await ops.delete_flight_plan(str(flight_plan_id))
     return JSONResponse(data, status_code=status_code)

@@ -16,7 +16,7 @@ from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
 from flight_blender.clients import dss_rid_client as dss_rid_helper
 from flight_blender.config import settings
-from flight_blender.db.session import async_session_scope
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.flight_feed import SingleRIDObservation
 from flight_blender.domain_types.rid import UASID, LatLngPoint, SignedUnsignedTelemetryObservation, UAClassificationEU
 from flight_blender.domain_types.rid import RIDAircraftState as LocalRIDAircraftState
@@ -74,7 +74,7 @@ async def _async_write_operator_rid_notification(message: str, session_id: str) 
         session_uuid = uuid.UUID(session_id)
     except (ValueError, AttributeError):
         session_uuid = None
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         repo = SQLAlchemyNotificationsRepository(db)
         await repo.create_notification(message=message, session_id=session_uuid)
 
@@ -294,37 +294,37 @@ async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> Non
     polling_duration = delta.total_seconds()
     logger.info("Polling duration: %s" % polling_duration)
 
-    async with async_session_scope() as db:
-        rid_repo = SQLAlchemyRIDRepository(db)
-        subscription_record = await rid_repo.get_subscription_by_id(session_id)
-
     logger.info("Polling USSP for RID data..")
 
     r = get_redis()
     async_polling_lock = f"async_polling_lock_{session_id}"
 
-    my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
+    async with async_task_session() as db:
+        rid_repo = SQLAlchemyRIDRepository(db)
+        feed_repo = SQLAlchemyFlightFeedRepository(db)
+        subscription_record = await rid_repo.get_subscription_by_id(session_id)
+        my_dss_subscriber = dss_rid_helper.RemoteIDOperations(rid_repo=rid_repo, feed_repo=feed_repo)
 
-    if r.exists(async_polling_lock):
-        logger.info("Polling is ongoing, not setting additional polling tasks..")
-    else:
-        logger.info("Setting Polling Lock..")
+        if r.exists(async_polling_lock):
+            logger.info("Polling is ongoing, not setting additional polling tasks..")
+        else:
+            logger.info("Setting Polling Lock..")
 
-        r.set(async_polling_lock, "1")
-        r.expire(async_polling_lock, timedelta(seconds=polling_duration))
-        while arrow.now() < end_time_formatted:
-            subscription_id = str(subscription_record.subscription_id)
-            view = subscription_record.view
-            flight_details = subscription_record.flight_details
-            await my_dss_subscriber.query_uss_for_rid(
-                flight_details=flight_details,
-                subscription_id=subscription_id,
-                view=view,
-            )
+            r.set(async_polling_lock, "1")
+            r.expire(async_polling_lock, timedelta(seconds=polling_duration))
+            while arrow.now() < end_time_formatted:
+                subscription_id = str(subscription_record.subscription_id)
+                view = subscription_record.view
+                flight_details = subscription_record.flight_details
+                await my_dss_subscriber.query_uss_for_rid(
+                    flight_details=flight_details,
+                    subscription_id=subscription_id,
+                    view=view,
+                )
 
-            await asyncio.sleep(0.6)
+                await asyncio.sleep(0.6)
 
-        r.delete(async_polling_lock)
+            r.delete(async_polling_lock)
 
     logger.debug("Finished USSP polling..")
 
@@ -342,7 +342,7 @@ async def _async_stream_rid_telemetry_data(rid_telemetry_observations) -> None:
         current_states = observation["current_states"]
         operation_id = flight_details["id"]
 
-        async with async_session_scope() as db:
+        async with async_task_session() as db:
             fd_repo = SQLAlchemyFlightDeclarationRepository(db)
             await fd_repo.update_telemetry_timestamp(uuid.UUID(operation_id))
 
@@ -405,7 +405,7 @@ async def _async_stream_rid_test_data(requested_flights, test_id) -> None:
 
     all_altitudes = []
 
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         rid_repo = SQLAlchemyRIDRepository(db)
         for requested_flight in rf:
             processed_flight, _all_positions, _all_altitudes = await _async_process_requested_flight(
@@ -576,7 +576,7 @@ async def _async_check_rid_stream_conformance(session_id: str) -> None:
     now = arrow.now()
     four_seconds_before_now = now.shift(seconds=-4)
 
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         feed_repo = SQLAlchemyFlightFeedRepository(db)
         relevant_observations = await feed_repo.get_active_rid_observations_for_session_between_interval(
             session_id=session_id,
@@ -606,7 +606,7 @@ async def _async_check_rid_stream_conformance(session_id: str) -> None:
     except (ValueError, AttributeError):
         session_uuid = None
 
-    async with async_session_scope() as db:
+    async with async_task_session() as db:
         notif_repo = SQLAlchemyNotificationsRepository(db)
         for error_msg in errors:
             await notif_repo.create_notification(message=error_msg, session_id=session_uuid)

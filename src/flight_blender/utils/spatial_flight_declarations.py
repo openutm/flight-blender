@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import hashlib
 import os
 from dataclasses import asdict
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import arrow
 from loguru import logger
@@ -9,9 +11,10 @@ from rtree import index
 from rtree.exceptions import RTreeError
 
 from flight_blender.auth.token_cache import get_redis
-from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.flight_declarations import FlightDeclarationMetadata
-from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+
+if TYPE_CHECKING:
+    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
 def _open_or_recover_index(base_path: str) -> index.Index:
@@ -31,9 +34,10 @@ def _open_or_recover_index(base_path: str) -> index.Index:
 
 
 class FlightDeclarationRTreeIndexFactory:
-    def __init__(self, index_name: str):
+    def __init__(self, index_name: str, fd_repo: SQLAlchemyFlightDeclarationRepository | None = None):
         self.r = get_redis()
         self.idx = _open_or_recover_index(index_name)
+        self.fd_repo = fd_repo
 
     def add_box_to_index(self, id: int, flight_declaration_id: str, view: list[float], start_date: str, end_date: str) -> None:
         metadata = FlightDeclarationMetadata(start_date=start_date, end_date=end_date, flight_declaration_id=flight_declaration_id)
@@ -60,8 +64,9 @@ class FlightDeclarationRTreeIndexFactory:
 
     async def clear_rtree_index(self, all_declarations: list[Any] | None = None) -> None:
         if all_declarations is None:
-            async with async_session_scope() as db:
-                all_declarations = await SQLAlchemyFlightDeclarationRepository(db).list(states=[1, 2])
+            if self.fd_repo is None:
+                raise ValueError("fd_repo is required when all_declarations is not provided")
+            all_declarations = await self.fd_repo.list(states=[1, 2])
         for declaration in all_declarations:
             declaration_idx_str = str(declaration.id)
             declaration_id = int(hashlib.sha256(declaration_idx_str.encode("utf-8")).hexdigest(), 16) % 10**8
