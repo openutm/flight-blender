@@ -17,7 +17,7 @@ See PLUGINS.md for the full guide.
 
 from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
 from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
@@ -43,7 +43,7 @@ class HelloWorldEngine:
     are intentionally skipped to keep the example concise.
     """
 
-    def check_deconfliction(self, request: DeconflictionRequest, db: Session) -> DeconflictionResult:
+    async def check_deconfliction(self, request: DeconflictionRequest, db: AsyncSession) -> DeconflictionResult:
         # Find active declarations whose time window overlaps the request.
         stmt = select(FlightDeclarationORM).where(
             FlightDeclarationORM.start_datetime < request.end_datetime,
@@ -52,7 +52,8 @@ class HelloWorldEngine:
         )
         if request.declaration_id:
             stmt = stmt.where(FlightDeclarationORM.id != request.declaration_id)
-        rows = db.execute(stmt).scalars().all()
+        result = await db.execute(stmt)
+        rows = result.scalars().all()
         conflicting_ids = [str(r.id) for r in rows[:20]]
 
         has_conflicts = bool(conflicting_ids)

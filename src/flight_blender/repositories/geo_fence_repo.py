@@ -12,6 +12,18 @@ class SQLAlchemyGeoFenceRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def get_geofences_overlapping_time_window(
+        self,
+        start: datetime,
+        end: datetime,
+    ) -> list[GeoFenceORM]:
+        stmt = select(GeoFenceORM).where(
+            GeoFenceORM.start_datetime <= start,
+            GeoFenceORM.end_datetime >= end,
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_geofences_by_date_range(
         self,
         start: datetime,

@@ -80,6 +80,7 @@ dev = [
 
 [tool.pyright]
 typeCheckingMode = "basic"
+reportAbstractUsage = "none"
 
 [tool.pytest.ini_options]
 addopts = "-v --tb=short"

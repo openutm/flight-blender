@@ -1,4 +1,3 @@
-import asyncio
 import json
 import uuid
 from dataclasses import asdict
@@ -18,7 +17,6 @@ from shapely.ops import unary_union
 
 from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
 from flight_blender.config import settings
-from flight_blender.db.session import session_scope
 from flight_blender.domain_types.flight_declarations import (
     DEFAULT_UAV_CLIMB_RATE_M_PER_S,
     DEFAULT_UAV_DESCENT_RATE_M_PER_S,
@@ -32,7 +30,7 @@ from flight_blender.domain_types.flight_declarations import (
     HTTP404Response,
     IntersectionCheckResult,
 )
-from flight_blender.domain_types.plugin_protocols import DeconflictionEngineProtocol
+from flight_blender.domain_types.plugin_protocols import DeconflictionEngineProtocol, Volume4DGeneratorProtocol
 from flight_blender.domain_types.scd import (
     Altitude,
     LatLngPoint,
@@ -174,7 +172,10 @@ class OperationalIntentsConverter:
 
     def convert_geo_json_to_volume_4_d(self, geo_json_fc: FeatureCollection, start_datetime: str, end_datetime: str) -> list[Volume4D]:
         if FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR:
-            CustomVolumeGenerator = load_plugin(FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR)
+            CustomVolumeGenerator = load_plugin(
+                FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR,
+                expected_protocol=Volume4DGeneratorProtocol,
+            )
             custom_volume_generator = CustomVolumeGenerator(
                 default_uav_speed_m_per_s=DEFAULT_UAV_SPEED_M_PER_S,
                 default_uav_climb_rate_m_per_s=DEFAULT_UAV_CLIMB_RATE_M_PER_S,
@@ -426,38 +427,6 @@ async def _create_flight_declaration_record(
     return asdict(response), 200
 
 
-def _run_deconfliction_sa(
-    flight_declarations: list[Any],
-    ussp_network_enabled: int,
-) -> dict[str, IntersectionCheckResult]:
-    if not flight_declarations:
-        return {}
-    results: dict[str, IntersectionCheckResult] = {}
-    for fd in flight_declarations:
-        view_box = [float(i) for i in fd.bounds.split(",")]
-        raw_geojson = fd.flight_declaration_raw_geojson
-        flight_declaration_geo_json = json.loads(raw_geojson) if raw_geojson else None
-        request = DeconflictionRequest(
-            start_datetime=fd.start_datetime,
-            end_datetime=fd.end_datetime,
-            view_box=view_box,
-            ussp_network_enabled=ussp_network_enabled,
-            declaration_id=str(fd.id),
-            flight_declaration_geo_json=flight_declaration_geo_json,
-            type_of_operation=fd.type_of_operation,
-            priority=0,
-        )
-        engine_cls = _get_deconfliction_engine()
-        if engine_cls is None:
-            logger.warning("No deconfliction engine configured; skipping deconfliction for %s", fd.id)
-            continue
-        engine = engine_cls()
-        with session_scope() as db:
-            result = engine.check_deconfliction(request, db)
-        results[str(fd.id)] = result
-    return results
-
-
 async def do_network_declarations_by_view(
     view: str | None,
     scd_client: SCDOperations,
@@ -513,6 +482,37 @@ class FlightDeclarationOperations:
         self.scd_client = scd_client
         self.parser = parser
         self.notifier = notifier
+
+    async def _run_deconfliction_sa(
+        self,
+        flight_declarations: list[Any],
+        ussp_network_enabled: int,
+    ) -> dict[str, IntersectionCheckResult]:
+        if not flight_declarations:
+            return {}
+        results: dict[str, IntersectionCheckResult] = {}
+        for fd in flight_declarations:
+            view_box = [float(i) for i in fd.bounds.split(",")]
+            raw_geojson = fd.flight_declaration_raw_geojson
+            flight_declaration_geo_json = json.loads(raw_geojson) if raw_geojson else None
+            request = DeconflictionRequest(
+                start_datetime=fd.start_datetime,
+                end_datetime=fd.end_datetime,
+                view_box=view_box,
+                ussp_network_enabled=ussp_network_enabled,
+                declaration_id=str(fd.id),
+                flight_declaration_geo_json=flight_declaration_geo_json,
+                type_of_operation=fd.type_of_operation,
+                priority=0,
+            )
+            engine_cls = _get_deconfliction_engine()
+            if engine_cls is None:
+                logger.warning("No deconfliction engine configured; skipping deconfliction for %s", fd.id)
+                continue
+            engine = engine_cls()
+            result = await engine.check_deconfliction(request, self.repo.db)
+            results[str(fd.id)] = result
+        return results
 
     async def create_flight_declaration(
         self,
@@ -704,7 +704,7 @@ class FlightDeclarationOperations:
         )
         await self.repo.add_state_history_entry(fd.id, 0, default_state, "Created Declaration")
 
-        intersection_results = await asyncio.to_thread(_run_deconfliction_sa, [fd], ussp_network_enabled)
+        intersection_results = await self._run_deconfliction_sa([fd], ussp_network_enabled)
         creation_response = await self._process_intersection_result_sa(fd, intersection_results[str(fd.id)], ussp_network_enabled)
         return asdict(creation_response), 200
 
@@ -762,7 +762,7 @@ class FlightDeclarationOperations:
                 failed_count += 1
                 results.append({"index": idx, "success": False, "message": str(exc)})
 
-        intersection_results = await asyncio.to_thread(_run_deconfliction_sa, list(saved.values()), ussp_network_enabled)
+        intersection_results = await self._run_deconfliction_sa(list(saved.values()), ussp_network_enabled)
         submitted_count = 0
         for idx, fd in saved.items():
             creation_response = await self._process_intersection_result_sa(fd, intersection_results[str(fd.id)], ussp_network_enabled)

@@ -3,8 +3,10 @@
 import inspect
 import json
 import uuid
+from dataclasses import asdict
 from enum import Enum
 from itertools import cycle
+from typing import Any
 
 import dacite
 from dacite import from_dict
@@ -12,7 +14,9 @@ from loguru import logger
 
 from flight_blender.clients import dss_scd_client as dss_scd_helper
 from flight_blender.clients.dss_scd_client import DSSAreaClearHandler, SCDTestHarnessHelper, VolumesConverter, VolumesValidator
-from flight_blender.domain_types.common import OPERATION_STATES, OPERATION_STATES_LOOKUP
+from flight_blender.domain_types.common import ALTITUDE_REF_LOOKUP, OPERATION_STATES, OPERATION_STATES_LOOKUP
+from flight_blender.domain_types.constraint import CompositeConstraintPayload, Constraint
+from flight_blender.domain_types.geo_fence import GeofencePayload
 from flight_blender.domain_types.scd import (
     AdvisoryInclusion,
     ASTMF354821OpIntentInformation,
@@ -430,6 +434,67 @@ async def clear_area(request_data: dict) -> tuple[dict, int]:
     return json.loads(json.dumps(clear_area_response, cls=EnhancedJSONEncoder)), 200
 
 
+class ConstraintsWriter:
+    def __init__(self, constraint_repo: SQLAlchemyConstraintRepository):
+        self.constraint_repo = constraint_repo
+
+    async def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: Any):
+        my_volumes_converter = VolumesConverter()
+        for constraint in constraints:
+            constraint_reference = constraint.reference
+            constraint_details = constraint.details
+            ref_uuid = uuid.UUID(str(constraint_reference.id))
+
+            existing_ref = await self.constraint_repo.get_constraint_reference_by_id(ref_uuid)
+            if existing_ref is not None:
+                existing_geo = await self.constraint_repo.get_geofence_by_constraint_reference_id(ref_uuid)
+                geofence_id = str(existing_geo.id) if existing_geo else str(uuid.uuid4())
+            else:
+                geofence_id = str(uuid.uuid4())
+
+            my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
+            altitude_ref_int = ALTITUDE_REF_LOOKUP.get(my_volumes_converter.altitude_ref, 4)
+            bounds = my_volumes_converter.get_bounds()
+            bounds_str = ",".join(map(str, bounds))
+            geofence_payload = GeofencePayload(
+                id=geofence_id,
+                raw_geo_fence=my_volumes_converter.geo_json,
+                upper_limit=my_volumes_converter.upper_altitude,
+                lower_limit=my_volumes_converter.lower_altitude,
+                altitude_ref=altitude_ref_int,
+                name=constraint_details.geozone.name,
+                bounds=bounds_str,
+                status=1,
+                message="Constraint from peer USS",
+                is_test_dataset=False,
+                start_datetime=constraint_reference.time_start,
+                end_datetime=constraint_reference.time_end,
+                geozone=asdict(constraint_details.geozone),
+            )
+
+            geo_fence = await self.constraint_repo.create_or_update_geofence(geofence_payload=geofence_payload)
+            constraint_reference_obj = await self.constraint_repo.create_or_update_constraint_reference(
+                constraint_reference=constraint_reference,
+                geofence_id=geo_fence.id,
+                declaration_id=flight_declaration.id,
+            )
+            constraint_detail_obj = await self.constraint_repo.create_or_update_constraint_detail(
+                constraint=constraint_details,
+                geofence_id=geo_fence.id,
+            )
+            composite_constraint_payload = CompositeConstraintPayload(
+                constraint_reference_id=str(constraint_reference_obj.id),
+                constraint_detail_id=str(constraint_detail_obj.id),
+                flight_declaration_id=str(flight_declaration.id),
+                bounds=bounds_str,
+                start_datetime=constraint_reference_obj.time_start,
+                end_datetime=constraint_reference_obj.time_end,
+                alt_max=my_volumes_converter.upper_altitude,
+                alt_min=my_volumes_converter.lower_altitude,
+            )
+            await self.constraint_repo.create_or_update_composite_constraint(payload=composite_constraint_payload)
+
+
 class SCDService:
     def __init__(self, fd_repo: SQLAlchemyFlightDeclarationRepository) -> None:
         self.fd_repo = fd_repo
@@ -686,7 +751,7 @@ class SCDService:
                 )
 
                 if flight_planning_submission.constraints:
-                    my_constraints_writer = dss_scd_helper.ConstraintsWriter(
+                    my_constraints_writer = ConstraintsWriter(
                         constraint_repo=SQLAlchemyConstraintRepository(self.fd_repo.db),
                     )
                     await my_constraints_writer.write_nearby_constraints(

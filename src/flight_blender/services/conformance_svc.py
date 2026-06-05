@@ -2,12 +2,13 @@ import asyncio
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 import arrow
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
 from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.conformance import ConformanceRecord, ConformanceSummary
@@ -342,14 +343,70 @@ class FlightOperationStateMachine:
 
 
 class FlightOperationConformanceHelper:
-    def __init__(self, flight_declaration_id: str, db: AsyncSession, dss: Any):
+    def __init__(self, flight_declaration_id: str, db: AsyncSession):
         self.flight_declaration_id = flight_declaration_id
         self.db = db
         self.fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-        self.dss: Any = dss
         self.flight_declaration = None
         self.ENABLE_CONFORMANCE_MONITORING = settings.ENABLE_CONFORMANCE_MONITORING
         self.USSP_NETWORK_ENABLED = settings.USSP_NETWORK_ENABLED
+
+    # ── Orchestration functions (moved from dss_conformance_client.py) ──────
+
+    async def operation_ended_clear_dss(self, dry_run: int = 1) -> None:
+        my_scd_dss_helper = SCDOperations()
+        flight_declaration = await self.fd_repo.get_by_id(uuid.UUID(self.flight_declaration_id))
+        if not flight_declaration:
+            logger.error(f"Flight Declaration {self.flight_declaration_id} not found")
+            return
+        flight_operational_intent_reference = await self.fd_repo.get_opint_reference_by_declaration_id(flight_declaration.id)
+
+        if not flight_operational_intent_reference:
+            return
+        dss_operational_intent_ref_id = str(flight_operational_intent_reference.id)
+        stored_ovn = flight_operational_intent_reference.ovn
+        if not dry_run:
+            operation_removal_status = my_scd_dss_helper.delete_operational_intent(
+                dss_operational_intent_ref_id=dss_operational_intent_ref_id,
+                ovn=stored_ovn,
+            )
+            if operation_removal_status.status == 200:
+                logger.info("Successfully removed operational intent %s from DSS" % dss_operational_intent_ref_id)
+            else:
+                logger.error("Error in deleting operational intent from DSS")
+
+    async def update_operational_intent_to_activated(self, dry_run: int = 1) -> None:
+        if dry_run:
+            return
+        my_operational_intents_helper = OperationalIntentReferenceHelper()
+        flight_declaration = await self.fd_repo.get_by_id(uuid.UUID(self.flight_declaration_id))
+        if not flight_declaration:
+            logger.error(f"Flight Declaration {self.flight_declaration_id} not found")
+            return
+        flight_operational_intent_reference = await self.fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(self.flight_declaration_id))
+
+        if not flight_operational_intent_reference:
+            return
+        await my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=self.flight_declaration_id)
+        operational_intent_id = str(flight_operational_intent_reference.id)
+        logger.info(f"Updating operational intent {operational_intent_id} to activated")
+
+    def operator_declares_contingency(self, dry_run: int = 1) -> None:
+        if dry_run:
+            return
+        logger.info(f"Declaring contingency for flight declaration {self.flight_declaration_id}")
+
+    def update_operational_intent_to_non_conforming(self, dry_run: int = 1) -> None:
+        if dry_run:
+            return
+        logger.info(f"Updating operational intent to non-conforming for {self.flight_declaration_id}")
+
+    def transition_to_non_conforming_update_expand_volumes(self, dry_run: int = 1) -> None:
+        if dry_run:
+            return
+        logger.info(f"Transitioning to non-conforming (expand volumes) for {self.flight_declaration_id}")
+
+    # ── State transition handlers ──────────────────────────────────────────
 
     def verify_operation_state_transition(self, original_state: int, new_state: int, event: str) -> bool:
         my_operation_state_machine = FlightOperationStateMachine(state=original_state)
@@ -382,17 +439,10 @@ class FlightOperationConformanceHelper:
             logger.info("Operation has ended, but no confirmation received")
             return
         if self.USSP_NETWORK_ENABLED:
-            self._clear_operation_from_dss()
+            await self.operation_ended_clear_dss(dry_run=0)
         if self.ENABLE_CONFORMANCE_MONITORING:
             logger.info("Removing conformance monitoring task as operation has ended")
             await self._remove_conformance_monitoring_task()
-
-    def _clear_operation_from_dss(self):
-        self.dss.call_command(
-            "operation_ended_clear_dss",
-            flight_declaration_id=self.flight_declaration_id,
-            dry_run=0,
-        )
 
     async def _remove_conformance_monitoring_task(self):
         conformance_monitoring_job = None
@@ -405,26 +455,19 @@ class FlightOperationConformanceHelper:
         valid_events_for_state_3 = ["timeout", "operator_confirms_contingent"]
         if self.USSP_NETWORK_ENABLED:
             if original_state in [2, 3] and event in (valid_events_for_state_2 if original_state == 2 else valid_events_for_state_3):
-                self.dss.call_command(
-                    "operator_declares_contingency",
-                    flight_declaration_id=self.flight_declaration_id,
-                    dry_run=0,
-                )
+                self.operator_declares_contingency(dry_run=0)
         else:
             logger.info("USSP Network is not enabled, skipping contingency state handling with DSS")
 
     async def _handle_non_conforming_state(self, original_state: int, event: str):
-        non_conforming_events = {
-            "ua_exits_coordinated_op_intent": "transition_to_non_conforming_update_expand_volumes",
-            "ua_departs_early_late": "update_operational_intent_to_non_conforming",
+        non_conforming_handlers = {
+            "ua_exits_coordinated_op_intent": self.transition_to_non_conforming_update_expand_volumes,
+            "ua_departs_early_late": self.update_operational_intent_to_non_conforming,
         }
-        if event in non_conforming_events and original_state in [1, 2]:
+        handler = non_conforming_handlers.get(event)
+        if handler and original_state in [1, 2]:
             if self.USSP_NETWORK_ENABLED:
-                self.dss.call_command(
-                    non_conforming_events[event],
-                    flight_declaration_id=self.flight_declaration_id,
-                    dry_run=0,
-                )
+                handler(dry_run=0)
             if self.ENABLE_CONFORMANCE_MONITORING:
                 logger.info("Removing conformance monitoring task due to non-conformance")
             else:
@@ -435,7 +478,7 @@ class FlightOperationConformanceHelper:
             logger.info("Withdrawal event mismatch")
             return
         if self.USSP_NETWORK_ENABLED:
-            self._clear_operation_from_dss()
+            await self.operation_ended_clear_dss(dry_run=0)
         if self.ENABLE_CONFORMANCE_MONITORING:
             await self._remove_conformance_monitoring_task()
 
@@ -444,7 +487,7 @@ class FlightOperationConformanceHelper:
             logger.info("Cancellation event mismatch")
             return
         if self.USSP_NETWORK_ENABLED:
-            self._clear_operation_from_dss()
+            await self.operation_ended_clear_dss(dry_run=0)
         if self.ENABLE_CONFORMANCE_MONITORING:
             await self._remove_conformance_monitoring_task()
 
@@ -453,16 +496,9 @@ class FlightOperationConformanceHelper:
             logger.info("Invalid state or event for activation")
             return
         if self.USSP_NETWORK_ENABLED:
-            self._update_operational_intent_to_activated()
+            await self.update_operational_intent_to_activated(dry_run=0)
         if self.ENABLE_CONFORMANCE_MONITORING:
             await self._create_conformance_monitoring_task()
-
-    def _update_operational_intent_to_activated(self):
-        self.dss.call_command(
-            "update_operational_intent_to_activated",
-            flight_declaration_id=self.flight_declaration_id,
-            dry_run=0,
-        )
 
     async def _create_conformance_monitoring_task(self):
         logger.info(f"Conformance monitoring scheduling is handled by TaskSchedulerService for {self.flight_declaration_id}")
@@ -506,9 +542,8 @@ class ConformanceDependencies:
     at startup. Tests can replace the provider with a stub.
     """
 
-    def __init__(self, db: AsyncSession | None, dss: Any, notifier: CelerySCDNotifier) -> None:
+    def __init__(self, db: AsyncSession | None, notifier: CelerySCDNotifier) -> None:
         self.db: AsyncSession | None = db
-        self.dss: Any = dss
         self.notifier: CelerySCDNotifier = notifier
 
 
@@ -569,7 +604,7 @@ async def _process_telemetry_conformance_db_work(
                 notes="State changed by telemetry conformance checks because of telemetry non-conformance: %s" % non_conformance_state_code,
             )
             await fd_repo.update(fd.id, state=new_state)
-            helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id, db=db, dss=deps.dss)
+            helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id, db=db)
             await helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)
 
 
@@ -605,7 +640,7 @@ async def _process_opint_reference_conformance_db_work(
                 notes="State changed by flight authorization checks: %s" % non_conformance_state_code,
             )
             await fd_repo.update(fd.id, state=new_state)
-            helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id, db=db, dss=deps.dss)
+            helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id, db=db)
             await helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)
 
 

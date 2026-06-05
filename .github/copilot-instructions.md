@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a Django 5.2 / Python 3.12 project using Django REST Framework. Package management is handled by **uv**. The project uses SQLite in tests and PostgreSQL in production.
+This is a FastAPI + SQLAlchemy 2.0 (async) + Celery + Redis project. Python 3.12. Package management is handled by **uv**. The project uses SQLite (aiosqlite) in tests and PostgreSQL (asyncpg) in production.
 
 ## Linting & Formatting
 
@@ -30,27 +30,26 @@ All code changes **must** include or update relevant pytest test cases. Every mo
 - **Run specific file:** `uv run pytest path/to/tests.py --tb=short`
 - **Run with coverage:** `uv run pytest --cov --cov-report=term-missing --tb=short`
 
-Test configuration is in `pyproject.toml` under `[tool.pytest.ini_options]`:
-- `DJANGO_SETTINGS_MODULE = "flight_blender.settings"`
-- Test file patterns: `test_*.py`, `tests.py`, `tests_*.py`
+Test configuration is in `pyproject.toml` under `[tool.pytest.ini_options]`.
+No `pytest-django`. No `@pytest.mark.django_db`.
 
 Environment variables needed for tests:
-- `DATABASE_URL=sqlite://:memory:`
+- `DATABASE_URL=sqlite+aiosqlite:///:memory:` (or `sqlite:///:memory:` for sync)
 - `BYPASS_AUTH_TOKEN_VERIFICATION=1`
 
 ### Test requirements
 
-1. **Every code change must have tests.** If you add or modify a function, class, or view, add or update tests in the same app's `tests.py` or `test_*.py` file.
+1. **Every code change must have tests.** If you add or modify a function, class, or endpoint, add or update tests.
 2. **All tests must pass.** Run `uv run pytest` after making changes and fix any failures before considering work complete.
 3. **Code coverage must be above 80%** for any new or modified code. Run `uv run pytest --cov --cov-report=term-missing --tb=short` and verify coverage on touched files. If a modified file drops below 80%, add more tests before finishing.
-4. Use `unittest.mock.patch` and Django's `TestCase` / `APITestCase` for mocking external services (Redis, DSS, Celery tasks).
+4. Use `unittest.mock.patch` and `pytest` with `AsyncMock` for mocking external services (Redis, DSS, Celery tasks).
 5. Follow existing test patterns in the codebase.
 
 ## Code Style Conventions
 
 - Use type hints where practical.
-- Use `dataclass` or `dacite` for data structures (see `data_definitions.py` files throughout the project).
-- Django apps follow the standard layout: `models.py`, `views.py`, `urls.py`, `tests.py`, `data_definitions.py`.
+- Use `dataclass` for data structures (see `domain_types/` directory).
+- Follow the directory layout from AGENTS.md: `models/*_orm.py`, `services/*_svc.py`, `api/routers/*_api.py`, etc.
 - Imports should be organized: stdlib → third-party → local (ruff handles this).
 
 ## Dependencies
@@ -63,12 +62,12 @@ Environment variables needed for tests:
 
 Do **not** introduce security vulnerabilities. Follow OWASP best practices:
 
-- **No hardcoded secrets** — use environment variables or Django settings for credentials, tokens, and keys.
-- **No SQL injection** — always use Django ORM or parameterized queries. Never interpolate user input into raw SQL.
+- **No hardcoded secrets** — use environment variables or pydantic-settings (`config.py`) for credentials, tokens, and keys.
+- **No SQL injection** — always use SQLAlchemy ORM or parameterized queries. Never interpolate user input into raw SQL.
 - **No command injection** — never pass unsanitized input to `subprocess` or `os.system`.
 - **Validate and sanitize all external input** — request data, query parameters, headers.
 - **No unsafe deserialization** — do not use `pickle.loads`, `yaml.unsafe_load`, or `eval`/`exec` on untrusted data.
-- **Use Django's CSRF and authentication** — do not bypass middleware protections.
+- **Use the FastAPI/JWT auth pattern** — all endpoints require a JWT bearer token via `require_scopes()`. Do not bypass authentication.
 - **Run `uv run bandit -r . -x ./.venv,./migrations -c pyproject.toml`** to check for security issues and fix any findings before finishing.
 
 ## Pre-commit Checklist

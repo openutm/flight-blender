@@ -10,7 +10,13 @@ Covers:
 from datetime import datetime, timezone
 from unittest import TestCase
 
-from flight_blender.domain_types.plugin_protocols import DeconflictionEngineProtocol, TrafficDataFuserProtocol as TrafficDataFuserProtocol
+import pytest
+
+from flight_blender.domain_types.plugin_protocols import (
+    DeconflictionEngineProtocol,
+    TrafficDataFuserProtocol as TrafficDataFuserProtocol,
+    Volume4DGeneratorProtocol,
+)
 from flight_blender.plugins.loader import load_plugin
 from flight_blender.domain_types.flight_declarations import (
     DeconflictionRequest,
@@ -22,6 +28,7 @@ from flight_blender.services.surveillance_svc import TrafficDataFuser
 from flight_blender.plugins.examples.altitude_aware_deconfliction_engine import (
     AltitudeAwareDeconflictionEngine,
 )
+from flight_blender.plugins.examples.hello_world_volume_generator import HelloWorldVolumeGenerator
 
 # ---------------------------------------------------------------------------
 # load_plugin — core mechanics
@@ -152,7 +159,7 @@ class DeconflictionProtocolTests(TestCase):
 # ---------------------------------------------------------------------------
 
 
-class ExampleDeconflictionEngineTests(TestCase):
+class ExampleDeconflictionEngineTests:
     """Functional tests for AltitudeAwareDeconflictionEngine."""
 
     def _make_request(self, **overrides) -> DeconflictionRequest:
@@ -165,43 +172,48 @@ class ExampleDeconflictionEngineTests(TestCase):
         defaults.update(overrides)
         return DeconflictionRequest(**defaults)
 
-    def test_example_engine_returns_deconfliction_result(self):
+    @pytest.mark.asyncio
+    async def test_example_engine_returns_deconfliction_result(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request(), db=None)
-        self.assertIsInstance(result, DeconflictionResult)
+        result = await engine.check_deconfliction(self._make_request(), db=None)
+        assert isinstance(result, DeconflictionResult)
 
-    def test_example_engine_always_approves(self):
+    @pytest.mark.asyncio
+    async def test_example_engine_always_approves(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request(), db=None)
-        self.assertTrue(result.is_approved)
-        self.assertEqual(result.all_relevant_fences, [])
-        self.assertEqual(result.all_relevant_declarations, [])
+        result = await engine.check_deconfliction(self._make_request(), db=None)
+        assert result.is_approved is True
+        assert result.all_relevant_fences == []
+        assert result.all_relevant_declarations == []
 
-    def test_example_engine_state_with_ussp_disabled(self):
+    @pytest.mark.asyncio
+    async def test_example_engine_state_with_ussp_disabled(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request(ussp_network_enabled=0), db=None)
-        self.assertEqual(result.declaration_state, 1)
+        result = await engine.check_deconfliction(self._make_request(ussp_network_enabled=0), db=None)
+        assert result.declaration_state == 1
 
-    def test_example_engine_state_with_ussp_enabled(self):
+    @pytest.mark.asyncio
+    async def test_example_engine_state_with_ussp_enabled(self):
         engine = AltitudeAwareDeconflictionEngine()
-        result = engine.check_deconfliction(self._make_request(ussp_network_enabled=1), db=None)
-        self.assertEqual(result.declaration_state, 0)
+        result = await engine.check_deconfliction(self._make_request(ussp_network_enabled=1), db=None)
+        assert result.declaration_state == 0
 
-    def test_example_engine_receives_geojson(self):
+    @pytest.mark.asyncio
+    async def test_example_engine_receives_geojson(self):
         """The request's flight_declaration_geo_json is available to the engine."""
         geo = {"type": "FeatureCollection", "features": []}
         engine = AltitudeAwareDeconflictionEngine()
         req = self._make_request(flight_declaration_geo_json=geo)
-        # The example engine doesn't use it, but it shouldn't raise
-        result = engine.check_deconfliction(req, db=None)
-        self.assertTrue(result.is_approved)
+        result = await engine.check_deconfliction(req, db=None)
+        assert result.is_approved is True
 
-    def test_example_engine_with_priority_and_type(self):
+    @pytest.mark.asyncio
+    async def test_example_engine_with_priority_and_type(self):
         """Extra fields on the request are accessible."""
         engine = AltitudeAwareDeconflictionEngine()
         req = self._make_request(type_of_operation=2, priority=5)
-        result = engine.check_deconfliction(req, db=None)
-        self.assertTrue(result.is_approved)
+        result = await engine.check_deconfliction(req, db=None)
+        assert result.is_approved is True
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +328,47 @@ class TrafficDataFuserProtocolTests(TestCase):
         cls = load_plugin("flight_blender.services.surveillance_svc.TrafficDataFuser", expected_protocol=TrafficDataFuserProtocol)
         self.assertIs(cls, TrafficDataFuser)
         load_plugin.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Volume4DGeneratorProtocol
+# ---------------------------------------------------------------------------
+
+
+class Volume4DGeneratorProtocolTests(TestCase):
+    """Tests for the Volume4DGenerator protocol."""
+
+    def test_protocol_is_runtime_checkable(self):
+        """isinstance() works on Volume4DGeneratorProtocol."""
+
+        class GoodGenerator:
+            def build_v4d_from_geojson(self, geo_json_fc, start_datetime, end_datetime):
+                return []
+
+        self.assertIsInstance(GoodGenerator(), Volume4DGeneratorProtocol)
+
+    def test_class_without_method_not_instance(self):
+        class BadGenerator:
+            pass
+
+        self.assertNotIsInstance(BadGenerator(), Volume4DGeneratorProtocol)
+
+    def test_example_generator_passes_protocol_check(self):
+        load_plugin.cache_clear()
+        cls = load_plugin(
+            "flight_blender.plugins.examples.hello_world_volume_generator.HelloWorldVolumeGenerator",
+            expected_protocol=Volume4DGeneratorProtocol,
+        )
+        self.assertIs(cls, HelloWorldVolumeGenerator)
+        load_plugin.cache_clear()
+
+    def test_example_generator_is_instance_of_protocol(self):
+        gen = HelloWorldVolumeGenerator(
+            default_uav_speed_m_per_s=5.5,
+            default_uav_climb_rate_m_per_s=1.5,
+            default_uav_descent_rate_m_per_s=1.5,
+        )
+        self.assertIsInstance(gen, Volume4DGeneratorProtocol)
 
 
 # ---------------------------------------------------------------------------

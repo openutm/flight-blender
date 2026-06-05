@@ -9,7 +9,7 @@ import urllib3
 from dacite import Config, from_dict
 from loguru import logger
 
-from flight_blender.auth import dss_auth as dss_auth_helper
+from flight_blender.auth.dss_auth import get_dss_auth_token
 from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
@@ -206,22 +206,4 @@ class ConstraintOperations:
         return all_constraints_in_aoi
 
     def get_auth_token(self, audience: str = ""):
-        my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
-        if not audience:
-            audience = settings.DSS_SELF_AUDIENCE
-        if not audience:
-            logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
-            return {"error": "DSS_SELF_AUDIENCE is not set in the environment"}
-        auth_token: dict = {}
-        try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="constraints")  # nosec B106
-        except Exception as e:
-            logger.error("Error in getting Authority Access Token %s " % e)
-            logger.error(f"Auth server error {e}")
-            auth_token["error"] = "Error in getting access token"
-        else:
-            error = auth_token.get("error", None)
-            if error:
-                logger.error("Authority server provided the following error during token request %s " % error)
-
-        return auth_token
+        return get_dss_auth_token(audience=audience, token_type="constraints")  # nosec B106
