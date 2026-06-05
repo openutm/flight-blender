@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
-from flight_blender.core.operations.conformance import ConformanceChecksList
-from flight_blender.core.operations.conformance import (
+from flight_blender.services.conformance_svc import ConformanceChecksList
+from flight_blender.services.conformance_svc import (
     AcceptedState,
     ActivatedState,
     CancelledState,
@@ -29,13 +29,13 @@ from flight_blender.core.operations.conformance import (
     get_status,
     match_state,
 )
-from flight_blender.core.operations.conformance import (
+from flight_blender.services.conformance_svc import (
     OperationConformanceNotification,
     set_conformance_deps,
 )
-from flight_blender.infrastructure.celery.tasks.conformance import check_flight_conformance, check_operation_telemetry_conformance
-from flight_blender.core.operations.conformance import FlightBlenderConformanceEngine, is_time_between
-from flight_blender.core.entities.scd import LatLngPoint
+from flight_blender.tasks.conformance_task import check_flight_conformance, check_operation_telemetry_conformance
+from flight_blender.services.conformance_svc import FlightBlenderConformanceEngine, is_time_between
+from flight_blender.domain_types.scd import LatLngPoint
 
 
 # ---------------------------------------------------------------------------
@@ -275,20 +275,20 @@ class TestCheckFlightOperationalIntentReferenceConformance:
 class TestCheckFlightConformanceTask:
     def test_conformant_calls_telemetry_check(self):
         with patch(
-            "flight_blender.infrastructure.celery.tasks.conformance.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
+            "flight_blender.tasks.conformance_task.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
             return_value=1,
         ):
-            with patch("flight_blender.infrastructure.celery.tasks.conformance.check_operation_telemetry_conformance") as mock_telem:
+            with patch("flight_blender.tasks.conformance_task.check_operation_telemetry_conformance") as mock_telem:
                 check_flight_conformance(flight_declaration_id=str(uuid.uuid4()), session_id="test-sess")
                 mock_telem.assert_called_once()
 
     def test_nonconformant_sends_signal(self):
         with patch(
-            "flight_blender.infrastructure.celery.tasks.conformance.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
+            "flight_blender.tasks.conformance_task.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
             return_value=ConformanceChecksList.C9a,
         ):
             with patch(
-                "flight_blender.infrastructure.celery.tasks.conformance.custom_signals.flight_operational_intent_reference_non_conformance_signal.send"
+                "flight_blender.tasks.conformance_task.custom_signals.flight_operational_intent_reference_non_conformance_signal.send"
             ) as mock_signal:
                 check_flight_conformance(flight_declaration_id=str(uuid.uuid4()), session_id="test-sess")
                 mock_signal.assert_called_once()
@@ -296,7 +296,7 @@ class TestCheckFlightConformanceTask:
 
 class TestCheckOperationTelemetryConformanceTask:
     def test_no_observation_returns_early(self):
-        with patch("flight_blender.infrastructure.celery.tasks.conformance.flight_stream_helper.ObservationReadOperations") as mock_obs_cls:
+        with patch("flight_blender.tasks.conformance_task.flight_stream_helper.ObservationReadOperations") as mock_obs_cls:
             mock_obs_instance = MagicMock()
             mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id.return_value = None
             mock_obs_cls.return_value = mock_obs_instance
@@ -318,7 +318,7 @@ class TestOperationConformanceNotification:
 
     def test_with_amqp_calls_task(self):
         with patch("flight_blender.config.settings.AMQP_URL", "amqp://localhost"):
-            with patch("flight_blender.infrastructure.celery.tasks.flight_declarations.send_operational_update_message") as mock_task:
+            with patch("flight_blender.tasks.flight_declarations_task.send_operational_update_message") as mock_task:
                 mock_delay = MagicMock()
                 mock_task.delay = mock_delay
                 notifier = MagicMock()

@@ -18,9 +18,9 @@ See PLUGINS.md for the full guide.
 from loguru import logger
 from sqlalchemy import select
 
-from flight_blender.core.entities.common import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
-from flight_blender.core.entities.flight_declarations import DeconflictionRequest, DeconflictionResult
-from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
+from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
+from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
+from flight_blender.models.flight_declarations_orm import FlightDeclarationORM
 from flight_blender.infrastructure.database.session import session_scope
 
 # Derive state codes directly from the canonical OPERATION_STATES tuple so this

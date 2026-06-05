@@ -7,8 +7,8 @@ from typing import Protocol, runtime_checkable
 
 import pytest
 
-from flight_blender.core.operations.json_codecs import EnhancedJSONDecoder, EnhancedJSONEncoder, LazyEncoder
-from flight_blender.infrastructure.auth.auth_token_audience_helper import generate_audience_from_base_url
+from flight_blender.utils.json_codecs import EnhancedJSONDecoder, EnhancedJSONEncoder, LazyEncoder
+from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.plugins.loader import load_plugin
 
 
@@ -121,7 +121,7 @@ class TestLoadPlugin:
 
     def test_raises_attribute_error_for_bad_class(self):
         with pytest.raises(AttributeError):
-            load_plugin("flight_blender.core.operations.json_codecs.NonExistentClass")
+            load_plugin("flight_blender.utils.json_codecs.NonExistentClass")
 
     def test_validates_protocol(self):
         @runtime_checkable
@@ -145,6 +145,6 @@ class TestLoadPlugin:
         # This class doesn't have method_xyz_does_not_exist
         with pytest.raises(TypeError):
             load_plugin(
-                "flight_blender.core.operations.json_codecs.EnhancedJSONEncoder",
+                "flight_blender.utils.json_codecs.EnhancedJSONEncoder",
                 expected_protocol=RequiresMethodXYZ,
             )

@@ -35,8 +35,17 @@ from flight_blender.infrastructure.database.models.surveillance import (  # noqa
     SurveillanceSessionORM,
     SurveillanceTrackEventORM,
 )
-from flight_blender.infrastructure.database.session import Base, async_get_db
+from flight_blender.infrastructure.database.session import Base as OldBase, async_get_db as old_async_get_db
 from flight_blender.infrastructure.database.session import engine as sync_engine
+from flight_blender.db.session import Base, async_get_db
+from flight_blender.models.conformance_orm import ConformanceRecordORM as _NewConformanceORM  # noqa: F401 — triggers new metadata
+from flight_blender.models.constraint_orm import ConstraintDetailORM as _NewConstraintORM  # noqa: F401
+from flight_blender.models.flight_declarations_orm import FlightDeclarationORM as _NewFlightDeclORM  # noqa: F401
+from flight_blender.models.flight_feed_orm import FlightObservationORM as _NewFlightFeedORM  # noqa: F401
+from flight_blender.models.geo_fence_orm import GeoFenceORM as _NewGeoFenceORM  # noqa: F401
+from flight_blender.models.notifications_orm import OperatorRIDNotificationORM as _NewNotificationsORM  # noqa: F401
+from flight_blender.models.rid_orm import ISASubscriptionORM as _NewRIDORM  # noqa: F401
+from flight_blender.models.surveillance_orm import SurveillanceSensorORM as _NewSurveillanceORM  # noqa: F401
 
 
 # ── Auth token helpers ───────────────────────────────────────────────────────
@@ -102,9 +111,12 @@ def _celery_eager(monkeypatch):
 @pytest.fixture(scope="session", autouse=True)
 def _sync_sqlalchemy_schema():
     """Create tables for migrated sync code paths that still use session_scope()."""
+    OldBase.metadata.drop_all(sync_engine)
+    OldBase.metadata.create_all(sync_engine)
     Base.metadata.drop_all(sync_engine)
     Base.metadata.create_all(sync_engine)
     yield
+    OldBase.metadata.drop_all(sync_engine)
     Base.metadata.drop_all(sync_engine)
 
 
@@ -139,7 +151,7 @@ def _mock_all_redis(monkeypatch):
     fake = fakeredis.FakeRedis(server=server, decode_responses=True)
     fake_async = _AsyncRedisAdapter(fake)
 
-    import flight_blender.infrastructure.auth.redis_helpers as auth_redis_helpers
+    import flight_blender.auth.token_cache as auth_redis_helpers
 
     monkeypatch.setattr(auth_redis_helpers, "get_redis", lambda: fake)
     monkeypatch.setattr(auth_redis_helpers, "get_async_redis", lambda: fake_async)
@@ -148,22 +160,42 @@ def _mock_all_redis(monkeypatch):
     _patched_get_async_redis = lambda: fake_async
 
     for _mod_path in (
+        # New _api router paths
+        "flight_blender.api.routers.flight_feed_api",
+        "flight_blender.api.routers.geo_fence_api",
+        "flight_blender.api.routers.rid_api",
+        "flight_blender.api.routers.uss_api",
+        # Old router paths (still exist alongside new ones)
         "flight_blender.api.routers.flight_feed",
         "flight_blender.api.routers.geo_fence",
         "flight_blender.api.routers.rid",
         "flight_blender.api.routers.uss",
+        # New task paths
+        "flight_blender.tasks.conformance_task",
+        "flight_blender.tasks.geo_fence_task",
+        "flight_blender.tasks.rid_task",
+        "flight_blender.tasks.surveillance_task",
+        # Old task paths (still exist)
         "flight_blender.infrastructure.celery.tasks.conformance",
         "flight_blender.infrastructure.celery.tasks.geo_fence",
         "flight_blender.infrastructure.celery.tasks.rid",
         "flight_blender.infrastructure.celery.tasks.surveillance",
+        # New client paths
+        "flight_blender.clients.dss_rid_client",
+        "flight_blender.clients.dss_scd_client",
+        # New util paths
+        "flight_blender.utils.spatial_flight_declarations",
+        "flight_blender.utils.spatial_geo_fence",
+        "flight_blender.utils.spatial_rid",
+        # Old util paths
         "flight_blender.infrastructure.redis.stream_operations",
         "flight_blender.infrastructure.spatial.flight_declarations",
         "flight_blender.infrastructure.spatial.geo_fence",
         "flight_blender.infrastructure.spatial.rid",
         "flight_blender.infrastructure.dss.rid",
         "flight_blender.infrastructure.dss.scd",
-        "flight_blender.infrastructure.auth.pki_helper",
-        "flight_blender.infrastructure.auth.dss_auth_helper",
+        "flight_blender.auth.pki",
+        "flight_blender.auth.dss_auth",
     ):
         try:
             _mod = __import__(_mod_path, fromlist=["*"])
@@ -192,6 +224,7 @@ async def mounted_sync_client():
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async with test_engine.begin() as conn:
+        await conn.run_sync(OldBase.metadata.create_all)
         await conn.run_sync(Base.metadata.create_all)
 
     async def override_get_db():
@@ -205,6 +238,7 @@ async def mounted_sync_client():
 
     app = create_fastapi_app()
     app.dependency_overrides[async_get_db] = override_get_db
+    app.dependency_overrides[old_async_get_db] = override_get_db
 
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c
@@ -219,6 +253,7 @@ async def fastapi_client():
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async with test_engine.begin() as conn:
+        await conn.run_sync(OldBase.metadata.create_all)
         await conn.run_sync(Base.metadata.create_all)
 
     async def override_get_db():
@@ -232,6 +267,7 @@ async def fastapi_client():
 
     app = create_fastapi_app()
     app.dependency_overrides[async_get_db] = override_get_db
+    app.dependency_overrides[old_async_get_db] = override_get_db
 
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c
@@ -246,6 +282,7 @@ async def mounted_fastapi_client():
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async with test_engine.begin() as conn:
+        await conn.run_sync(OldBase.metadata.create_all)
         await conn.run_sync(Base.metadata.create_all)
 
     async def override_get_db():
@@ -259,6 +296,7 @@ async def mounted_fastapi_client():
 
     fastapi_app = create_fastapi_app()
     fastapi_app.dependency_overrides[async_get_db] = override_get_db
+    fastapi_app.dependency_overrides[old_async_get_db] = override_get_db
     with TestClient(fastapi_app, raise_server_exceptions=True) as c:
         yield c
 
@@ -324,7 +362,7 @@ def future_dates():
 def mock_scd_auth_error(monkeypatch):
     """SCDOperations.get_auth_token returns an error — triggers the auth-failure branch."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_error())
 
@@ -333,7 +371,7 @@ def mock_scd_auth_error(monkeypatch):
 def mock_scd_dss_success(monkeypatch):
     """SCDOperations succeeds: auth OK, DSS submission accepted."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -351,7 +389,7 @@ def mock_scd_dss_success(monkeypatch):
 def mock_scd_dss_conflict(monkeypatch):
     """SCDOperations: auth OK, DSS submission returns conflict."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -366,7 +404,7 @@ def mock_scd_dss_conflict(monkeypatch):
 def mock_scd_dss_failure(monkeypatch):
     """SCDOperations: auth OK, DSS submission fails (500)."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -381,7 +419,7 @@ def mock_scd_dss_failure(monkeypatch):
 def mock_scd_dss_timeout(monkeypatch):
     """SCDOperations: auth OK, DSS submission times out (408)."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -396,7 +434,7 @@ def mock_scd_dss_timeout(monkeypatch):
 def mock_scd_delete_success(monkeypatch):
     """SCDOperations.delete_operational_intent returns success (200)."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -410,7 +448,7 @@ def mock_scd_delete_success(monkeypatch):
 def mock_scd_delete_failure(monkeypatch):
     """SCDOperations.delete_operational_intent returns failure (404)."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -424,7 +462,7 @@ def mock_scd_delete_failure(monkeypatch):
 def mock_network_opint_empty(monkeypatch):
     """SCDOperations.get_and_process_nearby_operational_intents returns empty FeatureCollection."""
     from tests import fakes
-    import flight_blender.infrastructure.dss.scd as dss_helper
+    import flight_blender.clients.dss_scd_client as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(

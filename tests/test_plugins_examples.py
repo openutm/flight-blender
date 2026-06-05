@@ -7,8 +7,8 @@ from geojson import Feature, FeatureCollection
 from flight_blender.plugins.examples.hello_world_engine import HelloWorldEngine
 from flight_blender.plugins.examples.hello_world_fuser import HelloWorldFuser
 from flight_blender.plugins.examples.hello_world_volume_generator import HelloWorldVolumeGenerator
-from flight_blender.core.entities.flight_declarations import DeconflictionRequest
-from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
+from flight_blender.domain_types.flight_declarations import DeconflictionRequest
+from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 
 
 # ---------------------------------------------------------------------------

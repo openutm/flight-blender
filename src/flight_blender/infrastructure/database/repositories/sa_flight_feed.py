@@ -8,7 +8,7 @@ from loguru import logger
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
+from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
 from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM
 

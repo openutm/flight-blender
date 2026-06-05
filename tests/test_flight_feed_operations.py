@@ -258,7 +258,7 @@ class TestGetAirTraffic:
 class TestStartOpenSkyFeed:
     @pytest.fixture(autouse=True)
     def _mock_opensky_task(self):
-        with patch("flight_blender.infrastructure.celery.tasks.flight_feed.start_opensky_network_stream.delay"):
+        with patch("flight_blender.tasks.flight_feed_task.start_opensky_network_stream.delay"):
             yield
 
     def test_start_opensky_missing_view(self, mounted_sync_client):

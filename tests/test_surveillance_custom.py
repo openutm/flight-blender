@@ -5,9 +5,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
-from flight_blender.core.entities.surveillance import ActiveTrack
-from flight_blender.core.operations.surveillance import SpecializedTrafficDataFuser, TrafficDataFuser
+from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
+from flight_blender.domain_types.surveillance import ActiveTrack
+from flight_blender.services.surveillance_svc import SpecializedTrafficDataFuser, TrafficDataFuser
 
 
 # ===========================================================================

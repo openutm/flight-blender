@@ -1056,7 +1056,7 @@ class SyncDatabaseFacade:
             return True
 
     def create_conformance_monitoring_periodic_task(self, flight_declaration) -> bool:
-        from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService
+        from flight_blender.tasks.scheduler import TaskSchedulerService
 
         expires = arrow.now().shift(hours=6).isoformat()
         return TaskSchedulerService.schedule_conformance_check(

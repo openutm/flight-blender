@@ -15,7 +15,7 @@ import arrow
 import pytest
 
 from flight_blender.config import settings
-from flight_blender.infrastructure.dss.scd import (
+from flight_blender.clients.dss_scd_client import (
     FlightPlanningDataValidator,
     OperationalIntentReferenceHelper,
     OperationalIntentValidator,
@@ -23,8 +23,8 @@ from flight_blender.infrastructure.dss.scd import (
     VolumesConverter,
     VolumesValidator,
 )
-from flight_blender.core.entities.scd import FlightPlanningInjectionData
-from flight_blender.core.entities.scd import (
+from flight_blender.domain_types.scd import FlightPlanningInjectionData
+from flight_blender.domain_types.scd import (
     Altitude,
     Circle,
     LatLngPoint,
@@ -37,7 +37,7 @@ from flight_blender.core.entities.scd import (
     Volume3D,
     Volume4D,
 )
-from flight_blender.core.entities.scd import Polygon as Plgn
+from flight_blender.domain_types.scd import Polygon as Plgn
 
 
 # ---------------------------------------------------------------------------

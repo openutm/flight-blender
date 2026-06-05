@@ -2,7 +2,7 @@
 
 import pytest
 
-from flight_blender.core.operations.scd import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
+from flight_blender.services.scd_svc import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
 
 
 # ---------------------------------------------------------------------------

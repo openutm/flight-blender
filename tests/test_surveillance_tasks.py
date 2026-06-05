@@ -15,13 +15,13 @@ import arrow
 
 from flight_blender.config import settings
 
-from flight_blender.core.operations.surveillance import SurveillanceMetricCalculator
-from flight_blender.infrastructure.celery.tasks.surveillance import (
+from flight_blender.services.surveillance_svc import SurveillanceMetricCalculator
+from flight_blender.tasks.surveillance_task import (
     cleanup_old_heartbeat_events,
     send_and_generate_track_to_consumer,
     send_heartbeat_to_consumer,
 )
-from flight_blender.infrastructure.redis.stream_operations import RedisStreamOperations
+from flight_blender.clients.redis_client import RedisStreamOperations
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -278,7 +278,7 @@ def _sa_repo_patch(mock_repo):
             stack.enter_context(patch("flight_blender.infrastructure.database.session.SessionLocal", return_value=mock_session))
             stack.enter_context(
                 patch(
-                    "flight_blender.infrastructure.celery.tasks.surveillance.SQLAlchemySurveillanceSyncRepository",
+                    "flight_blender.tasks.surveillance_task.SQLAlchemySurveillanceSyncRepository",
                     mock_repo_cls,
                 )
             )
@@ -292,7 +292,7 @@ class TestSendHeartbeatToConsumer:
         """send_heartbeat_to_consumer should record event when Redis publish succeeds."""
         mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
-        with patch("flight_blender.infrastructure.celery.tasks.surveillance.redis.from_url") as mock_from_url:
+        with patch("flight_blender.tasks.surveillance_task.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.return_value = 1
             with patch.object(send_heartbeat_to_consumer, "apply_async") as mock_apply_async:
                 with _sa_repo_patch(mock_repo):
@@ -305,7 +305,7 @@ class TestSendHeartbeatToConsumer:
         """send_heartbeat_to_consumer records the event even when Redis publish fails."""
         mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
-        with patch("flight_blender.infrastructure.celery.tasks.surveillance.redis.from_url") as mock_from_url:
+        with patch("flight_blender.tasks.surveillance_task.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.side_effect = Exception("redis unavailable")
             with patch.object(send_heartbeat_to_consumer, "apply_async") as mock_apply_async:
                 with _sa_repo_patch(mock_repo):
@@ -322,11 +322,11 @@ class TestSendAndGenerateTrackToConsumer:
         """send_and_generate_track_to_consumer calls record_track_event."""
         mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
-        with patch("flight_blender.infrastructure.celery.tasks.surveillance.redis.from_url") as mock_from_url:
+        with patch("flight_blender.tasks.surveillance_task.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.return_value = 1
             with patch.object(RedisStreamOperations, "create_consumer_reader", return_value="consumer-1"):
                 with patch.object(RedisStreamOperations, "read_latest_air_traffic_data", return_value=[]):
-                    with patch("flight_blender.infrastructure.celery.tasks.surveillance.load_plugin") as mock_load:
+                    with patch("flight_blender.tasks.surveillance_task.load_plugin") as mock_load:
                         mock_fuser = MagicMock()
                         mock_fuser.return_value.generate_track_messages.return_value = []
                         mock_load.return_value = mock_fuser

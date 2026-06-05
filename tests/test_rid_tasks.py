@@ -14,9 +14,9 @@ import arrow
 import pytest
 
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-from flight_blender.core.entities.rid import RIDStreamErrorDetail
-from flight_blender.core.operations.rid import FlightTelemetryRIDEngine
-from flight_blender.infrastructure.celery.tasks.rid import (
+from flight_blender.domain_types.rid import RIDStreamErrorDetail
+from flight_blender.services.rid_svc import FlightTelemetryRIDEngine
+from flight_blender.tasks.rid_task import (
     _parse_rid_timestamp_us,
     check_rid_stream_conformance,
     process_requested_flight,
@@ -149,7 +149,7 @@ class TestProcessRequestedFlight:
             "details_responses": [_make_flight_detail_entry()],
         }
         with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
-            with patch("flight_blender.infrastructure.celery.tasks.rid.write_operator_rid_notification") as mock_notify:
+            with patch("flight_blender.tasks.rid_task.write_operator_rid_notification") as mock_notify:
                 result, positions, altitudes = process_requested_flight(
                     requested_flight=flight,
                     flight_injection_sorted_set="test_ss2",
@@ -276,8 +276,8 @@ class TestStreamRidTelemetryData:
         """stream_rid_telemetry_data should enqueue write tasks for each state."""
         payload = json.dumps(self._make_observation_payload())
         with patch.object(SyncDatabaseFacade, "update_telemetry_timestamp"):
-            with patch("flight_blender.infrastructure.celery.tasks.rid.write_incoming_air_traffic_data") as mock_write:
-                with patch("flight_blender.infrastructure.celery.tasks.rid.wgs84_to_barometric", return_value=(100.0, 100.0)):
+            with patch("flight_blender.tasks.rid_task.write_incoming_air_traffic_data") as mock_write:
+                with patch("flight_blender.tasks.rid_task.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
         mock_write.delay.assert_called_once()
 
@@ -287,8 +287,8 @@ class TestStreamRidTelemetryData:
         obs[0]["current_states"].append(obs[0]["current_states"][0].copy())
         payload = json.dumps(obs)
         with patch.object(SyncDatabaseFacade, "update_telemetry_timestamp"):
-            with patch("flight_blender.infrastructure.celery.tasks.rid.write_incoming_air_traffic_data") as mock_write:
-                with patch("flight_blender.infrastructure.celery.tasks.rid.wgs84_to_barometric", return_value=(100.0, 100.0)):
+            with patch("flight_blender.tasks.rid_task.write_incoming_air_traffic_data") as mock_write:
+                with patch("flight_blender.tasks.rid_task.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
         assert mock_write.delay.call_count == 2
 

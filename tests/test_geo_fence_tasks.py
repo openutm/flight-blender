@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from requests.exceptions import ConnectionError
 
-from flight_blender.infrastructure.celery.tasks.geo_fence import download_geozone_source, write_geo_zone
+from flight_blender.tasks.geo_fence_task import download_geozone_source, write_geo_zone
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ class TestWriteGeoZoneTask:
         mock_parse_response = MagicMock()
         mock_parse_response.feature_list = [feature]
 
-        with patch("flight_blender.infrastructure.celery.tasks.geo_fence.GeoZoneParser") as mock_parser_cls:
+        with patch("flight_blender.tasks.geo_fence_task.GeoZoneParser") as mock_parser_cls:
             mock_parser = MagicMock()
             mock_parser.parse_validate_geozone.return_value = mock_parse_response
             mock_parser_cls.return_value = mock_parser
@@ -86,7 +86,7 @@ class TestWriteGeoZoneTask:
         mock_parse_response = MagicMock()
         mock_parse_response.feature_list = [feature]
 
-        with patch("flight_blender.infrastructure.celery.tasks.geo_fence.GeoZoneParser") as mock_parser_cls:
+        with patch("flight_blender.tasks.geo_fence_task.GeoZoneParser") as mock_parser_cls:
             mock_parser = MagicMock()
             mock_parser.parse_validate_geozone.return_value = mock_parse_response
             mock_parser_cls.return_value = mock_parser
@@ -111,9 +111,9 @@ class TestDownloadGeozoneSourceTask:
         mock_redis.exists.return_value = True
 
         with (
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.requests.get", return_value=mock_response),
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.get_redis", return_value=mock_redis),
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.write_geo_zone.delay") as mock_delay,
+            patch("flight_blender.tasks.geo_fence_task.requests.get", return_value=mock_response),
+            patch("flight_blender.tasks.geo_fence_task.get_redis", return_value=mock_redis),
+            patch("flight_blender.tasks.geo_fence_task.write_geo_zone.delay") as mock_delay,
         ):
             download_geozone_source("http://example.com/zones.json", "test-source-123")
             mock_delay.assert_called_once()
@@ -126,8 +126,8 @@ class TestDownloadGeozoneSourceTask:
         mock_redis.exists.return_value = True
 
         with (
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.requests.get", return_value=mock_response),
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.get_redis", return_value=mock_redis),
+            patch("flight_blender.tasks.geo_fence_task.requests.get", return_value=mock_response),
+            patch("flight_blender.tasks.geo_fence_task.get_redis", return_value=mock_redis),
         ):
             download_geozone_source("http://example.com/zones.json", "test-source-404")
             mock_redis.set.assert_called_once()
@@ -139,8 +139,8 @@ class TestDownloadGeozoneSourceTask:
         mock_redis.exists.return_value = True
 
         with (
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.requests.get", side_effect=ConnectionError("timeout")),
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.get_redis", return_value=mock_redis),
+            patch("flight_blender.tasks.geo_fence_task.requests.get", side_effect=ConnectionError("timeout")),
+            patch("flight_blender.tasks.geo_fence_task.get_redis", return_value=mock_redis),
         ):
             download_geozone_source("http://unreachable.invalid/zones.json", "test-source-err")
             mock_redis.set.assert_called_once()
@@ -155,8 +155,8 @@ class TestDownloadGeozoneSourceTask:
         mock_redis.exists.return_value = False
 
         with (
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.requests.get", return_value=mock_response),
-            patch("flight_blender.infrastructure.celery.tasks.geo_fence.get_redis", return_value=mock_redis),
+            patch("flight_blender.tasks.geo_fence_task.requests.get", return_value=mock_response),
+            patch("flight_blender.tasks.geo_fence_task.get_redis", return_value=mock_redis),
         ):
             download_geozone_source("http://example.com/zones.json", "test-source-no-key")
             mock_redis.set.assert_not_called()

@@ -57,7 +57,7 @@ class TestWeatherEndpoint:
         assert "latitude" in resp.json()["error"].lower()
 
     def test_weather_success(self, fastapi_client):
-        with patch("flight_blender.api.routers.weather.WeatherClient") as MockWS:
+        with patch("flight_blender.api.routers.weather_api.WeatherClient") as MockWS:
             instance = MockWS.return_value
             instance.get_weather = AsyncMock(return_value=MOCK_WEATHER)
             resp = fastapi_client.get(

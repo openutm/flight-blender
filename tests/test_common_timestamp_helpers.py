@@ -4,7 +4,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-from flight_blender.infrastructure.redis.stream_operations import RedisStreamOperations
+from flight_blender.clients.redis_client import RedisStreamOperations
 
 
 class TimestampNormalizationTests(TestCase):

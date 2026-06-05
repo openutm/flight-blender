@@ -90,7 +90,7 @@ class TestConstraintAuthEnforcement:
         async def fake_fetch_jwks(url: str):
             return {"keys": [jwk]}
 
-        monkeypatch.setattr("flight_blender.infrastructure.auth.jwt_validator._fetch_jwks", fake_fetch_jwks)
+        monkeypatch.setattr("flight_blender.auth.jwt_validator._fetch_jwks", fake_fetch_jwks)
         return private_key
 
     def test_missing_token_returns_401(self, mounted_fastapi_client, rsa_private_key):

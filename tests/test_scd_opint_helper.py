@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
-from flight_blender.infrastructure.dss.scd import DSSOperationalIntentsCreator
-from flight_blender.core.entities.scd import (
+from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator
+from flight_blender.domain_types.scd import (
     OperationalIntentSubmissionStatus,
     OtherError,
 )

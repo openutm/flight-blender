@@ -8,12 +8,12 @@ app = Celery(
     broker=settings.REDIS_BROKER_URL,
     broker_connection_retry_on_startup=True,
     include=[
-        "flight_blender.infrastructure.celery.tasks.geo_fence",
-        "flight_blender.infrastructure.celery.tasks.surveillance",
-        "flight_blender.infrastructure.celery.tasks.flight_feed",
-        "flight_blender.infrastructure.celery.tasks.flight_declarations",
-        "flight_blender.infrastructure.celery.tasks.conformance",
-        "flight_blender.infrastructure.celery.tasks.rid",
+        "flight_blender.tasks.geo_fence_task",
+        "flight_blender.tasks.surveillance_task",
+        "flight_blender.tasks.flight_feed_task",
+        "flight_blender.tasks.flight_declarations_task",
+        "flight_blender.tasks.conformance_task",
+        "flight_blender.tasks.rid_task",
     ],
 )
 
@@ -29,7 +29,7 @@ app.conf.update(
 @task_postrun.connect
 def close_db_connections_after_task(**kwargs):
     """Return connections to the pool after each Celery task."""
-    from flight_blender.infrastructure.database.session import engine
+    from flight_blender.db.session import async_engine as engine
 
     engine.dispose(close=False)
 

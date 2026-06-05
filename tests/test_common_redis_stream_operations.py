@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from flight_blender.core.entities.surveillance import ActiveTrack
-from flight_blender.infrastructure.redis.stream_operations import RedisStreamOperations
+from flight_blender.domain_types.surveillance import ActiveTrack
+from flight_blender.clients.redis_client import RedisStreamOperations
 
 
 # ---------------------------------------------------------------------------
