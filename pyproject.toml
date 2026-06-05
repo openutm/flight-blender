@@ -33,9 +33,6 @@ dependencies = [
     "celery==5.5.3",
     "cryptography==46.0.7",
     "dacite==1.9.2",
-    "dj-database-url==2.1.0",
-    "django==5.2.14",
-    "django-celery-beat==2.8.1",
     "geojson==3.2.0",
     "gunicorn==23.0.0",
     "uvicorn[standard]==0.37.0",
@@ -69,7 +66,6 @@ dev = [
     "codespell>=2.4.1",
     "pre-commit>=4.2.0",
     "pyright>=1.1.398",
-    "pytest-django>=4.11.1",
     "pyupgrade>=3.19.1",
     "ruff>=0.11.4",
     "python-lsp-server>=1.12.2",
@@ -80,18 +76,17 @@ dev = [
     "radon>=6.0.1",
     "pytest-env>=1.2.0",
     "fakeredis>=2.36.0",
-    "django-stubs>=5.0.0",
 ]
 
 [tool.pyright]
 typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "flight_blender.settings"
 addopts = "-v --tb=short"
 testpaths = ["tests"]
 env = [
     "USE_LOCAL_SQLITE_DATABASE=1",
+    "DATABASE_URL=sqlite:////tmp/flight_blender_tests.sqlite3",
     "BYPASS_AUTH_TOKEN_VERIFICATION=1",
 ]
 python_files = ["test_*.py"]
@@ -182,11 +177,8 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
-# Legacy Django files not yet migrated to SQLAlchemy — lazy imports prevent circular deps
-"src/flight_blender/infrastructure/database/repositories/django_*.py" = ["PLC0415"]
 "src/flight_blender/infrastructure/celery/task_scheduler.py" = ["PLC0415"]
-"src/flight_blender/surveillance/views.py" = ["PLC0415"]
-"src/flight_blender/surveillance/metric_calculator.py" = ["PLC0415"]
+"src/flight_blender/common/database_operations.py" = ["PLC0415"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["flight_blender"]

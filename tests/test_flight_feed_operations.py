@@ -5,7 +5,6 @@ import pytest
 from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE
 
 
-@pytest.mark.django_db
 class TestSetAirTraffic:
     def test_set_air_traffic(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
@@ -122,7 +121,6 @@ class TestSetAirTraffic:
         assert resp.status_code == 422
 
 
-@pytest.mark.django_db
 class TestBulkSetAirTraffic:
     def test_bulk_set_air_traffic(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
@@ -221,7 +219,6 @@ class TestBulkSetAirTraffic:
         assert resp.status_code == 422
 
 
-@pytest.mark.django_db
 class TestGetAirTraffic:
     def test_get_air_traffic_missing_view(self, mounted_sync_client):
         session_id = str(uuid.uuid4())
@@ -258,11 +255,10 @@ class TestGetAirTraffic:
         assert resp.status_code in (200, 400)
 
 
-@pytest.mark.django_db
 class TestStartOpenSkyFeed:
     @pytest.fixture(autouse=True)
     def _mock_opensky_task(self):
-        with patch("flight_blender.flight_feed.tasks.start_opensky_network_stream.delay"):
+        with patch("flight_blender.tasks.flight_feed_task.start_opensky_network_stream.delay"):
             yield
 
     def test_start_opensky_missing_view(self, mounted_sync_client):
@@ -289,7 +285,6 @@ class TestStartOpenSkyFeed:
         assert "message" in data
 
 
-@pytest.mark.django_db
 class TestSetTelemetry:
     def test_set_telemetry_missing_observations(self, mounted_sync_client):
         resp = mounted_sync_client.put(
@@ -346,7 +341,6 @@ class TestSetTelemetry:
         assert resp.status_code in (400, 500)
 
 
-@pytest.mark.django_db
 class TestTrafficInformationDiscovery:
     def test_traffic_info_not_registered(self, mounted_sync_client):
         resp = mounted_sync_client.get(

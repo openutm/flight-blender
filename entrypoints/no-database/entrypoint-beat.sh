@@ -1,10 +1,12 @@
 #!/bin/bash
 
+set -e
+
 source .venv/bin/activate
 
 echo Waiting for DBs...
 if ! wait-for-it --parallel --service $REDIS_HOST:$REDIS_PORT; then
-    exit
+    exit 1
 fi
 
-celery --app=flight_blender beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+celery --app=flight_blender beat --loglevel=info --schedule=/tmp/celerybeat-schedule

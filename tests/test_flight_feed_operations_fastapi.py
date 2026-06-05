@@ -120,7 +120,6 @@ class TestBulkSetAirTrafficFastAPI:
         assert resp.status_code == 422
 
 
-@pytest.mark.django_db
 class TestGetAirTrafficFastAPI:
     def test_unauthenticated(self, fastapi_client):
         session_id = str(uuid.uuid4())
@@ -150,7 +149,7 @@ class TestGetAirTrafficFastAPI:
 class TestStartOpenskyFeedFastAPI:
     @pytest.fixture(autouse=True)
     def _mock_opensky_task(self):
-        with patch("flight_blender.flight_feed.tasks.start_opensky_network_stream.delay"):
+        with patch("flight_blender.tasks.flight_feed_task.start_opensky_network_stream.delay"):
             yield
 
     def test_unauthenticated(self, fastapi_client):

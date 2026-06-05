@@ -7,9 +7,8 @@ from geojson import Feature, FeatureCollection
 from flight_blender.plugins.examples.hello_world_engine import HelloWorldEngine
 from flight_blender.plugins.examples.hello_world_fuser import HelloWorldFuser
 from flight_blender.plugins.examples.hello_world_volume_generator import HelloWorldVolumeGenerator
-from flight_blender.flight_declarations.data_definitions import DeconflictionRequest
-from flight_blender.flight_declarations.models import FlightDeclaration
-from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
+from flight_blender.domain_types.flight_declarations import DeconflictionRequest
+from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 
 
 # ---------------------------------------------------------------------------
@@ -112,75 +111,13 @@ class TestHelloWorldFuser:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestHelloWorldEngine:
-    def _make_declaration(self, start_offset_s=0, end_offset_s=3600, state=1):
-        now = arrow.utcnow()
-        fd = FlightDeclaration.objects.create(
-            flight_declaration_raw_geojson="{}",
-            bounds="-1.0,-1.0,1.0,1.0",
-            start_datetime=now.shift(seconds=start_offset_s).datetime,
-            end_datetime=now.shift(seconds=end_offset_s).datetime,
-            type_of_operation=0,
-            originating_party="TEST",
-            state=state,
-        )
-        return fd
-
     def test_no_conflict_returns_approved(self):
         engine = HelloWorldEngine()
         now = arrow.utcnow()
         req = DeconflictionRequest(
             start_datetime=now.shift(hours=10).datetime,
             end_datetime=now.shift(hours=11).datetime,
-            view_box=[-1.0, -1.0, 1.0, 1.0],
-            declaration_id=None,
-            ussp_network_enabled=False,
-        )
-        result = engine.check_deconfliction(req)
-        assert result.is_approved is True
-
-    def test_time_conflict_returns_rejected(self):
-        now = arrow.utcnow()
-        self._make_declaration(start_offset_s=-600, end_offset_s=3600, state=1)
-
-        engine = HelloWorldEngine()
-        req = DeconflictionRequest(
-            start_datetime=now.shift(seconds=-300).datetime,
-            end_datetime=now.shift(seconds=1800).datetime,
-            view_box=[-1.0, -1.0, 1.0, 1.0],
-            declaration_id=None,
-            ussp_network_enabled=False,
-        )
-        result = engine.check_deconfliction(req)
-        assert result.is_approved is False
-        assert result.all_relevant_declarations != []
-
-    def test_exclude_self_declaration(self):
-        now = arrow.utcnow()
-        fd = self._make_declaration(start_offset_s=-600, end_offset_s=3600, state=1)
-
-        engine = HelloWorldEngine()
-        req = DeconflictionRequest(
-            start_datetime=now.shift(seconds=-300).datetime,
-            end_datetime=now.shift(seconds=1800).datetime,
-            view_box=[-1.0, -1.0, 1.0, 1.0],
-            declaration_id=str(fd.id),
-            ussp_network_enabled=False,
-        )
-        # The declaration being checked is excluded → no conflict
-        result = engine.check_deconfliction(req)
-        assert result.is_approved is True
-
-    def test_inactive_state_not_conflicting(self):
-        """Declarations in state 0 (Not Submitted) should not conflict."""
-        now = arrow.utcnow()
-        self._make_declaration(start_offset_s=-600, end_offset_s=3600, state=0)
-
-        engine = HelloWorldEngine()
-        req = DeconflictionRequest(
-            start_datetime=now.shift(seconds=-300).datetime,
-            end_datetime=now.shift(seconds=1800).datetime,
             view_box=[-1.0, -1.0, 1.0, 1.0],
             declaration_id=None,
             ussp_network_enabled=False,

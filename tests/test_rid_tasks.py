@@ -13,10 +13,10 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-from flight_blender.rid.data_definitions import RIDStreamErrorDetail
-from flight_blender.rid.rid_telemetry_monitoring import FlightTelemetryRIDEngine
-from flight_blender.rid.tasks import (
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.domain_types.rid import RIDStreamErrorDetail
+from flight_blender.services.rid_svc import FlightTelemetryRIDEngine
+from flight_blender.tasks.rid_task import (
     _parse_rid_timestamp_us,
     check_rid_stream_conformance,
     process_requested_flight,
@@ -110,11 +110,10 @@ class TestParseRidTimestampUs:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestWriteOperatorRidNotification:
     def test_creates_notification_record(self):
         """write_operator_rid_notification should write to the database."""
-        with patch.object(FlightBlenderDatabaseWriter, "create_operator_rid_notification") as mock_create:
+        with patch.object(SyncDatabaseFacade, "create_operator_rid_notification") as mock_create:
             write_operator_rid_notification("test message", "session-abc")
             mock_create.assert_called_once()
 
@@ -124,12 +123,11 @@ class TestWriteOperatorRidNotification:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestProcessRequestedFlight:
     def test_basic_flight_processing(self, fakeredis_server):
         """process_requested_flight returns a RIDTestInjection and positions/altitudes."""
         flight = _make_requested_flight()
-        with patch.object(FlightBlenderDatabaseWriter, "create_or_update_rid_flight_details"):
+        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
             result, positions, altitudes = process_requested_flight(
                 requested_flight=flight,
                 flight_injection_sorted_set="test_ss",
@@ -150,8 +148,8 @@ class TestProcessRequestedFlight:
             "telemetry": [bad_telemetry],
             "details_responses": [_make_flight_detail_entry()],
         }
-        with patch.object(FlightBlenderDatabaseWriter, "create_or_update_rid_flight_details"):
-            with patch("flight_blender.rid.tasks.write_operator_rid_notification") as mock_notify:
+        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
+            with patch("flight_blender.tasks.rid_task.write_operator_rid_notification") as mock_notify:
                 result, positions, altitudes = process_requested_flight(
                     requested_flight=flight,
                     flight_injection_sorted_set="test_ss2",
@@ -180,7 +178,7 @@ class TestProcessRequestedFlight:
             "telemetry": [_make_telemetry_entry()],
             "details_responses": [detail_with_loc],
         }
-        with patch.object(FlightBlenderDatabaseWriter, "create_or_update_rid_flight_details"):
+        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
             result, positions, altitudes = process_requested_flight(
                 requested_flight=flight,
                 flight_injection_sorted_set="test_ss3",
@@ -207,7 +205,7 @@ class TestProcessRequestedFlight:
             "telemetry": [_make_telemetry_entry()],
             "details_responses": [detail_with_auth],
         }
-        with patch.object(FlightBlenderDatabaseWriter, "create_or_update_rid_flight_details"):
+        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
             result, positions, altitudes = process_requested_flight(
                 requested_flight=flight,
                 flight_injection_sorted_set="test_ss_auth",
@@ -227,7 +225,7 @@ class TestProcessRequestedFlight:
             "telemetry": [telemetry_with_height],
             "details_responses": [_make_flight_detail_entry("inj-height")],
         }
-        with patch.object(FlightBlenderDatabaseWriter, "create_or_update_rid_flight_details"):
+        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
             result, positions, altitudes = process_requested_flight(
                 requested_flight=flight,
                 flight_injection_sorted_set="test_ss_height",
@@ -242,7 +240,6 @@ class TestProcessRequestedFlight:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestStreamRidTelemetryData:
     def _make_observation_payload(self, operation_id="op-001"):
         return [
@@ -278,9 +275,9 @@ class TestStreamRidTelemetryData:
     def test_stream_enqueues_observations(self):
         """stream_rid_telemetry_data should enqueue write tasks for each state."""
         payload = json.dumps(self._make_observation_payload())
-        with patch.object(FlightBlenderDatabaseWriter, "update_telemetry_timestamp"):
-            with patch("flight_blender.rid.tasks.write_incoming_air_traffic_data") as mock_write:
-                with patch("flight_blender.rid.tasks.wgs84_to_barometric", return_value=(100.0, 100.0)):
+        with patch.object(SyncDatabaseFacade, "update_telemetry_timestamp"):
+            with patch("flight_blender.tasks.rid_task.write_incoming_air_traffic_data") as mock_write:
+                with patch("flight_blender.tasks.rid_task.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
         mock_write.delay.assert_called_once()
 
@@ -289,9 +286,9 @@ class TestStreamRidTelemetryData:
         obs = self._make_observation_payload()
         obs[0]["current_states"].append(obs[0]["current_states"][0].copy())
         payload = json.dumps(obs)
-        with patch.object(FlightBlenderDatabaseWriter, "update_telemetry_timestamp"):
-            with patch("flight_blender.rid.tasks.write_incoming_air_traffic_data") as mock_write:
-                with patch("flight_blender.rid.tasks.wgs84_to_barometric", return_value=(100.0, 100.0)):
+        with patch.object(SyncDatabaseFacade, "update_telemetry_timestamp"):
+            with patch("flight_blender.tasks.rid_task.write_incoming_air_traffic_data") as mock_write:
+                with patch("flight_blender.tasks.rid_task.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
         assert mock_write.delay.call_count == 2
 
@@ -301,7 +298,6 @@ class TestStreamRidTelemetryData:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestCheckRidStreamConformance:
     def test_conformant_stream(self):
         """check_rid_stream_conformance with a conformant stream logs OK."""
@@ -313,7 +309,7 @@ class TestCheckRidStreamConformance:
         """check_rid_stream_conformance with errors writes notifications."""
         errors = [RIDStreamErrorDetail(error_code="NET0040", error_description="Timestamp gap")]
         with patch.object(FlightTelemetryRIDEngine, "check_rid_stream_ok", return_value=(False, errors)):
-            with patch.object(FlightBlenderDatabaseWriter, "create_operator_rid_notification") as mock_create:
+            with patch.object(SyncDatabaseFacade, "create_operator_rid_notification") as mock_create:
                 check_rid_stream_conformance(session_id="sess-002")
         mock_create.assert_called_once()
 
@@ -323,12 +319,11 @@ class TestCheckRidStreamConformance:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestFlightTelemetryRIDEngine:
     def test_check_rid_stream_ok_no_observations(self):
         """When there are no recent observations the stream is considered OK."""
-        with patch.object(FlightBlenderDatabaseReader, "get_active_rid_observations_for_session_between_interval", return_value=[]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-empty")
+        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[]):
+            engine = FlightTelemetryRIDEngine(session_id="sess-empty", db_reader=SyncDatabaseFacade())
             ok, errors = engine.check_rid_stream_ok()
         assert ok is True
         assert errors == []
@@ -338,8 +333,8 @@ class TestFlightTelemetryRIDEngine:
         now = arrow.utcnow()
         obs = MagicMock()
         obs.timestamp = now.datetime
-        with patch.object(FlightBlenderDatabaseReader, "get_active_rid_observations_for_session_between_interval", return_value=[obs]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-single")
+        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs]):
+            engine = FlightTelemetryRIDEngine(session_id="sess-single", db_reader=SyncDatabaseFacade())
             ok, errors = engine.check_rid_stream_ok()
         assert ok is True
 
@@ -350,10 +345,8 @@ class TestFlightTelemetryRIDEngine:
         obs1.timestamp = now.datetime
         obs2 = MagicMock()
         obs2.timestamp = (now + timedelta(seconds=3)).datetime
-        with patch.object(
-            FlightBlenderDatabaseReader, "get_active_rid_observations_for_session_between_interval", return_value=[obs1, obs2]
-        ):
-            engine = FlightTelemetryRIDEngine(session_id="sess-gap")
+        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs1, obs2]):
+            engine = FlightTelemetryRIDEngine(session_id="sess-gap", db_reader=SyncDatabaseFacade())
             ok, errors = engine.check_rid_stream_ok()
         assert ok is False
         assert len(errors) == 1

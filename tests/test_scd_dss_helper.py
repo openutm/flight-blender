@@ -14,7 +14,8 @@ Covers the pure-logic classes that do not require a live DSS:
 import arrow
 import pytest
 
-from flight_blender.scd.dss_scd_helper import (
+from flight_blender.config import settings
+from flight_blender.clients.dss_scd_client import (
     FlightPlanningDataValidator,
     OperationalIntentReferenceHelper,
     OperationalIntentValidator,
@@ -22,8 +23,8 @@ from flight_blender.scd.dss_scd_helper import (
     VolumesConverter,
     VolumesValidator,
 )
-from flight_blender.scd.flight_planning_data_definitions import FlightPlanningInjectionData
-from flight_blender.scd.scd_data_definitions import (
+from flight_blender.domain_types.scd import FlightPlanningInjectionData
+from flight_blender.domain_types.scd import (
     Altitude,
     Circle,
     LatLngPoint,
@@ -36,7 +37,7 @@ from flight_blender.scd.scd_data_definitions import (
     Volume3D,
     Volume4D,
 )
-from flight_blender.scd.scd_data_definitions import Polygon as Plgn
+from flight_blender.domain_types.scd import Polygon as Plgn
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +337,6 @@ class TestVolumesValidator:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
 class TestVolumesConverter:
     def test_convert_polygon_volume(self):
         vol = _make_volume4d()
@@ -348,7 +348,7 @@ class TestVolumesConverter:
 
     def test_convert_circle_volume(self, monkeypatch):
         """Circle volumes require UTM conversion.  Use zone '32' (Central Europe) to avoid pyproj issues."""
-        monkeypatch.setenv("UTM_ZONE", "32")
+        monkeypatch.setattr(settings, "UTM_ZONE", "32")
         vol = _make_circle_volume4d()
         converter = VolumesConverter()
         converter.convert_volumes_to_geojson(volumes=[vol])

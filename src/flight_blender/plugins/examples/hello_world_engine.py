@@ -16,13 +16,15 @@ See PLUGINS.md for the full guide.
 """
 
 from loguru import logger
+from sqlalchemy import select
 
-from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
-from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
-from flight_blender.flight_declarations.models import FlightDeclaration
+from flight_blender.db.session import session_scope
+from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
+from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
+from flight_blender.models.flight_declarations_orm import FlightDeclarationORM
 
 # Derive state codes directly from the canonical OPERATION_STATES tuple so this
-# example can never silently drift out of sync with common/data_definitions.py.
+# example can never silently drift out of sync with core/entities/common.py.
 _STATES_LOOKUP = {str(label): code for code, label in OPERATION_STATES}
 _STATE_NOT_SUBMITTED = _STATES_LOOKUP["Not Submitted"]  # 0 — pending USSP network validation
 _STATE_ACCEPTED = _STATES_LOOKUP["Accepted"]  # 1 — locally accepted (no USSP network)
@@ -43,17 +45,17 @@ class HelloWorldEngine:
 
     def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
         # Find active declarations whose time window overlaps the request.
-        overlapping = FlightDeclaration.objects.filter(
-            start_datetime__lt=request.end_datetime,
-            end_datetime__gt=request.start_datetime,
-            state__in=_ACTIVE_STATES,
-        )
+        with session_scope() as db:
+            stmt = select(FlightDeclarationORM).where(
+                FlightDeclarationORM.start_datetime < request.end_datetime,
+                FlightDeclarationORM.end_datetime > request.start_datetime,
+                FlightDeclarationORM.state.in_(_ACTIVE_STATES),
+            )
+            if request.declaration_id:
+                stmt = stmt.where(FlightDeclarationORM.id != request.declaration_id)
+            rows = db.execute(stmt).scalars().all()
+            conflicting_ids = [str(r.id) for r in rows[:20]]
 
-        # Exclude the declaration itself (important for re-evaluation).
-        if request.declaration_id:
-            overlapping = overlapping.exclude(pk=request.declaration_id)
-
-        conflicting_ids = list(overlapping.values_list("id", flat=True)[:20])
         has_conflicts = bool(conflicting_ids)
 
         if has_conflicts:

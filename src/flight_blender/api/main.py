@@ -1,35 +1,35 @@
 from fastapi import FastAPI
 
 from flight_blender.api.routers import (
-    conformance,
-    constraint,
-    flight_declarations,
-    flight_feed,
-    geo_fence,
-    misc,
-    notifications,
-    realtime,
-    rid,
-    scd,
-    surveillance,
-    uss,
-    weather,
+    conformance_api,
+    constraint_api,
+    flight_declarations_api,
+    flight_feed_api,
+    geo_fence_api,
+    misc_api,
+    notifications_api,
+    realtime_api,
+    rid_api,
+    scd_api,
+    surveillance_api,
+    uss_api,
+    weather_api,
 )
 
 
 def create_fastapi_app() -> FastAPI:
     app = FastAPI(title="Flight Blender")
-    app.include_router(misc.router)
-    app.include_router(geo_fence.router)
-    app.include_router(weather.router)
-    app.include_router(surveillance.router)
-    app.include_router(flight_feed.router)
-    app.include_router(constraint.router)
-    app.include_router(notifications.router)
-    app.include_router(realtime.router)
-    app.include_router(conformance.router)
-    app.include_router(rid.router)
-    app.include_router(flight_declarations.router)
-    app.include_router(scd.router)
-    app.include_router(uss.router)
+    app.include_router(misc_api.router)
+    app.include_router(geo_fence_api.router)
+    app.include_router(weather_api.router)
+    app.include_router(surveillance_api.router)
+    app.include_router(flight_feed_api.router)
+    app.include_router(constraint_api.router)
+    app.include_router(notifications_api.router)
+    app.include_router(realtime_api.router)
+    app.include_router(conformance_api.router)
+    app.include_router(rid_api.router)
+    app.include_router(flight_declarations_api.router)
+    app.include_router(scd_api.router)
+    app.include_router(uss_api.router)
     return app

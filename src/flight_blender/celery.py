@@ -1,37 +1,37 @@
-import os
-
 from celery import Celery
 from celery.signals import task_postrun
 
-# set the default Django settings module for the 'celery' program.
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "flight_blender.settings")
+from flight_blender.config import settings
+
 app = Celery(
     "flight_blender",
-    include=["flight_blender.conformance.tasks", "flight_blender.surveillance.tasks"],
+    broker=settings.REDIS_BROKER_URL,
     broker_connection_retry_on_startup=True,
+    include=[
+        "flight_blender.tasks.geo_fence_task",
+        "flight_blender.tasks.surveillance_task",
+        "flight_blender.tasks.flight_feed_task",
+        "flight_blender.tasks.flight_declarations_task",
+        "flight_blender.tasks.conformance_task",
+        "flight_blender.tasks.rid_task",
+    ],
 )
 
-# Using a string here means the worker doesn't have to serialize
-# the configuration object to child processes.
-# - namespace='CELERY' means all celery-related configuration keys
-#   should have a `CELERY_` prefix.
-app.config_from_object("django.conf:settings", namespace="")
-
-# Load task modules from all registered Django app configs.
-app.autodiscover_tasks(related_name="tasks")
-app.autodiscover_tasks(related_name="custom_tasks")
+app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
+    enable_utc=True,
+)
 
 
 @task_postrun.connect
 def close_db_connections_after_task(**kwargs):
-    """Close stale DB connections after each Celery task.
+    """Return connections to the pool after each Celery task."""
+    from flight_blender.db.session import async_engine as engine
 
-    Under ASGI + prefork, Django's built-in fixup does not always release
-    connections promptly, leading to PostgreSQL connection exhaustion.
-    """
-    from django.db import close_old_connections  # noqa: PLC0415
-
-    close_old_connections()
+    engine.dispose(close=False)
 
 
 @app.task(bind=True)

@@ -1,7 +1,7 @@
 from fastapi import Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from flight_blender.infrastructure.auth.jwt_validator import validate_token
+from flight_blender.auth.jwt_validator import validate_token
 
 security = HTTPBearer()
 

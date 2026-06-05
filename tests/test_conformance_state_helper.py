@@ -2,7 +2,7 @@
 
 import pytest
 
-from flight_blender.conformance.conformance_state_helper import ConformanceChecksList
+from flight_blender.services.conformance_svc import ConformanceChecksList
 
 
 class TestStatusCodeBase:

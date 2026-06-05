@@ -1,10 +1,10 @@
 import uuid
 
 import pytest
+from flight_blender.config import settings
 from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE, READ_WRITE_SCOPE
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationCreate:
     def test_create_flight_declaration(self, mounted_sync_client, flight_declaration_payload):
         resp = mounted_sync_client.post(
@@ -68,7 +68,6 @@ class TestFlightDeclarationCreate:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestSetFlightDeclaration:
     def test_set_flight_declaration(self, mounted_sync_client, flight_declaration_payload):
         resp = mounted_sync_client.post(
@@ -107,7 +106,6 @@ class TestSetFlightDeclaration:
         assert resp.status_code == 200
 
 
-@pytest.mark.django_db
 class TestSetOperationalIntent:
     def test_set_operational_intent(self, mounted_sync_client, operational_intent_payload):
         resp = mounted_sync_client.post(
@@ -127,7 +125,6 @@ class TestSetOperationalIntent:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestBulkFlightDeclarations:
     def test_bulk_create(self, mounted_sync_client, flight_declaration_payload):
         resp = mounted_sync_client.post(
@@ -194,7 +191,6 @@ class TestBulkFlightDeclarations:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationList:
     def test_list_empty(self, mounted_sync_client):
         resp = mounted_sync_client.get(
@@ -239,7 +235,6 @@ class TestFlightDeclarationList:
         assert resp.status_code == 401
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationDetail:
     def test_get_nonexistent(self, mounted_sync_client):
         pk = str(uuid.uuid4())
@@ -268,7 +263,6 @@ class TestFlightDeclarationDetail:
         assert "bounds" in data
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationStateUpdate:
     def test_update_state(self, mounted_sync_client, flight_declaration_payload):
         create_resp = mounted_sync_client.post(
@@ -295,7 +289,6 @@ class TestFlightDeclarationStateUpdate:
         assert resp.status_code in (400, 404)
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationApproval:
     def test_update_approval(self, mounted_sync_client, flight_declaration_payload):
         create_resp = mounted_sync_client.post(
@@ -313,7 +306,6 @@ class TestFlightDeclarationApproval:
         assert resp.status_code == 200
 
 
-@pytest.mark.django_db
 class TestFlightDeclarationDelete:
     def test_delete_nonexistent(self, mounted_sync_client):
         pk = str(uuid.uuid4())
@@ -345,7 +337,6 @@ class TestFlightDeclarationDelete:
         assert resp.status_code == 404
 
 
-@pytest.mark.django_db
 class TestSubmitToDSS:
     def test_submit_not_enabled(self, mounted_sync_client, flight_declaration_payload):
         create_resp = mounted_sync_client.post(
@@ -371,7 +362,6 @@ class TestSubmitToDSS:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestNetworkFlightDeclarations:
     def test_network_by_view_not_enabled(self, mounted_sync_client):
         resp = mounted_sync_client.get(
@@ -409,13 +399,12 @@ class TestNetworkFlightDeclarations:
         assert resp.status_code == 400
 
 
-@pytest.mark.django_db
 class TestSubmitToDSSEnabled:
     """Tests for submit_flight_declaration_to_dss when USSP_NETWORK_ENABLED=1."""
 
     def test_submit_to_dss_not_found(self, mounted_sync_client, monkeypatch):
         """When the flight declaration does not exist, returns 404."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         pk = str(uuid.uuid4())
         resp = mounted_sync_client.post(
             f"/flight_declaration_ops/flight_declaration/{pk}/submit_to_dss",
@@ -425,7 +414,7 @@ class TestSubmitToDSSEnabled:
 
     def test_submit_to_dss_wrong_state(self, mounted_sync_client, monkeypatch, flight_declaration_payload):
         """Flight declaration not in state=0 returns 409."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         create_resp = mounted_sync_client.post(
             "/flight_declaration_ops/set_flight_declaration",
             json=flight_declaration_payload,
@@ -452,8 +441,8 @@ class TestSubmitToDSSEnabled:
         AUTO_SUBMIT_TO_DSS=0 prevents the creation endpoint from auto-submitting
         (which would consume the state=0 window and return 409 on the explicit call).
         """
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
-        monkeypatch.setenv("AUTO_SUBMIT_TO_DSS", "0")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
+        monkeypatch.setattr(settings, "AUTO_SUBMIT_TO_DSS", 0)
         create_resp = mounted_sync_client.post(
             "/flight_declaration_ops/set_flight_declaration",
             json=flight_declaration_payload,
@@ -469,13 +458,12 @@ class TestSubmitToDSSEnabled:
         assert "id" in resp.json()
 
 
-@pytest.mark.django_db
 class TestNetworkFlightDeclarationsByViewEnabled:
     """Tests network_flight_declaration_details_by_view with USSP_NETWORK_ENABLED=1."""
 
     def test_network_by_view_enabled_returns_200(self, mounted_sync_client, monkeypatch, mock_network_opint_empty):
         """With USSP enabled and mocked DSS, returns 200 with empty list."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         resp = mounted_sync_client.get(
             "/flight_declaration_ops/network_flight_declarations_by_view?view=52.500,13.399,52.501,13.400",
             headers=fastapi_auth_header(READ_SCOPE),
@@ -484,7 +472,7 @@ class TestNetworkFlightDeclarationsByViewEnabled:
 
     def test_network_by_id_enabled_no_flight(self, mounted_sync_client, monkeypatch):
         """With USSP enabled but flight not found returns 400 or 404."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         pk = str(uuid.uuid4())
         resp = mounted_sync_client.get(
             f"/flight_declaration_ops/flight_declaration/{pk}/network_flight_declarations",

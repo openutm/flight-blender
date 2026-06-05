@@ -40,7 +40,7 @@ def fake_auth_token_error() -> dict:
 
 def _fake_opint_reference(state: str = "Accepted", opint_id: str | None = None):
     """Build a minimal :class:`OperationalIntentReferenceDSSResponse`."""
-    from flight_blender.scd.scd_data_definitions import (
+    from flight_blender.domain_types.scd import (
         OperationalIntentReferenceDSSResponse,
         Time,
     )
@@ -65,7 +65,7 @@ def fake_submission_success(
     operational_intent_id: str | None = None,
 ):
     """Return a successful :class:`OperationalIntentSubmissionStatus`."""
-    from flight_blender.scd.scd_data_definitions import (
+    from flight_blender.domain_types.scd import (
         OperationalIntentSubmissionStatus,
         OperationalIntentSubmissionSuccess,
     )
@@ -87,7 +87,7 @@ def fake_submission_success(
 
 def fake_submission_conflict():
     """Return a conflict-with-flight :class:`OperationalIntentSubmissionStatus`."""
-    from flight_blender.scd.scd_data_definitions import OtherError, OperationalIntentSubmissionStatus
+    from flight_blender.domain_types.scd import OtherError, OperationalIntentSubmissionStatus
 
     return OperationalIntentSubmissionStatus(
         dss_response=OtherError(notes="Conflict with existing flight in DSS"),
@@ -100,7 +100,7 @@ def fake_submission_conflict():
 
 def fake_submission_failure(status_code: int = 500):
     """Return a failed :class:`OperationalIntentSubmissionStatus`."""
-    from flight_blender.scd.scd_data_definitions import OtherError, OperationalIntentSubmissionStatus
+    from flight_blender.domain_types.scd import OtherError, OperationalIntentSubmissionStatus
 
     return OperationalIntentSubmissionStatus(
         dss_response=OtherError(notes="DSS returned an error"),
@@ -118,7 +118,7 @@ def fake_submission_timeout():
 
 def fake_delete_success():
     """Return a successful DSS operational-intent deletion response."""
-    from flight_blender.scd.scd_data_definitions import (
+    from flight_blender.domain_types.scd import (
         CommonDSS2xxResponse,
         DeleteOperationalIntentResponse,
         DeleteOperationalIntentResponseSuccess,
@@ -138,7 +138,7 @@ def fake_delete_success():
 
 def fake_delete_failure():
     """Return a failed DSS operational-intent deletion response."""
-    from flight_blender.scd.scd_data_definitions import CommonDSS4xxResponse, DeleteOperationalIntentResponse
+    from flight_blender.domain_types.scd import CommonDSS4xxResponse, DeleteOperationalIntentResponse
 
     return DeleteOperationalIntentResponse(
         dss_response=CommonDSS4xxResponse(message="Operational intent not found in DSS"),
