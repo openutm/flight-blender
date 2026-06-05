@@ -10,16 +10,15 @@ from loguru import logger
 
 from flight_blender.celery import app
 from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.config import settings as _s
 from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceSyncRepository
 from flight_blender.infrastructure.database.session import session_scope
 from flight_blender.plugins.loader import load_plugin
-from flight_blender.config import settings as _s
 
 BROKER_URL = _s.REDIS_BROKER_URL
 FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = _s.FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
-from flight_blender.surveillance.traffic_data_fuser_protocol import TrafficDataFuser as TrafficDataFuserProtocol
-
 from flight_blender.surveillance.data_definitions import HeartbeatMessage
+from flight_blender.surveillance.traffic_data_fuser_protocol import TrafficDataFuser as TrafficDataFuserProtocol
 
 load_dotenv(find_dotenv())
 

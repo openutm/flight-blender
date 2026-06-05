@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 import uuid
@@ -6,8 +7,6 @@ from enum import Enum
 from typing import Any
 
 import arrow
-import asyncio
-
 from dacite import Config, from_dict
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse, Response
@@ -168,8 +167,8 @@ def _do_uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
 
 
 def _do_uss_update_constraint_details(request_data: dict) -> int:
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.constraint.data_definitions import PutConstraintDetailsParameters
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
     my_database_reader = SyncDatabaseFacade()
     my_database_writer = SyncDatabaseFacade()
@@ -328,7 +327,9 @@ def _do_get_uss_flight_details(flight_id: str) -> tuple[dict, int]:
         eu_classification=eu_classification,
     )
     flight_details_full = OperatorDetailsSuccessResponse(details=f_detail)
-    return json.loads(json.dumps(asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}), cls=EnhancedJSONEncoder)), 200
+    return json.loads(
+        json.dumps(asdict(flight_details_full, dict_factory=lambda x: {k: v for (k, v) in x if (v is not None)}), cls=EnhancedJSONEncoder)
+    ), 200
 
 
 def _do_uss_telemetry(opint_id: str) -> dict:

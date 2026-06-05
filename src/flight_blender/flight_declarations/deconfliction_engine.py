@@ -17,11 +17,11 @@ from sqlalchemy import select
 
 from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
 from flight_blender.flight_declarations.data_definitions import DeconflictionRequest, DeconflictionResult
-from flight_blender.infrastructure.spatial.flight_declarations import FlightDeclarationRTreeIndexFactory
 from flight_blender.geo_fence import rtree_geo_fence_helper
 from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
 from flight_blender.infrastructure.database.session import session_scope
+from flight_blender.infrastructure.spatial.flight_declarations import FlightDeclarationRTreeIndexFactory
 
 
 class DefaultDeconflictionEngine:

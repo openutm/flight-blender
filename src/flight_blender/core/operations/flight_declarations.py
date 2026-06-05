@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from dataclasses import asdict
@@ -5,7 +6,6 @@ from os import environ as env
 from typing import Any
 
 import arrow
-import asyncio
 from geojson import Feature, FeatureCollection, Polygon
 from loguru import logger
 from marshmallow.exceptions import ValidationError
@@ -76,7 +76,10 @@ def _validate_geojson(fc: dict) -> tuple[bool, str | None]:
         props = feature.get("properties", {})
         shp = shape(geometry)
         if not shp.is_valid:
-            return False, "Error in processing the submitted GeoJSON: every Feature in a GeoJSON FeatureCollection must have a valid geometry, please check your submitted FeatureCollection"
+            return (
+                False,
+                "Error in processing the submitted GeoJSON: every Feature in a GeoJSON FeatureCollection must have a valid geometry, please check your submitted FeatureCollection",
+            )
         if "min_altitude" not in props or "max_altitude" not in props:
             return (
                 False,
@@ -471,13 +474,15 @@ class FlightDeclarationOperations:
         for idx, fd in saved.items():
             creation_response = await self._process_intersection_result_sa(fd, intersection_results[str(fd.id)], ussp_network_enabled)
             submitted_count += 1
-            results.append({
-                "index": idx,
-                "success": True,
-                "id": creation_response.id,
-                "is_approved": creation_response.is_approved,
-                "state": creation_response.state,
-            })
+            results.append(
+                {
+                    "index": idx,
+                    "success": True,
+                    "id": creation_response.id,
+                    "is_approved": creation_response.is_approved,
+                    "state": creation_response.state,
+                }
+            )
 
         results.sort(key=lambda r: r["index"])
         bulk_response = BulkFlightDeclarationCreateResponse(submitted=submitted_count, failed=failed_count, results=results)
@@ -490,7 +495,10 @@ class FlightDeclarationOperations:
         intersection_result: IntersectionCheckResult,
         ussp_network_enabled: int,
     ) -> FlightDeclarationCreateResponse:
-        from flight_blender.infrastructure.celery.tasks.flight_declarations import send_operational_update_message, submit_flight_declaration_to_dss_async  # noqa: PLC0415
+        from flight_blender.infrastructure.celery.tasks.flight_declarations import (
+            send_operational_update_message,
+            submit_flight_declaration_to_dss_async,
+        )  # noqa: PLC0415
 
         is_approved = intersection_result.is_approved
         declaration_state = intersection_result.declaration_state

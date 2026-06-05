@@ -179,10 +179,9 @@ async def get_display_data(
     feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes(["dss.read.identification_service_areas"])),
 ):
-    from dacite import from_dict
 
-    from flight_blender.infrastructure.dss import rid as dss_rid_helper
     from flight_blender.infrastructure.celery.tasks.rid import run_ussp_polling_for_rid
+    from flight_blender.infrastructure.dss import rid as dss_rid_helper
 
     try:
         view_port = [float(i) for i in (view or "").split(",")]
@@ -228,9 +227,7 @@ async def get_display_data(
         run_ussp_polling_for_rid.delay(session_id=request_id, end_time=subscription_end_time)
 
     now = arrow.utcnow()
-    observations = await feed_repo.get_all_flight_observations_in_window(
-        start_time=now.shift(seconds=-30).datetime, end_time=now.datetime
-    )
+    observations = await feed_repo.get_all_flight_observations_in_window(start_time=now.shift(seconds=-30).datetime, end_time=now.datetime)
     unique = {}
     for observation in observations or []:
         unique.setdefault(observation.icao_address, observation)
@@ -290,7 +287,6 @@ async def delete_test(
     from sqlalchemy import delete
 
     from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM
-    from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM
 
     redis_client = get_redis()
     test_id_str = str(test_id)
@@ -333,7 +329,6 @@ def _view_hash(view: str) -> int:
 
 
 def _make_json_compatible(struct):
-    from typing import Any
 
     if isinstance(struct, tuple) and hasattr(struct, "_asdict"):
         return {k: _make_json_compatible(v) for k, v in struct._asdict().items()}

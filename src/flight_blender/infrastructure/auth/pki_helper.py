@@ -8,7 +8,7 @@ import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from dotenv import find_dotenv, load_dotenv
-from http_message_signatures import HTTPMessageSigner, HTTPMessageVerifier, HTTPSignatureKeyResolver, algorithms
+from http_message_signatures import HTTPMessageVerifier, HTTPSignatureKeyResolver, algorithms
 from jwcrypto import jwk, jws
 from jwcrypto.common import json_encode
 from loguru import logger
@@ -126,9 +126,10 @@ class MessageVerifier:
         s = requests.Session()
 
         public_keys = {}
-        from flight_blender.infrastructure.database.models.flight_feed import SignedTelmetryPublicKeyORM  # noqa: PLC0415
-        from flight_blender.infrastructure.database.session import session_scope, SessionLocal  # noqa: PLC0415
         from sqlalchemy import select  # noqa: PLC0415
+
+        from flight_blender.infrastructure.database.models.flight_feed import SignedTelmetryPublicKeyORM  # noqa: PLC0415
+        from flight_blender.infrastructure.database.session import SessionLocal  # noqa: PLC0415
 
         _db = SessionLocal()
         try:
@@ -243,8 +244,8 @@ class ResponseSigningOperations:
         return str(http_sfv.Dictionary({"sha-256": hashlib.sha256(payload_str.encode("utf-8")).digest()}))
 
     def sign_json_via_django(self, data_to_sign):
-        import hmac
         import hashlib as _hashlib
+        import hmac
 
         secret = env.get("SECRET_KEY", "changeme")
         payload = json.dumps(data_to_sign, separators=(",", ":"))

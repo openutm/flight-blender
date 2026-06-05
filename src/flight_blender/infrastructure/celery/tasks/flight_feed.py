@@ -14,10 +14,9 @@ from pyproj import Transformer
 
 from flight_blender.celery import app
 from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedSyncRepository
 from flight_blender.infrastructure.database.session import session_scope
-
-from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
 
 load_dotenv(find_dotenv())
 

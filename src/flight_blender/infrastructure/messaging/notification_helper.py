@@ -6,7 +6,6 @@ from loguru import logger
 from pika.exceptions import ChannelClosedByBroker
 
 from flight_blender.config import settings
-
 from flight_blender.notifications.data_definitions import FlightDeclarationUpdateMessage
 
 

@@ -18,9 +18,7 @@ class ISASubscriptionORM(Base):
     end_datetime: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     view_hash: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     is_simulated: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
@@ -34,7 +32,5 @@ class RIDFlightDetailORM(Base):
     auth_data: Mapped[str | None] = mapped_column(String(255), nullable=True)
     uas_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     eu_classification: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

@@ -16,10 +16,7 @@ import arrow
 from sqlalchemy import delete, select
 
 from flight_blender.infrastructure.database.models.conformance import ConformanceRecordORM
-from flight_blender.infrastructure.database.models.constraint import (
-    ConstraintDetailORM,
-    ConstraintReferenceORM,
-)
+from flight_blender.infrastructure.database.models.constraint import ConstraintDetailORM, ConstraintReferenceORM
 from flight_blender.infrastructure.database.models.flight_declarations import (
     CompositeOperationalIntentORM,
     FlightDeclarationORM,
@@ -35,7 +32,8 @@ from flight_blender.infrastructure.database.models.flight_feed import FlightObse
 from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM
 from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM
 from flight_blender.infrastructure.database.models.surveillance import SurveillanceSensorORM
-from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedSyncRepository, _normalize_timestamp as _sa_normalize_timestamp
+from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedSyncRepository
+from flight_blender.infrastructure.database.repositories.sa_flight_feed import _normalize_timestamp as _sa_normalize_timestamp
 from flight_blender.infrastructure.database.session import session_scope
 
 
@@ -144,14 +142,10 @@ class SyncDatabaseFacade:
 
     # ─── FlightOperationalIntentReference ─────────────────────────────────────
 
-    def get_flight_operational_intent_reference_by_flight_declaration_obj(
-        self, flight_declaration
-    ) -> Optional[FlightOperationalIntentReferenceORM]:
+    def get_flight_operational_intent_reference_by_flight_declaration_obj(self, flight_declaration) -> Optional[FlightOperationalIntentReferenceORM]:
         with session_scope() as db:
             result = db.execute(
-                select(FlightOperationalIntentReferenceORM).where(
-                    FlightOperationalIntentReferenceORM.declaration_id == flight_declaration.id
-                )
+                select(FlightOperationalIntentReferenceORM).where(FlightOperationalIntentReferenceORM.declaration_id == flight_declaration.id)
             )
             ref = result.scalar_one_or_none()
             if ref is not None:
@@ -251,9 +245,7 @@ class SyncDatabaseFacade:
 
     # ─── FlightOperationalIntentDetail ────────────────────────────────────────
 
-    def get_operational_intent_details_by_flight_declaration_id(
-        self, declaration_id: str
-    ) -> Optional[FlightOperationalIntentDetailORM]:
+    def get_operational_intent_details_by_flight_declaration_id(self, declaration_id: str) -> Optional[FlightOperationalIntentDetailORM]:
         with session_scope() as db:
             result = db.execute(
                 select(FlightOperationalIntentDetailORM).where(FlightOperationalIntentDetailORM.declaration_id == uuid.UUID(declaration_id))
@@ -323,9 +315,7 @@ class SyncDatabaseFacade:
     ) -> bool:
         with session_scope() as db:
             payload = composite_operational_intent_payload
-            result = db.execute(
-                select(CompositeOperationalIntentORM).where(CompositeOperationalIntentORM.declaration_id == flight_declaration.id)
-            )
+            result = db.execute(select(CompositeOperationalIntentORM).where(CompositeOperationalIntentORM.declaration_id == flight_declaration.id))
             existing = result.scalar_one_or_none()
             if existing:
                 existing.bounds = str(payload.bounds)
@@ -338,18 +328,22 @@ class SyncDatabaseFacade:
                 if hasattr(payload, "operational_intent_details_id") and payload.operational_intent_details_id:
                     existing.operational_intent_details_id = uuid.UUID(str(payload.operational_intent_details_id))
             else:
-                ref_id = uuid.UUID(str(payload.operational_intent_reference_id)) if hasattr(payload, "operational_intent_reference_id") else uuid.uuid4()
+                ref_id = (
+                    uuid.UUID(str(payload.operational_intent_reference_id)) if hasattr(payload, "operational_intent_reference_id") else uuid.uuid4()
+                )
                 det_id = uuid.UUID(str(payload.operational_intent_details_id)) if hasattr(payload, "operational_intent_details_id") else uuid.uuid4()
-                db.add(CompositeOperationalIntentORM(
-                    declaration_id=flight_declaration.id,
-                    bounds=str(payload.bounds),
-                    start_datetime=_coerce_datetime(payload.start_datetime),
-                    end_datetime=_coerce_datetime(payload.end_datetime),
-                    alt_max=float(payload.alt_max),
-                    alt_min=float(payload.alt_min),
-                    operational_intent_reference_id=ref_id,
-                    operational_intent_details_id=det_id,
-                ))
+                db.add(
+                    CompositeOperationalIntentORM(
+                        declaration_id=flight_declaration.id,
+                        bounds=str(payload.bounds),
+                        start_datetime=_coerce_datetime(payload.start_datetime),
+                        end_datetime=_coerce_datetime(payload.end_datetime),
+                        alt_max=float(payload.alt_max),
+                        alt_min=float(payload.alt_min),
+                        operational_intent_reference_id=ref_id,
+                        operational_intent_details_id=det_id,
+                    )
+                )
             return True
 
     # ─── Peer operational intent ───────────────────────────────────────────────
@@ -368,12 +362,14 @@ class SyncDatabaseFacade:
                 existing.off_nominal_volumes = json.dumps(_payload["off_nominal_volumes"])
                 existing.priority = operational_intent_details.priority
             else:
-                db.add(PeerOperationalIntentDetailORM(
-                    id=peer_id,
-                    volumes=json.dumps(_payload["volumes"]),
-                    off_nominal_volumes=json.dumps(_payload["off_nominal_volumes"]),
-                    priority=operational_intent_details.priority,
-                ))
+                db.add(
+                    PeerOperationalIntentDetailORM(
+                        id=peer_id,
+                        volumes=json.dumps(_payload["volumes"]),
+                        off_nominal_volumes=json.dumps(_payload["off_nominal_volumes"]),
+                        priority=operational_intent_details.priority,
+                    )
+                )
             return None
 
     def create_or_update_peer_operational_intent_reference(
@@ -394,18 +390,20 @@ class SyncDatabaseFacade:
                 existing.time_end = _coerce_datetime(peer_operational_intent_reference.time_end.value)
                 existing.subscription_id = peer_operational_intent_reference.subscription_id
             else:
-                db.add(PeerOperationalIntentReferenceORM(
-                    id=peer_id,
-                    uss_base_url=peer_operational_intent_reference.uss_base_url,
-                    ovn=peer_operational_intent_reference.ovn,
-                    state=peer_operational_intent_reference.state,
-                    uss_availability=peer_operational_intent_reference.uss_availability,
-                    version=str(peer_operational_intent_reference.version),
-                    manager=getattr(peer_operational_intent_reference, "manager", ""),
-                    time_start=_coerce_datetime(peer_operational_intent_reference.time_start.value),
-                    time_end=_coerce_datetime(peer_operational_intent_reference.time_end.value),
-                    subscription_id=peer_operational_intent_reference.subscription_id,
-                ))
+                db.add(
+                    PeerOperationalIntentReferenceORM(
+                        id=peer_id,
+                        uss_base_url=peer_operational_intent_reference.uss_base_url,
+                        ovn=peer_operational_intent_reference.ovn,
+                        state=peer_operational_intent_reference.state,
+                        uss_availability=peer_operational_intent_reference.uss_availability,
+                        version=str(peer_operational_intent_reference.version),
+                        manager=getattr(peer_operational_intent_reference, "manager", ""),
+                        time_start=_coerce_datetime(peer_operational_intent_reference.time_start.value),
+                        time_end=_coerce_datetime(peer_operational_intent_reference.time_end.value),
+                        subscription_id=peer_operational_intent_reference.subscription_id,
+                    )
+                )
             return None
 
     def create_or_update_peer_composite_operational_intent(
@@ -430,15 +428,17 @@ class SyncDatabaseFacade:
                 existing.alt_max = float(payload.alt_max)
                 existing.alt_min = float(payload.alt_min)
             else:
-                db.add(PeerCompositeOperationalIntentORM(
-                    start_datetime=_coerce_datetime(payload.start_datetime),
-                    end_datetime=_coerce_datetime(payload.end_datetime),
-                    alt_max=float(payload.alt_max),
-                    alt_min=float(payload.alt_min),
-                    bounds=str(getattr(payload, "bounds", "")),
-                    operational_intent_details_id=details.id,
-                    operational_intent_reference_id=reference.id,
-                ))
+                db.add(
+                    PeerCompositeOperationalIntentORM(
+                        start_datetime=_coerce_datetime(payload.start_datetime),
+                        end_datetime=_coerce_datetime(payload.end_datetime),
+                        alt_max=float(payload.alt_max),
+                        alt_min=float(payload.alt_min),
+                        bounds=str(getattr(payload, "bounds", "")),
+                        operational_intent_details_id=details.id,
+                        operational_intent_reference_id=reference.id,
+                    )
+                )
             return True
 
     # ─── Constraint ───────────────────────────────────────────────────────────
@@ -555,9 +555,7 @@ class SyncDatabaseFacade:
 
     def update_flight_details_in_rid_subscription_record(self, existing_subscription_record, flights_dict: str) -> bool:
         with session_scope() as db:
-            result = db.execute(
-                select(ISASubscriptionORM).where(ISASubscriptionORM.subscription_id == existing_subscription_record.subscription_id)
-            )
+            result = db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.subscription_id == existing_subscription_record.subscription_id))
             obj = result.scalar_one_or_none()
             if obj is None:
                 return False
@@ -587,15 +585,17 @@ class SyncDatabaseFacade:
                 existing.uas_id = ui
                 existing.eu_classification = ec
             else:
-                db.add(RIDFlightDetailORM(
-                    id=detail_id,
-                    operation_description=rid_flight_details_payload.operation_description,
-                    operator_location=ol,
-                    operator_id=rid_flight_details_payload.operator_id,
-                    auth_data=ad,
-                    uas_id=ui,
-                    eu_classification=ec,
-                ))
+                db.add(
+                    RIDFlightDetailORM(
+                        id=detail_id,
+                        operation_description=rid_flight_details_payload.operation_description,
+                        operator_location=ol,
+                        operator_id=rid_flight_details_payload.operator_id,
+                        auth_data=ad,
+                        uas_id=ui,
+                        eu_classification=ec,
+                    )
+                )
 
     def delete_all_flight_details(self) -> bool:
         with session_scope() as db:
@@ -669,11 +669,7 @@ class SyncDatabaseFacade:
         cutoff = after_datetime.datetime if hasattr(after_datetime, "datetime") else after_datetime
         with session_scope() as db:
             rows = (
-                db.execute(
-                    select(FlightObservationORM)
-                    .where(FlightObservationORM.created_at >= cutoff)
-                    .order_by(FlightObservationORM.created_at)
-                )
+                db.execute(select(FlightObservationORM).where(FlightObservationORM.created_at >= cutoff).order_by(FlightObservationORM.created_at))
                 .scalars()
                 .all()
             )
@@ -843,5 +839,3 @@ class SyncDatabaseFacade:
     @staticmethod
     def _normalize_timestamp(ts):
         return _sa_normalize_timestamp(ts)
-
-

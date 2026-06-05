@@ -23,10 +23,9 @@ from flight_blender.auth import dss_auth_helper
 from flight_blender.auth.common import get_redis
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.common.data_definitions import RESPONSE_CONTENT_TYPE
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.rid.data_definitions import UASID, OperatorLocation, UAClassificationEU
-
 from flight_blender.rid.rid_utils import (
     Cluster,
     ClusterDetail,

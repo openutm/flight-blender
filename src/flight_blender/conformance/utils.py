@@ -8,8 +8,8 @@ from loguru import logger
 from shapely.geometry import Point
 from shapely.geometry import Polygon as Plgn
 
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.conformance.data_definitions import PolygonAltitude
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.scd.scd_data_definitions import LatLngPoint
 
 from .conformance_state_helper import ConformanceChecksList

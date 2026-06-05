@@ -12,10 +12,9 @@ from loguru import logger
 
 from flight_blender.auth import dss_auth_helper
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
+from flight_blender.constraint.data_definitions import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.scd.scd_data_definitions import Time, Volume4D
-
-from flight_blender.constraint.data_definitions import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 
 load_dotenv(find_dotenv())
 

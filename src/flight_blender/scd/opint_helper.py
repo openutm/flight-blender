@@ -6,8 +6,8 @@ import tldextract
 from dacite import from_dict
 from loguru import logger
 
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.flight_declarations.utils import OperationalIntentsConverter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.infrastructure.dss.scd import ConstraintsWriter, SCDOperations
 
 from .data_definitions import FlightDeclarationOperationalIntentStorageDetails

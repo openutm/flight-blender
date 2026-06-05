@@ -2,8 +2,8 @@ from uuid import UUID
 
 from loguru import logger
 
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.common.dispatch import Signal, receiver
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 surveillance_sensor_failure_signal = Signal()
 

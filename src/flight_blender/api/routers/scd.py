@@ -1,9 +1,8 @@
+import asyncio
 import json
 from dataclasses import asdict
 from typing import Any
 from uuid import UUID
-
-import asyncio
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
@@ -85,7 +84,7 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
         planned_test_injection_response,
         ready_to_fly_planning_response,
     )
-    from flight_blender.scd.utils import DSSAreaClearHandler, OperatorRegistrationNumberValidator, UAVSerialNumberValidator
+    from flight_blender.scd.utils import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
 
     my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()
     my_scd_dss_helper = dss_scd_helper.SCDOperations()
@@ -363,14 +362,10 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
 
 
 def _do_delete_flight_plan(flight_plan_id: str) -> tuple[dict, int]:
-    from dataclasses import asdict
 
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
     from flight_blender.infrastructure.dss import scd as dss_scd_helper
-    from flight_blender.scd.scd_test_harness_helper import (
-        flight_planning_deletion_failure_response,
-        flight_planning_deletion_success_response,
-    )
+    from flight_blender.scd.scd_test_harness_helper import flight_planning_deletion_failure_response, flight_planning_deletion_success_response
 
     operation_id_str = str(flight_plan_id)
     my_scd_dss_helper = dss_scd_helper.SCDOperations()

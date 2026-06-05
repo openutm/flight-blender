@@ -4,8 +4,8 @@ from os import environ as env
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.conformance.dss_handlers import call_command as management_call_command
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 from .operation_state_helper import FlightOperationStateMachine, get_status
 

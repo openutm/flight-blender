@@ -82,7 +82,9 @@ class SQLAlchemyFlightFeedRepository:
 
     async def get_recent_flight_observations(self, after_datetime: arrow.Arrow | datetime) -> list[FlightObservationORM]:
         cutoff = after_datetime.datetime if hasattr(after_datetime, "datetime") else after_datetime
-        result = await self.db.execute(select(FlightObservationORM).where(FlightObservationORM.created_at >= cutoff).order_by(FlightObservationORM.created_at))
+        result = await self.db.execute(
+            select(FlightObservationORM).where(FlightObservationORM.created_at >= cutoff).order_by(FlightObservationORM.created_at)
+        )
         return list(result.scalars().all())
 
     async def get_closest_flight_observation_for_now(self, now: arrow.Arrow) -> list[FlightObservationORM]:

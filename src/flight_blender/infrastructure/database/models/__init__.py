@@ -1,5 +1,4 @@
 from flight_blender.infrastructure.database.models.conformance import ConformanceRecordORM
-from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM
 from flight_blender.infrastructure.database.models.constraint import CompositeConstraintORM, ConstraintDetailORM, ConstraintReferenceORM
 from flight_blender.infrastructure.database.models.flight_declarations import (
     CompositeOperationalIntentORM,
@@ -15,6 +14,7 @@ from flight_blender.infrastructure.database.models.flight_declarations import (
 from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
 from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM
+from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM
 from flight_blender.infrastructure.database.models.surveillance import (
     SurveillanceHeartbeatEventORM,
     SurveillanceSensorFailureNotificationORM,

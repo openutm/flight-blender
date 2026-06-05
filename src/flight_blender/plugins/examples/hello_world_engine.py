@@ -16,7 +16,6 @@ See PLUGINS.md for the full guide.
 """
 
 from loguru import logger
-
 from sqlalchemy import select
 
 from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES

@@ -1,11 +1,10 @@
 import json
 import uuid
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -39,7 +38,9 @@ class SQLAlchemyRIDRepository:
 
     async def get_active_subscriptions_for_view(self, now: datetime) -> list[ISASubscriptionORM]:
         result = await self.db.execute(
-            select(ISASubscriptionORM).where(ISASubscriptionORM.is_simulated == True, ISASubscriptionORM.end_datetime >= now, ISASubscriptionORM.created_at <= now)  # noqa: E712
+            select(ISASubscriptionORM).where(
+                ISASubscriptionORM.is_simulated == True, ISASubscriptionORM.end_datetime >= now, ISASubscriptionORM.created_at <= now
+            )  # noqa: E712
         )
         return list(result.scalars().all())
 
@@ -142,7 +143,9 @@ class SQLAlchemyRIDSyncRepository:
 
     def get_all_simulated_subscriptions(self, now: datetime) -> list[ISASubscriptionORM]:
         result = self.db.execute(
-            select(ISASubscriptionORM).where(ISASubscriptionORM.is_simulated == True, ISASubscriptionORM.end_datetime >= now, ISASubscriptionORM.created_at <= now)  # noqa: E712
+            select(ISASubscriptionORM).where(
+                ISASubscriptionORM.is_simulated == True, ISASubscriptionORM.end_datetime >= now, ISASubscriptionORM.created_at <= now
+            )  # noqa: E712
         )
         return list(result.scalars().all())
 

@@ -5,9 +5,9 @@ from loguru import logger
 
 from flight_blender.common.data_definitions import OPINT_INDEX_BASEPATH
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.infrastructure.dss import scd as dss_scd_helper
 from flight_blender.infrastructure.spatial import rid as rtree_helper
 
-from flight_blender.infrastructure.dss import scd as dss_scd_helper
 from .scd_data_definitions import ClearAreaResponse, ClearAreaResponseOutcome
 
 

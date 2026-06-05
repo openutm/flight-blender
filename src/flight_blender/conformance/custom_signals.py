@@ -1,7 +1,7 @@
 from loguru import logger
 
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.common.dispatch import Signal, receiver
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 from .conformance_checks_handler import FlightOperationConformanceHelper
 from .conformance_state_helper import ConformanceChecksList

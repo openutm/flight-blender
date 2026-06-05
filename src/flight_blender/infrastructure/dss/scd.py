@@ -21,13 +21,12 @@ from flight_blender.auth.common import get_redis
 from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.common.data_definitions import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.common.utils import LazyEncoder
 from flight_blender.constraint.data_definitions import CompositeConstraintPayload, Constraint
-from flight_blender.infrastructure.dss.constraint import ConstraintOperations
 from flight_blender.geo_fence.data_definitions import GeofencePayload
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.infrastructure.dss.constraint import ConstraintOperations
 from flight_blender.infrastructure.spatial import rid as rtree_helper
-
 from flight_blender.scd.flight_planning_data_definitions import FlightPlanningInjectionData
 from flight_blender.scd.scd_data_definitions import (
     Altitude,

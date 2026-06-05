@@ -9,7 +9,6 @@ from rtree import index
 from rtree.exceptions import RTreeError
 
 from flight_blender.auth.common import get_redis
-
 from flight_blender.flight_declarations.data_definitions import FlightDeclarationMetadata
 
 
