@@ -33,8 +33,8 @@ def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> N
 
 
 def update_operational_intent_to_activated(flight_declaration_id: str, dry_run: int = 1) -> None:
-    from flight_blender.domain_types.common import OPERATION_STATES  # noqa: PLC0415
     from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
+    from flight_blender.domain_types.common import OPERATION_STATES  # noqa: PLC0415
 
     if dry_run:
         return

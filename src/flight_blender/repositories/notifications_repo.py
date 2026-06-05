@@ -29,4 +29,5 @@ class SQLAlchemyNotificationsRepository:
         await self.db.refresh(obj)
         return obj
 
+
 AsyncNotificationsRepository = SQLAlchemyNotificationsRepository

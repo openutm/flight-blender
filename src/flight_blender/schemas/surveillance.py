@@ -221,6 +221,7 @@ class ActiveTrack:
     last_updated_timestamp: str
     observations: list[dict]
 
+
 # --- HTTP request/response schemas ---
 from typing import Literal
 

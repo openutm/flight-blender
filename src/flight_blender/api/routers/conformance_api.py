@@ -7,10 +7,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE
-from flight_blender.services.conformance_svc import ConformanceOperations
-from flight_blender.repositories.conformance_repo import SQLAlchemyConformanceRepository
 from flight_blender.db.session import async_get_db
+from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE
+from flight_blender.repositories.conformance_repo import SQLAlchemyConformanceRepository
+from flight_blender.services.conformance_svc import ConformanceOperations
 
 router = APIRouter(prefix="/conformance_monitoring_ops")
 

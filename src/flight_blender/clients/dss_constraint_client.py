@@ -8,11 +8,11 @@ import urllib3
 from dacite import Config, from_dict
 from loguru import logger
 
+from flight_blender.auth import dss_auth as dss_auth_helper
+from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.config import settings
 from flight_blender.domain_types.constraint import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 from flight_blender.domain_types.scd import Time, Volume4D
-from flight_blender.auth import dss_auth as dss_auth_helper
-from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
 
 

@@ -4,10 +4,10 @@ from typing import List, Optional
 
 from loguru import logger
 
+from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 from flight_blender.domain_types.surveillance import ActiveTrack
-from flight_blender.auth.token_cache import get_redis
 
 AIR_TRAFFIC_STREAM_TTL_MS = settings.AIR_TRAFFIC_STREAM_TTL_MS
 

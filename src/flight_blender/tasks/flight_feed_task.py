@@ -11,11 +11,11 @@ from loguru import logger
 from pyproj import Transformer
 
 from flight_blender.celery import app
+from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.config import settings
+from flight_blender.db.session import session_scope
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedSyncRepository
-from flight_blender.db.session import session_scope
-from flight_blender.clients.redis_client import RedisStreamOperations
 
 #### Airtraffic Endpoint
 
@@ -182,7 +182,6 @@ def start_opensky_network_stream(view_port: str, session_id: str):
         time.sleep(heartbeat)
 
 
-import json
 
 
 class CeleryFlightFeedTaskDispatcher:
@@ -195,4 +194,5 @@ class CeleryFlightFeedTaskDispatcher:
 
     def stream_rid_telemetry_data(self, rid_telemetry_observations: str) -> None:
         from flight_blender.tasks.rid_task import stream_rid_telemetry_data
+
         stream_rid_telemetry_data.delay(rid_telemetry_observations=rid_telemetry_observations)

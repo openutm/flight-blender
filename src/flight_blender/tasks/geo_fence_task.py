@@ -8,12 +8,12 @@ from requests.exceptions import ConnectionError
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
-from flight_blender.celery import app
-from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus, GeoZone
-from flight_blender.services.geo_fence_svc import GeoZoneParser
 from flight_blender.auth.token_cache import get_redis
-from flight_blender.models.geo_fence_orm import GeoFenceORM
+from flight_blender.celery import app
 from flight_blender.db.session import session_scope
+from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus, GeoZone
+from flight_blender.models.geo_fence_orm import GeoFenceORM
+from flight_blender.services.geo_fence_svc import GeoZoneParser
 
 
 @app.task(name="download_geozone_source")
@@ -99,7 +99,6 @@ def write_geo_zone(geo_zone: str, test_harness_datasource: str = "0"):
         logger.info("Saved Geofence to database ..")
 
 
-import json
 
 
 class CeleryGeoFenceTaskDispatcher:

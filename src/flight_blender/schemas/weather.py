@@ -1,4 +1,3 @@
-
 # --- HTTP request/response schemas ---
 from pydantic import BaseModel, ConfigDict
 

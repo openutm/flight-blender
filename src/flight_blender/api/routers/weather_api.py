@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.schemas.weather import WeatherResponse
+from flight_blender.clients.weather_client import WeatherClient
 from flight_blender.config import settings
 from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE
+from flight_blender.schemas.weather import WeatherResponse
 from flight_blender.services.weather_svc import WeatherOperations
-from flight_blender.clients.weather_client import WeatherClient
 
 router = APIRouter(prefix="/weather_monitoring_ops")
 

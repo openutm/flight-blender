@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.services.constraint_svc import ConstraintOperations
-from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
 from flight_blender.db.session import async_get_db
+from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
+from flight_blender.services.constraint_svc import ConstraintOperations
 
 CONSTRAINT_SCOPE = "utm.constraint_processing"
 

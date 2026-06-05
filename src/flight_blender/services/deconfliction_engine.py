@@ -4,13 +4,13 @@ import uuid
 
 from sqlalchemy import select
 
+from flight_blender.db.session import session_scope
 from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
 from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
-from flight_blender.db.session import session_scope
 from flight_blender.models.flight_declarations_orm import FlightDeclarationORM
 from flight_blender.models.geo_fence_orm import GeoFenceORM
-from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 from flight_blender.utils import spatial_geo_fence as rtree_geo_fence_helper
+from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 
 
 class DefaultDeconflictionEngine:

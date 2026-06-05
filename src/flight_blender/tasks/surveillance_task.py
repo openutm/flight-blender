@@ -7,14 +7,15 @@ import redis
 from loguru import logger
 
 from flight_blender.celery import app
+from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.config import settings
+from flight_blender.db.session import session_scope
+from flight_blender.domain_types.protocols_surveillance import TrafficDataFuser as TrafficDataFuserProtocol
 from flight_blender.domain_types.surveillance import HeartbeatMessage
+from flight_blender.plugins.loader import load_plugin
+
 # Protocol removed — TrafficDataFuser injected directly
 from flight_blender.repositories.surveillance_repo import SQLAlchemySurveillanceSyncRepository
-from flight_blender.db.session import session_scope
-from flight_blender.clients.redis_client import RedisStreamOperations
-from flight_blender.domain_types.protocols_surveillance import TrafficDataFuser as TrafficDataFuserProtocol
-from flight_blender.plugins.loader import load_plugin
 
 BROKER_URL = settings.REDIS_BROKER_URL
 FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = settings.FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER

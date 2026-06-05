@@ -8,6 +8,8 @@ from loguru import logger
 from pyproj import Geod
 
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
+from flight_blender.domain_types.protocols_flight_feed import FlightFeedRepository
+from flight_blender.domain_types.protocols_surveillance import SurveillanceRepository, SurveillanceTaskScheduler, TrackStore
 from flight_blender.domain_types.surveillance import (
     FLIGHT_OBSERVATION_TRAFFIC_SOURCE,
     ActiveTrack,
@@ -27,8 +29,6 @@ from flight_blender.domain_types.surveillance import (
     TrackMessage,
     TrackUpdateProbability,
 )
-from flight_blender.domain_types.protocols_flight_feed import FlightFeedRepository
-from flight_blender.domain_types.protocols_surveillance import SurveillanceRepository, SurveillanceTaskScheduler, TrackStore
 
 if TYPE_CHECKING:
     from flight_blender.repositories.conformance_repo import SyncSurveillanceDB

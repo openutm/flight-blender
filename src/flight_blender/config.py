@@ -51,9 +51,7 @@ class FlightBlenderSettings(BaseSettings):
     ENABLE_CONFORMANCE_MONITORING: bool = False
 
     # ── Plugins ────────────────────────────────────────────────────────────
-    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE: str = (
-        "flight_blender.services.deconfliction_engine.DefaultDeconflictionEngine"
-    )
+    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE: str = "flight_blender.services.deconfliction_engine.DefaultDeconflictionEngine"
     FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER: str = ""
     FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR: str = ""
 

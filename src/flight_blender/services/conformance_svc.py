@@ -6,13 +6,13 @@ from loguru import logger
 
 from flight_blender.config import settings
 from flight_blender.domain_types.conformance import ConformanceRecord, ConformanceSummary
-from flight_blender.domain_types.scd import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
 from flight_blender.domain_types.protocols_conformance import (
     AsyncConformanceRepository,
     DSSConformanceDispatcher,
     NotificationDispatcher,
     SyncConformanceDB,
 )
+from flight_blender.domain_types.scd import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
 
 
 class StatusCode:

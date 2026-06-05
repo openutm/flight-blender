@@ -11,8 +11,8 @@ from jwcrypto import jwk, jws
 from jwcrypto.common import json_encode
 from loguru import logger
 
-from flight_blender.config import settings
 from flight_blender.auth.token_cache import get_redis
+from flight_blender.config import settings
 
 
 class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):
@@ -125,8 +125,8 @@ class MessageVerifier:
         public_keys = {}
         from sqlalchemy import select  # noqa: PLC0415
 
-        from flight_blender.models.flight_feed_orm import SignedTelmetryPublicKeyORM  # noqa: PLC0415
         from flight_blender.db.session import SessionLocal  # noqa: PLC0415
+        from flight_blender.models.flight_feed_orm import SignedTelmetryPublicKeyORM  # noqa: PLC0415
 
         _db = SessionLocal()
         try:

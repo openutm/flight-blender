@@ -92,4 +92,5 @@ class SQLAlchemyFlightDeclarationRepository:
             "submitted_by": obj.submitted_by,
         }
 
+
 AsyncFlightDeclarationRepository = SQLAlchemyFlightDeclarationRepository

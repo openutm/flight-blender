@@ -23,6 +23,7 @@ class FlightDeclarationUpdateMessage:
     ]
     timestamp: str
 
+
 # --- HTTP request/response schemas ---
 import uuid
 

@@ -54,4 +54,5 @@ class SQLAlchemyConstraintRepository:
         await self.db.refresh(obj)
         return obj
 
+
 AsyncConstraintRepository = SQLAlchemyConstraintRepository

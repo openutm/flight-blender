@@ -22,6 +22,8 @@ from flight_blender.domain_types.flight_feed import (
     ObservationRequest,
     SingleAirtrafficObservation,
 )
+from flight_blender.domain_types.protocols_flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, SyncFlightFeedReader, TelemetryValidator
+from flight_blender.domain_types.redis_protocols import SyncRedisClient
 from flight_blender.domain_types.rid import (
     NestedDict,
     RIDAircraftState,
@@ -30,8 +32,6 @@ from flight_blender.domain_types.rid import (
     SignedUnSignedTelemetryObservations,
     SubmittedTelemetryFlightDetails,
 )
-from flight_blender.domain_types.protocols_flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, SyncFlightFeedReader, TelemetryValidator
-from flight_blender.domain_types.redis_protocols import SyncRedisClient
 
 
 def _check_view_port(view_port_coords: list[float]) -> bool:

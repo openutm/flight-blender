@@ -12,7 +12,8 @@ from loguru import logger
 from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiagonalKm
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.schemas.rid import CreateTestBody, ISACallbackBody
+from flight_blender.auth.token_cache import get_redis
+from flight_blender.db.session import async_get_db
 from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.domain_types.uss import (
     FlightDetailsNotFoundMessage,
@@ -20,6 +21,9 @@ from flight_blender.domain_types.uss import (
     OperatorDetailsSuccessResponse,
     RIDFlightDetails,
 )
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
+from flight_blender.schemas.rid import CreateTestBody, ISACallbackBody
 from flight_blender.services import rid_svc as view_port_ops
 from flight_blender.services.rid_svc import (
     CreateTestResponse,
@@ -33,10 +37,6 @@ from flight_blender.services.rid_svc import (
     RIDVolume4D,
     SubscriptionState,
 )
-from flight_blender.auth.token_cache import get_redis
-from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
-from flight_blender.db.session import async_get_db
 
 router = APIRouter(prefix="/rid")
 
@@ -108,8 +108,8 @@ async def get_rid_data(
     if not record or not record.flight_details or not json.loads(record.flight_details):
         return JSONResponse({}, status_code=404)
 
-    from flight_blender.services import flight_feed_svc as flight_stream_helper
     from flight_blender.auth.token_cache import get_redis
+    from flight_blender.services import flight_feed_svc as flight_stream_helper
 
     observations = flight_stream_helper.ObservationReadOperations(redis=get_redis()).get_temporal_flight_observations_by_session(
         session_id=sub_id_str
@@ -187,8 +187,8 @@ async def get_display_data(
     _auth: Any = Depends(require_scopes(["dss.read.identification_service_areas"])),
 ):
 
-    from flight_blender.tasks.rid_task import run_ussp_polling_for_rid
     from flight_blender.clients import dss_rid_client as dss_rid_helper
+    from flight_blender.tasks.rid_task import run_ussp_polling_for_rid
 
     try:
         view_port = [float(i) for i in (view or "").split(",")]

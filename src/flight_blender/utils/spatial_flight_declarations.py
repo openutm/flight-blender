@@ -8,8 +8,8 @@ from loguru import logger
 from rtree import index
 from rtree.exceptions import RTreeError
 
-from flight_blender.domain_types.flight_declarations import FlightDeclarationMetadata
 from flight_blender.auth.token_cache import get_redis
+from flight_blender.domain_types.flight_declarations import FlightDeclarationMetadata
 
 
 def _open_or_recover_index(base_path: str) -> index.Index:

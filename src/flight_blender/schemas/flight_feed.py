@@ -116,6 +116,7 @@ class TrafficInformationDiscoveryResponse:
     url: str
     description: str
 
+
 # --- HTTP request/response schemas ---
 from pydantic import BaseModel, ConfigDict
 

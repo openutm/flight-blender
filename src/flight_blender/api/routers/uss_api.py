@@ -90,10 +90,10 @@ def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
 
 
 def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
+    from flight_blender.clients.dss_scd_client import VolumesConverter
     from flight_blender.domain_types.scd import CompositeOperationalIntentPayload
     from flight_blender.domain_types.uss import UpdateChangedOpIntDetailsPost
     from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
-    from flight_blender.clients.dss_scd_client import VolumesConverter
 
     database_writer = SyncDatabaseFacade()
     my_geo_json_converter = VolumesConverter()
@@ -187,6 +187,7 @@ def _do_uss_update_constraint_details(request_data: dict) -> int:
 
 
 def _do_get_uss_flights(view: str) -> tuple[dict, int]:
+    from flight_blender.auth.token_cache import get_redis
     from flight_blender.domain_types.uss import (
         GenericErrorResponseMessage,
         GetFlightsResponse,
@@ -197,10 +198,9 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
         RIDHeight,
         RIDTime,
     )
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
     from flight_blender.services import flight_feed_svc as flight_stream_helper
     from flight_blender.services import rid_svc as view_port_ops
-    from flight_blender.auth.token_cache import get_redis
-    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 
     try:
         view_port = [float(i) for i in view.split(",")]

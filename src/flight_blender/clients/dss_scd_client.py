@@ -15,6 +15,10 @@ from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
+from flight_blender.auth.dss_auth import AuthorityCredentialsGetter
+from flight_blender.auth.token_audience import generate_audience_from_base_url
+from flight_blender.auth.token_cache import get_redis
+from flight_blender.clients.dss_constraint_client import ConstraintOperations
 from flight_blender.config import settings
 from flight_blender.domain_types.common import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
 from flight_blender.domain_types.constraint import CompositeConstraintPayload, Constraint
@@ -61,13 +65,9 @@ from flight_blender.domain_types.scd import (
     Volume4D,
 )
 from flight_blender.domain_types.scd import Polygon as Plgn
-from flight_blender.utils.json_codecs import LazyEncoder
-from flight_blender.auth.token_audience import generate_audience_from_base_url
-from flight_blender.auth.dss_auth import AuthorityCredentialsGetter
-from flight_blender.auth.token_cache import get_redis
 from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
-from flight_blender.clients.dss_constraint_client import ConstraintOperations
 from flight_blender.utils import spatial_rid as rtree_helper
+from flight_blender.utils.json_codecs import LazyEncoder
 
 
 def is_time_within_time_period(start_time: datetime, end_time: datetime, time_to_check: datetime):
@@ -1731,8 +1731,8 @@ class DSSOperationalIntentsCreator:
     """Helper to submit an operational intent to the DSS based on an operation ID."""
 
     def __init__(self, flight_declaration_id: str):
-        from flight_blender.services.flight_declarations_svc import OperationalIntentsConverter  # noqa: PLC0415
         from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
+        from flight_blender.services.flight_declarations_svc import OperationalIntentsConverter  # noqa: PLC0415
 
         self.flight_declaration_id = flight_declaration_id
         self.my_scd_dss_helper = SCDOperations()

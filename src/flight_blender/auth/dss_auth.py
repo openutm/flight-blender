@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 import requests
 from loguru import logger
 
-from flight_blender.config import settings
 from flight_blender.auth.token_cache import get_redis
+from flight_blender.config import settings
 
 
 class AuthorityCredentialsGetter:

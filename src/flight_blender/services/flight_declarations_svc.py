@@ -31,6 +31,12 @@ from flight_blender.domain_types.flight_declarations import (
     HTTP404Response,
     IntersectionCheckResult,
 )
+from flight_blender.domain_types.protocols_flight_declarations import (
+    AsyncFlightDeclarationRepository,
+    OperationalIntentParser,
+    SCDNotificationDispatcher,
+    SCDQueryClient,
+)
 from flight_blender.domain_types.scd import (
     Altitude,
     LatLngPoint,
@@ -42,12 +48,6 @@ from flight_blender.domain_types.scd import (
     Volume4D,
 )
 from flight_blender.domain_types.scd import Polygon as Plgn
-from flight_blender.domain_types.protocols_flight_declarations import (
-    AsyncFlightDeclarationRepository,
-    OperationalIntentParser,
-    SCDNotificationDispatcher,
-    SCDQueryClient,
-)
 from flight_blender.plugins.loader import load_plugin
 
 FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = settings.FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR

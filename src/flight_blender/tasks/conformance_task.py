@@ -1,11 +1,11 @@
 from loguru import logger
 
+from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
 from flight_blender.domain_types.scd import LatLngPoint
 from flight_blender.services import conformance_svc as custom_signals
 from flight_blender.services import flight_feed_svc as flight_stream_helper
 from flight_blender.services.conformance_svc import FlightBlenderConformanceEngine
-from flight_blender.auth.token_cache import get_redis
 
 
 # This method conducts flight conformance checks as a async tasks

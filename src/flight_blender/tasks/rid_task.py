@@ -11,7 +11,9 @@ from dacite.exceptions import DaciteFieldError
 from loguru import logger
 from shapely.geometry import MultiPoint, Point, box
 
+from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
+from flight_blender.clients import dss_rid_client as dss_rid_helper
 from flight_blender.config import settings
 from flight_blender.domain_types.flight_feed import SingleRIDObservation
 from flight_blender.domain_types.rid import (
@@ -23,6 +25,7 @@ from flight_blender.domain_types.rid import (
 )
 from flight_blender.domain_types.rid import RIDAircraftState as LocalRIDAircraftState
 from flight_blender.domain_types.rid import RIDFlightDetails as LocalRIDFlightDetails
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 from flight_blender.services.altitude import wgs84_to_barometric
 from flight_blender.services.rid_svc import (
     FlightTelemetryRIDEngine,
@@ -42,10 +45,7 @@ from flight_blender.services.rid_svc import (
     RIDVolume4D,
     SingleObservationMetadata,
 )
-from flight_blender.auth.token_cache import get_redis
 from flight_blender.tasks.flight_feed_task import write_incoming_air_traffic_data
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
-from flight_blender.clients import dss_rid_client as dss_rid_helper
 
 
 def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:

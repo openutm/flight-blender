@@ -9,13 +9,13 @@ from marshmallow import ValidationError as MarshmallowValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
+from flight_blender.auth.token_cache import get_async_redis
+from flight_blender.db.session import async_get_db
 from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.domain_types.geo_fence import GeoFencePutSchema, GeoZoneCheckRequestBody, GeoZoneHttpsSource
-from flight_blender.services.geo_fence_svc import GeoFenceOperations, validate_geo_zone
-from flight_blender.auth.token_cache import get_async_redis
-from flight_blender.tasks.geo_fence_task import CeleryGeoFenceTaskDispatcher
 from flight_blender.repositories.geo_fence_repo import SQLAlchemyGeoFenceRepository
-from flight_blender.db.session import async_get_db
+from flight_blender.services.geo_fence_svc import GeoFenceOperations, validate_geo_zone
+from flight_blender.tasks.geo_fence_task import CeleryGeoFenceTaskDispatcher
 from flight_blender.utils.spatial_geo_fence import RTreeGeoFenceSpatialService
 
 router = APIRouter(prefix="/geo_fence_ops")

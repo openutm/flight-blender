@@ -15,6 +15,7 @@ from typing import Optional
 import arrow
 from sqlalchemy import delete, select
 
+from flight_blender.db.session import session_scope
 from flight_blender.models.conformance_orm import ConformanceRecordORM
 from flight_blender.models.constraint_orm import CompositeConstraintORM, ConstraintDetailORM, ConstraintReferenceORM
 from flight_blender.models.flight_declarations_orm import (
@@ -36,7 +37,6 @@ from flight_blender.models.rid_orm import ISASubscriptionORM, RIDFlightDetailORM
 from flight_blender.models.surveillance_orm import SurveillanceSensorORM
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedSyncRepository
 from flight_blender.repositories.flight_feed_repo import _normalize_timestamp as _sa_normalize_timestamp
-from flight_blender.db.session import session_scope
 
 
 class _CompositeBundle:

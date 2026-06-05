@@ -21,4 +21,5 @@ class SQLAlchemyConformanceRepository:
         )
         return list(result.scalars().all())
 
+
 AsyncConformanceRepository = SQLAlchemyConformanceRepository
