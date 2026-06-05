@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from flight_blender.config import settings
+from flight_blender.infrastructure.database import models  # noqa: F401
 from flight_blender.infrastructure.database.session import Base
 
 config = context.config
@@ -11,7 +12,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+sync_database_url = settings.DATABASE_URL.replace("postgres://", "postgresql://", 1)
+config.set_main_option("sqlalchemy.url", sync_database_url)
 
 target_metadata = Base.metadata
 
