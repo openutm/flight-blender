@@ -29,7 +29,10 @@ from flight_blender.core.operations.conformance import (
     get_status,
     match_state,
 )
-from flight_blender.core.operations.conformance import OperationConformanceNotification
+from flight_blender.core.operations.conformance import (
+    OperationConformanceNotification,
+    set_conformance_deps,
+)
 from flight_blender.infrastructure.celery.tasks.conformance import check_flight_conformance, check_operation_telemetry_conformance
 from flight_blender.core.operations.conformance import FlightBlenderConformanceEngine, is_time_between
 from flight_blender.core.entities.scd import LatLngPoint
@@ -209,11 +212,29 @@ class TestIsTimeBetween:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _stub_conformance_deps():
+    """Signal receivers and no-arg FlightBlenderConformanceEngine read deps from
+    a module-level provider. Tests need a stub registered before they run.
+    """
+    deps = MagicMock()
+    deps.db = MagicMock()
+    deps.dss = MagicMock()
+    deps.notifier = MagicMock()
+    set_conformance_deps(deps)
+    yield
+    set_conformance_deps(MagicMock(db=MagicMock(), dss=MagicMock(), notifier=MagicMock()))
+
+
 class TestFlightBlenderConformanceEngineC2C3:
     def test_c2_no_flight_declaration(self):
-        engine = FlightBlenderConformanceEngine()
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+
+        engine = FlightBlenderConformanceEngine(db=SyncDatabaseFacade())
         # Non-existent flight declaration ID
-        with patch("flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None):
+        with patch(
+            "flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
+        ):
             result = engine.is_operation_conformant_via_telemetry(
                 flight_declaration_id=str(uuid.uuid4()),
                 aircraft_id="TEST-UAV",
@@ -226,9 +247,13 @@ class TestFlightBlenderConformanceEngineC2C3:
 
 class TestCheckFlightOperationalIntentReferenceConformance:
     def test_nonexistent_declaration_returns_c11(self):
-        engine = FlightBlenderConformanceEngine()
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+
+        engine = FlightBlenderConformanceEngine(db=SyncDatabaseFacade())
         with (
-            patch("flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None),
+            patch(
+                "flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
+            ),
             patch(
                 "flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_operational_intent_reference_by_flight_declaration_id",
                 return_value=None,
@@ -262,7 +287,9 @@ class TestCheckFlightConformanceTask:
             "flight_blender.infrastructure.celery.tasks.conformance.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
             return_value=ConformanceChecksList.C9a,
         ):
-            with patch("flight_blender.infrastructure.celery.tasks.conformance.custom_signals.flight_operational_intent_reference_non_conformance_signal.send") as mock_signal:
+            with patch(
+                "flight_blender.infrastructure.celery.tasks.conformance.custom_signals.flight_operational_intent_reference_non_conformance_signal.send"
+            ) as mock_signal:
                 check_flight_conformance(flight_declaration_id=str(uuid.uuid4()), session_id="test-sess")
                 mock_signal.assert_called_once()
 
@@ -284,7 +311,8 @@ class TestCheckOperationTelemetryConformanceTask:
 
 class TestOperationConformanceNotification:
     def test_no_amqp_logs_error(self):
-        notif = OperationConformanceNotification(flight_declaration_id="test-fd-id")
+        notifier = MagicMock()
+        notif = OperationConformanceNotification(flight_declaration_id="test-fd-id", notifier=notifier)
         # When AMQP_URL is not set, should just log without raising
         notif.send_conformance_status_notification(message="Test message", level="error")
 
@@ -293,6 +321,8 @@ class TestOperationConformanceNotification:
             with patch("flight_blender.infrastructure.celery.tasks.flight_declarations.send_operational_update_message") as mock_task:
                 mock_delay = MagicMock()
                 mock_task.delay = mock_delay
-                notif = OperationConformanceNotification(flight_declaration_id="fd-amqp")
+                notifier = MagicMock()
+                notifier.send_operational_update_message = mock_delay
+                notif = OperationConformanceNotification(flight_declaration_id="fd-amqp", notifier=notifier)
                 notif.send_conformance_status_notification(message="Some message", level="info")
                 mock_delay.assert_called_once()

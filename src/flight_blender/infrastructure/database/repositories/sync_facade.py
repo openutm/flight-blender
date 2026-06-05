@@ -29,6 +29,7 @@ from flight_blender.infrastructure.database.models.flight_declarations import (
     SubscriberORM,
 )
 from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM
+from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
 from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM
 from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM
 from flight_blender.infrastructure.database.models.surveillance import SurveillanceSensorORM
@@ -690,6 +691,75 @@ class SyncDatabaseFacade:
                 for row in rows
             ]
 
+    def get_flight_observation_objects(self) -> list:
+        with session_scope() as db:
+            rows = db.execute(select(FlightObservationORM).order_by(FlightObservationORM.created_at)).scalars().all()
+            return [
+                {
+                    "id": str(row.id),
+                    "session_id": str(row.session_id) if row.session_id else "",
+                    "latitude_dd": row.latitude_dd,
+                    "longitude_dd": row.longitude_dd,
+                    "altitude_mm": row.altitude_mm,
+                    "traffic_source": row.traffic_source,
+                    "source_type": row.source_type,
+                    "icao_address": row.icao_address,
+                    "created_at": row.created_at.isoformat(),
+                    "updated_at": row.updated_at.isoformat(),
+                    "metadata": row.raw_metadata,
+                }
+                for row in rows
+            ]
+
+    def get_latest_flight_observation_by_session(self, session_id: str):
+        with session_scope() as db:
+            row = (
+                db.execute(
+                    select(FlightObservationORM)
+                    .where(FlightObservationORM.session_id == uuid.UUID(session_id))
+                    .order_by(FlightObservationORM.created_at.desc())
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            if row is None:
+                return None
+            db.expunge(row)
+            return row
+
+    def get_temporal_flight_observations_by_session(self, session_id: str, after_datetime) -> list:
+        cutoff = after_datetime.datetime if hasattr(after_datetime, "datetime") else after_datetime
+        with session_scope() as db:
+            rows = (
+                db.execute(
+                    select(FlightObservationORM)
+                    .where(
+                        FlightObservationORM.session_id == uuid.UUID(session_id),
+                        FlightObservationORM.created_at >= cutoff,
+                    )
+                    .order_by(FlightObservationORM.created_at)
+                )
+                .scalars()
+                .all()
+            )
+            return [
+                {
+                    "id": str(row.id),
+                    "session_id": str(row.session_id) if row.session_id else "",
+                    "latitude_dd": row.latitude_dd,
+                    "longitude_dd": row.longitude_dd,
+                    "altitude_mm": row.altitude_mm,
+                    "traffic_source": row.traffic_source,
+                    "source_type": row.source_type,
+                    "icao_address": row.icao_address,
+                    "created_at": row.created_at.isoformat(),
+                    "updated_at": row.updated_at.isoformat(),
+                    "metadata": row.raw_metadata,
+                }
+                for row in rows
+            ]
+
     def delete_all_flight_observations(self) -> bool:
         with session_scope() as db:
             db.execute(delete(FlightObservationORM))
@@ -773,6 +843,16 @@ class SyncDatabaseFacade:
 
     def remove_conformance_monitoring_periodic_task(self, conformance_monitoring_task=None) -> None:
         pass  # no-op: Celery tasks expire naturally
+
+    # ─── Geofence ─────────────────────────────────────────────────────────────
+
+    def get_active_geofences(self) -> list:
+        with session_scope() as db:
+            result = db.execute(select(GeoFenceORM).where(GeoFenceORM.status == 0))
+            objs = list(result.scalars().all())
+            for o in objs:
+                db.expunge(o)
+            return objs
 
     # ─── FlightDeclaration extras ─────────────────────────────────────────────
 

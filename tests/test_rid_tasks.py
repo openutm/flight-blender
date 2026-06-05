@@ -323,7 +323,7 @@ class TestFlightTelemetryRIDEngine:
     def test_check_rid_stream_ok_no_observations(self):
         """When there are no recent observations the stream is considered OK."""
         with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-empty")
+            engine = FlightTelemetryRIDEngine(session_id="sess-empty", db_reader=SyncDatabaseFacade())
             ok, errors = engine.check_rid_stream_ok()
         assert ok is True
         assert errors == []
@@ -334,7 +334,7 @@ class TestFlightTelemetryRIDEngine:
         obs = MagicMock()
         obs.timestamp = now.datetime
         with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-single")
+            engine = FlightTelemetryRIDEngine(session_id="sess-single", db_reader=SyncDatabaseFacade())
             ok, errors = engine.check_rid_stream_ok()
         assert ok is True
 
@@ -345,10 +345,8 @@ class TestFlightTelemetryRIDEngine:
         obs1.timestamp = now.datetime
         obs2 = MagicMock()
         obs2.timestamp = (now + timedelta(seconds=3)).datetime
-        with patch.object(
-            SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs1, obs2]
-        ):
-            engine = FlightTelemetryRIDEngine(session_id="sess-gap")
+        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs1, obs2]):
+            engine = FlightTelemetryRIDEngine(session_id="sess-gap", db_reader=SyncDatabaseFacade())
             ok, errors = engine.check_rid_stream_ok()
         assert ok is False
         assert len(errors) == 1

@@ -9,14 +9,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.core.entities.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.operations.flight_declarations import FlightDeclarationOperations, do_network_declarations_by_view
+from flight_blender.infrastructure.celery.scd_notifier_dispatcher import CelerySCDNotifier
 from flight_blender.infrastructure.database.repositories.sa_flight_declarations import SQLAlchemyFlightDeclarationRepository
 from flight_blender.infrastructure.database.session import async_get_db
+from flight_blender.infrastructure.dss.scd import OperationalIntentReferenceHelper, SCDOperations
 
 router = APIRouter(prefix="/flight_declaration_ops")
 
 
+def _scd_query_client() -> SCDOperations:
+    return SCDOperations()
+
+
+def _operational_intent_parser() -> OperationalIntentReferenceHelper:
+    return OperationalIntentReferenceHelper()
+
+
+def _notifier() -> CelerySCDNotifier:
+    return CelerySCDNotifier()
+
+
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> FlightDeclarationOperations:
-    return FlightDeclarationOperations(repo=SQLAlchemyFlightDeclarationRepository(db))
+    return FlightDeclarationOperations(
+        repo=SQLAlchemyFlightDeclarationRepository(db),
+        scd_client=_scd_query_client(),
+        parser=_operational_intent_parser(),
+        notifier=_notifier(),
+    )
 
 
 @router.post("/set_flight_declaration")
@@ -115,7 +134,7 @@ async def network_flight_declarations_by_view(
     view: str | None = None,
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    data, status_code = await asyncio.to_thread(do_network_declarations_by_view, view)
+    data, status_code = await asyncio.to_thread(do_network_declarations_by_view, view, _scd_query_client())
     return JSONResponse(data, status_code=status_code)
 
 

@@ -11,6 +11,7 @@ from shapely.geometry import box as shapely_box
 
 from flight_blender.core.entities.rid import UASID, OperatorLocation, RIDStreamErrorDetail, UAClassificationEU
 from flight_blender.core.entities.scd import Volume4D
+from flight_blender.core.repositories.flight_feed import SyncFlightFeedReader
 
 # ── viewport helpers (from rid/view_port_ops.py) ─────────────────────────────
 
@@ -80,16 +81,14 @@ all_rid_errors = [
 
 
 class FlightTelemetryRIDEngine:
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, db_reader: SyncFlightFeedReader):
         self.session_id = session_id
+        self.db_reader: SyncFlightFeedReader = db_reader
 
     def check_rid_stream_ok(self) -> tuple[bool, list[Never] | list[RIDStreamErrorDetail]]:
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
-        my_database_reader = SyncDatabaseFacade()
         now = arrow.now()
         four_seconds_before_now = arrow.now().shift(seconds=-4)
-        relevant_observations = my_database_reader.get_active_rid_observations_for_session_between_interval(
+        relevant_observations = self.db_reader.get_active_rid_observations_for_session_between_interval(
             session_id=self.session_id, start_time=four_seconds_before_now, end_time=now
         )
 

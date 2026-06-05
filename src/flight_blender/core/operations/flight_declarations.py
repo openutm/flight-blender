@@ -42,7 +42,12 @@ from flight_blender.core.entities.scd import (
     Volume4D,
 )
 from flight_blender.core.entities.scd import Polygon as Plgn
-from flight_blender.core.repositories.flight_declarations import FlightDeclarationRepository
+from flight_blender.core.repositories.flight_declarations import (
+    FlightDeclarationRepository,
+    OperationalIntentParser,
+    SCDNotificationDispatcher,
+    SCDQueryClient,
+)
 from flight_blender.plugins.loader import load_plugin
 
 FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = settings.FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
@@ -464,7 +469,10 @@ def _run_deconfliction_sa(
     return results
 
 
-def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
+def do_network_declarations_by_view(
+    view: str | None,
+    scd_client: SCDQueryClient,
+) -> tuple[dict, int]:
     ussp_network_enabled = settings.USSP_NETWORK_ENABLED
 
     if not view:
@@ -496,11 +504,8 @@ def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
     volumes = temporary_ref.volumes
     my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=volumes)
 
-    from flight_blender.infrastructure.dss.scd import SCDOperations  # noqa: PLC0415
-
-    my_scd_helper = SCDOperations()
     try:
-        operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=volumes)
+        operational_intent_geojson = scd_client.get_and_process_nearby_operational_intents(volumes=volumes)
     except (ValueError, ConnectionError):
         operational_intent_geojson = []
 
@@ -508,8 +513,17 @@ def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
 
 
 class FlightDeclarationOperations:
-    def __init__(self, repo: FlightDeclarationRepository):
+    def __init__(
+        self,
+        repo: FlightDeclarationRepository,
+        scd_client: SCDQueryClient,
+        parser: OperationalIntentParser,
+        notifier: SCDNotificationDispatcher,
+    ):
         self.repo = repo
+        self.scd_client = scd_client
+        self.parser = parser
+        self.notifier = notifier
 
     async def create_flight_declaration(
         self,
@@ -750,10 +764,7 @@ class FlightDeclarationOperations:
         intersection_result: IntersectionCheckResult,
         ussp_network_enabled: int,
     ) -> FlightDeclarationCreateResponse:
-        from flight_blender.infrastructure.celery.tasks.flight_declarations import (  # noqa: PLC0415
-            send_operational_update_message,
-            submit_flight_declaration_to_dss_async,
-        )
+        notifier: SCDNotificationDispatcher = self.notifier
 
         is_approved = intersection_result.is_approved
         declaration_state = intersection_result.declaration_state
@@ -772,7 +783,7 @@ class FlightDeclarationOperations:
             )
 
         flight_declaration_id = str(fd.id)
-        send_operational_update_message.delay(
+        notifier.send_operational_update_message(
             flight_declaration_id=flight_declaration_id,
             message_text="Flight Declaration created..",
             level="info",
@@ -780,7 +791,7 @@ class FlightDeclarationOperations:
 
         if all_relevant_fences and all_relevant_declarations:
             self_deconfliction_failed_msg = f"Self deconfliction failed for operation {flight_declaration_id} did not pass self-deconfliction, there are existing operations declared in the area"
-            send_operational_update_message.delay(
+            notifier.send_operational_update_message(
                 flight_declaration_id=flight_declaration_id,
                 message_text=self_deconfliction_failed_msg,
                 level="error",
@@ -788,7 +799,7 @@ class FlightDeclarationOperations:
 
         auto_submit_to_dss = settings.AUTO_SUBMIT_TO_DSS
         if is_approved and declaration_state == 0 and ussp_network_enabled and auto_submit_to_dss:
-            submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
+            notifier.submit_flight_declaration_to_dss_async(flight_declaration_id=flight_declaration_id)
 
         return FlightDeclarationCreateResponse(
             id=flight_declaration_id,
@@ -812,8 +823,6 @@ class FlightDeclarationOperations:
         if fd is None:
             return asdict(HTTP404Response(message=f"Flight Declaration with ID {flight_declaration_id} not found")), 404
 
-        from flight_blender.infrastructure.dss.scd import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
-
         if fd.state not in [0, 1, 2, 3, 4]:
             return asdict(HTTP400Response(message="USSP network can only be queried for operational intents that are active")), 400
 
@@ -823,12 +832,10 @@ class FlightDeclarationOperations:
         except (json.JSONDecodeError, KeyError):
             return asdict(HTTP400Response(message="Flight declaration has invalid or missing operational intent volumes")), 400
 
-        my_operational_intent_parser = OperationalIntentReferenceHelper()
-        all_volumes = [my_operational_intent_parser.parse_volume_to_volume4D(volume=volume) for volume in operational_intent_volumes]
+        all_volumes = [self.parser.parse_volume_to_volume4D(volume=volume) for volume in operational_intent_volumes]
 
-        my_scd_helper = SCDOperations()
         try:
-            operational_intent_geojson = my_scd_helper.get_and_process_nearby_operational_intents(volumes=all_volumes)
+            operational_intent_geojson = self.scd_client.get_and_process_nearby_operational_intents(volumes=all_volumes)
         except (ValueError, ConnectionError):
             operational_intent_geojson = []
 

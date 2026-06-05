@@ -30,7 +30,7 @@ from flight_blender.core.entities.rid import (
     SignedUnSignedTelemetryObservations,
     SubmittedTelemetryFlightDetails,
 )
-from flight_blender.core.repositories.flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, TelemetryValidator
+from flight_blender.core.repositories.flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, SyncFlightFeedReader, TelemetryValidator
 from flight_blender.core.repositories.redis import SyncRedisClient
 
 
@@ -363,14 +363,12 @@ def batcher(iterable, n):
 
 
 class ObservationReadOperations:
-    def __init__(self, redis: SyncRedisClient, view_port_box=None):
+    def __init__(self, redis: SyncRedisClient, db_reader: SyncFlightFeedReader, view_port_box=None):
         self.view_port_box: shapely_box = view_port_box
         self.redis: SyncRedisClient = redis
+        self.db_reader: SyncFlightFeedReader = db_reader
 
     def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
-        my_database_reader = SyncDatabaseFacade()
         key = f"last_reading_for_{session_id}"
         if self.redis.exists(key):
             last_reading_time = self.redis.get(key)
@@ -382,7 +380,7 @@ class ObservationReadOperations:
         self.redis.set(key, arrow.now().isoformat())
         self.redis.expire(key, 300)
         pending_messages = []
-        all_flight_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
+        all_flight_observations = self.db_reader.get_flight_observations(after_datetime=after_datetime)
         logger.info("Retrieved all flight observations..")
         for message in all_flight_observations:
             observation = FlightObservationSchema(
@@ -406,11 +404,8 @@ class ObservationReadOperations:
         return pending_messages
 
     def get_closest_observation_for_now(self, now: arrow.arrow.Arrow):
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
-        my_database_reader = SyncDatabaseFacade()
         all_observations = []
-        closest_observations = my_database_reader.get_closest_flight_observation_for_now(now=now)
+        closest_observations = self.db_reader.get_closest_flight_observation_for_now(now=now)
         logger.info("Retrieved closest_observations..")
         for closest_observation in closest_observations:
             single_observation = FlightObservationSchema(
@@ -434,11 +429,8 @@ class ObservationReadOperations:
         return all_observations
 
     def get_all_flight_observations(self) -> list[FlightObservationSchema]:
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
-        my_database_reader = SyncDatabaseFacade()
         pending_messages = []
-        all_flight_observations = my_database_reader.get_flight_observation_objects()
+        all_flight_observations = self.db_reader.get_flight_observation_objects()
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],
@@ -461,10 +453,7 @@ class ObservationReadOperations:
         return pending_messages
 
     def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
-        my_database_reader = SyncDatabaseFacade()
-        latest_observation = my_database_reader.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
+        latest_observation = self.db_reader.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
         if latest_observation:
             return FlightObservationSchema(
                 id=str(latest_observation.id),
@@ -482,9 +471,6 @@ class ObservationReadOperations:
         return None
 
     def get_temporal_flight_observations_by_session(self, session_id: str) -> list[FlightObservationSchema]:
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
-        my_database_reader = SyncDatabaseFacade()
         key = f"last_reading_for_{session_id}"
         if self.redis.exists(key):
             last_reading_time = self.redis.get(key)
@@ -496,7 +482,7 @@ class ObservationReadOperations:
         self.redis.set(key, arrow.now().isoformat())
         self.redis.expire(key, 300)
         pending_messages = []
-        all_flight_observations = my_database_reader.get_temporal_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
+        all_flight_observations = self.db_reader.get_temporal_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],

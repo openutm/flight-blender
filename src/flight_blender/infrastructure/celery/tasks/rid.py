@@ -629,7 +629,7 @@ def stream_rid_test_data(requested_flights, test_id):
 def check_rid_stream_conformance(session_id: str, flight_declaration_id=None, dry_run: str = "1"):
     # This method conducts flight conformance checks as a async task
 
-    my_rid_stream_checker = FlightTelemetryRIDEngine(session_id=session_id)
+    my_rid_stream_checker = FlightTelemetryRIDEngine(session_id=session_id, db_reader=SyncDatabaseFacade())
 
     rid_stream_conformant, error_details = my_rid_stream_checker.check_rid_stream_ok()
 

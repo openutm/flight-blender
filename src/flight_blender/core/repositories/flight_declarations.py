@@ -106,3 +106,37 @@ class FlightDeclarationRepository(Protocol):
     def update_flight_operational_intent_details(
         self, flight_operational_intent_detail: Any, operational_intent_details: OperationalIntentUSSDetails
     ) -> bool: ...
+
+
+@runtime_checkable
+class SCDQueryClient(Protocol):
+    """DSS Strategic Coordination query client used by flight-declaration ops.
+
+    Concrete implementation: ``SCDOperations`` in
+    ``flight_blender.infrastructure.dss.scd``.
+    """
+
+    def get_and_process_nearby_operational_intents(self, volumes: list[Any]) -> Any: ...
+
+
+@runtime_checkable
+class OperationalIntentParser(Protocol):
+    """DSS operational-intent reference parser used by flight-declaration ops.
+
+    Concrete implementation: ``OperationalIntentReferenceHelper`` in
+    ``flight_blender.infrastructure.dss.scd``.
+    """
+
+    def parse_volume_to_volume4D(self, volume: dict) -> Any: ...
+
+
+@runtime_checkable
+class SCDNotificationDispatcher(Protocol):
+    """Fire-and-forget DSS / notification dispatcher used by flight-declaration ops.
+
+    Concrete implementation: Celery task adapters in
+    ``flight_blender.infrastructure.celery.tasks.flight_declarations``.
+    """
+
+    def send_operational_update_message(self, flight_declaration_id: str, message_text: str, level: str) -> None: ...
+    def submit_flight_declaration_to_dss_async(self, flight_declaration_id: str) -> None: ...

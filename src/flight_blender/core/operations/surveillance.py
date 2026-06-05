@@ -31,7 +31,7 @@ from flight_blender.core.repositories.flight_feed import FlightFeedRepository
 from flight_blender.core.repositories.surveillance import SurveillanceRepository, SurveillanceTaskScheduler, TrackStore
 
 if TYPE_CHECKING:
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+    from flight_blender.core.repositories.conformance import SyncSurveillanceDB
 
 
 class SurveillanceOperations:
@@ -399,8 +399,8 @@ def _calculate_aggregate_health_metrics(
 class SurveillanceMetricCalculator:
     """Calculates ASTM F3623 SDSP surveillance metrics from database records."""
 
-    def __init__(self, database_reader: "SyncDatabaseFacade"):
-        self.db = database_reader
+    def __init__(self, database_reader: "SyncSurveillanceDB"):
+        self.db: "SyncSurveillanceDB" = database_reader
 
     def calculate_heartbeat_rate(self, session_id: str, start_time: datetime, end_time: datetime) -> HeartbeatRateMetric:
         events = self.db.get_heartbeat_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
@@ -457,13 +457,7 @@ class SurveillanceMetricCalculator:
 
         sensor = None
         try:
-            from flight_blender.infrastructure.database.models.surveillance import SurveillanceSensorORM  # noqa: PLC0415
-            from flight_blender.infrastructure.database.session import session_scope  # noqa: PLC0415
-
-            with session_scope() as db:
-                sensor = db.get(SurveillanceSensorORM, sensor_id)
-                if sensor is not None:
-                    db.expunge(sensor)
+            sensor = self.db.get_surveillance_sensor_by_id(sensor_id=sensor_id)
         except Exception:
             logger.warning(f"calculate_sensor_health_metrics: sensor {sensor_id} not found")
 
