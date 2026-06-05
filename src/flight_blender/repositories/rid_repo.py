@@ -29,6 +29,9 @@ class SQLAlchemyRIDRepository:
         result = await self.db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.subscription_id == uuid.UUID(subscription_id)))
         return result.scalar_one_or_none()
 
+    async def get_subscription_by_id(self, record_id: str) -> Optional[ISASubscriptionORM]:
+        return await self.db.get(ISASubscriptionORM, uuid.UUID(record_id))
+
     async def update_subscription_flight_details(self, subscription: ISASubscriptionORM, flights_dict: str) -> None:
         subscription.flight_details = flights_dict
         await self.db.flush()

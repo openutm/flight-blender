@@ -1,11 +1,11 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flight_blender.models.flight_declarations_orm import FlightDeclarationORM, FlightOperationTrackingORM
+from flight_blender.models.flight_declarations_orm import FlightDeclarationORM, FlightOperationTrackingORM, FlightOperationalIntentReferenceORM
 
 
 class SQLAlchemyFlightDeclarationRepository:
@@ -71,6 +71,24 @@ class SQLAlchemyFlightDeclarationRepository:
         if obj is None:
             return False
         await self.db.delete(obj)
+        await self.db.flush()
+        return True
+
+    async def get_opint_reference_by_declaration_id(
+        self, declaration_id: uuid.UUID
+    ) -> FlightOperationalIntentReferenceORM | None:
+        result = await self.db.execute(
+            select(FlightOperationalIntentReferenceORM).where(
+                FlightOperationalIntentReferenceORM.declaration_id == declaration_id
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def update_telemetry_timestamp(self, declaration_id: uuid.UUID) -> bool:
+        obj = await self.get_by_id(declaration_id)
+        if obj is None:
+            return False
+        obj.latest_telemetry_datetime = datetime.now(timezone.utc)
         await self.db.flush()
         return True
 

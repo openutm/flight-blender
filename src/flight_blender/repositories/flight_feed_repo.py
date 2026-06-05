@@ -191,6 +191,22 @@ class SQLAlchemyFlightFeedRepository:
             return None
         return await self.db.get(FlightDeclarationORM, declaration_uuid)
 
+    async def get_active_rid_observations_for_session_between_interval(
+        self, session_id: str, start_time, end_time
+    ) -> list[FlightObservationORM]:
+        start_dt = start_time.datetime if hasattr(start_time, "datetime") else start_time
+        end_dt = end_time.datetime if hasattr(end_time, "datetime") else end_time
+        result = await self.db.execute(
+            select(FlightObservationORM)
+            .where(
+                FlightObservationORM.session_id == uuid.UUID(session_id),
+                FlightObservationORM.created_at >= start_dt,
+                FlightObservationORM.created_at <= end_dt,
+            )
+            .order_by(FlightObservationORM.created_at)
+        )
+        return list(result.scalars().all())
+
 
 class SQLAlchemyFlightFeedSyncRepository:
     """Sync repository for Celery tasks."""

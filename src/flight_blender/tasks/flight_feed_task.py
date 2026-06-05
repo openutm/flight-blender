@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from dataclasses import asdict
@@ -13,9 +14,9 @@ from pyproj import Transformer
 from flight_blender.celery import app
 from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.config import settings
-from flight_blender.db.session import session_scope
+from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
-from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedSyncRepository
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 
 #### Airtraffic Endpoint
 
@@ -27,6 +28,10 @@ def bulk_write_incoming_air_traffic_data(observations_str: str):
     This function takes a JSON string representing a list of observations,
     parses it, writes it to the database in bulk, and then pushes to a Redis stream.
     """
+    asyncio.run(_async_bulk_write_incoming_air_traffic_data(observations_str))
+
+
+async def _async_bulk_write_incoming_air_traffic_data(observations_str: str) -> None:
     my_redis_helper = RedisStreamOperations()
     obs_list = json.loads(observations_str)
 
@@ -44,9 +49,9 @@ def bulk_write_incoming_air_traffic_data(observations_str: str):
 
     if parsed_observations:
         logger.info(f"Writing {len(parsed_observations)} observations to database in bulk..")
-        with session_scope() as db:
-            repo = SQLAlchemyFlightFeedSyncRepository(db)
-            repo.bulk_write_flight_observations(parsed_observations)
+        async with async_session_scope() as db:
+            repo = SQLAlchemyFlightFeedRepository(db)
+            await repo.bulk_write_flight_observations(parsed_observations)
 
         logger.info("Writing batch to Redis stream..")
         for single_obs in parsed_observations:
@@ -64,6 +69,10 @@ def write_incoming_air_traffic_data(observation: str):
     Returns:
         str: The message ID of the added observation.
     """
+    asyncio.run(_async_write_incoming_air_traffic_data(observation))
+
+
+async def _async_write_incoming_air_traffic_data(observation: str) -> None:
     my_redis_helper = RedisStreamOperations()
     obs = json.loads(observation)
     logger.debug(f"Received observation: {obs}")
@@ -78,9 +87,9 @@ def write_incoming_air_traffic_data(observation: str):
     logger.debug(f"Parsed observation: {single_air_traffic_observation}")
 
     logger.info("Writing observation..")
-    with session_scope() as db:
-        repo = SQLAlchemyFlightFeedSyncRepository(db)
-        repo.write_flight_observation(single_air_traffic_observation)
+    async with async_session_scope() as db:
+        repo = SQLAlchemyFlightFeedRepository(db)
+        await repo.write_flight_observation(single_air_traffic_observation)
 
     logger.info("Writing to Redis stream..")
     my_redis_helper.add_air_traffic_data(stream_name="air_traffic_stream", observation=asdict(single_air_traffic_observation))

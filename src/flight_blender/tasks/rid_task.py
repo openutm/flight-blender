@@ -1,5 +1,7 @@
+import asyncio
 import json
 import time
+import uuid
 from dataclasses import asdict
 from datetime import timedelta
 from enum import Enum
@@ -15,6 +17,7 @@ from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
 from flight_blender.clients import dss_rid_client as dss_rid_helper
 from flight_blender.config import settings
+from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.flight_feed import SingleRIDObservation
 from flight_blender.domain_types.rid import (
     UASID,
@@ -25,7 +28,10 @@ from flight_blender.domain_types.rid import (
 )
 from flight_blender.domain_types.rid import RIDAircraftState as LocalRIDAircraftState
 from flight_blender.domain_types.rid import RIDFlightDetails as LocalRIDFlightDetails
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
+from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.services.altitude import wgs84_to_barometric
 from flight_blender.services.rid_svc import (
     FlightTelemetryRIDEngine,
@@ -68,38 +74,29 @@ def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:
 
 @app.task(name="write_operator_rid_notification")
 def write_operator_rid_notification(message: str, session_id: str):
-    operator_rid_notification = OperatorRIDNotificationCreationPayload(message=message, session_id=session_id)
-    my_database_writer = SyncDatabaseFacade()
-    my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)
+    asyncio.run(_async_write_operator_rid_notification(message, session_id))
 
 
-def process_requested_flight(
+async def _async_write_operator_rid_notification(message: str, session_id: str) -> None:
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except (ValueError, AttributeError):
+        session_uuid = None
+    async with async_session_scope() as db:
+        repo = SQLAlchemyNotificationsRepository(db)
+        await repo.create_notification(message=message, session_id=session_uuid)
+
+
+async def _async_process_requested_flight(
     requested_flight: dict,
     flight_injection_sorted_set: str,
     test_id: str,
     injection_id: str,
+    rid_repo: SQLAlchemyRIDRepository,
 ) -> tuple[RIDTestInjection, list[LatLngPoint], list[float]]:
     """
     Processes a requested flight by parsing flight details and telemetry data, storing relevant information in Redis,
     and returning structured representations of the flight, positions, and altitudes.
-    Args:
-        requested_flight (dict): Dictionary containing flight details and telemetry data. Expected keys are:
-            - "telemetry": List of telemetry observations, each containing position, timestamp, and other flight state data.
-            - "details_responses": List of flight detail responses, each with flight and operator information.
-            - "injection_id": Unique identifier for the flight injection.
-        flight_injection_sorted_set (str): Redis sorted set key for storing telemetry observations.
-        test_id (str): Identifier for the test session, used for operator notifications.
-    Returns:
-        tuple:
-            - RIDTestInjection: Structured object representing the injected flight, including telemetry and details responses.
-            - list[LatLngPoint]: List of latitude/longitude points representing the flight path.
-            - list[float]: List of altitudes corresponding to the telemetry positions.
-    Side Effects:
-        - Stores flight details and telemetry observations in Redis.
-        - Sets expiration for stored flight details.
-        - Sends operator notifications if telemetry timestamps are invalid.
-    Raises:
-        None directly, but logs and notifies on telemetry timestamp parsing errors.
     """
     r = get_redis()
     all_telemetry = []
@@ -108,7 +105,6 @@ def process_requested_flight(
     all_altitudes = []
     provided_telemetries = requested_flight["telemetry"]
     provided_flight_details = requested_flight["details_responses"]
-    my_database_writer = SyncDatabaseFacade()
 
     MANDATORY_TELEMETRY_FIELDS = [
         "timestamp",
@@ -166,18 +162,14 @@ def process_requested_flight(
         )
         all_flight_details.append(pfd)
 
-        my_database_writer.create_or_update_rid_flight_details(rid_flight_details_payload=flight_detail)
+        await rid_repo.create_or_update_flight_detail(rid_flight_details_payload=flight_detail)
 
-    # Iterate over telemetry details provided
     for telemetry_id, provided_telemetry in enumerate(provided_telemetries):
-        # Check if all mandatory telemetry fields are present
-
         missing_fields = [field for field in MANDATORY_TELEMETRY_FIELDS if field not in provided_telemetry or provided_telemetry[field] is None]
         logger.debug(f"Processing telemetry entry {telemetry_id}")
         logger.debug(f"Number of missing fields: {len(missing_fields)}")
         if missing_fields:
             logger.info("Missing telemetry fields, in telemetry: %s", missing_fields)
-
             logger.info(f"Telemetry entry {telemetry_id} is missing mandatory fields: {missing_fields}")
             write_operator_rid_notification.delay(
                 session_id=test_id,
@@ -202,7 +194,6 @@ def process_requested_flight(
             continue
 
         pos = provided_telemetry["position"]
-        # In provided telemetry position and pressure altitude and extrapolated values are optional use if provided else generate them.
         pressure_altitude = pos["pressure_altitude"] if "pressure_altitude" in pos else 0.0
         extrapolated = pos["extrapolated"] if "extrapolated" in pos else False
 
@@ -232,7 +223,6 @@ def process_requested_flight(
             formatted_timestamp = arrow.get(provided_telemetry["timestamp"])
         except (ParserError, TypeError):
             logger.info("Error in parsing telemetry timestamp")
-            # Set an operator notification
             write_operator_rid_notification.delay(
                 session_id=test_id,
                 message="The mandatory timestamp provided in the telemetry is not in the correct format",
@@ -271,7 +261,6 @@ def process_requested_flight(
             injection_id=requested_flight["injection_id"],
         )
         zadd_struct = {json.dumps(asdict(flight_state_storage)): formatted_timestamp.int_timestamp}
-        # Add these as a sorted set in Redis
         r.zadd(flight_injection_sorted_set, zadd_struct)
         all_telemetry.append(telemetry_observation)
 
@@ -301,8 +290,11 @@ def submit_dss_subscription(view, vertex_list, request_uuid):
 @app.task(name="run_ussp_polling_for_rid")
 def run_ussp_polling_for_rid(end_time: str, session_id: str):
     """This method is a wrapper for repeated polling of UTMSPs for Network RID information"""
+    asyncio.run(_async_run_ussp_polling_for_rid(end_time, session_id))
+
+
+async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> None:
     logger.info("Starting USSP polling.. ")
-    # Define start and end time
     now = arrow.now()
     end_time_formatted = arrow.get(end_time)
 
@@ -310,13 +302,14 @@ def run_ussp_polling_for_rid(end_time: str, session_id: str):
     polling_duration = delta.total_seconds()
     logger.info("Polling duration: %s" % polling_duration)
 
-    my_database_reader = SyncDatabaseFacade()
-    subscription_record = my_database_reader.get_rid_subscription_record_by_id(id=session_id)
+    async with async_session_scope() as db:
+        rid_repo = SQLAlchemyRIDRepository(db)
+        subscription_record = await rid_repo.get_subscription_by_id(session_id)
+
     logger.info("Polling USSP for RID data..")
 
     r = get_redis()
-
-    async_polling_lock = f"async_polling_lock_{session_id}"  # This
+    async_polling_lock = f"async_polling_lock_{session_id}"
 
     my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
 
@@ -337,7 +330,7 @@ def run_ussp_polling_for_rid(end_time: str, session_id: str):
                 view=view,
             )
 
-            time.sleep(0.6)
+            await asyncio.sleep(0.6)
 
         r.delete(async_polling_lock)
 
@@ -346,41 +339,37 @@ def run_ussp_polling_for_rid(end_time: str, session_id: str):
 
 @app.task(name="stream_rid_telemetry_data")
 def stream_rid_telemetry_data(rid_telemetry_observations):
-    my_database_writer = SyncDatabaseFacade()
+    asyncio.run(_async_stream_rid_telemetry_data(rid_telemetry_observations))
+
+
+async def _async_stream_rid_telemetry_data(rid_telemetry_observations) -> None:
     telemetry_observations = json.loads(rid_telemetry_observations)
 
     for observation in telemetry_observations:
         flight_details = observation["flight_details"]
         current_states = observation["current_states"]
-        operation_id = flight_details[
-            "id"
-        ]  # The Flight declaration ID is set as the session ID so that observations can be linked back to the flight declaration
-        # Update telemetry received timestamp
-        my_database_writer.update_telemetry_timestamp(flight_declaration_id=operation_id)
+        operation_id = flight_details["id"]
+
+        async with async_session_scope() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            await fd_repo.update_telemetry_timestamp(uuid.UUID(operation_id))
 
         for current_state in current_states:
             _current_state = from_dict(data_class=LocalRIDAircraftState, data=current_state, config=Config(cast=[Enum]))
             _flight_details = from_dict(data_class=LocalRIDFlightDetails, data=flight_details, config=Config(cast=[Enum]))
             observation_and_metadata = SignedUnsignedTelemetryObservation(current_state=_current_state, flight_details=_flight_details)
             current_wgs84_m_altitude = observation_and_metadata.current_state.position.alt
-            # current_height = observation_and_metadata.current_state.position.height
-            # if current_height:
-            #     current_altitude = current_height.distance
-            #     current_altitude_reference = current_height.reference
-
-            # TODO: When height is provided use that to determine MSL and Pressure altitude
 
             msl_height, pressure_altitude = wgs84_to_barometric(
                 lat=observation_and_metadata.current_state.position.lat,
                 lon=observation_and_metadata.current_state.position.lng,
                 hae_meters=current_wgs84_m_altitude,
             )
-            altitude_mm = pressure_altitude * 1000  # Convert meters to millimeters
+            altitude_mm = pressure_altitude * 1000
             flight_details_id = observation_and_metadata.flight_details.uas_id.serial_number
             lat_dd = observation_and_metadata.current_state.position.lat
             lon_dd = observation_and_metadata.current_state.position.lng
-            altitude_mm = altitude_mm
-            traffic_source = 11  # Per the Air-traffic data protocol a source type of 11 means that the data is associated with RID observations
+            traffic_source = 11
             source_type = 0
             icao_address = flight_details_id
 
@@ -398,12 +387,16 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
                 timestamp=rid_timestamp_us,
                 metadata=asdict(observation_and_metadata),
             )
-            write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
+            write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
             logger.debug("Submitted observation..")
 
 
 @app.task(name="stream_rid_test_data")
 def stream_rid_test_data(requested_flights, test_id):
+    asyncio.run(_async_stream_rid_test_data(requested_flights, test_id))
+
+
+async def _async_stream_rid_test_data(requested_flights, test_id) -> None:
     test_id = test_id.split("_")[1]
     all_requested_flights: list[RIDTestInjection] = []
     rf = json.loads(requested_flights)
@@ -417,27 +410,26 @@ def stream_rid_test_data(requested_flights, test_id):
 
     if r.exists(flight_injection_sorted_set):
         r.delete(flight_injection_sorted_set)
-    # Iterate over requested flights and process for storage / querying
 
     all_altitudes = []
 
-    for requested_flight in rf:
-        processed_flight, _all_positions, _all_altitudes = process_requested_flight(
-            requested_flight=requested_flight,
-            flight_injection_sorted_set=flight_injection_sorted_set,
-            test_id=test_id,
-            injection_id=injection_id,
-        )
-        all_positions.extend(_all_positions)
-        all_altitudes.extend(_all_altitudes)
-
-        all_requested_flights.append(processed_flight)
+    async with async_session_scope() as db:
+        rid_repo = SQLAlchemyRIDRepository(db)
+        for requested_flight in rf:
+            processed_flight, _all_positions, _all_altitudes = await _async_process_requested_flight(
+                requested_flight=requested_flight,
+                flight_injection_sorted_set=flight_injection_sorted_set,
+                test_id=test_id,
+                injection_id=injection_id,
+                rid_repo=rid_repo,
+            )
+            all_positions.extend(_all_positions)
+            all_altitudes.extend(_all_altitudes)
+            all_requested_flights.append(processed_flight)
 
     start_time_of_injection_list = r.zrange(flight_injection_sorted_set, 0, 0, withscores=True)
-
     start_time_of_injections = arrow.get(start_time_of_injection_list[0][1])
 
-    # Computing when the requested flight data will end
     end_time_of_injection_list = r.zrevrange(flight_injection_sorted_set, 0, 0, withscores=True)
     end_time_of_injections = arrow.get(end_time_of_injection_list[0][1])
 
@@ -445,16 +437,14 @@ def stream_rid_test_data(requested_flights, test_id):
     logger.info("Provided Telemetry Ends at %s" % end_time_of_injections)
 
     isa_start_time = start_time_of_injections
-    # isa_end_time =  end_time_of_injections
     provided_telemetry_item_length = r.zcard(flight_injection_sorted_set)
     logger.info("Provided Telemetry Item Count: %s" % provided_telemetry_item_length)
 
     provided_telemetry_duration_seconds = (end_time_of_injections - start_time_of_injections).total_seconds()
     logger.info("Provided Telemetry Duration in seconds: %s" % provided_telemetry_duration_seconds)
-    ASTM_TIME_SHIFT_SECS = 65  # Enable querying for upto sixty seconds after end time.
+    ASTM_TIME_SHIFT_SECS = 65
     astm_rid_standard_end_time = end_time_of_injections.shift(seconds=ASTM_TIME_SHIFT_SECS)
 
-    # Create an ISA in the DSS
     position_list: list[Point] = []
     for position in all_positions:
         position_list.append(Point(position.lng, position.lat))
@@ -471,7 +461,6 @@ def stream_rid_test_data(requested_flights, test_id):
         polygon_verticies.append(ll)
     polygon_verticies.pop()
     outline_polygon = RIDPolygon(vertices=polygon_verticies)
-    # Buffer the altitude by 5 m
     altitude_lower = RIDAltitude(value=min(all_altitudes) - 5, reference="W84", units="M")
     altitude_upper = RIDAltitude(value=min(all_altitudes) + 5, reference="W84", units="M")
     volume_3_d = RIDVolume3D(
@@ -490,48 +479,14 @@ def stream_rid_test_data(requested_flights, test_id):
 
     logger.info("Creating a DSS ISA..")
     my_dss_helper.create_dss_isa(flight_extents=volume_4_d, uss_base_url=uss_base_url)
-    # # End create ISA in the DSS
 
     r.expire(flight_injection_sorted_set, time=3000)
-    time.sleep(2)  # Wait 2 seconds before starting mission
+    await asyncio.sleep(2)
     should_continue = True
-    # Calculate the target number of queries based on the provided telemetry item length and ASTM time shift
 
-    # Retrieve all telemetry details from the sorted set in Redis
     all_telemetry_details = r.zrange(flight_injection_sorted_set, 0, -1, withscores=True)
 
-    # Initialize a list to store all timestamps
-    # all_timestamps = []
-
-    # # Iterate over all telemetry details and extract their timestamps
-    # for telemetry_id, cur_telemetry_detail in enumerate(all_telemetry_details):
-    #     all_timestamps.append(cur_telemetry_detail[1])
-
-    # # Create a cycle iterator for the timestamps
-    # cycled = cycle(all_timestamps)
-
-    # # Generate a list of query times by cycling through the timestamps
-    # query_time_lookup = list(islice(cycled, 0, query_target))
-
     def _stream_data(query_time: arrow.arrow.Arrow):
-        """
-        Stream data based on the given query time.
-        This function retrieves the closest observations from a sorted set in Redis
-        based on the provided query time. It then processes each observation, extracts
-        relevant telemetry and details response data, and creates a SingleRIDObservation
-        object. Finally, it sends a job to the task queue to write the incoming air traffic
-        data to the database.
-        Args:
-            query_time (arrow.arrow.Arrow): The time to query the closest observations.
-        Returns:
-            None
-        Raises:
-            None
-        Note:
-            This function uses Redis to retrieve data and Celery to queue tasks for writing
-            data to the database.
-        """
-        # Function implementation here
         last_observation_timestamp_key = test_id + "_rid_stream_last_observation_timestamp"
         closest_observations = r.zrangebyscore(
             flight_injection_sorted_set,
@@ -566,19 +521,14 @@ def stream_rid_test_data(requested_flights, test_id):
                 last_observation_timestamp = int(last_observation_timestamp)
                 if abs(last_observation_timestamp - query_time.int_timestamp) <= 1:
                     logger.debug("The last observation was received less than 1 second ago..")
-                else:  # The last observation was received more than 1 second ago
-                    # Define a key to track the timestamp of the last notification sent
+                else:
                     time_since_last_notification_key = test_id + "_rid_stream_last_notification_timestamp"
-                    # Retrieve the timestamp of the last notification sent from Redis
                     time_since_last_notification = r.get(time_since_last_notification_key)
-                    # Check if no notification has been sent or if the last notification was sent more than 10 seconds ago
                     if not time_since_last_notification or (query_time.int_timestamp - int(time_since_last_notification)) >= 10:
-                        # Send a notification about the RID data stream error
                         write_operator_rid_notification.delay(
                             message="NET0040: RID data stream error, the last observation was received more than 1 second ago",
                             session_id=test_id,
                         )
-                        # Update the timestamp of the last notification sent in Redis
                         r.set(time_since_last_notification_key, query_time.int_timestamp)
             r.set(last_observation_timestamp_key, query_time.int_timestamp)
 
@@ -597,7 +547,7 @@ def stream_rid_test_data(requested_flights, test_id):
                 timestamp=rid_timestamp_us,
                 metadata=asdict(observation_metadata),
             )
-            write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))  # Send a job to the task queue
+            write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
             logger.debug("Submitted flight observation..")
 
     r.expire(flight_injection_sorted_set, time=3000)
@@ -622,23 +572,51 @@ def stream_rid_test_data(requested_flights, test_id):
         if now > streaming_start_time:
             _stream_data(query_time=query_time)
 
-        time.sleep(0.3)
+        await asyncio.sleep(0.3)
 
 
 @app.task(name="check_rid_stream_conformance")
 def check_rid_stream_conformance(session_id: str, flight_declaration_id=None, dry_run: str = "1"):
-    # This method conducts flight conformance checks as a async task
+    asyncio.run(_async_check_rid_stream_conformance(session_id))
 
-    my_rid_stream_checker = FlightTelemetryRIDEngine(session_id=session_id, db_reader=SyncDatabaseFacade())
 
-    rid_stream_conformant, error_details = my_rid_stream_checker.check_rid_stream_ok()
+async def _async_check_rid_stream_conformance(session_id: str) -> None:
+    now = arrow.now()
+    four_seconds_before_now = now.shift(seconds=-4)
 
-    if rid_stream_conformant:
-        logger.info(f"RID Data stream for  {session_id} is OK...")
+    async with async_session_scope() as db:
+        feed_repo = SQLAlchemyFlightFeedRepository(db)
+        relevant_observations = await feed_repo.get_active_rid_observations_for_session_between_interval(
+            session_id=session_id,
+            start_time=four_seconds_before_now,
+            end_time=now,
+        )
 
-    else:
-        logger.info(f"RID Data stream for {session_id} is NOT OK...")
-        my_database_writer = SyncDatabaseFacade()
-        for error_detail in error_details:
-            operator_rid_notification = OperatorRIDNotificationCreationPayload(message=error_detail.error_description, session_id=session_id)
-            my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)
+    if not relevant_observations:
+        logger.info(f"RID Data stream for {session_id} is OK...")
+        return
+
+    errors = []
+    for i in range(1, len(relevant_observations)):
+        prev_obs = relevant_observations[i - 1]
+        curr_obs = relevant_observations[i]
+        time_diff = (curr_obs.created_at - prev_obs.created_at).total_seconds()
+        if time_diff != 1:
+            errors.append(
+                f"NET0040: Timestamp difference error: {time_diff} seconds between observations {i - 1} and {i}"
+            )
+
+    if not errors:
+        logger.info(f"RID Data stream for {session_id} is OK...")
+        return
+
+    logger.info(f"RID Data stream for {session_id} is NOT OK...")
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except (ValueError, AttributeError):
+        session_uuid = None
+
+    async with async_session_scope() as db:
+        notif_repo = SQLAlchemyNotificationsRepository(db)
+        for error_msg in errors:
+            await notif_repo.create_notification(message=error_msg, session_id=session_uuid)
