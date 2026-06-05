@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import json
 import uuid
 from dataclasses import asdict
 from decimal import Decimal
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import arrow
 import pyproj
@@ -27,8 +29,11 @@ from flight_blender.domain_types.geo_fence import (
     ParseValidateResponse,
     ZoneAuthority,
 )
-from flight_blender.domain_types.protocols_geo_fence import GeoFenceRepository, GeoFenceSpatialService, GeoFenceTaskDispatcher
-from flight_blender.domain_types.redis_protocols import AsyncRedisClient
+from flight_blender.repositories.geo_fence_repo import SQLAlchemyGeoFenceRepository
+from flight_blender.utils.spatial_geo_fence import RTreeGeoFenceSpatialService
+
+if TYPE_CHECKING:
+    from flight_blender.tasks.geo_fence_task import CeleryGeoFenceTaskDispatcher
 
 proj_wgs84 = pyproj.Proj("+proj=longlat +datum=WGS84")
 
@@ -52,15 +57,15 @@ def _compute_bounds_and_times(features: list[dict]) -> tuple[str, str, str, Deci
 class GeoFenceOperations:
     def __init__(
         self,
-        repo: GeoFenceRepository,
-        dispatcher: GeoFenceTaskDispatcher,
-        spatial: GeoFenceSpatialService,
-        redis: AsyncRedisClient,
+        repo: SQLAlchemyGeoFenceRepository,
+        dispatcher: CeleryGeoFenceTaskDispatcher,
+        spatial: RTreeGeoFenceSpatialService,
+        redis: Any,
     ):
         self.repo = repo
         self.dispatcher = dispatcher
         self.spatial = spatial
-        self.redis: AsyncRedisClient = redis
+        self.redis: Any = redis
 
     async def list_geofences(
         self,

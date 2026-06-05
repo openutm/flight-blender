@@ -1,6 +1,6 @@
 import arrow
 
-from flight_blender.domain_types.weather_protocol import WeatherClient
+from flight_blender.clients.weather_client import WeatherClient
 
 
 class WeatherOperations:

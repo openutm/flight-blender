@@ -1,19 +1,16 @@
 from dataclasses import asdict
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Optional
 
 import arrow
 from loguru import logger
 
 from flight_blender.config import settings
 from flight_blender.domain_types.conformance import ConformanceRecord, ConformanceSummary
-from flight_blender.domain_types.protocols_conformance import (
-    AsyncConformanceRepository,
-    DSSConformanceDispatcher,
-    NotificationDispatcher,
-    SyncConformanceDB,
-)
 from flight_blender.domain_types.scd import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
+from flight_blender.repositories.conformance_repo import SQLAlchemyConformanceRepository
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
 
 class StatusCode:
@@ -115,7 +112,7 @@ class ConformanceChecksList(StatusCode):
 
 
 class ConformanceOperations:
-    def __init__(self, repo: AsyncConformanceRepository) -> None:
+    def __init__(self, repo: SQLAlchemyConformanceRepository) -> None:
         self._repo = repo
 
     @staticmethod
@@ -341,11 +338,11 @@ class FlightOperationStateMachine:
 
 
 class FlightOperationConformanceHelper:
-    def __init__(self, flight_declaration_id: str, db: SyncConformanceDB, dss: DSSConformanceDispatcher):
+    def __init__(self, flight_declaration_id: str, db: SyncDatabaseFacade, dss: Any):
         self.flight_declaration_id = flight_declaration_id
-        self.database_reader: SyncConformanceDB = db
-        self.database_writer: SyncConformanceDB = db
-        self.dss: DSSConformanceDispatcher = dss
+        self.database_reader: SyncDatabaseFacade = db
+        self.database_writer: SyncDatabaseFacade = db
+        self.dss: Any = dss
         self.flight_declaration = self.database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
         self.ENABLE_CONFORMANCE_MONITORING = settings.ENABLE_CONFORMANCE_MONITORING
         self.USSP_NETWORK_ENABLED = settings.USSP_NETWORK_ENABLED
@@ -474,10 +471,10 @@ class FlightOperationConformanceHelper:
 
 
 class OperationConformanceNotification:
-    def __init__(self, flight_declaration_id: str, notifier: NotificationDispatcher):
+    def __init__(self, flight_declaration_id: str, notifier: CelerySCDNotifier):
         self.amqp_connection_url = settings.AMQP_URL
         self.flight_declaration_id = flight_declaration_id
-        self.notifier: NotificationDispatcher = notifier
+        self.notifier: CelerySCDNotifier = notifier
 
     def send_conformance_status_notification(self, message: str, level: str):
         if self.amqp_connection_url:
@@ -499,8 +496,7 @@ telemetry_non_conformance_signal = Signal()
 flight_operational_intent_reference_non_conformance_signal = Signal()
 
 
-@runtime_checkable
-class ConformanceDependencies(Protocol):
+class ConformanceDependencies:
     """Bundle of infrastructure dependencies that signal receivers need at runtime.
 
     Signal receivers are global and called with a fixed signature; they cannot
@@ -509,12 +505,13 @@ class ConformanceDependencies(Protocol):
     at startup. Tests can replace the provider with a stub.
     """
 
-    db: SyncConformanceDB
-    dss: DSSConformanceDispatcher
-    notifier: NotificationDispatcher
+    def __init__(self, db: SyncDatabaseFacade, dss: Any, notifier: CelerySCDNotifier) -> None:
+        self.db: SyncDatabaseFacade = db
+        self.dss: Any = dss
+        self.notifier: CelerySCDNotifier = notifier
 
 
-_DEFAULT_DEPS_HOLDER: list[ConformanceDependencies | None] = [None]
+_DEFAULT_DEPS_HOLDER: list[Optional[ConformanceDependencies]] = [None]
 
 
 def set_conformance_deps(deps: ConformanceDependencies) -> None:
@@ -706,10 +703,10 @@ def is_time_between(begin_time, end_time, check_time=None):
 
 
 class FlightBlenderConformanceEngine:
-    def __init__(self, db: SyncConformanceDB | None = None):
-        self.db: SyncConformanceDB | None = db
+    def __init__(self, db: SyncDatabaseFacade | None = None):
+        self.db: Optional[SyncDatabaseFacade] = db
 
-    def _db(self) -> SyncConformanceDB:
+    def _db(self) -> SyncDatabaseFacade:
         """Resolve the sync DB at call-time so unset default instances still work.
 
         ``db`` is normally injected, but tests and the engine's no-arg

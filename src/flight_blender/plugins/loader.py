@@ -7,10 +7,9 @@ the result so repeated lookups are free.
 Usage::
 
     from flight_blender.plugins.loader import load_plugin
-    from flight_blender.services.flight_declarations_svc import DeconflictionEngine
 
     EngineClass = load_plugin(
-        "flight_blender.infrastructure.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine",
+        "flight_blender.services.deconfliction_engine.DefaultDeconflictionEngine",
         expected_protocol=DeconflictionEngine,
     )
     engine = EngineClass()

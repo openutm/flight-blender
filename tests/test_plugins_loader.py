@@ -1,9 +1,7 @@
 """Tests for the universal plugin loader and plugin-based extension points.
 
 Covers:
-- ``load_plugin`` importing, caching, error handling, and protocol validation
-- ``DeconflictionEngine`` protocol (default engine, example engine, functional)
-- ``TrafficDataFuser`` protocol conformance
+- ``load_plugin`` importing, caching, and error handling
 - ``DeconflictionResult`` backward-compat alias (``IntersectionCheckResult``)
 - ``DeconflictionRequest`` defaults and field assignment
 - Plugin settings (new prefix, backward-compat fallback)
@@ -12,6 +10,7 @@ Covers:
 from datetime import datetime, timezone
 from unittest import TestCase
 
+from flight_blender.domain_types.plugin_protocols import DeconflictionEngineProtocol, TrafficDataFuserProtocol as TrafficDataFuserProtocol
 from flight_blender.plugins.loader import load_plugin
 from flight_blender.domain_types.flight_declarations import (
     DeconflictionRequest,
@@ -19,12 +18,9 @@ from flight_blender.domain_types.flight_declarations import (
     IntersectionCheckResult,
 )
 from flight_blender.services.deconfliction_engine import DefaultDeconflictionEngine
-from flight_blender.services.flight_declarations_svc import DeconflictionEngine
+from flight_blender.services.surveillance_svc import TrafficDataFuser
 from flight_blender.plugins.examples.altitude_aware_deconfliction_engine import (
     AltitudeAwareDeconflictionEngine,
-)
-from flight_blender.domain_types.protocols_surveillance import (
-    TrafficDataFuser as TrafficDataFuserProtocol,
 )
 
 # ---------------------------------------------------------------------------
@@ -79,20 +75,20 @@ class LoadPluginTests(TestCase):
         with self.assertRaises(TypeError):
             load_plugin(
                 "flight_blender.domain_types.flight_declarations.DeconflictionRequest",
-                expected_protocol=DeconflictionEngine,
+                expected_protocol=DeconflictionEngineProtocol,
             )
 
     def test_valid_protocol_passes(self):
         cls = load_plugin(
             "flight_blender.services.deconfliction_engine.DefaultDeconflictionEngine",
-            expected_protocol=DeconflictionEngine,
+            expected_protocol=DeconflictionEngineProtocol,
         )
         self.assertIs(cls, DefaultDeconflictionEngine)
 
     def test_example_engine_passes_protocol_check(self):
         cls = load_plugin(
             "flight_blender.plugins.examples.altitude_aware_deconfliction_engine.AltitudeAwareDeconflictionEngine",
-            expected_protocol=DeconflictionEngine,
+            expected_protocol=DeconflictionEngineProtocol,
         )
         self.assertIs(cls, AltitudeAwareDeconflictionEngine)
 
@@ -135,20 +131,20 @@ class DeconflictionProtocolTests(TestCase):
 
     def test_default_engine_is_instance_of_protocol(self):
         engine = DefaultDeconflictionEngine()
-        self.assertIsInstance(engine, DeconflictionEngine)
+        self.assertIsInstance(engine, DeconflictionEngineProtocol)
 
     def test_example_engine_is_instance_of_protocol(self):
         engine = AltitudeAwareDeconflictionEngine()
-        self.assertIsInstance(engine, DeconflictionEngine)
+        self.assertIsInstance(engine, DeconflictionEngineProtocol)
 
     def test_plain_object_is_not_deconfliction_engine(self):
         """An object without check_deconfliction is not a DeconflictionEngine."""
-        self.assertNotIsInstance(object(), DeconflictionEngine)
+        self.assertNotIsInstance(object(), DeconflictionEngineProtocol)
 
     def test_protocol_is_runtime_checkable(self):
         """DeconflictionEngine is decorated with @runtime_checkable."""
         # isinstance() only works on @runtime_checkable protocols
-        self.assertIsInstance(DefaultDeconflictionEngine(), DeconflictionEngine)
+        self.assertIsInstance(DefaultDeconflictionEngine(), DeconflictionEngineProtocol)
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +282,7 @@ class DeconflictionDataClassTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# TrafficDataFuser protocol
+# TrafficDataFuser — basic interface check (no Protocol layer anymore)
 # ---------------------------------------------------------------------------
 
 
@@ -309,21 +305,15 @@ class TrafficDataFuserProtocolTests(TestCase):
         self.assertNotIsInstance(BadFuser(), TrafficDataFuserProtocol)
 
     def test_default_fuser_has_correct_method(self):
-        """The default TrafficDataFuser in utils.py has generate_track_messages."""
-        from flight_blender.services.surveillance_svc import TrafficDataFuser
+        """The default TrafficDataFuser in services has generate_track_messages."""
 
         self.assertTrue(hasattr(TrafficDataFuser, "generate_track_messages"))
         self.assertTrue(callable(getattr(TrafficDataFuser, "generate_track_messages")))
 
-    def test_load_plugin_with_fuser_protocol(self):
-        """load_plugin accepts the default fuser class against the protocol."""
+    def test_load_plugin_with_fuser_class(self):
+        """load_plugin returns the fuser class."""
         load_plugin.cache_clear()
-        cls = load_plugin(
-            "flight_blender.services.surveillance_svc.TrafficDataFuser",
-            expected_protocol=TrafficDataFuserProtocol,
-        )
-        from flight_blender.services.surveillance_svc import TrafficDataFuser
-
+        cls = load_plugin("flight_blender.services.surveillance_svc.TrafficDataFuser", expected_protocol=TrafficDataFuserProtocol)
         self.assertIs(cls, TrafficDataFuser)
         load_plugin.cache_clear()
 

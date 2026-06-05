@@ -1,15 +1,14 @@
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, List, Optional
+from typing import Any, List, Optional
 
 import arrow
 from loguru import logger
 from pyproj import Geod
 
+from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
-from flight_blender.domain_types.protocols_flight_feed import FlightFeedRepository
-from flight_blender.domain_types.protocols_surveillance import SurveillanceRepository, SurveillanceTaskScheduler, TrackStore
 from flight_blender.domain_types.surveillance import (
     FLIGHT_OBSERVATION_TRAFFIC_SOURCE,
     ActiveTrack,
@@ -29,17 +28,17 @@ from flight_blender.domain_types.surveillance import (
     TrackMessage,
     TrackUpdateProbability,
 )
-
-if TYPE_CHECKING:
-    from flight_blender.repositories.conformance_repo import SyncSurveillanceDB
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.surveillance_repo import SQLAlchemySurveillanceRepository
+from flight_blender.tasks.scheduler import TaskSchedulerService
 
 
 class SurveillanceOperations:
     def __init__(
         self,
-        repo: SurveillanceRepository,
-        scheduler: SurveillanceTaskScheduler,
-        flight_feed_repo: FlightFeedRepository | None = None,
+        repo: SQLAlchemySurveillanceRepository,
+        scheduler: TaskSchedulerService,
+        flight_feed_repo: SQLAlchemyFlightFeedRepository | None = None,
     ):
         self.repo = repo
         self.scheduler = scheduler
@@ -405,8 +404,8 @@ def _calculate_aggregate_health_metrics(
 class SurveillanceMetricCalculator:
     """Calculates ASTM F3623 SDSP surveillance metrics from database records."""
 
-    def __init__(self, database_reader: "SyncSurveillanceDB"):
-        self.db: "SyncSurveillanceDB" = database_reader
+    def __init__(self, database_reader: Any):
+        self.db: Any = database_reader
 
     def calculate_heartbeat_rate(self, session_id: str, start_time: datetime, end_time: datetime) -> HeartbeatRateMetric:
         events = self.db.get_heartbeat_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
@@ -591,9 +590,8 @@ class BaseTrafficDataFuser:
 
     .. note::
 
-        The canonical interface is the ``TrafficDataFuser`` Protocol defined in
-        ``flight_blender.core.repositories.surveillance``.
-        Extending this base class is optional.
+        Extending this base class is optional. Subclasses must implement
+        ``_fuse_raw_observations`` and ``_generate_active_tracks``.
 
     Attributes:
         session_id: Unique identifier for the surveillance session
@@ -611,13 +609,13 @@ class BaseTrafficDataFuser:
             raw_observations: List of raw air traffic observations from various sources
 
         Note:
-            Subclasses must initialize ``redis_stream_helper`` (a ``TrackStore``) and
+            Subclasses must initialize ``redis_stream_helper`` (a ``RedisStreamOperations``) and
             ``SDSP_IDENTIFIER`` attributes.
         """
         self.session_id = session_id
         self.raw_observations = raw_observations
         self.geod = Geod(ellps="WGS84")
-        self.redis_stream_helper: TrackStore
+        self.redis_stream_helper: RedisStreamOperations
         self.SDSP_IDENTIFIER: str = "FLIGHT_BLENDER_SDSP"
 
     def generate_track_messages(self) -> List[TrackMessage]:
@@ -816,7 +814,7 @@ class TrafficDataFuser(BaseTrafficDataFuser):
         self,
         session_id: str,
         raw_observations: List[SingleAirtrafficObservation],
-        track_store: TrackStore | None = None,
+        track_store: RedisStreamOperations | None = None,
     ):
         self.raw_observations = raw_observations
         self.SDSP_IDENTIFIER = "SDSP123"

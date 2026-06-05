@@ -26,7 +26,7 @@ class TestEnhancedJSONEncoder:
     def test_encodes_datetime(self):
         dt = datetime.datetime(2026, 6, 1, 12, 0, 0)
         result = json.dumps(dt, cls=EnhancedJSONEncoder)
-        assert "2026-06-01" in result
+        assert "2026-06-01T12:00:00" in result
 
     def test_encodes_dataclass(self):
         @dataclass

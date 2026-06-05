@@ -2,7 +2,7 @@ import asyncio
 import json
 import uuid
 from dataclasses import asdict
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 import arrow
 import geojson
@@ -16,6 +16,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import box as shapely_box
 from shapely.ops import unary_union
 
+from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
 from flight_blender.config import settings
 from flight_blender.domain_types.flight_declarations import (
     DEFAULT_UAV_CLIMB_RATE_M_PER_S,
@@ -31,12 +32,7 @@ from flight_blender.domain_types.flight_declarations import (
     HTTP404Response,
     IntersectionCheckResult,
 )
-from flight_blender.domain_types.protocols_flight_declarations import (
-    AsyncFlightDeclarationRepository,
-    OperationalIntentParser,
-    SCDNotificationDispatcher,
-    SCDQueryClient,
-)
+from flight_blender.domain_types.plugin_protocols import DeconflictionEngineProtocol
 from flight_blender.domain_types.scd import (
     Altitude,
     LatLngPoint,
@@ -49,18 +45,10 @@ from flight_blender.domain_types.scd import (
 )
 from flight_blender.domain_types.scd import Polygon as Plgn
 from flight_blender.plugins.loader import load_plugin
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
 FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = settings.FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR
-
-
-# ── DeconflictionEngine Protocol (from flight_declarations/deconfliction_protocol.py) ─
-
-
-@runtime_checkable
-class DeconflictionEngine(Protocol):
-    """Structural interface for flight de-confliction engines."""
-
-    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult: ...
 
 
 # ── OperationalIntentsConverter (from flight_declarations/utils.py) ───────────
@@ -324,7 +312,7 @@ def _get_deconfliction_engine():
     engine_path = settings.FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE
     if not engine_path:
         return None
-    return load_plugin(engine_path, expected_protocol=DeconflictionEngine)
+    return load_plugin(engine_path, expected_protocol=DeconflictionEngineProtocol)
 
 
 def _validate_geojson(fc: dict) -> tuple[bool, str | None]:
@@ -387,7 +375,7 @@ def _build_partial_operational_intent(request_data: dict) -> tuple[dict, str]:
 
 
 async def _create_flight_declaration_record(
-    repo: AsyncFlightDeclarationRepository,
+    repo: SQLAlchemyFlightDeclarationRepository,
     request_data: dict,
     *,
     response_message: str,
@@ -471,7 +459,7 @@ def _run_deconfliction_sa(
 
 def do_network_declarations_by_view(
     view: str | None,
-    scd_client: SCDQueryClient,
+    scd_client: SCDOperations,
 ) -> tuple[dict, int]:
     ussp_network_enabled = settings.USSP_NETWORK_ENABLED
 
@@ -515,10 +503,10 @@ def do_network_declarations_by_view(
 class FlightDeclarationOperations:
     def __init__(
         self,
-        repo: AsyncFlightDeclarationRepository,
-        scd_client: SCDQueryClient,
-        parser: OperationalIntentParser,
-        notifier: SCDNotificationDispatcher,
+        repo: SQLAlchemyFlightDeclarationRepository,
+        scd_client: SCDOperations,
+        parser: OperationalIntentReferenceHelper,
+        notifier: CelerySCDNotifier,
     ):
         self.repo = repo
         self.scd_client = scd_client
@@ -799,7 +787,7 @@ class FlightDeclarationOperations:
         intersection_result: IntersectionCheckResult,
         ussp_network_enabled: int,
     ) -> FlightDeclarationCreateResponse:
-        notifier: SCDNotificationDispatcher = self.notifier
+        notifier: CelerySCDNotifier = self.notifier
 
         is_approved = intersection_result.is_approved
         declaration_state = intersection_result.declaration_state

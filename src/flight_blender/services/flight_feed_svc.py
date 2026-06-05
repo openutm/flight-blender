@@ -4,7 +4,7 @@ import uuid
 from dataclasses import asdict
 from enum import Enum
 from itertools import zip_longest
-from typing import Optional
+from typing import Any, Optional
 
 import arrow
 import dacite
@@ -22,8 +22,6 @@ from flight_blender.domain_types.flight_feed import (
     ObservationRequest,
     SingleAirtrafficObservation,
 )
-from flight_blender.domain_types.protocols_flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, SyncFlightFeedReader, TelemetryValidator
-from flight_blender.domain_types.redis_protocols import SyncRedisClient
 from flight_blender.domain_types.rid import (
     NestedDict,
     RIDAircraftState,
@@ -32,6 +30,9 @@ from flight_blender.domain_types.rid import (
     SignedUnSignedTelemetryObservations,
     SubmittedTelemetryFlightDetails,
 )
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.tasks.flight_feed_task import CeleryFlightFeedTaskDispatcher
 
 
 def _check_view_port(view_port_coords: list[float]) -> bool:
@@ -55,10 +56,10 @@ def _build_view_port_box(view_port_coords: list[float]):
 class FlightFeedOperations:
     def __init__(
         self,
-        repo: FlightFeedRepository,
-        dispatcher: FlightFeedTaskDispatcher,
-        telemetry_validator: TelemetryValidator,
-        redis: SyncRedisClient,
+        repo: SQLAlchemyFlightFeedRepository,
+        dispatcher: CeleryFlightFeedTaskDispatcher,
+        telemetry_validator: "FlightBlenderTelemetryValidator",
+        redis: Any,
     ):
         self.repo = repo
         self.dispatcher = dispatcher
@@ -363,10 +364,10 @@ def batcher(iterable, n):
 
 
 class ObservationReadOperations:
-    def __init__(self, redis: SyncRedisClient, db_reader: SyncFlightFeedReader, view_port_box=None):
+    def __init__(self, redis: Any, db_reader: SyncDatabaseFacade, view_port_box=None):
         self.view_port_box: shapely_box = view_port_box
-        self.redis: SyncRedisClient = redis
-        self.db_reader: SyncFlightFeedReader = db_reader
+        self.redis: Any = redis
+        self.db_reader: SyncDatabaseFacade = db_reader
 
     def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
         key = f"last_reading_for_{session_id}"
