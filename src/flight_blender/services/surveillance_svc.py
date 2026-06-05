@@ -139,15 +139,18 @@ class SurveillanceOperations:
         start_date: Optional[str],
         end_date: Optional[str],
         session_id: Optional[str],
-    ) -> dict:
+    ) -> tuple[dict, int]:
         now = arrow.now()
         one_week_ago = now.shift(weeks=-1)
         if start_date:
             start_date = start_date.replace(" ", "+")
         if end_date:
             end_date = end_date.replace(" ", "+")
-        start_dt = arrow.get(start_date).datetime if start_date else one_week_ago.datetime
-        end_dt = arrow.get(end_date).datetime if end_date else now.datetime
+        try:
+            start_dt = arrow.get(start_date).datetime if start_date else one_week_ago.datetime
+            end_dt = arrow.get(end_date).datetime if end_date else now.datetime
+        except arrow.parser.ParserError:
+            return {"error": "Invalid date format. Use ISO8601 format."}, 400
 
         active_sessions = await self.repo.get_all_active_sessions()
         active_session_count = len(active_sessions)
@@ -185,7 +188,7 @@ class SurveillanceOperations:
             window_start=start_dt.isoformat(),
             window_end=end_dt.isoformat(),
         )
-        return asdict(metric_response)
+        return asdict(metric_response), 200
 
     async def _calculate_heartbeat_rate(self, session_id: uuid.UUID, start_time: datetime, end_time: datetime) -> HeartbeatRateMetric:
         events = await self.repo.get_heartbeat_events_for_session(session_id=session_id, start_time=start_time, end_time=end_time)
@@ -329,15 +332,18 @@ class SurveillanceOperations:
         sensor_id: Optional[str],
         start_date: Optional[str],
         end_date: Optional[str],
-    ) -> list[dict]:
+    ) -> tuple[dict, int]:
         now = arrow.now()
         one_week_ago = now.shift(weeks=-1)
         if start_date:
             start_date = start_date.replace(" ", "+")
         if end_date:
             end_date = end_date.replace(" ", "+")
-        start_dt = arrow.get(start_date).datetime if start_date else one_week_ago.datetime
-        end_dt = arrow.get(end_date).datetime if end_date else now.datetime
+        try:
+            start_dt = arrow.get(start_date).datetime if start_date else one_week_ago.datetime
+            end_dt = arrow.get(end_date).datetime if end_date else now.datetime
+        except arrow.parser.ParserError:
+            return {"error": "Invalid date format. Use ISO8601 format."}, 400
 
         if sensor_id:
             notifications = await self.repo.get_failure_notifications_for_sensor(
@@ -366,7 +372,7 @@ class SurveillanceOperations:
                     )
                 )
             )
-        return result
+        return {"notifications": result}, 200
 
 
 def _calculate_aggregate_health_metrics(

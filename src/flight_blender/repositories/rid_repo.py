@@ -21,6 +21,10 @@ class SQLAlchemyRIDRepository:
         result = await self.db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.subscription_id == uuid.UUID(subscription_id)))
         return result.scalar_one_or_none() is not None
 
+    async def check_subscription_exists_by_view_hash(self, view_hash: int) -> bool:
+        result = await self.db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.view_hash == view_hash))
+        return result.scalar_one_or_none() is not None
+
     async def get_subscription_by_subscription_id(self, subscription_id: str) -> Optional[ISASubscriptionORM]:
         result = await self.db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.subscription_id == uuid.UUID(subscription_id)))
         return result.scalar_one_or_none()

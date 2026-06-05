@@ -5,38 +5,38 @@ from dataclasses import asdict
 from typing import Any
 
 import arrow
-import shapely.geometry
+from dacite import from_dict
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, Response
-from loguru import logger
+from sqlalchemy import delete
 from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiagonalKm
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.auth.token_cache import get_redis
+from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.db.session import async_get_db
 from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from flight_blender.domain_types.rid_operations import (
+    IdentificationServiceArea,
+    RIDDisplayDataResponse,
+    RIDFlightsRecord,
+    RIDSubscription,
+    RIDVolume4D,
+    SubscriptionState,
+)
 from flight_blender.domain_types.uss import (
     FlightDetailsNotFoundMessage,
     GenericErrorResponseMessage,
     OperatorDetailsSuccessResponse,
     RIDFlightDetails,
 )
+from flight_blender.models.flight_feed_orm import FlightObservationORM
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.schemas.rid import CreateTestBody, ISACallbackBody
 from flight_blender.services import rid_svc as view_port_ops
-from flight_blender.services.rid_svc import (
-    CreateTestResponse,
-    IdentificationServiceArea,
-    Position,
-    RIDDisplayDataResponse,
-    RIDFlight,
-    RIDFlightsRecord,
-    RIDPositions,
-    RIDSubscription,
-    RIDVolume4D,
-    SubscriptionState,
-)
+from flight_blender.services.flight_feed_svc import ObservationReadOperations
+from flight_blender.services.rid_svc import CreateTestResponse
 
 router = APIRouter(prefix="/rid")
 
@@ -68,8 +68,8 @@ async def create_dss_subscription(
     if not view_port_ops.check_view_port(view_port_coords=view_port):
         return JSONResponse({"message": "A view bounding box is necessary with four values: lat1,lng1,lat2,lng2."}, status_code=400)
 
-    box = shapely.geometry.box(view_port[1], view_port[0], view_port[3], view_port[2])
-    vertex_list = [{"lng": lng, "lat": lat} for lng, lat in list(zip(*box.exterior.coords.xy))[:-1]]
+    box = view_port_ops.build_view_port_box_lng_lat(view_port_coords=view_port)
+    vertex_list = view_port_ops.build_vertex_list_from_box(box)
     request_id = str(uuid.uuid4())
 
     subscription_r = await asyncio.to_thread(
@@ -108,12 +108,7 @@ async def get_rid_data(
     if not record or not record.flight_details or not json.loads(record.flight_details):
         return JSONResponse({}, status_code=404)
 
-    from flight_blender.auth.token_cache import get_redis
-    from flight_blender.services import flight_feed_svc as flight_stream_helper
-
-    observations = flight_stream_helper.ObservationReadOperations(redis=get_redis()).get_temporal_flight_observations_by_session(
-        session_id=sub_id_str
-    )
+    observations = ObservationReadOperations(redis=get_redis()).get_temporal_flight_observations_by_session(session_id=sub_id_str)
     return JSONResponse(observations or {}, status_code=200 if observations else 404)
 
 
@@ -124,8 +119,6 @@ async def dss_isa_callback(
     repo: SQLAlchemyRIDRepository = Depends(_rid_ops),
     _auth: Any = Depends(require_scopes(["dss.write.identification_service_areas"])),
 ):
-    from dacite import from_dict
-
     updated_service_area = from_dict(IdentificationServiceArea, body.service_area) if body.service_area else None
     for _subscription in body.subscriptions:
         subscription = from_dict(SubscriptionState, _subscription)
@@ -186,13 +179,11 @@ async def get_display_data(
     feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes(["dss.read.identification_service_areas"])),
 ):
-
     from flight_blender.clients import dss_rid_client as dss_rid_helper
     from flight_blender.tasks.rid_task import run_ussp_polling_for_rid
 
-    try:
-        view_port = [float(i) for i in (view or "").split(",")]
-    except Exception:
+    view_port = view_port_ops.parse_view_bbox(view)
+    if not view_port:
         return JSONResponse({"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}, status_code=400)
 
     view_port_valid = view_port_ops.check_view_port(view_port_coords=view_port)
@@ -203,25 +194,15 @@ async def get_display_data(
         return JSONResponse({"message": "A incorrect view port bbox was provided"}, status_code=400)
 
     should_cluster = view_port_diagonal >= NetDetailsMaxDisplayAreaDiagonalKm
-    box = shapely.geometry.box(view_port[1], view_port[0], view_port[3], view_port[2])
+    box = view_port_ops.build_view_port_box_lng_lat(view_port_coords=view_port)
 
     request_id = str(uuid.uuid4())
-    view_hash = _view_hash(view or "")
-    import hashlib
-
-    view_hash_int = int(hashlib.sha256((view or "").encode("utf-8")).hexdigest(), 16) % 10**8
-
-    # Check if subscription exists by view hash — async SA
-    from sqlalchemy import select
-
-    from flight_blender.models.rid_orm import ISASubscriptionORM
-
-    result = await repo.db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.view_hash == view_hash_int))
-    subscription_exists = result.scalar_one_or_none() is not None
+    view_hash_int = view_port_ops.compute_view_hash(view or "")
+    subscription_exists = await repo.check_subscription_exists_by_view_hash(view_hash_int)
 
     if not subscription_exists:
         subscription_duration_seconds = 20
-        vertex_list = [{"lng": lng, "lat": lat} for lng, lat in list(zip(*box.exterior.coords.xy))[:-1]]
+        vertex_list = view_port_ops.build_vertex_list_from_box(box)
         subscription_end_time = arrow.utcnow().shift(seconds=subscription_duration_seconds).isoformat()
         await asyncio.to_thread(
             dss_rid_helper.RemoteIDOperations().create_dss_subscription,
@@ -235,37 +216,16 @@ async def get_display_data(
 
     now = arrow.utcnow()
     observations = await feed_repo.get_all_flight_observations_in_window(start_time=now.shift(seconds=-30).datetime, end_time=now.datetime)
-    unique = {}
-    for observation in observations or []:
-        unique.setdefault(observation.icao_address, observation)
+    unique = view_port_ops.deduplicate_observations_by_icao(observations)
 
-    rid_flights = []
-    for observation in unique.values():
-        recent_paths = []
-        try:
-            recent_positions = json.loads(observation.raw_metadata).get("recent_positions", [])
-            recent_paths.append(
-                RIDPositions(
-                    positions=[Position(lat=p["position"]["lat"], lng=p["position"]["lng"], alt=p["position"]["alt"]) for p in recent_positions]
-                )
-            )
-        except Exception as exc:
-            logger.error("Error parsing recent_positions for {}: {}", observation.icao_address, exc)
-            recent_paths = []
-        rid_flights.append(
-            RIDFlight(
-                id=observation.icao_address,
-                most_recent_position=Position(lat=observation.latitude_dd, lng=observation.longitude_dd, alt=observation.altitude_mm),
-                recent_paths=recent_paths,
-            )
-        )
+    rid_flights = [view_port_ops.rid_flight_from_observation(obs) for obs in unique.values()]
 
     clusters = []
     if should_cluster:
         clusters = dss_rid_helper.RemoteIDOperations().generate_cluster_details(rid_flights=rid_flights, view_box=box)
         rid_flights = []
 
-    response = _make_json_compatible(RIDDisplayDataResponse(flights=rid_flights, clusters=clusters))
+    response = view_port_ops.make_json_compatible(RIDDisplayDataResponse(flights=rid_flights, clusters=clusters))
     return {"flights": response["flights"], "clusters": response["clusters"]}
 
 
@@ -274,11 +234,9 @@ async def create_test(test_id: uuid.UUID, body: CreateTestBody, _auth: Any = Dep
     from flight_blender.tasks.rid_task import stream_rid_test_data
 
     redis_key = "rid-test_" + str(test_id)
-    redis_client = get_redis()
-    if redis_client.exists(redis_key):
+    redis_ops = RedisStreamOperations()
+    if not redis_ops.register_rid_test(redis_key):
         return JSONResponse({}, status_code=409)
-    redis_client.set(redis_key, json.dumps({"created_at": arrow.utcnow().isoformat()}))
-    redis_client.expire(redis_key, 300)
     stream_rid_test_data.delay(requested_flights=json.dumps(body.requested_flights), test_id=redis_key)
     return asdict(CreateTestResponse(injected_flights=body.requested_flights, version=1))
 
@@ -288,25 +246,18 @@ async def delete_test(
     test_id: uuid.UUID,
     version: str,
     repo: SQLAlchemyRIDRepository = Depends(_rid_ops),
-    feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes(["rid.inject_test_data"])),
 ):
-    from sqlalchemy import delete
-
-    from flight_blender.models.flight_feed_orm import FlightObservationORM
-
-    redis_client = get_redis()
     test_id_str = str(test_id)
-    if redis_client.exists(test_id_str):
-        redis_client.delete(test_id_str)
+    redis_ops = RedisStreamOperations()
+    redis_ops.delete_rid_test_key(test_id_str)
 
     await repo.delete_simulated_subscriptions()
     await repo.delete_all_flight_details()
-    # delete all flight observations
     await repo.db.execute(delete(FlightObservationORM))
     await repo.db.flush()
 
-    redis_client.set("stop_streaming_" + test_id_str, "1")
+    redis_ops.stop_rid_test_stream(test_id_str)
     return {}
 
 
@@ -327,23 +278,3 @@ async def user_notifications(
 
     notifications = await repo.get_active_notifications_between(after_dt, before_dt)
     return {"user_notifications": [{"message": n.message, "observed_at": {"value": n.created_at, "format": "RFC3339"}} for n in notifications]}
-
-
-def _view_hash(view: str) -> int:
-    import hashlib
-
-    return int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
-
-
-def _make_json_compatible(struct):
-
-    if isinstance(struct, tuple) and hasattr(struct, "_asdict"):
-        return {k: _make_json_compatible(v) for k, v in struct._asdict().items()}
-    if isinstance(struct, dict):
-        return {k: _make_json_compatible(v) for k, v in struct.items()}
-    if isinstance(struct, str):
-        return struct
-    try:
-        return [_make_json_compatible(v) for v in struct]
-    except TypeError:
-        return struct

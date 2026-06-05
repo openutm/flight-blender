@@ -2,6 +2,7 @@ import json
 import uuid
 from typing import List, Optional
 
+import arrow
 from loguru import logger
 
 from flight_blender.auth.token_cache import get_redis
@@ -98,7 +99,7 @@ class RedisStreamOperations:
             group_name (str): The name of the consumer group.
 
         Returns:
-            bool: True if group was deleted successfully, False otherwise.
+            bool: True if the group was deleted successfully, False otherwise.
         """
         try:
             result = self.redis.xgroup_destroy(stream_name, group_name)
@@ -109,8 +110,26 @@ class RedisStreamOperations:
                 logger.warning(f"Consumer group '{group_name}' does not exist for stream '{stream_name}'.")
                 return False
         except Exception as e:
-            logger.error(f"Error deleting consumer group '{group_name}' from stream '{stream_name}': {e}")
+            logger.error(f"Error deleting consumer group '{group_name}' from Redis stream '{stream_name}': {e}")
             return False
+
+    def register_rid_test(self, redis_key: str, ttl_seconds: int = 300) -> bool:
+        """Atomically register a RID test key. Returns False if the key already exists."""
+        created = self.redis.set(
+            redis_key,
+            json.dumps({"created_at": arrow.utcnow().isoformat()}),
+            nx=True,
+            ex=ttl_seconds,
+        )
+        return bool(created)
+
+    def stop_rid_test_stream(self, test_id: str) -> None:
+        """Signal the RID test task to stop streaming for the given test id."""
+        self.redis.set(f"stop_streaming_{test_id}", "1")
+
+    def delete_rid_test_key(self, key: str) -> None:
+        if self.redis.exists(key):
+            self.redis.delete(key)
 
     def clear_stream(self, stream_name: str) -> bool:
         """

@@ -64,8 +64,10 @@ async def set_flight_declarations_bulk(
     ops: FlightDeclarationOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    if not isinstance(body, list):
-        return JSONResponse({"message": "Request body must be a JSON array of flight declaration objects."}, status_code=400)
+    error = await ops.validate_bulk_declarations_payload(body)
+    if error is not None:
+        data, status_code = error
+        return JSONResponse(data, status_code=status_code)
     data, status_code = await ops.bulk_create_flight_declarations(body)
     return JSONResponse(data, status_code=status_code)
 
@@ -76,8 +78,10 @@ async def set_operational_intents_bulk(
     ops: FlightDeclarationOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    if not isinstance(body, list):
-        return JSONResponse({"message": "Request body must be a JSON array of operational intent objects."}, status_code=400)
+    error = await ops.validate_bulk_operational_intents_payload(body)
+    if error is not None:
+        data, status_code = error
+        return JSONResponse(data, status_code=status_code)
     data, status_code = await ops.set_operational_intents_bulk(body)
     return JSONResponse(data, status_code=status_code)
 
@@ -145,11 +149,7 @@ async def update_flight_declaration_approval(
     ops: FlightDeclarationOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    is_approved = body.get("is_approved")
-    approved_by = body.get("approved_by")
-    if is_approved is None:
-        return JSONResponse({"detail": "is_approved is required"}, status_code=422)
-    data, status_code = await ops.update_flight_declaration_approval(pk, bool(is_approved), approved_by)
+    data, status_code = await ops.update_approval_from_request(pk, body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -160,14 +160,7 @@ async def update_flight_declaration_state(
     ops: FlightDeclarationOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    state = body.get("state")
-    if state is None:
-        return JSONResponse({"detail": "state is required"}, status_code=422)
-    try:
-        state_int = int(state)
-    except (TypeError, ValueError):
-        return JSONResponse({"detail": "state must be an integer"}, status_code=422)
-    data, status_code = await ops.update_flight_declaration_state(pk, state_int)
+    data, status_code = await ops.update_state_from_request(pk, body)
     return JSONResponse(data, status_code=status_code)
 
 

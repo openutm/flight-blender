@@ -1,6 +1,5 @@
 from typing import Any
 
-import arrow
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,11 +25,10 @@ async def list_notifications(
     ops: NotificationsOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    try:
-        start = arrow.get(start_date).datetime if start_date else arrow.utcnow().shift(hours=-24).datetime
-        end = arrow.get(end_date).datetime if end_date else arrow.utcnow().datetime
-    except arrow.parser.ParserError:
-        return JSONResponse({"error": "Invalid date format. Use ISO8601 format."}, status_code=400)
+    dates, error = ops.parse_date_range_with_lookback(start_date, end_date)
+    if error:
+        return JSONResponse({"error": error}, status_code=400)
+    start, end = dates
     return {"notifications": await ops.get_active_notifications(start_time=start, end_time=end)}
 
 

@@ -622,6 +622,41 @@ class FlightDeclarationOperations:
             return 404
         return 204
 
+    async def validate_bulk_declarations_payload(self, body: Any) -> tuple[dict, int] | None:
+        if not isinstance(body, list):
+            return {"message": "Request body must be a JSON array of flight declaration objects."}, 400
+        return None
+
+    async def validate_bulk_operational_intents_payload(self, body: Any) -> tuple[dict, int] | None:
+        if not isinstance(body, list):
+            return {"message": "Request body must be a JSON array of operational intent objects."}, 400
+        return None
+
+    async def update_approval_from_request(
+        self,
+        pk: uuid.UUID,
+        body: dict,
+    ) -> tuple[dict, int]:
+        is_approved = body.get("is_approved")
+        approved_by = body.get("approved_by")
+        if is_approved is None:
+            return {"detail": "is_approved is required"}, 422
+        return await self.update_flight_declaration_approval(pk, bool(is_approved), approved_by)
+
+    async def update_state_from_request(
+        self,
+        pk: uuid.UUID,
+        body: dict,
+    ) -> tuple[dict, int]:
+        state = body.get("state")
+        if state is None:
+            return {"detail": "state is required"}, 422
+        try:
+            state_int = int(state)
+        except (TypeError, ValueError):
+            return {"detail": "state must be an integer"}, 422
+        return await self.update_flight_declaration_state(pk, state_int)
+
     async def submit_flight_declaration_to_dss(self, pk: uuid.UUID) -> tuple[dict, int]:
         ussp_network_enabled = settings.USSP_NETWORK_ENABLED
         if not ussp_network_enabled:

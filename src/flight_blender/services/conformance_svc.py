@@ -2,6 +2,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
+import arrow
 from loguru import logger
 
 from flight_blender.config import settings
@@ -116,6 +117,19 @@ class ConformanceChecksList(StatusCode):
 class ConformanceOperations:
     def __init__(self, repo: AsyncConformanceRepository) -> None:
         self._repo = repo
+
+    @staticmethod
+    def parse_date_range(start_date: str | None, end_date: str | None) -> tuple[tuple[datetime, datetime] | None, str | None]:
+        if not start_date or not end_date:
+            return None, "start_date and end_date are required"
+        try:
+            start = arrow.get(start_date).datetime
+            end = arrow.get(end_date).datetime
+        except arrow.parser.ParserError:
+            return None, "Invalid date format. Use ISO 8601 format."
+        if start >= end:
+            return None, "start_date must be before end_date"
+        return (start, end), None
 
     async def get_records(self, start_time: datetime, end_time: datetime) -> list[dict]:
         orm_records = await self._repo.get_conformance_records_for_duration(start_time=start_time, end_time=end_time)
@@ -677,7 +691,6 @@ def process_flight_operational_intent_reference_non_conformance_message(sender, 
 
 import json as _json  # noqa: E402
 
-import arrow  # noqa: E402
 from shapely.geometry import Point as _Point  # noqa: E402
 from shapely.geometry import Polygon as _Plgn  # noqa: E402
 

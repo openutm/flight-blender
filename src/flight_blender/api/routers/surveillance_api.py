@@ -1,7 +1,6 @@
 import uuid
 from typing import Any
 
-import arrow
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,11 +59,8 @@ async def service_metrics(
     ops: SurveillanceOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    try:
-        result = await ops.get_service_metrics(start_date=start_date, end_date=end_date, session_id=session_id)
-    except arrow.parser.ParserError:
-        return JSONResponse({"error": "Invalid date format. Use ISO8601 format."}, status_code=400)
-    return result
+    result, status_code = await ops.get_service_metrics(start_date=start_date, end_date=end_date, session_id=session_id)
+    return JSONResponse(result, status_code=status_code)
 
 
 @router.put("/update_sensor_health/{sensor_id}")
@@ -86,12 +82,9 @@ async def list_sensor_health_notifications(
     ops: SurveillanceOperations = Depends(_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    try:
-        notifications = await ops.list_sensor_health_notifications(
-            sensor_id=sensor_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
-    except arrow.parser.ParserError:
-        return JSONResponse({"error": "Invalid date format. Use ISO8601 format."}, status_code=400)
-    return {"notifications": notifications}
+    result, status_code = await ops.list_sensor_health_notifications(
+        sensor_id=sensor_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return JSONResponse(result, status_code=status_code)
