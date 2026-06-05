@@ -1,6 +1,6 @@
 """Tests for example_plugins: HelloWorldFuser, HelloWorldEngine, HelloWorldVolumeGenerator."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import arrow
@@ -114,7 +114,8 @@ class TestHelloWorldFuser:
 
 
 class TestHelloWorldEngine:
-    def test_no_conflict_returns_approved(self):
+    @pytest.mark.asyncio
+    async def test_no_conflict_returns_approved(self):
         engine = HelloWorldEngine()
         now = arrow.utcnow()
         req = DeconflictionRequest(
@@ -124,10 +125,15 @@ class TestHelloWorldEngine:
             declaration_id=None,
             ussp_network_enabled=False,
         )
-        result = engine.check_deconfliction(req, db=MagicMock())
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+        result = await engine.check_deconfliction(req, db=mock_db)
         assert result.is_approved is True
 
-    def test_ussp_network_enabled_sets_not_submitted(self):
+    @pytest.mark.asyncio
+    async def test_ussp_network_enabled_sets_not_submitted(self):
         now = arrow.utcnow()
         req = DeconflictionRequest(
             start_datetime=now.shift(hours=10).datetime,
@@ -137,7 +143,11 @@ class TestHelloWorldEngine:
             ussp_network_enabled=True,
         )
         engine = HelloWorldEngine()
-        result = engine.check_deconfliction(req, db=MagicMock())
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+        result = await engine.check_deconfliction(req, db=mock_db)
         # With USSP network enabled and no conflict, state should be NOT_SUBMITTED (0)
         assert result.is_approved is True
         assert result.declaration_state == 0

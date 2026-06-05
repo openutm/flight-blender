@@ -3,13 +3,12 @@
 import asyncio
 import uuid
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
+from flight_blender.domain_types.common import FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
 from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
-from flight_blender.models.flight_declarations_orm import FlightDeclarationORM
-from flight_blender.models.geo_fence_orm import GeoFenceORM
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.repositories.geo_fence_repo import SQLAlchemyGeoFenceRepository
 from flight_blender.utils import spatial_geo_fence as rtree_geo_fence_helper
 from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 
@@ -22,7 +21,7 @@ class DefaultDeconflictionEngine:
     3. Any intersection → rejected (state 8).
     """
 
-    def check_deconfliction(self, request: DeconflictionRequest, db: Session) -> DeconflictionResult:
+    async def check_deconfliction(self, request: DeconflictionRequest, db: AsyncSession) -> DeconflictionResult:
         view_box = request.view_box
         start_datetime = request.start_datetime
         end_datetime = request.end_datetime
@@ -33,15 +32,10 @@ class DefaultDeconflictionEngine:
         is_approved = True
         declaration_state = 0 if ussp_network_enabled else 1
 
-        all_fences = list(
-            db.execute(
-                select(GeoFenceORM).where(
-                    GeoFenceORM.start_datetime <= start_datetime,
-                    GeoFenceORM.end_datetime >= end_datetime,
-                )
-            )
-            .scalars()
-            .all()
+        fence_repo = SQLAlchemyGeoFenceRepository(db)
+        all_fences = await fence_repo.get_geofences_overlapping_time_window(
+            start=start_datetime,
+            end=end_datetime,
         )
 
         if all_fences:
@@ -57,15 +51,14 @@ class DefaultDeconflictionEngine:
             finally:
                 geo_fence_index.clear_rtree_index(all_fences=all_fences)
 
-        stmt = select(FlightDeclarationORM).where(
-            FlightDeclarationORM.state.in_(ACTIVE_OPERATIONAL_STATES),
-            FlightDeclarationORM.start_datetime <= end_datetime,
-            FlightDeclarationORM.end_datetime >= start_datetime,
-        )
+        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
         current_declaration_id = request.declaration_id
-        if current_declaration_id is not None:
-            stmt = stmt.where(FlightDeclarationORM.id != uuid.UUID(str(current_declaration_id)))
-        declaration_list = list(db.execute(stmt).scalars().all())
+        exclude_id = uuid.UUID(str(current_declaration_id)) if current_declaration_id is not None else None
+        declaration_list = await fd_repo.get_active_declarations_overlapping_time_window(
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            exclude_declaration_id=exclude_id,
+        )
 
         if declaration_list:
             fd_rtree_helper = FlightDeclarationRTreeIndexFactory(

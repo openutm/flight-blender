@@ -76,12 +76,12 @@ docker logs flight-blender 2>&1 | grep -A 30 "Error\|Exception" | tail -60
 
 The full Python traceback appears there.  The most common causes on this branch:
 
-- **Wrong SQLAlchemy `__tablename__`** — Django app label (`apps.py` `label =`) differs from the Python module name. Actual table = `<label>_<modelname_lower>`. Long names (> 63 chars) get truncated by Django with a deterministic hex suffix; query the DB to get the exact name:
+- **Wrong SQLAlchemy `__tablename__`** — the `__tablename__` value in the ORM class differs from what the code expects. Query the DB to get the exact name:
   ```bash
   docker exec db-blender psql -U mydatabaseuser -d mydatabase \
     -c "SELECT tablename FROM pg_tables WHERE tablename LIKE 'surveillance%' ORDER BY tablename;"
   ```
-- **Missing migration** — table doesn't exist at all. The compose entrypoint runs `manage.py migrate` automatically; if a table is still missing, a new Django migration needs to be generated and committed.
+- **Missing migration** — table doesn't exist at all. Run `alembic upgrade head` to apply all migrations; if a table is still missing, a new Alembic migration needs to be generated and committed.
 - **ForeignKey string mismatch** — `ForeignKey("old_table.id")` must match the target's `__tablename__`; update both when renaming.
 
 ---

@@ -291,7 +291,7 @@ class RedisStreamOperations:
         consumer_id: Optional[str] = None,
         count: int = 10,
         block: int = 1000,
-    ) -> List[SingleAirtrafficObservation]:
+    ) -> list[SingleAirtrafficObservation]:
         """
         Read the latest air traffic data from the Redis stream since last access by this consumer.
         Messages are automatically acknowledged after reading.

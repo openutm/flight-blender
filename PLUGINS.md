@@ -7,12 +7,12 @@ Flight Blender uses a plugin system that lets you replace core components with y
 The plugin system is built on three concepts:
 
 1. **Protocols** — Python `typing.Protocol` classes that define the method signatures your plugin must implement (structural subtyping, no inheritance required).
-2. **Dotted-path settings** — Each extension point has a Django setting (backed by an environment variable) that holds the fully qualified class path of the plugin to load.
+2. **Dotted-path settings** — Each extension point has a pydantic-settings config value (backed by an environment variable) that holds the fully qualified class path of the plugin to load.
 3. **`load_plugin()`** — A loader function that imports the class, validates it against the protocol, caches it, and returns it to the caller.
 
 ```
 Environment variable
-    └─▶ Django setting (dotted class path)
+    └─▶ pydantic-settings config (dotted class path)
             └─▶ load_plugin()  ──▶  import + validate + cache
                                          └─▶  caller instantiates your class
 ```
@@ -21,13 +21,13 @@ Environment variable
 
 | Extension Point | Environment Variable | Protocol | Default Implementation |
 |---|---|---|---|
-| De-confliction engine | `FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE` | `DeconflictionEngine` | `flight_declaration_operations.deconfliction_engine.DefaultDeconflictionEngine` |
-| Traffic data fuser | `FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER` | `TrafficDataFuser` | `surveillance_monitoring_operations.utils.TrafficDataFuser` |
-| Volume 4D generator | `FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR` | _(none)_ | _(empty — disabled by default)_ |
+| De-confliction engine | `FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE` | `DeconflictionEngineProtocol` | `flight_blender.services.deconfliction_engine.DefaultDeconflictionEngine` |
+| Traffic data fuser | `FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER` | `TrafficDataFuserProtocol` | `flight_blender.services.surveillance_svc.TrafficDataFuser` |
+| Volume 4D generator | `FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR` | `Volume4DGeneratorProtocol` | _(empty — disabled by default)_ |
 
 ## Quick Start
 
-The `example_plugins/` directory ships with a working example for every extension point. To try one out:
+The `src/flight_blender/plugins/examples/` directory ships with a working example for every extension point. To try one out:
 
 ### 1. Pick a plugin
 
@@ -35,14 +35,14 @@ The project includes these ready-to-use examples:
 
 | Example | File | What it does |
 |---|---|---|
-| De-confliction engine | `example_plugins/hello_world_engine.py` | Rejects declarations that overlap existing accepted flights by time window |
-| Traffic data fuser | `example_plugins/hello_world_fuser.py` | De-duplicates observations per aircraft, drops stale data, emits latest position |
-| Volume 4D generator | `example_plugins/hello_world_volume_generator.py` | Splits the time window across features proportionally to segment length |
+| De-confliction engine | `src/flight_blender/plugins/examples/hello_world_engine.py` | Rejects declarations that overlap existing accepted flights by time window |
+| Traffic data fuser | `src/flight_blender/plugins/examples/hello_world_fuser.py` | De-duplicates observations per aircraft, drops stale data, emits latest position |
+| Volume 4D generator | `src/flight_blender/plugins/examples/hello_world_volume_generator.py` | Splits the time window across features proportionally to segment length |
 
 ### 2. Point the setting to the class
 
 ```bash
-export FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=example_plugins.hello_world_engine.HelloWorldEngine
+export FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=flight_blender.plugins.examples.hello_world_engine.HelloWorldEngine
 ```
 
 Or add it to your `.env` file if you use one.
@@ -58,14 +58,18 @@ Create a file anywhere on the Python path. Your class only needs to implement th
 ```python
 # my_plugins/my_engine.py
 
-from flight_declaration_operations.data_definitions import (
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from flight_blender.domain_types.flight_declarations import (
     DeconflictionRequest,
     DeconflictionResult,
 )
 
 
 class MyEngine:
-    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
+    async def check_deconfliction(
+        self, request: DeconflictionRequest, db: AsyncSession
+    ) -> DeconflictionResult:
         # Your logic here
         return DeconflictionResult(
             all_relevant_fences=[],
@@ -84,13 +88,15 @@ Make sure the directory has an `__init__.py` so Python treats it as a package.
 Each extension point has a protocol class that defines the contract. For example, the de-confliction engine protocol is:
 
 ```python
-# flight_declaration_operations/deconfliction_protocol.py
+# flight_blender/domain_types/plugin_protocols.py
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @runtime_checkable
-class DeconflictionEngine(Protocol):
-    def check_deconfliction(
-        self, request: DeconflictionRequest
+class DeconflictionEngineProtocol(Protocol):
+    async def check_deconfliction(
+        self, request: DeconflictionRequest, db: AsyncSession
     ) -> DeconflictionResult: ...
 ```
 
@@ -123,19 +129,37 @@ Your class must implement every method in the protocol with matching signatures.
 ### Traffic Data Fuser Protocol
 
 ```python
-# surveillance_monitoring_operations/traffic_data_fuser_protocol.py
+# flight_blender/domain_types/plugin_protocols.py
 
 
 @runtime_checkable
-class TrafficDataFuser(Protocol):
+class TrafficDataFuserProtocol(Protocol):
     def generate_track_messages(self) -> list[TrackMessage]: ...
 ```
 
 Traffic data fusers are instantiated with `(session_id: str, raw_observations: list)`. The optional `BaseTrafficDataFuser` base class in `common/base_traffic_data_fuser.py` provides helper methods for speed/bearing calculation and track message generation — you can extend it for convenience, but it's not required.
 
+### Volume 4D Generator Protocol
+
+```python
+# flight_blender/domain_types/plugin_protocols.py
+
+
+@runtime_checkable
+class Volume4DGeneratorProtocol(Protocol):
+    def build_v4d_from_geojson(
+        self,
+        geo_json_fc: dict,
+        start_datetime: str,
+        end_datetime: str,
+    ) -> list[Volume4D]: ...
+```
+
+Volume 4D generators are instantiated with `(default_uav_speed_m_per_s: float, default_uav_climb_rate_m_per_s: float, default_uav_descent_rate_m_per_s: float)`. The constructor parameters are UAV performance characteristics used for time-proportioning calculations.
+
 ## Example Plugins
 
-The `example_plugins/` directory ships with a working example for **every** extension point. Each can be activated with a single environment variable.
+The `src/flight_blender/plugins/examples/` directory ships with a working example for **every** extension point. Each can be activated with a single environment variable.
 
 ### De-confliction Engine — `hello_world_engine.py`
 
@@ -143,19 +167,23 @@ Rejects flight declarations whose time window overlaps an existing accepted decl
 
 ```python
 class HelloWorldEngine:
-    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
-        overlapping = FlightDeclaration.objects.filter(
-            start_datetime__lt=request.end_datetime,
-            end_datetime__gt=request.start_datetime,
-            state__in=[_STATE_ACCEPTED, _STATE_ACCEPTED_WITH_CONDITIONS],
+    async def check_deconfliction(
+        self, request: DeconflictionRequest, db: AsyncSession
+    ) -> DeconflictionResult:
+        stmt = select(FlightDeclarationORM).where(
+            FlightDeclarationORM.start_datetime < request.end_datetime,
+            FlightDeclarationORM.end_datetime > request.start_datetime,
+            FlightDeclarationORM.state.in_(_ACTIVE_STATES),
         )
         if request.declaration_id:
-            overlapping = overlapping.exclude(pk=request.declaration_id)
+            stmt = stmt.where(FlightDeclarationORM.id != request.declaration_id)
+        result = await db.execute(stmt)
+        rows = result.scalars().all()
         ...
 ```
 
 ```bash
-export FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=example_plugins.hello_world_engine.HelloWorldEngine
+export FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=flight_blender.plugins.examples.hello_world_engine.HelloWorldEngine
 ```
 
 ### Traffic Data Fuser — `hello_world_fuser.py`
@@ -176,7 +204,7 @@ class HelloWorldFuser:
 The constructor receives `session_id` and `raw_observations` — the same arguments the framework passes when instantiating any traffic data fuser.
 
 ```bash
-export FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER=example_plugins.hello_world_fuser.HelloWorldFuser
+export FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER=flight_blender.plugins.examples.hello_world_fuser.HelloWorldFuser
 ```
 
 ### Volume 4D Generator — `hello_world_volume_generator.py`
@@ -202,15 +230,15 @@ class HelloWorldVolumeGenerator:
 The constructor receives UAV performance parameters. The framework calls `build_v4d_from_geojson()` with a GeoJSON FeatureCollection and a time window.
 
 ```bash
-export FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR=example_plugins.hello_world_volume_generator.HelloWorldVolumeGenerator
+export FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR=flight_blender.plugins.examples.hello_world_volume_generator.HelloWorldVolumeGenerator
 ```
 
 ### Built-in Advanced Example
 
-The project also includes an altitude-aware de-confliction engine at `flight_declaration_operations/example_deconfliction_engine.py` that demonstrates more advanced patterns:
+The project also includes an altitude-aware de-confliction engine at `src/flight_blender/plugins/examples/altitude_aware_deconfliction_engine.py` that demonstrates more advanced patterns:
 
 ```bash
-export FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=flight_declaration_operations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine
+export FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=flight_blender.plugins.examples.altitude_aware_deconfliction_engine.AltitudeAwareDeconflictionEngine
 ```
 
 ## Testing Your Plugin
@@ -218,33 +246,35 @@ export FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE=flight_declaration_operations.
 You can test that `load_plugin` accepts your class without running the full server:
 
 ```python
-from common.plugin_loader import load_plugin
-from flight_declaration_operations.deconfliction_protocol import DeconflictionEngine
+from flight_blender.plugins.loader import load_plugin
+from flight_blender.domain_types.plugin_protocols import DeconflictionEngineProtocol
 
 # This will raise TypeError if the class doesn't satisfy the protocol
 MyEngine = load_plugin(
-    "example_plugins.hello_world_engine.HelloWorldEngine",
-    expected_protocol=DeconflictionEngine,
+    "flight_blender.plugins.examples.hello_world_engine.HelloWorldEngine",
+    expected_protocol=DeconflictionEngineProtocol,
 )
 print(
     f"Loaded: {MyEngine}"
-)  # <class 'example_plugins.hello_world_engine.HelloWorldEngine'>
+)  # <class 'flight_blender.plugins.examples.hello_world_engine.HelloWorldEngine'>
 ```
 
-Write a Django `TestCase` to verify behavior (the example engine queries the database, so use `TestCase` instead of `SimpleTestCase`):
+Write pytest tests to verify behavior. The deconfliction engine is async and receives an `AsyncSession`, so use `AsyncMock` for the database:
 
 ```python
-from django.test import TestCase
+import pytest
+from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timezone, timedelta
-from flight_declaration_operations.data_definitions import (
+from flight_blender.domain_types.flight_declarations import (
     DeconflictionRequest,
     DeconflictionResult,
 )
-from example_plugins.hello_world_engine import HelloWorldEngine
+from flight_blender.plugins.examples.hello_world_engine import HelloWorldEngine
 
 
-class HelloWorldEngineTests(TestCase):
-    def test_approves_when_no_conflicts(self):
+class TestHelloWorldEngine:
+    @pytest.mark.asyncio
+    async def test_approves_when_no_conflicts(self):
         """With an empty database, every declaration is approved."""
         engine = HelloWorldEngine()
         now = datetime.now(tz=timezone.utc)
@@ -254,16 +284,20 @@ class HelloWorldEngineTests(TestCase):
             view_box=[0.0, 0.0, 1.0, 1.0],
             ussp_network_enabled=0,
         )
-        result = engine.check_deconfliction(request)
-        self.assertIsInstance(result, DeconflictionResult)
-        self.assertTrue(result.is_approved)
-        self.assertEqual(result.all_relevant_declarations, [])
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+        result = await engine.check_deconfliction(request, db=mock_db)
+        assert isinstance(result, DeconflictionResult)
+        assert result.is_approved is True
+        assert result.all_relevant_declarations == []
 ```
 
 ## Checklist
 
 - [ ] Your class implements all methods defined in the protocol
-- [ ] Method signatures match (argument names, types, return type)
+- [ ] Method signatures match (argument names, types, return type) — remember `check_deconfliction` is `async` and takes `db: AsyncSession`
 - [ ] Your module is importable (on the Python path, has `__init__.py` where needed)
 - [ ] The environment variable is set to the full dotted path: `package.module.ClassName`
 - [ ] You've tested with `load_plugin()` that the class loads without errors

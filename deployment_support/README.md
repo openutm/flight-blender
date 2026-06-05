@@ -4,7 +4,7 @@ In this article you will understand how to deploy the Flight Blender backend / d
 
 ## Who is this for?
 
-This guide is mainly for technical engineers within organizations interested in testing and standing up UTM capability. It is recommended that you are familiar with basic Docker, OAUTH/Bearer Tokens. The server is written in Django/Python if you want to use/run the built-in data. However, since it is all API-based, you can use any tools/languages that you are familiar with to communicate with the server.
+This guide is mainly for technical engineers within organizations interested in testing and standing up UTM capability. It is recommended that you are familiar with basic Docker, OAUTH/Bearer Tokens. The server is written in FastAPI/Python if you want to use/run the built-in data. However, since it is all API-based, you can use any tools/languages that you are familiar with to communicate with the server.
 
 ## Introduction and objectives
 
@@ -21,10 +21,10 @@ For this quick start, we will use the [sample .env](https://github.com/openutm/f
 
 | Variable Key | Data Type | Description |
 |--------------|--------------|:-----:|
-| SECRET_KEY | string | This is used in Django. It is recommended that you use a long SECRET Key as a string here. |
+| SECRET_KEY | string | This is used for JWT signing. It is recommended that you use a long SECRET Key as a string here. |
 | IS_DEBUG | integer | Set this as 1 if you are using it locally. |
 | BYPASS_AUTH_TOKEN_VERIFICATION | integer | Set this as 1 if you are using it locally or using NoAuth or Dummy tokens. **NOTE** Please remove this field totally for any production deployments, as it will bypass token verification and will be a security risk. |
-| ALLOWED_HOSTS | string | This is used in Django. It is recommended that if you are not using IS_DEBUG above, then this needs to be set as the domain name. If you are using IS_DEBUG above, then the system automatically allows all hosts. |
+| ALLOWED_HOSTS | string | Comma-separated list of allowed hostnames. If you are not using IS_DEBUG above, then this needs to be set as the domain name. If you are using IS_DEBUG above, then the system automatically allows all hosts. |
 | REDIS_HOST | string | Flight Blender uses Redis as the backend. You can use localhost if you are running Redis locally. |
 | REDIS_PORT | integer | Normally Redis runs at port 6379. You can set it here. If you don't set up the REDIS Host and Port, Flight Blender will use the default values. |
 | REDIS_PASSWORD | string | In production, the Redis instance is password protected. Set the password here. See redis.conf for more information. |
@@ -49,13 +49,102 @@ If you are working in stand-alone mode, recommended initially, the above environ
 | DSS_BASE_URL | string | Set the URL for DSS. If you are using it, it can be something like `http://host.docker.internal:8082/` if you are using the InterUSS/DSS build locally stack. |
 | FLIGHTBLENDER_FQDN | string | This is the domain name of a Flight Blender deployment, e.g., `https://beta.flightblender.com`. |
 
-### 2. Use Docker Compose to stand up Flight Blender
+### 2. Run Flight Blender
+
+You have two options: **Docker Compose** (recommended for first-time setup) or **running locally** (useful for development).
+
+#### Option A: Docker Compose (recommended)
 
 After creating and saving the .env file, you can utilize the [docker-compose-dev.yaml](../docker-compose-dev.yml) file to launch the instance. Simply execute `docker build . -t openutm/flight-blender-dev` to create the image, followed by `docker compose up` to make a running Flight Blender instance accessible.
 
-#### Running Flight Blender
+You can run Flight Blender by running `docker compose up` and then go to `http://localhost:8000`. You should see the Flight Blender Logo and a link to the API and Ping documentation. Congratulations — we now have a running version of the system!
 
-You can run Flight Blender by running `docker compose up` and then go to `http://localhost:8000`. You should see the Flight Blender Logo and a link to the API and Ping documentation. Congratulations 🎉 we now have a running version of the system!
+#### Option B: Running locally (without Docker)
+
+##### Prerequisites
+
+- **Python 3.12** (`python3 --version` should show 3.12.x)
+- **PostgreSQL** (14+) running locally, or **SQLite** for quick testing
+- **Redis** running locally (default port 6379)
+- **uv** package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
+
+##### 1. Install dependencies
+
+```bash
+cd flight-blender
+uv sync
+```
+
+##### 2. Create your .env file
+
+Copy the sample file and edit it for local hostnames:
+
+```bash
+cp deployment_support/.env.local .env
+```
+
+Key changes for local (non-Docker) runs:
+
+| Variable | Docker value | Local value |
+|---|---|---|
+| `REDIS_HOST` | `redis-blender` | `localhost` |
+| `REDIS_BROKER_URL` | `redis://:blender_redis@redis-blender:6379` | `redis://localhost:6379/` |
+| `DATABASE_URL` | `psql://...@myproject_db:5432/myproject_db` | see below |
+| `POSTGRES_HOST` | `myproject_db` | `localhost` |
+
+For **SQLite** (no PostgreSQL needed), set:
+
+```
+DATABASE_URL=sqlite:///./flight_blender.sqlite3
+```
+
+For **PostgreSQL**, set:
+
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/flightblender
+```
+
+Make sure `BYPASS_AUTH_TOKEN_VERIFICATION=1` is set for local development.
+
+##### 3. Apply database migrations
+
+```bash
+alembic upgrade head
+```
+
+This creates all required tables. On a fresh SQLite database this is all you need; for PostgreSQL make sure the database exists first (`createdb flightblender` or `CREATE DATABASE flightblender;`).
+
+##### 4. Start the services
+
+You need **three processes** running simultaneously. Open three terminals:
+
+**Terminal 1 — API server:**
+
+```bash
+uvicorn flight_blender.asgi:application --host 0.0.0.0 --port 8000 --reload
+```
+
+**Terminal 2 — Celery worker** (processes background jobs):
+
+```bash
+celery --app=flight_blender worker --loglevel=info
+```
+
+**Terminal 3 — Celery beat** (schedules periodic tasks):
+
+```bash
+celery --app=flight_blender beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+```
+
+The API is now at `http://localhost:8000`. You should see the Flight Blender logo and links to the API docs.
+
+##### 5. Verify it works
+
+```bash
+curl http://localhost:8000/
+```
+
+You can also open `http://localhost:8000/docs` in a browser to see the interactive Swagger UI.
 
 ### 3. Upload some flight information
 

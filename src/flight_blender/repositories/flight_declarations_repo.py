@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES
 from flight_blender.models.flight_declarations_orm import (
     CompositeOperationalIntentORM,
     FlightDeclarationORM,
@@ -59,6 +60,22 @@ class CompositeBundle:
 class SQLAlchemyFlightDeclarationRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def get_active_declarations_overlapping_time_window(
+        self,
+        start_datetime,
+        end_datetime,
+        exclude_declaration_id: uuid.UUID | None = None,
+    ) -> list[FlightDeclarationORM]:
+        stmt = select(FlightDeclarationORM).where(
+            FlightDeclarationORM.state.in_(ACTIVE_OPERATIONAL_STATES),
+            FlightDeclarationORM.start_datetime <= end_datetime,
+            FlightDeclarationORM.end_datetime >= start_datetime,
+        )
+        if exclude_declaration_id is not None:
+            stmt = stmt.where(FlightDeclarationORM.id != exclude_declaration_id)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
     async def create(self, **kwargs) -> FlightDeclarationORM:
         obj = FlightDeclarationORM(**kwargs)

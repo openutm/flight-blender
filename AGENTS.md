@@ -70,7 +70,7 @@ src/flight_blender/
 │   └── routers/                           # HTTP boundary (suffix: _api)
 │       └── <domain>_api.py
 │
-├── plugins/                               # Plugin loader + examples (unchanged)
+├── plugins/                               # Plugin loader + async examples
 └── alembic/                               # DB migrations
     ├── env.py
     └── versions/

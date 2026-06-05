@@ -2,7 +2,6 @@ import json
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any
 
 import arrow
 import requests
@@ -15,15 +14,13 @@ from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-from flight_blender.auth.dss_auth import AuthorityCredentialsGetter
+from flight_blender.auth.dss_auth import get_dss_auth_token
 from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.clients.dss_constraint_client import ConstraintOperations
 from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
-from flight_blender.domain_types.common import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
-from flight_blender.domain_types.constraint import CompositeConstraintPayload, Constraint
-from flight_blender.domain_types.geo_fence import GeofencePayload
+from flight_blender.domain_types.common import VALID_OPERATIONAL_INTENT_STATES
 from flight_blender.domain_types.scd import (
     Altitude,
     Circle,
@@ -336,73 +333,6 @@ class VolumesConverter:
         return geo_json_features
 
 
-class ConstraintsWriter:
-    def __init__(self, constraint_repo: SQLAlchemyConstraintRepository | None = None):
-        self.constraint_repo = constraint_repo
-
-    async def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: Any):
-        my_volumes_converter = VolumesConverter()
-        for constraint in constraints:
-            constraint_reference = constraint.reference
-            constraint_details = constraint.details
-            ref_uuid = uuid.UUID(str(constraint_reference.id))
-
-            if self.constraint_repo is not None:
-                constraint_repo = self.constraint_repo
-            else:
-                _db_ctx = async_task_session()
-                db = await _db_ctx.__aenter__()
-                constraint_repo = SQLAlchemyConstraintRepository(db)
-            existing_ref = await constraint_repo.get_constraint_reference_by_id(ref_uuid)
-            if existing_ref is not None:
-                existing_geo = await constraint_repo.get_geofence_by_constraint_reference_id(ref_uuid)
-                geofence_id = str(existing_geo.id) if existing_geo else str(uuid.uuid4())
-            else:
-                geofence_id = str(uuid.uuid4())
-
-            my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
-            altitude_ref_int = ALTITUDE_REF_LOOKUP.get(my_volumes_converter.altitude_ref, 4)
-            bounds = my_volumes_converter.get_bounds()
-            bounds_str = ",".join(map(str, bounds))
-            geofence_payload = GeofencePayload(
-                id=geofence_id,
-                raw_geo_fence=my_volumes_converter.geo_json,
-                upper_limit=my_volumes_converter.upper_altitude,
-                lower_limit=my_volumes_converter.lower_altitude,
-                altitude_ref=altitude_ref_int,
-                name=constraint_details.geozone.name,
-                bounds=bounds_str,
-                status=1,
-                message="Constraint from peer USS",
-                is_test_dataset=False,
-                start_datetime=constraint_reference.time_start,
-                end_datetime=constraint_reference.time_end,
-                geozone=asdict(constraint_details.geozone),
-            )
-
-            geo_fence = await constraint_repo.create_or_update_geofence(geofence_payload=geofence_payload)
-            constraint_reference_obj = await constraint_repo.create_or_update_constraint_reference(
-                constraint_reference=constraint_reference,
-                geofence_id=geo_fence.id,
-                declaration_id=flight_declaration.id,
-            )
-            constraint_detail_obj = await constraint_repo.create_or_update_constraint_detail(
-                constraint=constraint_details,
-                geofence_id=geo_fence.id,
-            )
-            composite_constraint_payload = CompositeConstraintPayload(
-                constraint_reference_id=str(constraint_reference_obj.id),
-                constraint_detail_id=str(constraint_detail_obj.id),
-                flight_declaration_id=str(flight_declaration.id),
-                bounds=bounds_str,
-                start_datetime=constraint_reference_obj.time_start,
-                end_datetime=constraint_reference_obj.time_end,
-                alt_max=my_volumes_converter.upper_altitude,
-                alt_min=my_volumes_converter.lower_altitude,
-            )
-            await constraint_repo.create_or_update_composite_constraint(payload=composite_constraint_payload)
-
-
 class OperationalIntentReferenceHelper:
     """
     A class to parse Operational Intent References into Dataclass objects
@@ -675,7 +605,6 @@ class SCDOperations:
         self.dss_base_url = settings.DSS_BASE_URL
         self.r = get_redis()
         self.constraints_helper = ConstraintOperations()
-        self.constraints_writer = ConstraintsWriter()
 
     async def get_nearby_operational_intents(self, volumes: list[Volume4D]) -> list[OperationalIntentDetailsUSSResponse]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
@@ -890,26 +819,7 @@ class SCDOperations:
         return nearby_operational_intents
 
     def get_auth_token(self, audience: str = ""):
-        my_authorization_helper = AuthorityCredentialsGetter()
-        if not audience:
-            audience = settings.DSS_SELF_AUDIENCE
-        if not audience:
-            logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
-            return {"error": "DSS_SELF_AUDIENCE is not set in the environment"}
-        auth_token: dict = {}
-        try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="scd")  # nosec B106
-        except Exception as e:
-            logger.error("Error in getting Authority Access Token %s " % e)
-            logger.error(f"Audience {audience}")
-            logger.error(f"Auth server error {e}")
-            auth_token["error"] = "Error in getting access token"
-        else:
-            error = auth_token.get("error", None)
-            if error:
-                logger.error("Authority server provided the following error during token request %s " % error)
-
-        return auth_token
+        return get_dss_auth_token(audience=audience, token_type="scd")
 
     def delete_operational_intent(self, dss_operational_intent_ref_id: str, ovn: str) -> DeleteOperationalIntentResponse:
         """
@@ -1844,11 +1754,15 @@ class DSSOperationalIntentsCreator:
                         notes="Operational Intent successfully submitted to DSS and is Accepted",
                     )
                 if op_int_submission_result.constraints:
-                    my_constraints_writer = ConstraintsWriter()
-                    await my_constraints_writer.write_nearby_constraints(
-                        flight_declaration=flight_declaration,
-                        constraints=op_int_submission_result.constraints,
-                    )
+                    from flight_blender.services.scd_svc import ConstraintsWriter  # noqa: PLC0415
+
+                    async with async_task_session() as db:
+                        constraint_repo = SQLAlchemyConstraintRepository(db)
+                        my_constraints_writer = ConstraintsWriter(constraint_repo=constraint_repo)
+                        await my_constraints_writer.write_nearby_constraints(
+                            flight_declaration=flight_declaration,
+                            constraints=op_int_submission_result.constraints,
+                        )
             elif op_int_submission_result.status_code in [400, 409, 401, 403, 412, 413, 429]:
                 if op_int_submission_result.status_code == 400:
                     notes = "Error during submission of operational intent, the DSS rejected because one or more parameters was missing"
