@@ -6,24 +6,23 @@ exercise the business logic without any external dependencies.
 """
 
 import json
-from dataclasses import asdict
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import arrow
 import pytest
 
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade
-from flight_blender.domain_types.rid import RIDStreamErrorDetail
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
 from flight_blender.services.rid_svc import FlightTelemetryRIDEngine
 from flight_blender.tasks.rid_task import (
+    _async_process_requested_flight,
     _parse_rid_timestamp_us,
     check_rid_stream_conformance,
-    process_requested_flight,
     stream_rid_telemetry_data,
     write_operator_rid_notification,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper builders
@@ -77,6 +76,10 @@ def _make_requested_flight(injection_id="test-inj-001"):
     }
 
 
+VALID_OPERATION_ID = "00000000-0000-0000-0000-000000000001"
+VALID_SESSION_ID = "00000000-0000-0000-0000-000000000002"
+
+
 # ---------------------------------------------------------------------------
 # _parse_rid_timestamp_us
 # ---------------------------------------------------------------------------
@@ -113,9 +116,9 @@ class TestParseRidTimestampUs:
 class TestWriteOperatorRidNotification:
     def test_creates_notification_record(self):
         """write_operator_rid_notification should write to the database."""
-        with patch.object(SyncDatabaseFacade, "create_operator_rid_notification") as mock_create:
-            write_operator_rid_notification("test message", "session-abc")
-            mock_create.assert_called_once()
+        with patch.object(SQLAlchemyNotificationsRepository, "create_notification", new_callable=AsyncMock) as mock_create:
+            write_operator_rid_notification("test message", VALID_SESSION_ID)
+            mock_create.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -124,48 +127,53 @@ class TestWriteOperatorRidNotification:
 
 
 class TestProcessRequestedFlight:
-    def test_basic_flight_processing(self, fakeredis_server):
-        """process_requested_flight returns a RIDTestInjection and positions/altitudes."""
-        flight = _make_requested_flight()
-        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
-            result, positions, altitudes = process_requested_flight(
-                requested_flight=flight,
-                flight_injection_sorted_set="test_ss",
-                test_id="test-session-001",
-                injection_id="test-inj-001",
-            )
+    async def test_basic_flight_processing(self, fakeredis_server):
+        """_async_process_requested_flight returns a RIDTestInjection and positions/altitudes."""
+        flight = _make_requested_flight(VALID_OPERATION_ID)
+        rid_repo = MagicMock()
+        rid_repo.create_or_update_flight_detail = AsyncMock()
+        result, positions, altitudes = await _async_process_requested_flight(
+            requested_flight=flight,
+            flight_injection_sorted_set="test_ss",
+            test_id=VALID_SESSION_ID,
+            injection_id=VALID_OPERATION_ID,
+            rid_repo=rid_repo,
+        )
         assert result.aircraft_type == "Multirotor"
         assert len(positions) == 1
         assert len(altitudes) == 1
         assert altitudes[0] == 100.0
 
-    def test_missing_telemetry_fields_skips_entry(self, fakeredis_server):
+    async def test_missing_telemetry_fields_skips_entry(self, fakeredis_server):
         """Telemetry entries missing mandatory fields are skipped."""
         bad_telemetry = {"position": {"lat": 52.5, "lng": 13.4, "alt": 100.0}}
         flight = {
             "aircraft_type": "Multirotor",
-            "injection_id": "inj-001",
+            "injection_id": VALID_OPERATION_ID,
             "telemetry": [bad_telemetry],
-            "details_responses": [_make_flight_detail_entry()],
+            "details_responses": [_make_flight_detail_entry(VALID_OPERATION_ID)],
         }
-        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
-            with patch("flight_blender.tasks.rid_task.write_operator_rid_notification") as mock_notify:
-                result, positions, altitudes = process_requested_flight(
-                    requested_flight=flight,
-                    flight_injection_sorted_set="test_ss2",
-                    test_id="test-session-002",
-                    injection_id="inj-001",
-                )
+        rid_repo = MagicMock()
+        rid_repo.create_or_update_flight_detail = AsyncMock()
+        with patch("flight_blender.tasks.rid_task.write_operator_rid_notification") as mock_notify:
+            result, positions, altitudes = await _async_process_requested_flight(
+                requested_flight=flight,
+                flight_injection_sorted_set="test_ss2",
+                test_id=VALID_SESSION_ID,
+                injection_id=VALID_OPERATION_ID,
+                rid_repo=rid_repo,
+            )
         # No positions or altitudes accumulated since telemetry was skipped
         assert len(positions) == 0
         assert len(altitudes) == 0
+        mock_notify.delay.assert_called_once()
 
-    def test_operator_location_parsed(self, fakeredis_server):
+    async def test_operator_location_parsed(self, fakeredis_server):
         """Flight details with operator_location are parsed correctly."""
         detail_with_loc = {
             "effective_after": arrow.utcnow().isoformat(),
             "details": {
-                "id": "inj-loc",
+                "id": VALID_OPERATION_ID,
                 "operation_description": "Test flight with operator loc",
                 "operator_id": "fin87astrdge12kh-abc",
                 "operator_location": {"lat": 52.51, "lng": 13.41},
@@ -174,25 +182,27 @@ class TestProcessRequestedFlight:
         }
         flight = {
             "aircraft_type": "Multirotor",
-            "injection_id": "inj-loc",
+            "injection_id": VALID_OPERATION_ID,
             "telemetry": [_make_telemetry_entry()],
             "details_responses": [detail_with_loc],
         }
-        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
-            result, positions, altitudes = process_requested_flight(
-                requested_flight=flight,
-                flight_injection_sorted_set="test_ss3",
-                test_id="session-003",
-                injection_id="inj-loc",
-            )
+        rid_repo = MagicMock()
+        rid_repo.create_or_update_flight_detail = AsyncMock()
+        result, positions, altitudes = await _async_process_requested_flight(
+            requested_flight=flight,
+            flight_injection_sorted_set="test_ss3",
+            test_id=VALID_SESSION_ID,
+            injection_id=VALID_OPERATION_ID,
+            rid_repo=rid_repo,
+        )
         assert len(positions) == 1
 
-    def test_auth_data_parsed(self, fakeredis_server):
+    async def test_auth_data_parsed(self, fakeredis_server):
         """Flight details with auth_data are parsed correctly."""
         detail_with_auth = {
             "effective_after": arrow.utcnow().isoformat(),
             "details": {
-                "id": "inj-auth",
+                "id": VALID_OPERATION_ID,
                 "operation_description": "Test flight with auth",
                 "operator_id": "fin87astrdge12kh-abc",
                 "auth_data": {"format": 1, "data": "dGVzdA=="},
@@ -201,37 +211,41 @@ class TestProcessRequestedFlight:
         }
         flight = {
             "aircraft_type": "Multirotor",
-            "injection_id": "inj-auth",
+            "injection_id": VALID_OPERATION_ID,
             "telemetry": [_make_telemetry_entry()],
             "details_responses": [detail_with_auth],
         }
-        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
-            result, positions, altitudes = process_requested_flight(
-                requested_flight=flight,
-                flight_injection_sorted_set="test_ss_auth",
-                test_id="session-auth",
-                injection_id="inj-auth",
-            )
+        rid_repo = MagicMock()
+        rid_repo.create_or_update_flight_detail = AsyncMock()
+        result, positions, altitudes = await _async_process_requested_flight(
+            requested_flight=flight,
+            flight_injection_sorted_set="test_ss_auth",
+            test_id=VALID_SESSION_ID,
+            injection_id=VALID_OPERATION_ID,
+            rid_repo=rid_repo,
+        )
         assert len(positions) == 1
 
-    def test_height_field_parsed(self, fakeredis_server):
+    async def test_height_field_parsed(self, fakeredis_server):
         """Telemetry entries with height field are handled correctly."""
         telemetry_with_height = _make_telemetry_entry()
         telemetry_with_height["height"] = {"distance": 50.0, "reference": "TakeoffLocation"}
 
         flight = {
             "aircraft_type": "Multirotor",
-            "injection_id": "inj-height",
+            "injection_id": VALID_OPERATION_ID,
             "telemetry": [telemetry_with_height],
-            "details_responses": [_make_flight_detail_entry("inj-height")],
+            "details_responses": [_make_flight_detail_entry(VALID_OPERATION_ID)],
         }
-        with patch.object(SyncDatabaseFacade, "create_or_update_rid_flight_details"):
-            result, positions, altitudes = process_requested_flight(
-                requested_flight=flight,
-                flight_injection_sorted_set="test_ss_height",
-                test_id="session-height",
-                injection_id="inj-height",
-            )
+        rid_repo = MagicMock()
+        rid_repo.create_or_update_flight_detail = AsyncMock()
+        result, positions, altitudes = await _async_process_requested_flight(
+            requested_flight=flight,
+            flight_injection_sorted_set="test_ss_height",
+            test_id=VALID_SESSION_ID,
+            injection_id=VALID_OPERATION_ID,
+            rid_repo=rid_repo,
+        )
         assert len(positions) == 1
 
 
@@ -241,7 +255,7 @@ class TestProcessRequestedFlight:
 
 
 class TestStreamRidTelemetryData:
-    def _make_observation_payload(self, operation_id="op-001"):
+    def _make_observation_payload(self, operation_id=VALID_OPERATION_ID):
         return [
             {
                 "flight_details": {
@@ -275,7 +289,7 @@ class TestStreamRidTelemetryData:
     def test_stream_enqueues_observations(self):
         """stream_rid_telemetry_data should enqueue write tasks for each state."""
         payload = json.dumps(self._make_observation_payload())
-        with patch.object(SyncDatabaseFacade, "update_telemetry_timestamp"):
+        with patch.object(SQLAlchemyFlightDeclarationRepository, "update_telemetry_timestamp", new_callable=AsyncMock):
             with patch("flight_blender.tasks.rid_task.write_incoming_air_traffic_data") as mock_write:
                 with patch("flight_blender.tasks.rid_task.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
@@ -286,7 +300,7 @@ class TestStreamRidTelemetryData:
         obs = self._make_observation_payload()
         obs[0]["current_states"].append(obs[0]["current_states"][0].copy())
         payload = json.dumps(obs)
-        with patch.object(SyncDatabaseFacade, "update_telemetry_timestamp"):
+        with patch.object(SQLAlchemyFlightDeclarationRepository, "update_telemetry_timestamp", new_callable=AsyncMock):
             with patch("flight_blender.tasks.rid_task.write_incoming_air_traffic_data") as mock_write:
                 with patch("flight_blender.tasks.rid_task.wgs84_to_barometric", return_value=(100.0, 100.0)):
                     stream_rid_telemetry_data(payload)
@@ -301,17 +315,27 @@ class TestStreamRidTelemetryData:
 class TestCheckRidStreamConformance:
     def test_conformant_stream(self):
         """check_rid_stream_conformance with a conformant stream logs OK."""
-        with patch.object(FlightTelemetryRIDEngine, "check_rid_stream_ok", return_value=(True, [])):
-            # Should not raise
-            check_rid_stream_conformance(session_id="sess-001")
+        with patch.object(
+            SQLAlchemyFlightFeedRepository, "get_active_rid_observations_for_session_between_interval", new_callable=AsyncMock, return_value=[]
+        ):
+            check_rid_stream_conformance(session_id=VALID_SESSION_ID)
 
     def test_non_conformant_stream_writes_notifications(self):
         """check_rid_stream_conformance with errors writes notifications."""
-        errors = [RIDStreamErrorDetail(error_code="NET0040", error_description="Timestamp gap")]
-        with patch.object(FlightTelemetryRIDEngine, "check_rid_stream_ok", return_value=(False, errors)):
-            with patch.object(SyncDatabaseFacade, "create_operator_rid_notification") as mock_create:
-                check_rid_stream_conformance(session_id="sess-002")
-        mock_create.assert_called_once()
+        now = arrow.utcnow().datetime
+        observations = [
+            MagicMock(created_at=now),
+            MagicMock(created_at=(arrow.get(now).shift(seconds=3).datetime)),
+        ]
+        with patch.object(
+            SQLAlchemyFlightFeedRepository,
+            "get_active_rid_observations_for_session_between_interval",
+            new_callable=AsyncMock,
+            return_value=observations,
+        ):
+            with patch.object(SQLAlchemyNotificationsRepository, "create_notification", new_callable=AsyncMock) as mock_create:
+                check_rid_stream_conformance(session_id=VALID_SESSION_ID)
+        mock_create.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -320,33 +344,39 @@ class TestCheckRidStreamConformance:
 
 
 class TestFlightTelemetryRIDEngine:
-    def test_check_rid_stream_ok_no_observations(self):
+    @pytest.mark.asyncio
+    async def test_check_rid_stream_ok_no_observations(self):
         """When there are no recent observations the stream is considered OK."""
-        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-empty", db_reader=SyncDatabaseFacade())
-            ok, errors = engine.check_rid_stream_ok()
+        repo = MagicMock()
+        repo.get_active_rid_observations_for_session_between_interval = AsyncMock(return_value=[])
+        engine = FlightTelemetryRIDEngine(session_id="sess-empty", db_reader=repo)
+        ok, errors = await engine.check_rid_stream_ok()
         assert ok is True
         assert errors == []
 
-    def test_check_rid_stream_ok_single_observation(self):
+    @pytest.mark.asyncio
+    async def test_check_rid_stream_ok_single_observation(self):
         """A single observation has no gaps so the stream is OK."""
         now = arrow.utcnow()
         obs = MagicMock()
-        obs.timestamp = now.datetime
-        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-single", db_reader=SyncDatabaseFacade())
-            ok, errors = engine.check_rid_stream_ok()
+        obs.created_at = now.datetime
+        repo = MagicMock()
+        repo.get_active_rid_observations_for_session_between_interval = AsyncMock(return_value=[obs])
+        engine = FlightTelemetryRIDEngine(session_id="sess-single", db_reader=repo)
+        ok, errors = await engine.check_rid_stream_ok()
         assert ok is True
 
-    def test_check_rid_stream_ok_with_gap(self):
+    @pytest.mark.asyncio
+    async def test_check_rid_stream_ok_with_gap(self):
         """Observations with a non-1-second gap produce an error."""
         now = arrow.utcnow()
         obs1 = MagicMock()
-        obs1.timestamp = now.datetime
+        obs1.created_at = now.datetime
         obs2 = MagicMock()
-        obs2.timestamp = (now + timedelta(seconds=3)).datetime
-        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs1, obs2]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-gap", db_reader=SyncDatabaseFacade())
-            ok, errors = engine.check_rid_stream_ok()
+        obs2.created_at = (now + timedelta(seconds=3)).datetime
+        repo = MagicMock()
+        repo.get_active_rid_observations_for_session_between_interval = AsyncMock(return_value=[obs1, obs2])
+        engine = FlightTelemetryRIDEngine(session_id="sess-gap", db_reader=repo)
+        ok, errors = await engine.check_rid_stream_ok()
         assert ok is False
         assert len(errors) == 1

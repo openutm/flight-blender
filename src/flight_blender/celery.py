@@ -1,5 +1,4 @@
 from celery import Celery
-from celery.signals import task_postrun
 
 from flight_blender.config import settings
 
@@ -24,14 +23,6 @@ app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
-
-
-@task_postrun.connect
-def close_db_connections_after_task(**kwargs):
-    """Return connections to the pool after each Celery task."""
-    from flight_blender.db.session import async_engine as engine
-
-    engine.dispose(close=False)
 
 
 @app.task(bind=True)

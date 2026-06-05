@@ -1,22 +1,25 @@
 """DSS operation handlers for conformance — replaces Django management command dispatch."""
 
+import asyncio
+import uuid
+
 from loguru import logger
 
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
+from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
+from flight_blender.db.session import async_task_session
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
-def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> None:
-    from flight_blender.clients.dss_scd_client import SCDOperations  # noqa: PLC0415
-
+async def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> None:
     my_scd_dss_helper = SCDOperations()
-    my_database_reader = SyncDatabaseFacade()
-    flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-    if not flight_declaration:
-        logger.error(f"Flight Declaration {flight_declaration_id} not found")
-        return
-    flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(
-        flight_declaration=flight_declaration
-    )
+    async with async_task_session() as db:
+        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+        flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
+        if not flight_declaration:
+            logger.error(f"Flight Declaration {flight_declaration_id} not found")
+            return
+        flight_operational_intent_reference = await fd_repo.get_opint_reference_by_declaration_id(flight_declaration.id)
+
     if not flight_operational_intent_reference:
         return
     dss_operational_intent_ref_id = str(flight_operational_intent_reference.id)
@@ -32,28 +35,21 @@ def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> N
             logger.error("Error in deleting operational intent from DSS")
 
 
-def update_operational_intent_to_activated(flight_declaration_id: str, dry_run: int = 1) -> None:
-    from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
-    from flight_blender.domain_types.common import OPERATION_STATES  # noqa: PLC0415
-
+async def update_operational_intent_to_activated(flight_declaration_id: str, dry_run: int = 1) -> None:
     if dry_run:
         return
-    my_database_reader = SyncDatabaseFacade()
-    my_database_writer = SyncDatabaseFacade()
-    my_scd_dss_helper = SCDOperations()
     my_operational_intents_helper = OperationalIntentReferenceHelper()
-    flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-    if not flight_declaration:
-        logger.error(f"Flight Declaration {flight_declaration_id} not found")
-        return
-    current_state = flight_declaration.state
-    current_state_str = OPERATION_STATES[current_state][1]
-    flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
-        flight_declaration_id=flight_declaration_id
-    )
+    async with async_task_session() as db:
+        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+        flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
+        if not flight_declaration:
+            logger.error(f"Flight Declaration {flight_declaration_id} not found")
+            return
+        flight_operational_intent_reference = await fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(flight_declaration_id))
+
     if not flight_operational_intent_reference:
         return
-    stored_operational_intent = my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
+    await my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
     operational_intent_id = str(flight_operational_intent_reference.id)
     logger.info(f"Updating operational intent {operational_intent_id} to activated")
 
@@ -88,6 +84,9 @@ _COMMAND_MAP = {
 def call_command(name: str, **kwargs) -> None:
     handler = _COMMAND_MAP.get(name)
     if handler:
-        handler(**kwargs)
+        if asyncio.iscoroutinefunction(handler):
+            asyncio.run(handler(**kwargs))
+        else:
+            handler(**kwargs)
     else:
         logger.warning(f"Unknown command: {name}")

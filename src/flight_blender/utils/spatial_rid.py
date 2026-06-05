@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import hashlib
+from typing import TYPE_CHECKING
 
 import arrow
 from rtree import index
@@ -6,7 +9,9 @@ from shapely.geometry import Polygon
 
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.domain_types.scd import Altitude, OpInttoCheckDetails, Time
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+
+if TYPE_CHECKING:
+    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
 class OperationalIntentComparisonFactory:
@@ -25,9 +30,10 @@ class OperationalIntentComparisonFactory:
 
 
 class OperationalIntentsIndexFactory:
-    def __init__(self, index_name: str):
+    def __init__(self, index_name: str, fd_repo: "SQLAlchemyFlightDeclarationRepository"):
         self.idx = index.Index(index_name)
         self.r = get_redis()
+        self.fd_repo = fd_repo
 
     def add_box_to_index(
         self,
@@ -51,16 +57,13 @@ class OperationalIntentsIndexFactory:
     def delete_from_index(self, enumerated_id: int, view: list[float]):
         self.idx.delete(id=enumerated_id, coordinates=(view[0], view[1], view[2], view[3]))
 
-    def check_op_ints_exist(self) -> bool:
-        """This method generates a rTree index of currently active operational indexes"""
-        my_database_reader = SyncDatabaseFacade()
-        return my_database_reader.check_active_activated_flights_exist()
+    async def check_op_ints_exist(self) -> bool:
+        """This method checks if any active/activated operational intents exist."""
+        return bool(await self.fd_repo.list(states=[1, 2]))
 
-    def generate_active_flights_operational_intents_index(self) -> None:
-        """This method generates a rTree index of currently active operational intents"""
-
-        my_database_reader = SyncDatabaseFacade()
-        flight_declarations = my_database_reader.get_active_activated_flight_declarations()
+    async def generate_active_flights_operational_intents_index(self) -> None:
+        """This method generates a rTree index of currently active operational intents."""
+        flight_declarations = await self.fd_repo.list(states=[1, 2])
 
         for flight_declaration in flight_declarations:
             flight_id_str = str(flight_declaration.id)
@@ -80,11 +83,9 @@ class OperationalIntentsIndexFactory:
                 end_time=end_time,
             )
 
-    def clear_rtree_index(self):
-        """Method to delete all boxes from the index"""
-
-        my_database_reader = SyncDatabaseFacade()
-        flight_declarations = my_database_reader.get_active_activated_flight_declarations()
+    async def clear_rtree_index(self) -> None:
+        """Method to delete all boxes from the index."""
+        flight_declarations = await self.fd_repo.list(states=[1, 2])
 
         for flight_declaration in flight_declarations:
             flight_id_str = str(flight_declaration.id)

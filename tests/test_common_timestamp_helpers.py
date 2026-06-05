@@ -3,30 +3,30 @@ from datetime import datetime, timezone
 from unittest import TestCase
 from unittest.mock import patch
 
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.clients.redis_client import RedisStreamOperations
+from flight_blender.repositories.flight_feed_repo import _normalize_timestamp
 
 
 class TimestampNormalizationTests(TestCase):
     def test_normalize_microsecond_timestamp(self):
         timestamp = 1_775_001_600_123_456
 
-        normalized_timestamp = SyncDatabaseFacade._normalize_timestamp(timestamp)
+        normalized_timestamp = _normalize_timestamp(timestamp)
 
         self.assertEqual(normalized_timestamp, datetime.fromtimestamp(1_775_001_600.123456, tz=timezone.utc))
 
     def test_normalize_millisecond_timestamp(self):
         timestamp = 1_775_001_600_123
 
-        normalized_timestamp = SyncDatabaseFacade._normalize_timestamp(timestamp)
+        normalized_timestamp = _normalize_timestamp(timestamp)
 
         self.assertEqual(normalized_timestamp, datetime.fromtimestamp(1_775_001_600.123, tz=timezone.utc))
 
     def test_normalize_missing_or_invalid_timestamp(self):
-        self.assertIsNone(SyncDatabaseFacade._normalize_timestamp(0))
+        self.assertIsNone(_normalize_timestamp(0))
 
         with patch("flight_blender.repositories.flight_feed_repo.logger") as mock_logger:
-            normalized_timestamp = SyncDatabaseFacade._normalize_timestamp("not-a-timestamp")
+            normalized_timestamp = _normalize_timestamp("not-a-timestamp")
 
         self.assertIsNone(normalized_timestamp)
         mock_logger.warning.assert_called_once()

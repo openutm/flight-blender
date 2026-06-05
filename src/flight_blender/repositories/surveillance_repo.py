@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.models.surveillance_orm import (
@@ -247,51 +247,3 @@ class SQLAlchemySurveillanceRepository:
         self.db.add(event)
         await self.db.flush()
         return True
-
-
-class SQLAlchemySurveillanceSyncRepository:
-    """Sync repository for Celery tasks using synchronous SQLAlchemy sessions."""
-
-    def __init__(self, db):
-        self.db = db
-
-    def get_active_surveillance_sensors(self) -> list:
-        result = self.db.execute(select(SurveillanceSensorORM).where(SurveillanceSensorORM.is_active == True))  # noqa: E712
-        return list(result.scalars().all())
-
-    def get_session_by_id(self, session_id: uuid.UUID) -> Optional[SurveillanceSessionORM]:
-        return self.db.get(SurveillanceSessionORM, session_id)
-
-    def record_heartbeat_event(self, session_id: uuid.UUID, expected_at: datetime, delivered_on_time: bool) -> bool:
-        session = self.get_session_by_id(session_id)
-        if session is None:
-            logger.error(f"record_heartbeat_event: session {session_id} not found")
-            return False
-        event = SurveillanceHeartbeatEventORM(
-            session_id=session_id,
-            expected_at=expected_at,
-            delivered_on_time=delivered_on_time,
-        )
-        self.db.add(event)
-        self.db.flush()
-        return True
-
-    def record_track_event(self, session_id: uuid.UUID, expected_at: datetime, had_active_tracks: bool) -> bool:
-        session = self.get_session_by_id(session_id)
-        if session is None:
-            logger.error(f"record_track_event: session {session_id} not found")
-            return False
-        event = SurveillanceTrackEventORM(
-            session_id=session_id,
-            expected_at=expected_at,
-            had_active_tracks=had_active_tracks,
-        )
-        self.db.add(event)
-        self.db.flush()
-        return True
-
-    def cleanup_old_events(self, cutoff: datetime) -> tuple[int, int]:
-        hb_result = self.db.execute(delete(SurveillanceHeartbeatEventORM).where(SurveillanceHeartbeatEventORM.dispatched_at < cutoff))
-        tr_result = self.db.execute(delete(SurveillanceTrackEventORM).where(SurveillanceTrackEventORM.dispatched_at < cutoff))
-        self.db.flush()
-        return hb_result.rowcount, tr_result.rowcount

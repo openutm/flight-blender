@@ -8,8 +8,7 @@ All external I/O (Redis channel layer, Celery, DB) is mocked.
 """
 
 import uuid
-from contextlib import ExitStack, contextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import arrow
 
@@ -44,7 +43,7 @@ def _mock_db_reader(
     active_sensors=None,
     pre_window_status=None,
 ):
-    """Build a minimal SyncDatabaseFacade mock."""
+    """Build a minimal database reader mock."""
     reader = MagicMock()
     # heartbeat events queryset-like
     hb_qs = MagicMock()
@@ -253,51 +252,35 @@ class TestSensorHealthMetrics:
 
 
 def _mock_sa_repo():
-    """Return a mock SQLAlchemySurveillanceSyncRepository."""
+    """Return a mock SQLAlchemySurveillanceRepository."""
     repo = MagicMock()
-    repo.get_active_surveillance_sensors.return_value = []
-    repo.record_heartbeat_event.return_value = True
-    repo.record_track_event.return_value = True
-    repo.cleanup_old_events.return_value = (0, 0)
+    repo.get_active_surveillance_sensors = AsyncMock(return_value=[])
+    repo.record_heartbeat_event = AsyncMock(return_value=True)
+    repo.record_track_event = AsyncMock(return_value=True)
+    repo.cleanup_old_events = AsyncMock(return_value=(0, 0))
     return repo
 
 
 def _sa_repo_patch(mock_repo):
-    """Context manager: patch SessionLocal (via session_scope) + the repo class as looked up in tasks."""
-
-    @contextmanager
-    def _ctx():
-        mock_session = MagicMock()
-        mock_session.commit = MagicMock()
-        mock_session.rollback = MagicMock()
-        mock_session.close = MagicMock()
-
-        mock_repo_cls = MagicMock(return_value=mock_repo)
-
-        with ExitStack() as stack:
-            stack.enter_context(patch("flight_blender.db.session.SessionLocal", return_value=mock_session))
-            stack.enter_context(
-                patch(
-                    "flight_blender.tasks.surveillance_task.SQLAlchemySurveillanceSyncRepository",
-                    mock_repo_cls,
-                )
-            )
-            yield mock_repo
-
-    return _ctx()
+    """Patch the async surveillance repository as looked up in the task module."""
+    return patch("flight_blender.tasks.surveillance_task.SQLAlchemySurveillanceRepository", return_value=mock_repo)
 
 
 class TestSendHeartbeatToConsumer:
     def test_heartbeat_sent_successfully(self):
         """send_heartbeat_to_consumer should record event when Redis publish succeeds."""
         mock_repo = _mock_sa_repo()
+        sensor_mock = MagicMock()
+        sensor_mock.expected_latency_ms = 100
+        sensor_mock.horizontal_accuracy_m = 5
+        mock_repo.get_active_surveillance_sensors.return_value = [sensor_mock]
         session_id = str(uuid.uuid4())
         with patch("flight_blender.tasks.surveillance_task.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.return_value = 1
             with patch.object(send_heartbeat_to_consumer, "apply_async") as mock_apply_async:
                 with _sa_repo_patch(mock_repo):
                     send_heartbeat_to_consumer(session_id=session_id)
-        mock_repo.record_heartbeat_event.assert_called_once()
+        mock_repo.record_heartbeat_event.assert_awaited_once()
         mock_from_url.return_value.publish.assert_called_once()
         mock_apply_async.assert_called_once()
 
@@ -311,7 +294,7 @@ class TestSendHeartbeatToConsumer:
                 with _sa_repo_patch(mock_repo):
                     send_heartbeat_to_consumer(session_id=session_id)
         # Even on error, we record the heartbeat
-        mock_repo.record_heartbeat_event.assert_called_once()
+        mock_repo.record_heartbeat_event.assert_awaited_once()
         mock_apply_async.assert_called_once()
         kwargs = mock_repo.record_heartbeat_event.call_args.kwargs
         assert kwargs.get("delivered_on_time") is False
@@ -333,7 +316,7 @@ class TestSendAndGenerateTrackToConsumer:
                         with patch.object(send_and_generate_track_to_consumer, "apply_async") as mock_apply_async:
                             with _sa_repo_patch(mock_repo):
                                 send_and_generate_track_to_consumer(session_id=session_id)
-        mock_repo.record_track_event.assert_called_once()
+        mock_repo.record_track_event.assert_awaited_once()
         mock_from_url.return_value.publish.assert_called_once()
         mock_apply_async.assert_called_once()
 

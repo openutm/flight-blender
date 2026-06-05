@@ -9,6 +9,8 @@ import uuid
 import arrow
 from loguru import logger
 
+from flight_blender.auth.token_cache import get_redis
+from flight_blender.celery import app
 from flight_blender.config import settings
 
 
@@ -20,12 +22,11 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_conformance_check(flight_declaration_id: str, session_id: str, expires: str) -> bool:
-        from flight_blender.tasks.conformance_task import check_flight_conformance  # Lazy import — break circular
-
         every = settings.HEARTBEAT_RATE_SECS
         logger.info("TaskSchedulerService: scheduling conformance check, expires at %s" % expires)
         try:
-            check_flight_conformance.apply_async(
+            app.send_task(
+                "check_flight_conformance",
                 args=[flight_declaration_id, session_id],
                 kwargs={"expires_iso": expires},
                 countdown=every,
@@ -37,11 +38,10 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_rid_stream_monitoring(session_id: str, end_datetime: str) -> bool:
-        from flight_blender.tasks.conformance_task import check_rid_stream_conformance  # Lazy import — break circular
-
         every = settings.HEARTBEAT_RATE_SECS
         try:
-            check_rid_stream_conformance.apply_async(
+            app.send_task(
+                "check_rid_stream_conformance",
                 args=[session_id],
                 kwargs={"expires_iso": end_datetime},
                 countdown=every,
@@ -53,13 +53,12 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_surveillance_heartbeat(surveillance_session_id: str) -> bool:
-        from flight_blender.tasks.surveillance_task import send_heartbeat_to_consumer
-
         session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
         expires = arrow.now().shift(minutes=1).isoformat()
         logger.info("TaskSchedulerService: scheduling surveillance heartbeat, expires at %s" % expires)
         try:
-            send_heartbeat_to_consumer.apply_async(
+            app.send_task(
+                "send_heartbeat_to_consumer",
                 args=[session_id],
                 kwargs={"expires_iso": expires},
                 countdown=1,
@@ -71,13 +70,12 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_surveillance_track(surveillance_session_id: str) -> bool:
-        from flight_blender.tasks.surveillance_task import send_and_generate_track_to_consumer
-
         session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
         expires = arrow.now().shift(minutes=1).isoformat()
         logger.info("TaskSchedulerService: scheduling surveillance track task, expires at %s" % expires)
         try:
-            send_and_generate_track_to_consumer.apply_async(
+            app.send_task(
+                "send_and_generate_track_to_consumer",
                 args=[session_id],
                 kwargs={"expires_iso": expires},
                 countdown=1,
@@ -90,7 +88,5 @@ class TaskSchedulerService:
     @staticmethod
     def cancel_session_tasks(session_id: str) -> None:
         """Signal running tasks for session_id to stop via Redis stop-signal key."""
-        from flight_blender.auth.token_cache import get_redis
-
         r = get_redis()
         r.set(f"stop_task_{session_id}", "1", ex=300)

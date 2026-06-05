@@ -14,8 +14,8 @@ from flight_blender.db.session import Base
 class FDProxy:
     """Proxy so `reference.declaration.id` works on an SA reference row.
 
-    Attached at runtime by ``SyncDatabaseFacade`` after the row is loaded; not a
-    SQLAlchemy-mapped attribute.
+    Runtime-only helper for legacy callers that expect ``reference.declaration.id``;
+    not a SQLAlchemy-mapped attribute.
     """
 
     id: uuid.UUID
@@ -84,9 +84,9 @@ class FlightOperationalIntentReferenceORM(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    # Runtime-attached proxy object (set by ``SyncDatabaseFacade``) so callers
-    # can read ``reference.declaration.id`` after the SA session detaches the
-    # row. Not a SQLAlchemy-mapped column; ``ClassVar`` excludes it from SA.
+    # Runtime-attached proxy object so callers can read
+    # ``reference.declaration.id`` after the SA session detaches the row. Not a
+    # SQLAlchemy-mapped column; ``ClassVar`` excludes it from SA.
     declaration: ClassVar[Optional[FDProxy]]
 
 

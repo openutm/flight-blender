@@ -30,7 +30,7 @@ from flight_blender.domain_types.rid_operations import (
     RIDVolume4D,
     SubscriptionState,
 )
-from flight_blender.repositories.flight_feed_repo import SyncFlightFeedReader
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 
 __all__ = [
     "IdentificationServiceArea",
@@ -180,14 +180,14 @@ all_rid_errors = [
 
 
 class FlightTelemetryRIDEngine:
-    def __init__(self, session_id: str, db_reader: SyncFlightFeedReader):
+    def __init__(self, session_id: str, db_reader: SQLAlchemyFlightFeedRepository):
         self.session_id = session_id
-        self.db_reader: SyncFlightFeedReader = db_reader
+        self.db_reader: SQLAlchemyFlightFeedRepository = db_reader
 
-    def check_rid_stream_ok(self) -> tuple[bool, list[Never] | list[RIDStreamErrorDetail]]:
+    async def check_rid_stream_ok(self) -> tuple[bool, list[Never] | list[RIDStreamErrorDetail]]:
         now = arrow.now()
         four_seconds_before_now = arrow.now().shift(seconds=-4)
-        relevant_observations = self.db_reader.get_active_rid_observations_for_session_between_interval(
+        relevant_observations = await self.db_reader.get_active_rid_observations_for_session_between_interval(
             session_id=self.session_id, start_time=four_seconds_before_now, end_time=now
         )
 
@@ -198,7 +198,7 @@ class FlightTelemetryRIDEngine:
         for i in range(1, len(relevant_observations)):
             prev_observation = relevant_observations[i - 1]
             current_observation = relevant_observations[i]
-            time_diff = (current_observation.timestamp - prev_observation.timestamp).total_seconds()
+            time_diff = (current_observation.created_at - prev_observation.created_at).total_seconds()
             if time_diff != 1:
                 errors.append(
                     RIDStreamErrorDetail(

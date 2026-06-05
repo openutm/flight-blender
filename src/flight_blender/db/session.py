@@ -1,9 +1,10 @@
-from collections.abc import AsyncGenerator, Generator, Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncGenerator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from flight_blender.config import settings
 
@@ -19,6 +20,10 @@ async_engine = create_async_engine(_async_url)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 AsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)
+
+# NullPool avoids event-loop binding issues when called via asyncio.run() in Celery tasks.
+_task_async_engine = create_async_engine(_async_url, poolclass=NullPool)
+_TaskAsyncSessionLocal = async_sessionmaker(_task_async_engine, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
@@ -39,14 +44,20 @@ def session_scope() -> Iterator[Session]:
         db.close()
 
 
-def get_db() -> Generator[Session, None, None]:
-    """Sync session for Celery tasks."""
-    with session_scope() as db:
-        yield db
-
-
 async def async_get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as db:
+        try:
+            yield db
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+
+@asynccontextmanager
+async def async_task_session() -> AsyncGenerator[AsyncSession, None]:
+    """Async session for Celery tasks / non-DI contexts. Commit on success, rollback on error."""
+    async with _TaskAsyncSessionLocal() as db:
         try:
             yield db
             await db.commit()

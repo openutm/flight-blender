@@ -1,3 +1,4 @@
+import asyncio
 import json
 from dataclasses import asdict
 
@@ -10,8 +11,8 @@ from shapely.ops import unary_union
 
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
-from flight_blender.db.session import session_scope
-from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus, GeoZone
+from flight_blender.db.session import async_task_session
+from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus
 from flight_blender.models.geo_fence_orm import GeoFenceORM
 from flight_blender.services.geo_fence_svc import GeoZoneParser
 
@@ -44,13 +45,16 @@ def download_geozone_source(geo_zone_url: str, geozone_source_id: str):
 
 @app.task(name="write_geo_zone")
 def write_geo_zone(geo_zone: str, test_harness_datasource: str = "0"):
+    asyncio.run(_async_write_geo_zone(geo_zone, test_harness_datasource))
+
+
+async def _async_write_geo_zone(geo_zone: str, test_harness_datasource: str = "0") -> None:
     geo_zone = json.loads(geo_zone)
     test_harness_datasource = int(test_harness_datasource)
     my_geo_zone_parser = GeoZoneParser(geo_zone=geo_zone)
 
     parse_response = my_geo_zone_parser.parse_validate_geozone()
 
-    # all_zones_valid = parse_response.all_zones
     processed_geo_zone_features = parse_response.feature_list
 
     logger.info("Processing %s geozone features.." % len(processed_geo_zone_features))
@@ -71,17 +75,12 @@ def write_geo_zone(geo_zone: str, test_harness_datasource: str = "0"):
 
         logger.debug(f"Bounding box for shape.. {bounds}")
 
-        geo_zone = GeoZone(
-            title=geo_zone["title"],
-            description=geo_zone["description"],
-            features=geo_zone_feature,
-        )
         name = geo_zone_feature.name
         start_time = arrow.now()
         end_time = start_time.shift(years=1)
         upper_limit = geo_zone_feature["upperLimit"] if "upperLimit" in geo_zone_feature else 300
         lower_limit = geo_zone_feature["lowerLimit"] if "lowerLimit" in geo_zone_feature else 10
-        with session_scope() as db:
+        async with async_task_session() as db:
             db.add(
                 GeoFenceORM(
                     geozone=json.dumps(geo_zone_feature),
@@ -95,10 +94,9 @@ def write_geo_zone(geo_zone: str, test_harness_datasource: str = "0"):
                     is_test_dataset=bool(test_harness_datasource),
                 )
             )
+            await db.flush()
 
         logger.info("Saved Geofence to database ..")
-
-
 
 
 class CeleryGeoFenceTaskDispatcher:

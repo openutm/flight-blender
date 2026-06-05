@@ -6,37 +6,33 @@
 - operator_conformance_notifications.py
 """
 
-import json
 import uuid
-from datetime import timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import arrow
 import pytest
 
-from flight_blender.services.conformance_svc import ConformanceChecksList
+from flight_blender.domain_types.scd import LatLngPoint
 from flight_blender.services.conformance_svc import (
     AcceptedState,
     ActivatedState,
     CancelledState,
+    ConformanceChecksList,
     ContingentState,
     EndedState,
+    FlightBlenderConformanceEngine,
     FlightOperationStateMachine,
     NonconformingState,
+    OperationConformanceNotification,
     ProcessingNotSubmittedToDss,
     RejectedState,
     WithdrawnState,
     get_status,
+    is_time_between,
     match_state,
-)
-from flight_blender.services.conformance_svc import (
-    OperationConformanceNotification,
     set_conformance_deps,
 )
 from flight_blender.tasks.conformance_task import check_flight_conformance, check_operation_telemetry_conformance
-from flight_blender.services.conformance_svc import FlightBlenderConformanceEngine, is_time_between
-from flight_blender.domain_types.scd import LatLngPoint
-
 
 # ---------------------------------------------------------------------------
 # operation_state_helper.py
@@ -227,15 +223,15 @@ def _stub_conformance_deps():
 
 
 class TestFlightBlenderConformanceEngineC2C3:
-    def test_c2_no_flight_declaration(self):
-        from flight_blender.repositories.sync_facade import SyncDatabaseFacade
-
-        engine = FlightBlenderConformanceEngine(db=SyncDatabaseFacade())
+    @pytest.mark.asyncio
+    async def test_c2_no_flight_declaration(self):
+        engine = FlightBlenderConformanceEngine(db=MagicMock())
         # Non-existent flight declaration ID
-        with patch(
-            "flight_blender.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
+        with (
+            patch.object(FlightBlenderConformanceEngine, "_get_flight_declaration", new_callable=AsyncMock, return_value=None),
+            patch.object(FlightBlenderConformanceEngine, "_get_opint_reference", new_callable=AsyncMock, return_value=True),
         ):
-            result = engine.is_operation_conformant_via_telemetry(
+            result = await engine.is_operation_conformant_via_telemetry(
                 flight_declaration_id=str(uuid.uuid4()),
                 aircraft_id="TEST-UAV",
                 telemetry_location=LatLngPoint(lat=51.5, lng=0.0),
@@ -246,20 +242,14 @@ class TestFlightBlenderConformanceEngineC2C3:
 
 
 class TestCheckFlightOperationalIntentReferenceConformance:
-    def test_nonexistent_declaration_returns_c11(self):
-        from flight_blender.repositories.sync_facade import SyncDatabaseFacade
-
-        engine = FlightBlenderConformanceEngine(db=SyncDatabaseFacade())
+    @pytest.mark.asyncio
+    async def test_nonexistent_declaration_returns_c11(self):
+        engine = FlightBlenderConformanceEngine(db=MagicMock())
         with (
-            patch(
-                "flight_blender.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
-            ),
-            patch(
-                "flight_blender.repositories.sync_facade.SyncDatabaseFacade.get_flight_operational_intent_reference_by_flight_declaration_id",
-                return_value=None,
-            ),
+            patch.object(FlightBlenderConformanceEngine, "_get_flight_declaration", new_callable=AsyncMock, return_value=None),
+            patch.object(FlightBlenderConformanceEngine, "_get_opint_reference", new_callable=AsyncMock, return_value=None),
         ):
-            result = engine.check_flight_operational_intent_reference_conformance(
+            result = await engine.check_flight_operational_intent_reference_conformance(
                 flight_declaration_id=str(uuid.uuid4()),
             )
         # If USSP_NETWORK_ENABLED=0 (test default), skips C11 and checks C10
@@ -276,15 +266,17 @@ class TestCheckFlightConformanceTask:
     def test_conformant_calls_telemetry_check(self):
         with patch(
             "flight_blender.tasks.conformance_task.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
+            new_callable=AsyncMock,
             return_value=1,
         ):
-            with patch("flight_blender.tasks.conformance_task.check_operation_telemetry_conformance") as mock_telem:
+            with patch("flight_blender.tasks.conformance_task._async_check_operation_telemetry_conformance", new_callable=AsyncMock) as mock_telem:
                 check_flight_conformance(flight_declaration_id=str(uuid.uuid4()), session_id="test-sess")
-                mock_telem.assert_called_once()
+                mock_telem.assert_awaited_once()
 
     def test_nonconformant_sends_signal(self):
         with patch(
             "flight_blender.tasks.conformance_task.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
+            new_callable=AsyncMock,
             return_value=ConformanceChecksList.C9a,
         ):
             with patch(
@@ -298,7 +290,7 @@ class TestCheckOperationTelemetryConformanceTask:
     def test_no_observation_returns_early(self):
         with patch("flight_blender.tasks.conformance_task.flight_stream_helper.ObservationReadOperations") as mock_obs_cls:
             mock_obs_instance = MagicMock()
-            mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id.return_value = None
+            mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id = AsyncMock(return_value=None)
             mock_obs_cls.return_value = mock_obs_instance
             # Should return early without raising
             check_operation_telemetry_conformance(flight_declaration_id=str(uuid.uuid4()))

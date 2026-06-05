@@ -31,7 +31,6 @@ from flight_blender.domain_types.rid import (
     SubmittedTelemetryFlightDetails,
 )
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.tasks.flight_feed_task import CeleryFlightFeedTaskDispatcher
 
 
@@ -364,12 +363,12 @@ def batcher(iterable, n):
 
 
 class ObservationReadOperations:
-    def __init__(self, redis: Any, db_reader: SyncDatabaseFacade, view_port_box=None):
+    def __init__(self, repo: SQLAlchemyFlightFeedRepository, redis: Any, view_port_box=None):
+        self.repo = repo
         self.view_port_box: shapely_box = view_port_box
         self.redis: Any = redis
-        self.db_reader: SyncDatabaseFacade = db_reader
 
-    def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
+    async def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
         key = f"last_reading_for_{session_id}"
         if self.redis.exists(key):
             last_reading_time = self.redis.get(key)
@@ -381,21 +380,21 @@ class ObservationReadOperations:
         self.redis.set(key, arrow.now().isoformat())
         self.redis.expire(key, 300)
         pending_messages = []
-        all_flight_observations = self.db_reader.get_flight_observations(after_datetime=after_datetime)
+        rows = await self.repo.get_recent_flight_observations(after_datetime=after_datetime)
         logger.info("Retrieved all flight observations..")
-        for message in all_flight_observations:
+        for row in rows:
             observation = FlightObservationSchema(
-                id=message["id"],
-                session_id=message["session_id"],
-                latitude_dd=message["latitude_dd"],
-                longitude_dd=message["longitude_dd"],
-                altitude_mm=message["altitude_mm"],
-                traffic_source=message["traffic_source"],
-                source_type=message["source_type"],
-                icao_address=message["icao_address"],
-                created_at=message["created_at"],
-                updated_at=message["updated_at"],
-                metadata=json.loads(message["metadata"]),
+                id=str(row.id),
+                session_id=str(row.session_id) if row.session_id else "",
+                latitude_dd=row.latitude_dd,
+                longitude_dd=row.longitude_dd,
+                altitude_mm=row.altitude_mm,
+                traffic_source=row.traffic_source,
+                source_type=row.source_type,
+                icao_address=row.icao_address,
+                created_at=row.created_at.isoformat(),
+                updated_at=row.updated_at.isoformat(),
+                metadata=json.loads(row.raw_metadata),
             )
             if self.view_port_box:
                 if shapely.contains(self.view_port_box, Point(observation.latitude_dd, observation.longitude_dd)):
@@ -404,9 +403,9 @@ class ObservationReadOperations:
                 pending_messages.append(observation)
         return pending_messages
 
-    def get_closest_observation_for_now(self, now: arrow.arrow.Arrow):
+    async def get_closest_observation_for_now(self, now: arrow.arrow.Arrow):
         all_observations = []
-        closest_observations = self.db_reader.get_closest_flight_observation_for_now(now=now)
+        closest_observations = await self.repo.get_closest_flight_observation_for_now(now=now)
         logger.info("Retrieved closest_observations..")
         for closest_observation in closest_observations:
             single_observation = FlightObservationSchema(
@@ -420,7 +419,7 @@ class ObservationReadOperations:
                 icao_address=closest_observation.icao_address,
                 created_at=closest_observation.created_at.isoformat(),
                 updated_at=closest_observation.updated_at.isoformat(),
-                metadata=json.loads(closest_observation.metadata),
+                metadata=json.loads(closest_observation.raw_metadata),
             )
             if self.view_port_box:
                 if shapely.contains(self.view_port_box, Point(single_observation.latitude_dd, single_observation.longitude_dd)):
@@ -429,9 +428,9 @@ class ObservationReadOperations:
                 all_observations.append(single_observation)
         return all_observations
 
-    def get_all_flight_observations(self) -> list[FlightObservationSchema]:
+    async def get_all_flight_observations(self) -> list[FlightObservationSchema]:
         pending_messages = []
-        all_flight_observations = self.db_reader.get_flight_observation_objects()
+        all_flight_observations = await self.repo.get_flight_observation_dicts()
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],
@@ -453,8 +452,8 @@ class ObservationReadOperations:
                 pending_messages.append(observation)
         return pending_messages
 
-    def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
-        latest_observation = self.db_reader.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
+    async def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
+        latest_observation = await self.repo.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
         if latest_observation:
             return FlightObservationSchema(
                 id=str(latest_observation.id),
@@ -467,11 +466,11 @@ class ObservationReadOperations:
                 icao_address=latest_observation.icao_address,
                 created_at=latest_observation.created_at.isoformat(),
                 updated_at=latest_observation.updated_at.isoformat(),
-                metadata=json.loads(latest_observation.metadata),
+                metadata=json.loads(latest_observation.raw_metadata),
             )
         return None
 
-    def get_temporal_flight_observations_by_session(self, session_id: str) -> list[FlightObservationSchema]:
+    async def get_temporal_flight_observations_by_session(self, session_id: str) -> list[FlightObservationSchema]:
         key = f"last_reading_for_{session_id}"
         if self.redis.exists(key):
             last_reading_time = self.redis.get(key)
@@ -483,7 +482,9 @@ class ObservationReadOperations:
         self.redis.set(key, arrow.now().isoformat())
         self.redis.expire(key, 300)
         pending_messages = []
-        all_flight_observations = self.db_reader.get_temporal_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
+        all_flight_observations = await self.repo.get_temporal_flight_observations_by_session_dicts(
+            session_id=session_id, after_datetime=after_datetime
+        )
         for message in all_flight_observations:
             observation = FlightObservationSchema(
                 id=message["id"],

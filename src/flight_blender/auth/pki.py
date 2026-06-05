@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 
 import http_sfv
@@ -13,6 +14,7 @@ from loguru import logger
 
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
+from flight_blender.db.session import session_scope
 
 
 class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):
@@ -125,17 +127,13 @@ class MessageVerifier:
         public_keys = {}
         from sqlalchemy import select  # noqa: PLC0415
 
-        from flight_blender.db.session import SessionLocal  # noqa: PLC0415
         from flight_blender.models.flight_feed_orm import SignedTelmetryPublicKeyORM  # noqa: PLC0415
 
-        _db = SessionLocal()
-        try:
+        with session_scope() as _db:
             _result = _db.execute(select(SignedTelmetryPublicKeyORM).where(SignedTelmetryPublicKeyORM.is_active == True))  # noqa: E712
             all_public_keys = list(_result.scalars().all())
             for o in all_public_keys:
                 _db.expunge(o)
-        finally:
-            _db.close()
         for current_public_key in all_public_keys:
             redis_jwks_key = str(current_public_key.id) + "-jwks"
             current_kid = current_public_key.key_id
@@ -241,12 +239,9 @@ class ResponseSigningOperations:
         return str(http_sfv.Dictionary({"sha-256": hashlib.sha256(payload_str.encode("utf-8")).digest()}))
 
     def sign_json_via_django(self, data_to_sign):
-        import hashlib as _hashlib
-        import hmac
-
         secret = settings.SECRET_KEY
         payload = json.dumps(data_to_sign, separators=(",", ":"))
-        sig = hmac.new(secret.encode(), payload.encode(), _hashlib.sha256).hexdigest()
+        sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
         return f"{payload}:{sig}"
 
     def sign_json_via_jose(self, payload):

@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Literal
+
+from pydantic import BaseModel
 
 FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (0, "1090ES"),
@@ -220,12 +223,6 @@ class ActiveTrack:
     unique_aircraft_identifier: str
     last_updated_timestamp: str
     observations: list[dict]
-
-
-# --- HTTP request/response schemas ---
-from typing import Literal
-
-from pydantic import BaseModel
 
 
 class SurveillanceSessionAction(BaseModel):

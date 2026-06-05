@@ -13,6 +13,8 @@ from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiag
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.auth.token_cache import get_redis
+from flight_blender.clients import dss_rid_client as dss_rid_helper
+from flight_blender.clients.dss_rid_client import RemoteIDOperations
 from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.db.session import async_get_db
 from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
@@ -37,6 +39,7 @@ from flight_blender.schemas.rid import CreateTestBody, ISACallbackBody
 from flight_blender.services import rid_svc as view_port_ops
 from flight_blender.services.flight_feed_svc import ObservationReadOperations
 from flight_blender.services.rid_svc import CreateTestResponse
+from flight_blender.tasks import rid_task
 
 router = APIRouter(prefix="/rid")
 
@@ -57,10 +60,10 @@ async def get_rid_capabilities(_auth: Any = Depends(require_scopes([FLIGHTBLENDE
 @router.put("/create_dss_subscription")
 async def create_dss_subscription(
     view: str | None = None,
+    repo: SQLAlchemyRIDRepository = Depends(_rid_ops),
+    feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    from flight_blender.clients.dss_rid_client import RemoteIDOperations
-
     try:
         view_port = [float(i) for i in (view or "").split(",")]
     except Exception:
@@ -73,7 +76,7 @@ async def create_dss_subscription(
     request_id = str(uuid.uuid4())
 
     subscription_r = await asyncio.to_thread(
-        RemoteIDOperations().create_dss_subscription,
+        RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).create_dss_subscription,
         vertex_list,
         view or "",
         request_id,
@@ -99,6 +102,7 @@ async def create_dss_subscription(
 async def get_rid_data(
     subscription_id: uuid.UUID,
     repo: SQLAlchemyRIDRepository = Depends(_rid_ops),
+    feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
     sub_id_str = str(subscription_id)
@@ -108,7 +112,9 @@ async def get_rid_data(
     if not record or not record.flight_details or not json.loads(record.flight_details):
         return JSONResponse({}, status_code=404)
 
-    observations = ObservationReadOperations(redis=get_redis()).get_temporal_flight_observations_by_session(session_id=sub_id_str)
+    observations = await ObservationReadOperations(repo=feed_repo, redis=get_redis()).get_temporal_flight_observations_by_session(
+        session_id=sub_id_str
+    )
     return JSONResponse(observations or {}, status_code=200 if observations else 404)
 
 
@@ -179,9 +185,6 @@ async def get_display_data(
     feed_repo: SQLAlchemyFlightFeedRepository = Depends(_feed_ops),
     _auth: Any = Depends(require_scopes(["dss.read.identification_service_areas"])),
 ):
-    from flight_blender.clients import dss_rid_client as dss_rid_helper
-    from flight_blender.tasks.rid_task import run_ussp_polling_for_rid
-
     view_port = view_port_ops.parse_view_bbox(view)
     if not view_port:
         return JSONResponse({"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}, status_code=400)
@@ -205,14 +208,14 @@ async def get_display_data(
         vertex_list = view_port_ops.build_vertex_list_from_box(box)
         subscription_end_time = arrow.utcnow().shift(seconds=subscription_duration_seconds).isoformat()
         await asyncio.to_thread(
-            dss_rid_helper.RemoteIDOperations().create_dss_subscription,
+            dss_rid_helper.RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).create_dss_subscription,
             vertex_list,
             view or "",
             request_id,
             subscription_duration_seconds,
             True,
         )
-        run_ussp_polling_for_rid.delay(session_id=request_id, end_time=subscription_end_time)
+        rid_task.run_ussp_polling_for_rid.delay(session_id=request_id, end_time=subscription_end_time)
 
     now = arrow.utcnow()
     observations = await feed_repo.get_all_flight_observations_in_window(start_time=now.shift(seconds=-30).datetime, end_time=now.datetime)
@@ -222,7 +225,9 @@ async def get_display_data(
 
     clusters = []
     if should_cluster:
-        clusters = dss_rid_helper.RemoteIDOperations().generate_cluster_details(rid_flights=rid_flights, view_box=box)
+        clusters = dss_rid_helper.RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).generate_cluster_details(
+            rid_flights=rid_flights, view_box=box
+        )
         rid_flights = []
 
     response = view_port_ops.make_json_compatible(RIDDisplayDataResponse(flights=rid_flights, clusters=clusters))
@@ -231,13 +236,11 @@ async def get_display_data(
 
 @router.put("/tests/{test_id}")
 async def create_test(test_id: uuid.UUID, body: CreateTestBody, _auth: Any = Depends(require_scopes(["rid.inject_test_data"]))):
-    from flight_blender.tasks.rid_task import stream_rid_test_data
-
     redis_key = "rid-test_" + str(test_id)
     redis_ops = RedisStreamOperations()
     if not redis_ops.register_rid_test(redis_key):
         return JSONResponse({}, status_code=409)
-    stream_rid_test_data.delay(requested_flights=json.dumps(body.requested_flights), test_id=redis_key)
+    rid_task.stream_rid_test_data.delay(requested_flights=json.dumps(body.requested_flights), test_id=redis_key)
     return asdict(CreateTestResponse(injected_flights=body.requested_flights, version=1))
 
 

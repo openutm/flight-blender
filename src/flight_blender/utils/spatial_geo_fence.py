@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+from dataclasses import asdict
 
 import arrow
 import pyproj
@@ -63,8 +64,6 @@ class GeoFenceRTreeIndexFactory:
         self.r = get_redis()
 
     def add_box_to_index(self, id: int, geo_fence_id: str, view: list[float], start_date: str, end_date: str):
-        from dataclasses import asdict
-
         metadata = GeoFenceMetadata(start_date=start_date, end_date=end_date, geo_fence_id=geo_fence_id)
         self.idx.insert(id=id, coordinates=(view[0], view[1], view[2], view[3]), obj=asdict(metadata))
 

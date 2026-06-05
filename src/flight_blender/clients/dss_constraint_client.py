@@ -1,4 +1,5 @@
 import json
+import uuid
 from dataclasses import asdict
 from enum import Enum
 from urllib.parse import urlparse
@@ -11,19 +12,18 @@ from loguru import logger
 from flight_blender.auth import dss_auth as dss_auth_helper
 from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.config import settings
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.constraint import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 from flight_blender.domain_types.scd import Time, Volume4D
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
+from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
 
 
 class ConstraintOperations:
-    def __init__(self):
+    def __init__(self, constraint_repo: SQLAlchemyConstraintRepository | None = None):
         self.dss_base_url = settings.DSS_BASE_URL
+        self.constraint_repo = constraint_repo
 
-        self.database_reader = SyncDatabaseFacade()
-        self.database_writer = SyncDatabaseFacade()
-
-    def get_nearby_constraints(self, volumes: list[Volume4D]) -> list[Constraint]:
+    async def get_nearby_constraints(self, volumes: list[Volume4D]) -> list[Constraint]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
 
         auth_token = self.get_auth_token()
@@ -79,22 +79,21 @@ class ConstraintOperations:
 
                 if current_uss_base_url == flight_blender_base_url:
                     # This constraint is managed in Blender, so we can get the details from the database
+                    if self.constraint_repo is not None:
+                        constraint_repo = self.constraint_repo
+                    else:
+                        from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository  # noqa: PLC0415
 
-                    constraints_reference_exists = self.database_reader.check_constraint_reference_id_exists(
-                        constraint_reference_id=str(_constraint_reference.id)
-                    )
+                        _db_ctx = async_task_session()
+                        db = await _db_ctx.__aenter__()
+                        constraint_repo = SQLAlchemyConstraintRepository(db)
+                    db_constraint_reference = await constraint_repo.get_constraint_reference_by_id(uuid.UUID(str(_constraint_reference.id)))
+                    constraints_reference_exists = db_constraint_reference is not None
 
                     if constraints_reference_exists:
-                        # Get the declaration
-                        db_constraint_reference = self.database_reader.get_constraint_reference_by_id(
-                            constraint_reference_id=str(_constraint_reference.id)
-                        )
-                        geofence = db_constraint_reference.geofence
-
-                        constraint_detail = self.database_reader.get_constraint_by_geofence(geofence=geofence)
-
-                        self.database_writer.update_constraint_reference_ovn(
-                            constraint_reference=db_constraint_reference,
+                        constraint_detail = await constraint_repo.get_constraint_by_geofence_id(db_constraint_reference.geofence_id)
+                        await constraint_repo.update_constraint_reference_ovn(
+                            ref_id=db_constraint_reference.id,
                             ovn=_constraint_reference.ovn,
                         )
 

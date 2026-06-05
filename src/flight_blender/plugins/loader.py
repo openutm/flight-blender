@@ -13,7 +13,7 @@ Usage::
         expected_protocol=DeconflictionEngine,
     )
     engine = EngineClass()
-    result = engine.check_deconfliction(request)
+    result = engine.check_deconfliction(request, db)
 """
 
 from functools import lru_cache

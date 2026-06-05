@@ -20,6 +20,7 @@ from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.clients.dss_constraint_client import ConstraintOperations
 from flight_blender.config import settings
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
 from flight_blender.domain_types.constraint import CompositeConstraintPayload, Constraint
 from flight_blender.domain_types.geo_fence import GeofencePayload
@@ -65,7 +66,8 @@ from flight_blender.domain_types.scd import (
     Volume4D,
 )
 from flight_blender.domain_types.scd import Polygon as Plgn
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
+from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.utils import spatial_rid as rtree_helper
 from flight_blender.utils.json_codecs import LazyEncoder
 
@@ -335,31 +337,28 @@ class VolumesConverter:
 
 
 class ConstraintsWriter:
-    def __init__(self) -> None:
-        self.my_database_reader = SyncDatabaseFacade()
-        self.my_database_writer = SyncDatabaseFacade()
+    def __init__(self, constraint_repo: SQLAlchemyConstraintRepository | None = None):
+        self.constraint_repo = constraint_repo
 
-    # def parse_stored_constraint_details(self, geozone_id: str) -> ConstraintDetails | None:
-    #     pass
-
-    # def parse_and_load_stored_constraint_reference(self, geozone_id: str) -> ConstraintReference | None:
-    #     pass
-
-    def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: Any):
-        # This method writes the constraint reference and constraint details to the database
+    async def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: Any):
         my_volumes_converter = VolumesConverter()
         for constraint in constraints:
             constraint_reference = constraint.reference
             constraint_details = constraint.details
-            # Check if the constraint reference already exists in the database
-            constraint_reference_exists = self.my_database_reader.check_constraint_reference_id_exists(
-                constraint_reference_id=str(constraint_reference.id)
-            )
-            geofence_id = str(uuid.uuid4())
+            ref_uuid = uuid.UUID(str(constraint_reference.id))
 
-            if constraint_reference_exists:
-                geo_fence = self.my_database_reader.get_geofence_by_constraint_reference_id(constraint_reference_id=str(constraint_reference.id))
-                geofence_id = geo_fence.id
+            if self.constraint_repo is not None:
+                constraint_repo = self.constraint_repo
+            else:
+                _db_ctx = async_task_session()
+                db = await _db_ctx.__aenter__()
+                constraint_repo = SQLAlchemyConstraintRepository(db)
+            existing_ref = await constraint_repo.get_constraint_reference_by_id(ref_uuid)
+            if existing_ref is not None:
+                existing_geo = await constraint_repo.get_geofence_by_constraint_reference_id(ref_uuid)
+                geofence_id = str(existing_geo.id) if existing_geo else str(uuid.uuid4())
+            else:
+                geofence_id = str(uuid.uuid4())
 
             my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
             altitude_ref_int = ALTITUDE_REF_LOOKUP.get(my_volumes_converter.altitude_ref, 4)
@@ -369,7 +368,7 @@ class ConstraintsWriter:
                 id=geofence_id,
                 raw_geo_fence=my_volumes_converter.geo_json,
                 upper_limit=my_volumes_converter.upper_altitude,
-                lower_limit=my_volumes_converter.upper_altitude,
+                lower_limit=my_volumes_converter.lower_altitude,
                 altitude_ref=altitude_ref_int,
                 name=constraint_details.geozone.name,
                 bounds=bounds_str,
@@ -381,19 +380,16 @@ class ConstraintsWriter:
                 geozone=asdict(constraint_details.geozone),
             )
 
-            geo_fence = self.my_database_writer.create_or_update_geofence(geofence_payload=geofence_payload)
-            # Create a new ConstraintReference object
-
-            constraint_reference_obj = self.my_database_writer.create_or_update_constraint_reference(
-                constraint_reference=constraint_reference, geofence=geo_fence, flight_declaration=flight_declaration
+            geo_fence = await constraint_repo.create_or_update_geofence(geofence_payload=geofence_payload)
+            constraint_reference_obj = await constraint_repo.create_or_update_constraint_reference(
+                constraint_reference=constraint_reference,
+                geofence_id=geo_fence.id,
+                declaration_id=flight_declaration.id,
             )
-
-            # Write the constraint details to the database
-            constraint_detail_obj = self.my_database_writer.create_or_update_constraint_detail(
+            constraint_detail_obj = await constraint_repo.create_or_update_constraint_detail(
                 constraint=constraint_details,
-                geofence=geo_fence,
+                geofence_id=geo_fence.id,
             )
-            # Write the composite constraint to the database
             composite_constraint_payload = CompositeConstraintPayload(
                 constraint_reference_id=str(constraint_reference_obj.id),
                 constraint_detail_id=str(constraint_detail_obj.id),
@@ -404,7 +400,7 @@ class ConstraintsWriter:
                 alt_max=my_volumes_converter.upper_altitude,
                 alt_min=my_volumes_converter.lower_altitude,
             )
-            self.my_database_writer.create_or_update_composite_constraint(composite_constraint_payload=composite_constraint_payload)
+            await constraint_repo.create_or_update_composite_constraint(payload=composite_constraint_payload)
 
 
 class OperationalIntentReferenceHelper:
@@ -412,10 +408,7 @@ class OperationalIntentReferenceHelper:
     A class to parse Operational Intent References into Dataclass objects
     """
 
-    def __init__(self) -> None:
-        self.my_database_reader = SyncDatabaseFacade()
-
-    def parse_stored_operational_intent_details(self, operation_id: str) -> None | OperationalIntentStorage:
+    async def parse_stored_operational_intent_details(self, operation_id: str) -> None | OperationalIntentStorage:
         """
         Parses and retrieves stored operational intent details for a given operation ID.
         This method interacts with the database to fetch operational intent details,
@@ -440,20 +433,16 @@ class OperationalIntentReferenceHelper:
               time intervals, altitude limits, and success response details.
         """
 
-        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
-            flight_declaration_id=operation_id
-        )
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            flight_operational_intent_reference = await fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(operation_id))
 
-        if not flight_operational_intent_reference:
-            logger.error("Flight operational intent reference not found in the database")
-            return None
+            if not flight_operational_intent_reference:
+                logger.error("Flight operational intent reference not found in the database")
+                return None
 
-        flight_operational_intent_details = self.my_database_reader.get_operational_intent_details_by_flight_declaration_id(
-            declaration_id=operation_id
-        )
-        operational_intent_subscribers = self.my_database_reader.get_subscribers_of_operational_intent_reference(
-            flight_operational_intent_reference=flight_operational_intent_reference
-        )
+            flight_operational_intent_details = await fd_repo.get_opint_detail_by_declaration_id(uuid.UUID(operation_id))
+            operational_intent_subscribers = await fd_repo.get_subscribers_of_opint_reference(ref_id=flight_operational_intent_reference.id)
 
         subscribers = []
         for s in operational_intent_subscribers:
@@ -508,9 +497,9 @@ class OperationalIntentReferenceHelper:
             off_nominal_volumes=all_off_nominal_volumes,
             state=state,
         )
-        composite_operational_intent_details = self.my_database_reader.get_composite_operational_intent_by_declaration_id(
-            flight_declaration_id=operation_id
-        )
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            composite_operational_intent_details = await fd_repo.get_composite_opint_by_declaration_id(uuid.UUID(operation_id))
         if composite_operational_intent_details is None:
             return None
 
@@ -528,21 +517,19 @@ class OperationalIntentReferenceHelper:
         )
         return stored
 
-    def parse_and_load_stored_flight_operational_intent_reference(self, operation_id: str) -> OperationalIntentDetailsUSSResponse | None:
+    async def parse_and_load_stored_flight_operational_intent_reference(self, operation_id: str) -> OperationalIntentDetailsUSSResponse | None:
         """
         Given a stored flight operational intent, get the details of the operational intent
         """
 
-        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
-            flight_declaration_id=operation_id
-        )
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            flight_operational_intent_reference = await fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(operation_id))
 
-        if not flight_operational_intent_reference:
-            logger.error("Flight operational intent reference not found in the database")
-            return None
-        flight_operational_intent_details = self.my_database_reader.get_operational_intent_details_by_flight_declaration_id(
-            declaration_id=operation_id
-        )
+            if not flight_operational_intent_reference:
+                logger.error("Flight operational intent reference not found in the database")
+                return None
+            flight_operational_intent_details = await fd_repo.get_opint_detail_by_declaration_id(uuid.UUID(operation_id))
         # Load existing opint details
 
         stored_operational_intent_id = flight_operational_intent_reference.id
@@ -687,12 +674,10 @@ class SCDOperations:
     def __init__(self):
         self.dss_base_url = settings.DSS_BASE_URL
         self.r = get_redis()
-        self.database_reader = SyncDatabaseFacade()
-        self.database_writer = SyncDatabaseFacade()
         self.constraints_helper = ConstraintOperations()
         self.constraints_writer = ConstraintsWriter()
 
-    def get_nearby_operational_intents(self, volumes: list[Volume4D]) -> list[OperationalIntentDetailsUSSResponse]:
+    async def get_nearby_operational_intents(self, volumes: list[Volume4D]) -> list[OperationalIntentDetailsUSSResponse]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
 
         nearby_operational_intents = []
@@ -767,58 +752,50 @@ class SCDOperations:
                     # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
 
-                    # Check if the flight operational intent reference exists
-
-                    flight_operational_intent_reference_exists = self.database_reader.check_flight_operational_intent_reference_by_id_exists(
-                        operational_intent_ref_id=str(current_uss_operational_intent_detail.id)
-                    )
-
-                    if flight_operational_intent_reference_exists:
-                        # Get the declaration
-                        flight_operational_intent_reference = self.database_reader.get_operational_intent_reference_by_id(
-                            operational_intent_ref_id=str(current_uss_operational_intent_detail.id)
+                    async with async_task_session() as db:
+                        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+                        flight_operational_intent_reference = await fd_repo.get_opint_reference_by_id(
+                            uuid.UUID(str(current_uss_operational_intent_detail.id))
                         )
-                        flight_declaration = flight_operational_intent_reference.declaration
+                        flight_operational_intent_reference_exists = flight_operational_intent_reference is not None
 
-                        flight_operational_intent_detail = self.database_reader.get_operational_intent_details_by_flight_declaration_id(
-                            declaration_id=str(flight_declaration.id)
-                        )
-
-                        self.database_writer.update_flight_operational_intent_reference_ovn(
-                            flight_operational_intent_reference=flight_operational_intent_reference,
-                            ovn=current_uss_operational_intent_detail.ovn,
-                        )
-
-                        _op_int_ref = OperationalIntentReferenceDSSResponse(
-                            subscription_id=current_uss_operational_intent_detail.subscription_id,
-                            id=str(flight_operational_intent_reference.id),
-                            uss_base_url=flight_operational_intent_reference.uss_base_url,
-                            manager=flight_operational_intent_reference.manager,
-                            uss_availability=flight_operational_intent_reference.uss_availability,
-                            version=flight_operational_intent_reference.version,
-                            state=flight_operational_intent_reference.state,
-                            ovn=flight_operational_intent_reference.ovn,
-                            time_start=Time(
-                                format="RFC3339",
-                                value=flight_operational_intent_reference.time_start,
-                            ),
-                            time_end=Time(
-                                format="RFC3339",
-                                value=flight_operational_intent_reference.time_end,
-                            ),
-                        )
-                        op_int_ref = asdict(_op_int_ref)
-                        op_int_det = {
-                            "volumes": json.loads(flight_operational_intent_detail.volumes),
-                            "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
-                            "priority": flight_operational_intent_detail.priority,
-                        }
-                    else:
-                        logger.warning(
-                            "Flight operational intent reference not found in the database, this is a new operational intent with id: {uss_op_int_id}".format(
-                                uss_op_int_id=current_uss_operational_intent_detail.id
+                        if flight_operational_intent_reference_exists:
+                            flight_declaration_id = flight_operational_intent_reference.declaration_id
+                            flight_operational_intent_detail = await fd_repo.get_opint_detail_by_declaration_id(flight_declaration_id)
+                            await fd_repo.update_opint_reference_ovn(
+                                ref_id=flight_operational_intent_reference.id,
+                                ovn=current_uss_operational_intent_detail.ovn,
                             )
-                        )
+                            _op_int_ref = OperationalIntentReferenceDSSResponse(
+                                subscription_id=current_uss_operational_intent_detail.subscription_id,
+                                id=str(flight_operational_intent_reference.id),
+                                uss_base_url=flight_operational_intent_reference.uss_base_url,
+                                manager=flight_operational_intent_reference.manager,
+                                uss_availability=flight_operational_intent_reference.uss_availability,
+                                version=flight_operational_intent_reference.version,
+                                state=flight_operational_intent_reference.state,
+                                ovn=flight_operational_intent_reference.ovn,
+                                time_start=Time(
+                                    format="RFC3339",
+                                    value=flight_operational_intent_reference.time_start,
+                                ),
+                                time_end=Time(
+                                    format="RFC3339",
+                                    value=flight_operational_intent_reference.time_end,
+                                ),
+                            )
+                            op_int_ref = asdict(_op_int_ref)
+                            op_int_det = {
+                                "volumes": json.loads(flight_operational_intent_detail.volumes),
+                                "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
+                                "priority": flight_operational_intent_detail.priority,
+                            }
+                        else:
+                            logger.warning(
+                                "Flight operational intent reference not found in the database, this is a new operational intent with id: {uss_op_int_id}".format(
+                                    uss_op_int_id=current_uss_operational_intent_detail.id
+                                )
+                            )
                     op_int_details_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
@@ -1001,11 +978,11 @@ class SCDOperations:
             delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=500, message=common_400_response)
         return delete_op_int_status
 
-    def get_and_process_nearby_operational_intents(self, volumes: list[Volume4D]) -> dict | bool:
+    async def get_and_process_nearby_operational_intents(self, volumes: list[Volume4D]) -> dict | bool:
         """This method processes the downloaded operational intents in to a GeoJSON object"""
         feat_collection = {"type": "FeatureCollection", "features": []}
         try:
-            nearby_operational_intents = self.get_nearby_operational_intents(volumes=volumes)
+            nearby_operational_intents = await self.get_nearby_operational_intents(volumes=volumes)
         except ConnectionError:
             raise ConnectionError("Could not reach peer USS for querying operational intent data")
 
@@ -1040,10 +1017,10 @@ class SCDOperations:
 
         return feat_collection
 
-    def get_latest_airspace_constraints_ovn(self, volumes: list[Volume4D]) -> list | list[str]:
+    async def get_latest_airspace_constraints_ovn(self, volumes: list[Volume4D]) -> list | list[str]:
         # Get the latest constraints from DSS
 
-        all_nearby_constraints = self.constraints_helper.get_nearby_constraints(volumes=volumes)
+        all_nearby_constraints = await self.constraints_helper.get_nearby_constraints(volumes=volumes)
         # self.constraints_writer.write_nearby_constraints(constraints=all_nearby_constraints)
         latest_constraints_ovns: list[str] = []
 
@@ -1053,11 +1030,11 @@ class SCDOperations:
 
         return latest_constraints_ovns
 
-    def get_latest_airspace_volumes(self, volumes: list[Volume4D]) -> list | list[OpInttoCheckDetails]:
+    async def get_latest_airspace_volumes(self, volumes: list[Volume4D]) -> list | list[OpInttoCheckDetails]:
         # This method checks if a flight volume has conflicts with any other volume in the airspace
         all_opints_to_check = []
         try:
-            nearby_operational_intents = self.get_nearby_operational_intents(volumes=volumes)
+            nearby_operational_intents = await self.get_nearby_operational_intents(volumes=volumes)
         except ConnectionError:
             logger.info("Raising Connection Error 2")
             raise ConnectionError("Could not reach peer USS for querying operational intent data")
@@ -1269,7 +1246,7 @@ class SCDOperations:
 
         return should_opint_be_sent_to_dss
 
-    def update_specified_operational_intent_reference(
+    async def update_specified_operational_intent_reference(
         self,
         operational_intent_ref_id: str,
         extents: list[Volume4D],
@@ -1308,7 +1285,7 @@ class SCDOperations:
         )
         # Get the latest airspace volumes
         try:
-            current_network_opint_details_full = self.get_latest_airspace_volumes(volumes=extents)
+            current_network_opint_details_full = await self.get_latest_airspace_volumes(volumes=extents)
         except ValueError:
             # Update unsuccessful, problems with processing peer USS volumes
             d_r = CommonPeer9xxResponse(message="Error in validating received operational intents from peer USS")
@@ -1335,7 +1312,7 @@ class SCDOperations:
         updated_ovn = latest_ovn if latest_ovn else ovn
         airspace_keys = self.generate_airspace_keys(current_network_opint_details_full=current_network_opint_details_full)
 
-        constraints_ovns = self.get_latest_airspace_constraints_ovn(volumes=extents)
+        constraints_ovns = await self.get_latest_airspace_constraints_ovn(volumes=extents)
         if constraints_ovns:
             airspace_keys.extend(constraints_ovns)
         operational_intent_update_payload.key = airspace_keys
@@ -1420,7 +1397,7 @@ class SCDOperations:
             opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_request_status_code, message=message)
             return opint_update_result
 
-    def create_and_submit_operational_intent_reference(
+    async def create_and_submit_operational_intent_reference(
         self,
         state: str,
         priority: int,
@@ -1509,7 +1486,7 @@ class SCDOperations:
             logger.info("No operational intent references found in the DSS")
 
         # Get all the constraints from DSS
-        all_nearby_constraints = self.constraints_helper.get_nearby_constraints(volumes=volumes)
+        all_nearby_constraints = await self.constraints_helper.get_nearby_constraints(volumes=volumes)
         all_constraint_ovns = []
         for cur_constraint in all_nearby_constraints:
             all_constraint_ovns.append(cur_constraint.reference.ovn)
@@ -1656,25 +1633,24 @@ class DSSAreaClearHandler:
     def __init__(self, request_id):
         self.request_id = request_id
 
-    def clear_area_request(self, extent_raw):
+    async def clear_area_request(self, extent_raw):
         import arrow  # noqa: PLC0415
 
         from flight_blender.domain_types.common import OPINT_INDEX_BASEPATH  # noqa: PLC0415
         from flight_blender.domain_types.scd import ClearAreaResponse, ClearAreaResponseOutcome  # noqa: PLC0415
-        from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
         from flight_blender.utils import spatial_rid as rtree_helper  # noqa: PLC0415
 
-        my_database_writer = SyncDatabaseFacade()
-        my_database_reader = SyncDatabaseFacade()
         my_scd_dss_helper = SCDOperations()
         my_operational_intent_parser = OperationalIntentReferenceHelper()
         volume4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=extent_raw)
         my_geo_json_converter = VolumesConverter()
         my_geo_json_converter.convert_volumes_to_geojson(volumes=[volume4D])
         view_rect_bounds = my_geo_json_converter.get_bounds()
-        my_rtree_helper = rtree_helper.OperationalIntentsIndexFactory(index_name=OPINT_INDEX_BASEPATH)
-        my_rtree_helper.generate_active_flights_operational_intents_index()
-        op_ints_exist = my_rtree_helper.check_op_ints_exist()
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            my_rtree_helper = rtree_helper.OperationalIntentsIndexFactory(index_name=OPINT_INDEX_BASEPATH, fd_repo=fd_repo)
+            await my_rtree_helper.generate_active_flights_operational_intents_index()
+            op_ints_exist = await my_rtree_helper.check_op_ints_exist()
         all_existing_op_ints_in_area = []
         if op_ints_exist:
             all_existing_op_ints_in_area = my_rtree_helper.check_box_intersection(view_box=view_rect_bounds)
@@ -1685,19 +1661,21 @@ class DSSAreaClearHandler:
                 if existing_op_ints_in_area:
                     deletion_success = False
                     operation_id = existing_op_ints_in_area["flight_id"]
-                    composite_operational_intent = my_database_reader.get_composite_operational_intent_by_declaration_id(
-                        flight_declaration_id=operation_id
-                    )
+                    async with async_task_session() as db:
+                        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+                        composite_operational_intent = await fd_repo.get_composite_opint_by_declaration_id(uuid.UUID(operation_id))
                     if composite_operational_intent:
                         ovn = composite_operational_intent.operational_intent_reference.ovn
                         opint_id = composite_operational_intent.id
                         ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
                         logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-                        deletion_request = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=opint_id, ovn=ovn)
+                        deletion_request = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=str(opint_id), ovn=str(ovn))
                         if deletion_request.status == 200:
                             logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             deletion_success = True
-                            my_database_writer.delete_flight_declaration(flight_declaration_id=operation_id)
+                            async with async_task_session() as db:
+                                fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+                                await fd_repo.delete(uuid.UUID(operation_id))
                         else:
                             logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             logger.error(deletion_request.dss_response)
@@ -1720,7 +1698,7 @@ class DSSAreaClearHandler:
                 message="All operational intents in the area cleared successfully",
                 timestamp=arrow.now().isoformat(),
             )
-        my_rtree_helper.clear_rtree_index()
+        await my_rtree_helper.clear_rtree_index()
         return ClearAreaResponse(outcome=clear_area_status)
 
 
@@ -1731,29 +1709,29 @@ class DSSOperationalIntentsCreator:
     """Helper to submit an operational intent to the DSS based on an operation ID."""
 
     def __init__(self, flight_declaration_id: str):
-        from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
         from flight_blender.services.flight_declarations_svc import OperationalIntentsConverter  # noqa: PLC0415
 
         self.flight_declaration_id = flight_declaration_id
         self.my_scd_dss_helper = SCDOperations()
         self.my_operational_intent_reference_helper = OperationalIntentsConverter()
-        self.my_database_reader = SyncDatabaseFacade()
-        self.my_database_writer = SyncDatabaseFacade()
 
-    def validate_flight_declaration_start_end_time(self) -> bool:
+    async def validate_flight_declaration_start_end_time(self) -> bool:
         import arrow  # noqa: PLC0415
 
-        flight_declaration = self.my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            flight_declaration = await fd_repo.get_by_id(uuid.UUID(self.flight_declaration_id))
+        if not flight_declaration:
+            return False
         now = arrow.now()
         two_hours_from_now = now.shift(hours=2)
         op_start_time = arrow.get(flight_declaration.start_datetime)
         op_end_time = arrow.get(flight_declaration.end_datetime)
         start_time_ok = op_start_time <= two_hours_from_now and op_start_time >= now
         end_time_ok = op_end_time <= two_hours_from_now and op_end_time >= now
-        start_end_time_oks = [start_time_ok, end_time_ok]
-        return False not in start_end_time_oks
+        return False not in [start_time_ok, end_time_ok]
 
-    def submit_flight_declaration_to_dss(self):
+    async def submit_flight_declaration_to_dss(self):
         import json as _json  # noqa: PLC0415
         import uuid as _uuid  # noqa: PLC0415
 
@@ -1768,7 +1746,11 @@ class DSSOperationalIntentsCreator:
         )
 
         new_entity_id = str(_uuid.uuid4())
-        flight_declaration = self.my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
+        fd_id = uuid.UUID(self.flight_declaration_id)
+
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            flight_declaration = await fd_repo.get_by_id(fd_id)
         if not flight_declaration:
             logger.error("Flight Declaration with ID %s not found in the database" % self.flight_declaration_id)
             return OperationalIntentSubmissionStatus(
@@ -1799,14 +1781,17 @@ class DSSOperationalIntentsCreator:
                 dss_response=OtherError(notes=notes),
                 operational_intent_id=new_entity_id,
             )
-            self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
-            flight_declaration.add_state_history_entry(
-                new_state=8,
-                original_state=current_state,
-                notes=notes,
-            )
+            async with async_task_session() as db:
+                fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+                await fd_repo.update(fd_id, state=8)
+                await fd_repo.add_state_history_entry(
+                    flight_declaration_id=fd_id,
+                    original_state=current_state,
+                    new_state=8,
+                    notes=notes,
+                )
         else:
-            op_int_submission_result = self.my_scd_dss_helper.create_and_submit_operational_intent_reference(
+            op_int_submission_result = await self.my_scd_dss_helper.create_and_submit_operational_intent_reference(
                 state=operational_intent_data.state,
                 volumes=operational_intent_data.volumes,
                 off_nominal_volumes=operational_intent_data.off_nominal_volumes,
@@ -1815,52 +1800,55 @@ class DSSOperationalIntentsCreator:
 
             if op_int_submission_result.status_code == 201:
                 logger.info("Successfully created operational intent in the DSS, updating database..")
-                created_flight_operational_intent_reference = self.my_database_writer.create_flight_operational_intent_reference(
-                    flight_declaration=flight_declaration,
-                    created_operational_intent_reference=op_int_submission_result.dss_response.operational_intent_reference,
-                )
                 operational_intent_details_payload = OperationalIntentUSSDetails(
                     volumes=operational_intent_data.volumes,
                     off_nominal_volumes=operational_intent_data.off_nominal_volumes,
                     priority=operational_intent_data.priority,
                 )
-                created_flight_operational_intent_detail = (
-                    self.my_database_writer.create_flight_operational_intent_details_with_submitted_operational_intent(
-                        flight_declaration=flight_declaration, operational_intent_details_payload=operational_intent_details_payload
+                async with async_task_session() as db:
+                    fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+                    created_flight_operational_intent_reference = await fd_repo.create_opint_reference(
+                        declaration_id=fd_id,
+                        payload=op_int_submission_result.dss_response.operational_intent_reference,
                     )
-                )
-                if created_flight_operational_intent_detail and created_flight_operational_intent_reference:
-                    generated_composite_operational_intent_data = (
-                        self.my_operational_intent_reference_helper.generate_bounds_altitude_time_for_volumes(
-                            operational_intent_details_payload=operational_intent_details_payload,
-                            flight_declaration_id=self.flight_declaration_id,
+                    created_flight_operational_intent_detail = await fd_repo.create_opint_detail(
+                        declaration_id=fd_id,
+                        payload=operational_intent_details_payload,
+                    )
+                    if created_flight_operational_intent_detail and created_flight_operational_intent_reference:
+                        generated_composite_operational_intent_data = (
+                            self.my_operational_intent_reference_helper.generate_bounds_altitude_time_for_volumes(
+                                operational_intent_details_payload=operational_intent_details_payload,
+                                flight_declaration_id=self.flight_declaration_id,
+                            )
                         )
-                    )
-                    composite_operational_intent_data = CompositeOperationalIntentPayload(
-                        bounds=generated_composite_operational_intent_data.bounds,
-                        start_datetime=generated_composite_operational_intent_data.start_datetime,
-                        end_datetime=generated_composite_operational_intent_data.end_datetime,
-                        alt_max=generated_composite_operational_intent_data.alt_max,
-                        alt_min=generated_composite_operational_intent_data.alt_min,
-                        operational_intent_reference_id=str(created_flight_operational_intent_reference.id),
-                        operational_intent_details_id=str(created_flight_operational_intent_detail.id),
-                    )
-                    self.my_database_writer.create_or_update_composite_operational_intent(
-                        flight_declaration=flight_declaration, composite_operational_intent_payload=composite_operational_intent_data
+                        composite_operational_intent_data = CompositeOperationalIntentPayload(
+                            bounds=generated_composite_operational_intent_data.bounds,
+                            start_datetime=generated_composite_operational_intent_data.start_datetime,
+                            end_datetime=generated_composite_operational_intent_data.end_datetime,
+                            alt_max=generated_composite_operational_intent_data.alt_max,
+                            alt_min=generated_composite_operational_intent_data.alt_min,
+                            operational_intent_reference_id=str(created_flight_operational_intent_reference.id),
+                            operational_intent_details_id=str(created_flight_operational_intent_detail.id),
+                        )
+                        await fd_repo.create_or_update_composite_opint(
+                            declaration_id=fd_id,
+                            payload=composite_operational_intent_data,
+                        )
+                    logger.info("Updating state from Processing to Accepted...")
+                    await fd_repo.update(fd_id, state=1)
+                    await fd_repo.add_state_history_entry(
+                        flight_declaration_id=fd_id,
+                        original_state=current_state,
+                        new_state=1,
+                        notes="Operational Intent successfully submitted to DSS and is Accepted",
                     )
                 if op_int_submission_result.constraints:
                     my_constraints_writer = ConstraintsWriter()
-                    my_constraints_writer.write_nearby_constraints(
+                    await my_constraints_writer.write_nearby_constraints(
                         flight_declaration=flight_declaration,
                         constraints=op_int_submission_result.constraints,
                     )
-                logger.info("Updating state from Processing to Accepted...")
-                self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=1)
-                flight_declaration.add_state_history_entry(
-                    new_state=1,
-                    original_state=current_state,
-                    notes="Operational Intent successfully submitted to DSS and is Accepted",
-                )
             elif op_int_submission_result.status_code in [400, 409, 401, 403, 412, 413, 429]:
                 if op_int_submission_result.status_code == 400:
                     notes = "Error during submission of operational intent, the DSS rejected because one or more parameters was missing"
@@ -1874,25 +1862,33 @@ class DSSOperationalIntentsCreator:
                     notes = "There was a error in submitting the operational intent to the DSS, the operational intent was too large"
                 elif op_int_submission_result.status_code == 429:
                     notes = "There was a error in submitting the operational intent to the DSS, too many requests were submitted to the DSS"
+                else:
+                    notes = "Unknown error during submission"
                 logger.info(
                     "There was a error in submitting the operational intent to the DSS, the DSS rejected our submission with a {status_code} response code".format(
                         status_code=op_int_submission_result.status_code
                     )
                 )
-                self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
-                flight_declaration.add_state_history_entry(
-                    new_state=8,
-                    original_state=current_state,
-                    notes=notes,
-                )
+                async with async_task_session() as db:
+                    fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+                    await fd_repo.update(fd_id, state=8)
+                    await fd_repo.add_state_history_entry(
+                        flight_declaration_id=fd_id,
+                        original_state=current_state,
+                        new_state=8,
+                        notes=notes,
+                    )
             elif op_int_submission_result.status_code == 500 and op_int_submission_result.message == "conflict_with_flight":
                 logger.info("Flight is not deconflicted, updating state from Processing to Rejected ..")
-                self.my_database_writer.update_flight_operation_state(flight_declaration_id=self.flight_declaration_id, state=8)
-                flight_declaration.add_state_history_entry(
-                    new_state=8,
-                    original_state=current_state,
-                    notes="Flight was not deconflicted correctly",
-                )
+                async with async_task_session() as db:
+                    fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+                    await fd_repo.update(fd_id, state=8)
+                    await fd_repo.add_state_history_entry(
+                        flight_declaration_id=fd_id,
+                        original_state=current_state,
+                        new_state=8,
+                        notes="Flight was not deconflicted correctly",
+                    )
 
         return op_int_submission_result
 
@@ -1924,19 +1920,16 @@ class DSSOperationalIntentsCreator:
 class SCDTestHarnessHelper:
     """Used in the SCD Test harness to include transformations."""
 
-    def __init__(self):
+    def __init__(self, fd_repo: SQLAlchemyFlightDeclarationRepository):
         from flight_blender.auth.token_cache import get_redis  # noqa: PLC0415
-        from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
         from flight_blender.utils import spatial_rid as rtree_helper  # noqa: PLC0415
 
         self.my_operational_intent_helper = OperationalIntentReferenceHelper()
         self.r = get_redis()
         self.my_volumes_converter = VolumesConverter()
-        self.my_database_reader = SyncDatabaseFacade()
         self.my_operational_intent_comparator = rtree_helper.OperationalIntentComparisonFactory()
+        self.fd_repo = fd_repo
 
-    def check_if_same_flight_id_exists(self, operation_id: str) -> bool:
-        flight_operational_intent_reference = self.my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
-            flight_declaration_id=operation_id
-        )
+    async def check_if_same_flight_id_exists(self, operation_id: str) -> bool:
+        flight_operational_intent_reference = await self.fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(operation_id))
         return bool(flight_operational_intent_reference)

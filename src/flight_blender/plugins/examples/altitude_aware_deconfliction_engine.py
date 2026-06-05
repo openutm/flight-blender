@@ -15,6 +15,8 @@ and returns a
 :class:`~flight_blender.core.entities.flight_declarations.DeconflictionResult`.
 """
 
+from sqlalchemy.orm import Session
+
 from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
 
 
@@ -26,7 +28,7 @@ class AltitudeAwareDeconflictionEngine:
     separation minima, ML-based prediction, batch optimisation, etc.).
     """
 
-    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
+    def check_deconfliction(self, request: DeconflictionRequest, db: Session) -> DeconflictionResult:
         """Evaluate a flight declaration with custom logic.
 
         Args:

@@ -1,4 +1,6 @@
+import asyncio
 import json
+import uuid
 
 import arrow
 from dacite import from_dict
@@ -8,19 +10,22 @@ from flight_blender.celery import app
 from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator
 from flight_blender.clients.notification_client import NotificationFactory
 from flight_blender.config import settings
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import OPERATION_STATES
 from flight_blender.domain_types.notifications import FlightDeclarationUpdateMessage
 from flight_blender.domain_types.scd import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
 @app.task(name="submit_flight_declaration_to_dss_async")
 def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
-    my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=flight_declaration_id)
-    my_database_reader = SyncDatabaseFacade()
-    my_database_writer = SyncDatabaseFacade()
+    asyncio.run(_async_submit_flight_declaration_to_dss(flight_declaration_id))
 
-    start_end_time_validated = my_dss_opint_creator.validate_flight_declaration_start_end_time()
+
+async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) -> None:
+    my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=flight_declaration_id)
+
+    start_end_time_validated = await my_dss_opint_creator.validate_flight_declaration_start_end_time()
 
     logger.info("Flight Operation start end time status %s" % start_end_time_validated)
 
@@ -50,7 +55,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
     )
     logger.info("Submitting flight declaration to DSS..")
 
-    opint_submission_result = my_dss_opint_creator.submit_flight_declaration_to_dss()
+    opint_submission_result = await my_dss_opint_creator.submit_flight_declaration_to_dss()
 
     if opint_submission_result.status_code == 500:
         logger.error("Error in submitting Flight Declaration to the DSS %s" % opint_submission_result.status)
@@ -92,35 +97,37 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             level="info",
         )
 
-        flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
 
-        if not flight_declaration:
-            logger.error("Flight Declaration with ID %s not found in the database" % flight_declaration_id)
-            return
+            if not flight_declaration:
+                logger.error("Flight Declaration with ID %s not found in the database" % flight_declaration_id)
+                return
 
-        fa = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_obj(flight_declaration=flight_declaration)
+            opint_ref = await fd_repo.get_opint_reference_by_declaration_id(flight_declaration.id)
+            created_opint = opint_ref.id if opint_ref else None
 
-        created_opint = fa.id
+            logger.info("Changing operation state..")
+            original_state = flight_declaration.state
+            accepted_state = OPERATION_STATES[1][0]
+            from flight_blender.services.conformance_svc import FlightOperationConformanceHelper  # noqa: PLC0415
 
-        logger.info("Changing operation state..")
-        original_state = flight_declaration.state
-        accepted_state = OPERATION_STATES[1][0]
-        from flight_blender.services.conformance_svc import FlightOperationConformanceHelper  # noqa: PLC0415  # Lazy import — break circular
-
-        my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id)
-        transition_valid = my_conformance_helper.verify_operation_state_transition(
-            original_state=original_state,
-            new_state=accepted_state,
-            event="dss_accepts",
-        )
-        if transition_valid:
-            my_database_writer.update_flight_operation_state(flight_declaration_id=flight_declaration_id, state=accepted_state)
-            logger.info("The state change transition to Accepted state from current state Created is valid..")
-            flight_declaration.add_state_history_entry(
-                new_state=accepted_state,
+            my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id)
+            transition_valid = my_conformance_helper.verify_operation_state_transition(
                 original_state=original_state,
-                notes="Successfully submitted to the DSS..",
+                new_state=accepted_state,
+                event="dss_accepts",
             )
+            if transition_valid:
+                await fd_repo.update(flight_declaration.id, state=accepted_state)
+                logger.info("The state change transition to Accepted state from current state Created is valid..")
+                await fd_repo.add_state_history_entry(
+                    flight_declaration_id=flight_declaration.id,
+                    new_state=accepted_state,
+                    original_state=original_state,
+                    notes="Successfully submitted to the DSS..",
+                )
 
         submission_state_updated_msg = "Flight Operation with ID {operation_id} has a updated state: Accepted. ".format(
             operation_id=flight_declaration_id
@@ -140,7 +147,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
                 uss_base_url = subscriber.uss_base_url
                 flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
 
-                if uss_base_url != flight_blender_base_url:  # There are others who are subscribesd, not just ourselves
+                if uss_base_url != flight_blender_base_url:
                     op_int_details = from_dict(
                         data_class=OperationalIntentUSSDetails,
                         data=json.loads(flight_declaration.operational_intent),
@@ -154,7 +161,6 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
                         operational_intent=operational_intent,
                         subscriptions=subscriptions_raw,
                     )
-                    # Notify Subscribers
                     my_dss_opint_creator.notify_peer_uss(
                         uss_base_url=uss_base_url,
                         notification_payload=post_notification_payload,

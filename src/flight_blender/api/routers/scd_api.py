@@ -1,32 +1,39 @@
-import asyncio
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
+from flight_blender.db.session import async_get_db
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.services import scd_svc
+from flight_blender.services.scd_svc import SCDService
 
 router = APIRouter(prefix="/scd")
 
 
+async def _ops(db: AsyncSession = Depends(async_get_db)) -> SCDService:
+    return SCDService(fd_repo=SQLAlchemyFlightDeclarationRepository(db))
+
+
 @router.get("/v1/status")
 async def scd_test_status(_auth: Any = Depends(require_scopes(["utm.inject_test_data"]))):
-    data = await asyncio.to_thread(scd_svc.get_scd_test_status)
+    data = scd_svc.get_scd_test_status()
     return JSONResponse(data, status_code=200)
 
 
 @router.get("/v1/capabilities")
 async def scd_test_capabilities(_auth: Any = Depends(require_scopes(["utm.inject_test_data"]))):
-    data = await asyncio.to_thread(scd_svc.get_scd_test_capabilities)
+    data = scd_svc.get_scd_test_capabilities()
     return JSONResponse(data, status_code=200)
 
 
 @router.get("/flight_planning/status")
 @router.get("/flight_planning/u_space/status")
 async def flight_planning_status(_auth: Any = Depends(require_scopes(["interuss.flight_planning.direct_automated_test"]))):
-    data = await asyncio.to_thread(scd_svc.get_flight_planning_status)
+    data = scd_svc.get_flight_planning_status()
     return JSONResponse(data, status_code=200)
 
 
@@ -36,7 +43,7 @@ async def flight_planning_clear_area_request(
     body: dict = Body(...),
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.direct_automated_test"])),
 ):
-    data, status_code = await asyncio.to_thread(scd_svc.clear_area, body)
+    data, status_code = await scd_svc.clear_area(body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -46,8 +53,9 @@ async def upsert_flight_plan(
     flight_plan_id: UUID,
     body: dict = Body(...),
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
+    ops: SCDService = Depends(_ops),
 ):
-    data, status_code = await asyncio.to_thread(scd_svc.upsert_flight_plan, str(flight_plan_id), body)
+    data, status_code = await ops.upsert_flight_plan(str(flight_plan_id), body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -56,6 +64,7 @@ async def upsert_flight_plan(
 async def delete_flight_plan(
     flight_plan_id: UUID,
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
+    ops: SCDService = Depends(_ops),
 ):
-    data, status_code = await asyncio.to_thread(scd_svc.delete_flight_plan, str(flight_plan_id))
+    data, status_code = await ops.delete_flight_plan(str(flight_plan_id))
     return JSONResponse(data, status_code=status_code)

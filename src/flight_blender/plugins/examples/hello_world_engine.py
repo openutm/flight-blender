@@ -17,8 +17,8 @@ See PLUGINS.md for the full guide.
 
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from flight_blender.db.session import session_scope
 from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
 from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
 from flight_blender.models.flight_declarations_orm import FlightDeclarationORM
@@ -43,18 +43,17 @@ class HelloWorldEngine:
     are intentionally skipped to keep the example concise.
     """
 
-    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
+    def check_deconfliction(self, request: DeconflictionRequest, db: Session) -> DeconflictionResult:
         # Find active declarations whose time window overlaps the request.
-        with session_scope() as db:
-            stmt = select(FlightDeclarationORM).where(
-                FlightDeclarationORM.start_datetime < request.end_datetime,
-                FlightDeclarationORM.end_datetime > request.start_datetime,
-                FlightDeclarationORM.state.in_(_ACTIVE_STATES),
-            )
-            if request.declaration_id:
-                stmt = stmt.where(FlightDeclarationORM.id != request.declaration_id)
-            rows = db.execute(stmt).scalars().all()
-            conflicting_ids = [str(r.id) for r in rows[:20]]
+        stmt = select(FlightDeclarationORM).where(
+            FlightDeclarationORM.start_datetime < request.end_datetime,
+            FlightDeclarationORM.end_datetime > request.start_datetime,
+            FlightDeclarationORM.state.in_(_ACTIVE_STATES),
+        )
+        if request.declaration_id:
+            stmt = stmt.where(FlightDeclarationORM.id != request.declaration_id)
+        rows = db.execute(stmt).scalars().all()
+        conflicting_ids = [str(r.id) for r in rows[:20]]
 
         has_conflicts = bool(conflicting_ids)
 

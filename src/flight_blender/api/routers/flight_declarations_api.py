@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 from typing import Any
 
@@ -138,7 +137,7 @@ async def network_flight_declarations_by_view(
     view: str | None = None,
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    data, status_code = await asyncio.to_thread(do_network_declarations_by_view, view, _scd_query_client())
+    data, status_code = await do_network_declarations_by_view(view, _scd_query_client())
     return JSONResponse(data, status_code=status_code)
 
 
