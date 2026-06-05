@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.models.surveillance_orm import (
@@ -247,5 +247,3 @@ class SQLAlchemySurveillanceRepository:
         self.db.add(event)
         await self.db.flush()
         return True
-
-

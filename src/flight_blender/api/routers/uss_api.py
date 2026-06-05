@@ -36,7 +36,7 @@ async def uss_operational_intent_details(
     opint_id: uuid.UUID,
     _auth: Any = Depends(require_scopes(["utm.strategic_coordination"])),
 ):
-    data, status_code = await asyncio.to_thread(uss_svc.uss_operational_intent_details, str(opint_id))
+    data, status_code = await uss_svc.uss_operational_intent_details(str(opint_id))
     return JSONResponse(data, status_code=status_code)
 
 
@@ -54,7 +54,7 @@ async def uss_update_opint_details(
     body: dict = Body(...),
     _auth: Any = Depends(require_scopes(["utm.strategic_coordination"])),
 ):
-    data, status_code = await asyncio.to_thread(uss_svc.uss_update_opint_details, body)
+    data, status_code = await uss_svc.uss_update_opint_details(body)
     return Response(status_code=status_code)
 
 
@@ -63,7 +63,7 @@ async def uss_constraint_details(
     constraint_id: uuid.UUID,
     _auth: Any = Depends(require_scopes(["utm.constraint_processing"])),
 ):
-    data, status_code = await asyncio.to_thread(uss_svc.uss_constraint_details, str(constraint_id))
+    data, status_code = await uss_svc.uss_constraint_details(str(constraint_id))
     return JSONResponse(data, status_code=status_code)
 
 
@@ -72,7 +72,7 @@ async def uss_update_constraint_details(
     body: dict = Body(...),
     _auth: Any = Depends(require_scopes(["utm.constraint_processing"])),
 ):
-    status_code = await asyncio.to_thread(uss_svc.uss_update_constraint_details, body)
+    status_code = await uss_svc.uss_update_constraint_details(body)
     return Response(status_code=status_code)
 
 
@@ -83,7 +83,7 @@ async def get_uss_flights(
 ):
     if not view:
         return JSONResponse({"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}, status_code=400)
-    data, status_code = await asyncio.to_thread(uss_svc.get_uss_flights, view)
+    data, status_code = await uss_svc.get_uss_flights(view)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -92,5 +92,5 @@ async def get_uss_flight_details(
     flight_id: str,
     _auth: Any = Depends(require_scopes(["rid.display_provider"])),
 ):
-    data, status_code = await asyncio.to_thread(uss_svc.get_uss_flight_details, flight_id)
+    data, status_code = await uss_svc.get_uss_flight_details(flight_id)
     return JSONResponse(data, status_code=status_code)

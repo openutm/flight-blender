@@ -12,7 +12,7 @@ from shapely.ops import unary_union
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
 from flight_blender.db.session import async_session_scope
-from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus, GeoZone
+from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus
 from flight_blender.models.geo_fence_orm import GeoFenceORM
 from flight_blender.services.geo_fence_svc import GeoZoneParser
 
@@ -75,11 +75,6 @@ async def _async_write_geo_zone(geo_zone: str, test_harness_datasource: str = "0
 
         logger.debug(f"Bounding box for shape.. {bounds}")
 
-        geo_zone_obj = GeoZone(
-            title=geo_zone["title"],
-            description=geo_zone["description"],
-            features=geo_zone_feature,
-        )
         name = geo_zone_feature.name
         start_time = arrow.now()
         end_time = start_time.shift(years=1)
@@ -102,8 +97,6 @@ async def _async_write_geo_zone(geo_zone: str, test_harness_datasource: str = "0
             await db.flush()
 
         logger.info("Saved Geofence to database ..")
-
-
 
 
 class CeleryGeoFenceTaskDispatcher:

@@ -7,6 +7,7 @@ import arrow
 import redis
 from loguru import logger
 
+from flight_blender.auth.token_cache import get_redis
 from flight_blender.celery import app
 from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.config import settings
@@ -38,8 +39,6 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
 async def _async_send_and_generate_track_to_consumer(
     session_id: str, flight_declaration_id: None | str = None, expires_iso: str | None = None
 ) -> None:
-    from flight_blender.auth.token_cache import get_redis
-
     r = get_redis()
     if r.exists(f"stop_task_{session_id}"):
         return
@@ -89,11 +88,7 @@ def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | st
     asyncio.run(_async_send_heartbeat_to_consumer(session_id, flight_declaration_id, expires_iso))
 
 
-async def _async_send_heartbeat_to_consumer(
-    session_id: str, flight_declaration_id: None | str = None, expires_iso: str | None = None
-) -> None:
-    from flight_blender.auth.token_cache import get_redis
-
+async def _async_send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None, expires_iso: str | None = None) -> None:
     r = get_redis()
     if r.exists(f"stop_task_{session_id}"):
         return

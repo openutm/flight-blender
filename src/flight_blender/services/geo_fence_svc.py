@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import arrow
 import pyproj
 from implicitdict import ImplicitDict
+from loguru import logger
 from shapely.geometry import Point, mapping, shape
 from shapely.ops import transform, unary_union
 
@@ -255,19 +256,12 @@ class GeoZoneParser:
                         lng = ed_269_geometry["horizontalProjection"]["center"][0]
                         radius = ed_269_geometry["horizontalProjection"]["radius"]
                     except KeyError as ke:
-                        from loguru import logger
-
                         logger.info("Error in parsing points provided in the ED 269 file %s" % ke)
                         parse_error = True
                     else:
                         r = radius / 1000
                         buf = geodesic_point_buffer(lat, lng, r)
                         b = mapping(buf)
-                        fc = {
-                            "type": "FeatureCollection",
-                            "features": [{"type": "Feature", "properties": {}, "geometry": b}],
-                        }
-                        from loguru import logger
 
                         logger.info("Converting point to circle")
                         ed_269_geometry["horizontalProjection"] = b

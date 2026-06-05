@@ -423,11 +423,14 @@ def mock_network_opint_empty(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
+    async def _empty_operational_intents(self, **kwargs):
+        return {"type": "FeatureCollection", "features": []}
+
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "get_and_process_nearby_operational_intents",
-        lambda self, **kwargs: {"type": "FeatureCollection", "features": []},
+        _empty_operational_intents,
     )
 
 

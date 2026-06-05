@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 
 import http_sfv
@@ -241,12 +242,9 @@ class ResponseSigningOperations:
         return str(http_sfv.Dictionary({"sha-256": hashlib.sha256(payload_str.encode("utf-8")).digest()}))
 
     def sign_json_via_django(self, data_to_sign):
-        import hashlib as _hashlib
-        import hmac
-
         secret = settings.SECRET_KEY
         payload = json.dumps(data_to_sign, separators=(",", ":"))
-        sig = hmac.new(secret.encode(), payload.encode(), _hashlib.sha256).hexdigest()
+        sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
         return f"{payload}:{sig}"
 
     def sign_json_via_jose(self, payload):

@@ -1,5 +1,6 @@
 """Built-in RTree bounding-box de-confliction engine."""
 
+import asyncio
 import uuid
 
 from sqlalchemy import select
@@ -83,7 +84,7 @@ class DefaultDeconflictionEngine:
                         is_approved = False
                         declaration_state = 8
                 finally:
-                    fd_rtree_helper.clear_rtree_index(declaration_list)
+                    asyncio.run(fd_rtree_helper.clear_rtree_index(declaration_list))
 
         return DeconflictionResult(
             all_relevant_fences=all_relevant_fences,

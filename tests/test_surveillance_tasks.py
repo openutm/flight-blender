@@ -43,7 +43,7 @@ def _mock_db_reader(
     active_sensors=None,
     pre_window_status=None,
 ):
-    """Build a minimal SyncDatabaseFacade mock."""
+    """Build a minimal database reader mock."""
     reader = MagicMock()
     # heartbeat events queryset-like
     hb_qs = MagicMock()

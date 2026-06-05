@@ -6,27 +6,23 @@ exercise the business logic without any external dependencies.
 """
 
 import json
-from dataclasses import asdict
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import arrow
 import pytest
 
-from flight_blender.domain_types.rid import RIDStreamErrorDetail
-from flight_blender.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
 from flight_blender.services.rid_svc import FlightTelemetryRIDEngine
 from flight_blender.tasks.rid_task import (
-    _parse_rid_timestamp_us,
     _async_process_requested_flight,
+    _parse_rid_timestamp_us,
     check_rid_stream_conformance,
     stream_rid_telemetry_data,
     write_operator_rid_notification,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper builders
@@ -319,7 +315,9 @@ class TestStreamRidTelemetryData:
 class TestCheckRidStreamConformance:
     def test_conformant_stream(self):
         """check_rid_stream_conformance with a conformant stream logs OK."""
-        with patch.object(SQLAlchemyFlightFeedRepository, "get_active_rid_observations_for_session_between_interval", new_callable=AsyncMock, return_value=[]):
+        with patch.object(
+            SQLAlchemyFlightFeedRepository, "get_active_rid_observations_for_session_between_interval", new_callable=AsyncMock, return_value=[]
+        ):
             check_rid_stream_conformance(session_id=VALID_SESSION_ID)
 
     def test_non_conformant_stream_writes_notifications(self):
@@ -346,33 +344,39 @@ class TestCheckRidStreamConformance:
 
 
 class TestFlightTelemetryRIDEngine:
-    def test_check_rid_stream_ok_no_observations(self):
+    @pytest.mark.asyncio
+    async def test_check_rid_stream_ok_no_observations(self):
         """When there are no recent observations the stream is considered OK."""
-        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-empty", db_reader=SyncDatabaseFacade())
-            ok, errors = engine.check_rid_stream_ok()
+        repo = MagicMock()
+        repo.get_active_rid_observations_for_session_between_interval = AsyncMock(return_value=[])
+        engine = FlightTelemetryRIDEngine(session_id="sess-empty", db_reader=repo)
+        ok, errors = await engine.check_rid_stream_ok()
         assert ok is True
         assert errors == []
 
-    def test_check_rid_stream_ok_single_observation(self):
+    @pytest.mark.asyncio
+    async def test_check_rid_stream_ok_single_observation(self):
         """A single observation has no gaps so the stream is OK."""
         now = arrow.utcnow()
         obs = MagicMock()
-        obs.timestamp = now.datetime
-        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-single", db_reader=SyncDatabaseFacade())
-            ok, errors = engine.check_rid_stream_ok()
+        obs.created_at = now.datetime
+        repo = MagicMock()
+        repo.get_active_rid_observations_for_session_between_interval = AsyncMock(return_value=[obs])
+        engine = FlightTelemetryRIDEngine(session_id="sess-single", db_reader=repo)
+        ok, errors = await engine.check_rid_stream_ok()
         assert ok is True
 
-    def test_check_rid_stream_ok_with_gap(self):
+    @pytest.mark.asyncio
+    async def test_check_rid_stream_ok_with_gap(self):
         """Observations with a non-1-second gap produce an error."""
         now = arrow.utcnow()
         obs1 = MagicMock()
-        obs1.timestamp = now.datetime
+        obs1.created_at = now.datetime
         obs2 = MagicMock()
-        obs2.timestamp = (now + timedelta(seconds=3)).datetime
-        with patch.object(SyncDatabaseFacade, "get_active_rid_observations_for_session_between_interval", return_value=[obs1, obs2]):
-            engine = FlightTelemetryRIDEngine(session_id="sess-gap", db_reader=SyncDatabaseFacade())
-            ok, errors = engine.check_rid_stream_ok()
+        obs2.created_at = (now + timedelta(seconds=3)).datetime
+        repo = MagicMock()
+        repo.get_active_rid_observations_for_session_between_interval = AsyncMock(return_value=[obs1, obs2])
+        engine = FlightTelemetryRIDEngine(session_id="sess-gap", db_reader=repo)
+        ok, errors = await engine.check_rid_stream_ok()
         assert ok is False
         assert len(errors) == 1

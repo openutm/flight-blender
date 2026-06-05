@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 import uuid
 from dataclasses import asdict
@@ -26,7 +27,6 @@ from flight_blender.domain_types.flight_declarations import (
     CreateFlightDeclarationRequestSchema,
     CreateFlightDeclarationViaOperationalIntentRequestSchema,
     DeconflictionRequest,
-    DeconflictionResult,
     FlightDeclarationCreateResponse,
     HTTP400Response,
     HTTP404Response,
@@ -457,7 +457,7 @@ def _run_deconfliction_sa(
     return results
 
 
-def do_network_declarations_by_view(
+async def do_network_declarations_by_view(
     view: str | None,
     scd_client: SCDOperations,
 ) -> tuple[dict, int]:
@@ -493,7 +493,7 @@ def do_network_declarations_by_view(
     my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=volumes)
 
     try:
-        operational_intent_geojson = scd_client.get_and_process_nearby_operational_intents(volumes=volumes)
+        operational_intent_geojson = await scd_client.get_and_process_nearby_operational_intents(volumes=volumes)
     except (ValueError, ConnectionError):
         operational_intent_geojson = []
 
@@ -858,7 +858,7 @@ class FlightDeclarationOperations:
         all_volumes = [self.parser.parse_volume_to_volume4D(volume=volume) for volume in operational_intent_volumes]
 
         try:
-            operational_intent_geojson = self.scd_client.get_and_process_nearby_operational_intents(volumes=all_volumes)
+            operational_intent_geojson = await self.scd_client.get_and_process_nearby_operational_intents(volumes=all_volumes)
         except (ValueError, ConnectionError):
             operational_intent_geojson = []
 

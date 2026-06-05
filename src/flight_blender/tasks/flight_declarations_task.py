@@ -25,7 +25,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
 async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) -> None:
     my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=flight_declaration_id)
 
-    start_end_time_validated = my_dss_opint_creator.validate_flight_declaration_start_end_time()
+    start_end_time_validated = await my_dss_opint_creator.validate_flight_declaration_start_end_time()
 
     logger.info("Flight Operation start end time status %s" % start_end_time_validated)
 
@@ -55,7 +55,7 @@ async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) ->
     )
     logger.info("Submitting flight declaration to DSS..")
 
-    opint_submission_result = my_dss_opint_creator.submit_flight_declaration_to_dss()
+    opint_submission_result = await my_dss_opint_creator.submit_flight_declaration_to_dss()
 
     if opint_submission_result.status_code == 500:
         logger.error("Error in submitting Flight Declaration to the DSS %s" % opint_submission_result.status)

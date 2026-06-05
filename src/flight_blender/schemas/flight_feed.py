@@ -117,11 +117,6 @@ class TrafficInformationDiscoveryResponse:
     description: str
 
 
-# --- HTTP request/response schemas ---
-from pydantic import BaseModel, ConfigDict
-
-from flight_blender.schemas.flight_feed import ObservationIn, ObservationRequest
-
 __all__ = [
     "ObservationIn",
     "ObservationRequest",

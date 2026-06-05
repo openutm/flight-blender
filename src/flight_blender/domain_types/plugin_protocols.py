@@ -1,4 +1,3 @@
-
 from typing import Protocol, runtime_checkable
 
 from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult

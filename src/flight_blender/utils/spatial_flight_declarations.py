@@ -9,7 +9,9 @@ from rtree import index
 from rtree.exceptions import RTreeError
 
 from flight_blender.auth.token_cache import get_redis
+from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.flight_declarations import FlightDeclarationMetadata
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
 def _open_or_recover_index(base_path: str) -> index.Index:
@@ -56,7 +58,10 @@ class FlightDeclarationRTreeIndexFactory:
                 end_date=end_date,
             )
 
-    def clear_rtree_index(self, all_declarations: list[Any]) -> None:
+    async def clear_rtree_index(self, all_declarations: list[Any] | None = None) -> None:
+        if all_declarations is None:
+            async with async_session_scope() as db:
+                all_declarations = await SQLAlchemyFlightDeclarationRepository(db).list(states=[1, 2])
         for declaration in all_declarations:
             declaration_idx_str = str(declaration.id)
             declaration_id = int(hashlib.sha256(declaration_idx_str.encode("utf-8")).hexdigest(), 16) % 10**8

@@ -1,6 +1,9 @@
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
+
+from pydantic import BaseModel
 
 
 class NotificationLevel(Enum):
@@ -22,12 +25,6 @@ class FlightDeclarationUpdateMessage:
         NotificationLevel.DEBUG,
     ]
     timestamp: str
-
-
-# --- HTTP request/response schemas ---
-import uuid
-
-from pydantic import BaseModel
 
 
 class CreateNotificationRequest(BaseModel):

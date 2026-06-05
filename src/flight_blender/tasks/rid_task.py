@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 import uuid
 from dataclasses import asdict
 from datetime import timedelta
@@ -19,13 +18,7 @@ from flight_blender.clients import dss_rid_client as dss_rid_helper
 from flight_blender.config import settings
 from flight_blender.db.session import async_session_scope
 from flight_blender.domain_types.flight_feed import SingleRIDObservation
-from flight_blender.domain_types.rid import (
-    UASID,
-    LatLngPoint,
-    OperatorRIDNotificationCreationPayload,
-    SignedUnsignedTelemetryObservation,
-    UAClassificationEU,
-)
+from flight_blender.domain_types.rid import UASID, LatLngPoint, SignedUnsignedTelemetryObservation, UAClassificationEU
 from flight_blender.domain_types.rid import RIDAircraftState as LocalRIDAircraftState
 from flight_blender.domain_types.rid import RIDFlightDetails as LocalRIDFlightDetails
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
@@ -34,7 +27,6 @@ from flight_blender.repositories.notifications_repo import SQLAlchemyNotificatio
 from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.services.altitude import wgs84_to_barometric
 from flight_blender.services.rid_svc import (
-    FlightTelemetryRIDEngine,
     OperatorLocation,
     RIDAircraftPosition,
     RIDAircraftState,
@@ -602,9 +594,7 @@ async def _async_check_rid_stream_conformance(session_id: str) -> None:
         curr_obs = relevant_observations[i]
         time_diff = (curr_obs.created_at - prev_obs.created_at).total_seconds()
         if time_diff != 1:
-            errors.append(
-                f"NET0040: Timestamp difference error: {time_diff} seconds between observations {i - 1} and {i}"
-            )
+            errors.append(f"NET0040: Timestamp difference error: {time_diff} seconds between observations {i - 1} and {i}")
 
     if not errors:
         logger.info(f"RID Data stream for {session_id} is OK...")

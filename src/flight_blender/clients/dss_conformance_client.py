@@ -5,13 +5,12 @@ import uuid
 
 from loguru import logger
 
+from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
 from flight_blender.db.session import async_session_scope
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 
 
 async def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> None:
-    from flight_blender.clients.dss_scd_client import SCDOperations  # noqa: PLC0415
-
     my_scd_dss_helper = SCDOperations()
     async with async_session_scope() as db:
         fd_repo = SQLAlchemyFlightDeclarationRepository(db)
@@ -37,12 +36,8 @@ async def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1
 
 
 async def update_operational_intent_to_activated(flight_declaration_id: str, dry_run: int = 1) -> None:
-    from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
-    from flight_blender.domain_types.common import OPERATION_STATES  # noqa: PLC0415
-
     if dry_run:
         return
-    my_scd_dss_helper = SCDOperations()
     my_operational_intents_helper = OperationalIntentReferenceHelper()
     async with async_session_scope() as db:
         fd_repo = SQLAlchemyFlightDeclarationRepository(db)
@@ -50,13 +45,11 @@ async def update_operational_intent_to_activated(flight_declaration_id: str, dry
         if not flight_declaration:
             logger.error(f"Flight Declaration {flight_declaration_id} not found")
             return
-        current_state = flight_declaration.state
-        current_state_str = OPERATION_STATES[current_state][1]
         flight_operational_intent_reference = await fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(flight_declaration_id))
 
     if not flight_operational_intent_reference:
         return
-    stored_operational_intent = my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
+    await my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=flight_declaration_id)
     operational_intent_id = str(flight_operational_intent_reference.id)
     logger.info(f"Updating operational intent {operational_intent_id} to activated")
 

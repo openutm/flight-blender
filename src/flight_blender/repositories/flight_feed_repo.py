@@ -5,7 +5,7 @@ from typing import Optional
 
 import arrow
 from loguru import logger
-from sqlalchemy import and_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
@@ -191,9 +191,72 @@ class SQLAlchemyFlightFeedRepository:
             return None
         return await self.db.get(FlightDeclarationORM, declaration_uuid)
 
-    async def get_active_rid_observations_for_session_between_interval(
-        self, session_id: str, start_time, end_time
-    ) -> list[FlightObservationORM]:
+    # ─── Phase 1C additions ───────────────────────────────────────────────────
+
+    async def get_flight_observation_dicts(self) -> list[dict]:
+        result = await self.db.execute(select(FlightObservationORM).order_by(FlightObservationORM.created_at))
+        rows = list(result.scalars().all())
+        return [
+            {
+                "id": str(row.id),
+                "session_id": str(row.session_id) if row.session_id else "",
+                "latitude_dd": row.latitude_dd,
+                "longitude_dd": row.longitude_dd,
+                "altitude_mm": row.altitude_mm,
+                "traffic_source": row.traffic_source,
+                "source_type": row.source_type,
+                "icao_address": row.icao_address,
+                "created_at": row.created_at.isoformat(),
+                "updated_at": row.updated_at.isoformat(),
+                "metadata": row.raw_metadata,
+            }
+            for row in rows
+        ]
+
+    async def get_temporal_flight_observations_by_session_dicts(self, session_id: str, after_datetime) -> list[dict]:
+        cutoff = after_datetime.datetime if hasattr(after_datetime, "datetime") else after_datetime
+        result = await self.db.execute(
+            select(FlightObservationORM)
+            .where(
+                FlightObservationORM.session_id == uuid.UUID(session_id),
+                FlightObservationORM.created_at >= cutoff,
+            )
+            .order_by(FlightObservationORM.created_at)
+        )
+        rows = list(result.scalars().all())
+        return [
+            {
+                "id": str(row.id),
+                "session_id": str(row.session_id) if row.session_id else "",
+                "latitude_dd": row.latitude_dd,
+                "longitude_dd": row.longitude_dd,
+                "altitude_mm": row.altitude_mm,
+                "traffic_source": row.traffic_source,
+                "source_type": row.source_type,
+                "icao_address": row.icao_address,
+                "created_at": row.created_at.isoformat(),
+                "updated_at": row.updated_at.isoformat(),
+                "metadata": row.raw_metadata,
+            }
+            for row in rows
+        ]
+
+    async def get_active_rid_observations_for_view(self, start_time, end_time) -> list[FlightObservationORM]:
+        start_dt = start_time.datetime if hasattr(start_time, "datetime") else start_time
+        end_dt = end_time.datetime if hasattr(end_time, "datetime") else end_time
+        result = await self.db.execute(
+            select(FlightObservationORM).where(
+                FlightObservationORM.created_at >= start_dt,
+                FlightObservationORM.created_at <= end_dt,
+            )
+        )
+        return list(result.scalars().all())
+
+    async def delete_all_flight_observations(self) -> bool:
+        await self.db.execute(delete(FlightObservationORM))
+        return True
+
+    async def get_active_rid_observations_for_session_between_interval(self, session_id: str, start_time, end_time) -> list[FlightObservationORM]:
         start_dt = start_time.datetime if hasattr(start_time, "datetime") else start_time
         end_dt = end_time.datetime if hasattr(end_time, "datetime") else end_time
         result = await self.db.execute(
@@ -206,70 +269,3 @@ class SQLAlchemyFlightFeedRepository:
             .order_by(FlightObservationORM.created_at)
         )
         return list(result.scalars().all())
-
-
-class SQLAlchemyFlightFeedSyncRepository:
-    """Sync repository for Celery tasks."""
-
-    def __init__(self, db):
-        self.db = db
-
-    def write_flight_observation(self, single_observation: SingleAirtrafficObservation) -> bool:
-        session_id = single_observation.session_id or "00000000-0000-0000-0000-000000000000"
-        sensor_timestamp = _normalize_timestamp(single_observation.timestamp)
-        obs = FlightObservationORM(
-            session_id=session_id,
-            latitude_dd=single_observation.lat_dd,
-            longitude_dd=single_observation.lon_dd,
-            altitude_mm=single_observation.altitude_mm,
-            traffic_source=single_observation.traffic_source,
-            source_type=single_observation.source_type,
-            icao_address=single_observation.icao_address,
-            raw_metadata=json.dumps(single_observation.metadata),
-            sensor_timestamp=sensor_timestamp,
-        )
-        self.db.add(obs)
-        self.db.flush()
-        return True
-
-    def bulk_write_flight_observations(self, observations: list[SingleAirtrafficObservation]) -> bool:
-        objs = []
-        for o in observations:
-            session_id = o.session_id or "00000000-0000-0000-0000-000000000000"
-            objs.append(
-                FlightObservationORM(
-                    session_id=session_id,
-                    latitude_dd=o.lat_dd,
-                    longitude_dd=o.lon_dd,
-                    altitude_mm=o.altitude_mm,
-                    traffic_source=o.traffic_source,
-                    source_type=o.source_type,
-                    icao_address=o.icao_address,
-                    raw_metadata=json.dumps(o.metadata),
-                )
-            )
-        self.db.add_all(objs)
-        self.db.flush()
-        return True
-
-    def get_active_rid_observations_for_session_between_interval(self, session_id: str, start_time, end_time) -> list:
-        from sqlalchemy import select
-
-        start_dt = start_time.datetime if hasattr(start_time, "datetime") else start_time
-        end_dt = end_time.datetime if hasattr(end_time, "datetime") else end_time
-        result = self.db.execute(
-            select(FlightObservationORM)
-            .where(
-                FlightObservationORM.session_id == uuid.UUID(session_id),
-                FlightObservationORM.created_at >= start_dt,
-                FlightObservationORM.created_at <= end_dt,
-            )
-            .order_by(FlightObservationORM.created_at)
-        )
-        objs = list(result.scalars().all())
-        for o in objs:
-            self.db.expunge(o)
-        return objs
-
-
-SyncFlightFeedReader = SQLAlchemyFlightFeedSyncRepository
