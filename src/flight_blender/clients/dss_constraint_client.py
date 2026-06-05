@@ -206,4 +206,4 @@ class ConstraintOperations:
         return all_constraints_in_aoi
 
     def get_auth_token(self, audience: str = ""):
-        return get_dss_auth_token(audience=audience, token_type="constraints")
+        return get_dss_auth_token(audience=audience, token_type="constraints")  # nosec B106

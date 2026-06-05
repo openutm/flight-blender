@@ -819,7 +819,7 @@ class SCDOperations:
         return nearby_operational_intents
 
     def get_auth_token(self, audience: str = ""):
-        return get_dss_auth_token(audience=audience, token_type="scd")
+        return get_dss_auth_token(audience=audience, token_type="scd")  # nosec B106
 
     def delete_operational_intent(self, dss_operational_intent_ref_id: str, ovn: str) -> DeleteOperationalIntentResponse:
         """

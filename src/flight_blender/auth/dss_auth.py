@@ -122,7 +122,7 @@ class AuthorityCredentialsGetter:
             return token_data.json()
 
 
-def get_dss_auth_token(audience: str = "", token_type: str = "scd") -> dict:
+def get_dss_auth_token(audience: str = "", token_type: str = "scd") -> dict:  # nosec B107
     """Get a DSS auth token. Shared by SCD and constraint clients."""
     my_authorization_helper = AuthorityCredentialsGetter()
     if not audience:
