@@ -16,7 +16,7 @@ class Signal:
         for receiver in self._receivers:
             try:
                 receiver(sender=sender, **kwargs)
-            except Exception:
+            except Exception:  # nosec B110 — mirror Django dispatch: receiver errors must not break the sender
                 pass
         return []
 
