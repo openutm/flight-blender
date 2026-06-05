@@ -278,7 +278,7 @@ Do not fix without a product decision.
 
 ### 1. Keep `core/` import-clean
 
-Current status: `core/` has been migrated away from `api/`, `infrastructure/`, legacy domain `data_definitions.py`, legacy task modules, and legacy helper modules. The only expected match in the import scans below is `flight_blender.config`.
+**Status: PASSING.** Both gates return clean. Only allowed import is `flight_blender.config`.
 
 Run these gates after any core-layer change:
 
@@ -296,44 +296,141 @@ Do not add new `core` imports from legacy domain packages. If core needs a capab
 
 ### 2. Delete `common/database_operations.py` (deletion gate)
 
-`FlightBlenderDatabaseReader` / `FlightBlenderDatabaseWriter` remain in:
-- `rid/rtree_helper.py` — 3 call sites
-- `rid/dss_rid_helper.py` — 4 call sites
-- `rid/rid_telemetry_monitoring.py` — 1 call site
-
-Migrate each to `infrastructure/database/repositories/sync_facade.py` (already covers SCD/USS). Check that `sync_facade.py` exposes the needed RID methods; add them if not. Then run:
+**Status: DONE.** `common/database_operations.py` deleted. `FlightBlenderDatabaseReader` / `FlightBlenderDatabaseWriter` have zero remaining callers. Gate passes.
 
 ```bash
 grep -r "FlightBlenderDatabaseReader\|FlightBlenderDatabaseWriter\|from.*database_operations" \
      src/ tests/ --include="*.py" | grep -v database_operations.py
-# Must return empty
+# Returns empty — gate passes
 ```
-
-Only then delete `src/flight_blender/common/database_operations.py`.
 
 ### 3. Relocate domain helper files
 
-These files exist in bare domain packages and must be moved to the target layout:
+Files already moved (targets exist, old files deleted):
+
+| Done | Target |
+|------|--------|
+| `rid/rtree_helper.py` | `infrastructure/spatial/rid.py` ✓ |
+| `flight_declarations/flight_declarations_rtree_helper.py` | `infrastructure/spatial/flight_declarations.py` ✓ |
+| `rid/dss_rid_helper.py` | `infrastructure/dss/rid.py` ✓ |
+| `scd/dss_scd_helper.py` | `infrastructure/dss/scd.py` ✓ |
+| `constraint/dss_constraints_helper.py` | `infrastructure/dss/constraint.py` ✓ |
+| `flight_feed/pki_helper.py` | `infrastructure/auth/pki_helper.py` ✓ |
+| `notifications/notification_helper.py` | `infrastructure/messaging/notification_helper.py` ✓ |
+| `rid/tasks.py`, `geo_fence/tasks.py`, `flight_feed/tasks.py`, `surveillance/tasks.py`, `conformance/tasks.py`, `flight_declarations/tasks.py` | `infrastructure/celery/tasks/<domain>.py` ✓ |
+
+**Still to move** — files in bare domain packages that must reach the target layout:
+
+#### SCD (tier 4)
 
 | Current | Target |
 |---------|--------|
-| `rid/rtree_helper.py`, `flight_declarations/flight_declarations_rtree_helper.py` | `infrastructure/spatial/<domain>.py` |
-| `rid/dss_rid_helper.py`, `scd/dss_scd_helper.py`, `constraint/dss_constraints_helper.py` | `infrastructure/dss/<domain>.py` |
-| `flight_feed/pki_helper.py` | `infrastructure/auth/pki_helper.py` |
-| `rid/tasks.py`, `geo_fence/tasks.py`, `flight_feed/tasks.py`, `surveillance/tasks.py`, `conformance/tasks.py`, `flight_declarations/tasks.py` | `infrastructure/celery/tasks/<domain>.py` |
-| `scd/opint_helper.py`, `scd/scd_test_harness_helper.py`, `scd/utils.py` | `core/operations/scd.py` + `infrastructure/dss/scd.py` (split by whether they do I/O) |
-| `flight_declarations/deconfliction_engine.py`, `flight_declarations/deconfliction_protocol.py` | `core/operations/flight_declarations.py` or `infrastructure/` if they do I/O |
-| `conformance/*_helper.py`, `conformance/*_handler.py` | `core/operations/conformance.py` |
-| `notifications/notification_helper.py` | `core/operations/notifications.py` |
+| `scd/opint_helper.py` | pure logic → `core/operations/scd.py`; I/O → `infrastructure/dss/scd.py` |
+| `scd/scd_test_harness_helper.py` | same split |
+| `scd/utils.py` | same split |
+| `scd/data_definitions.py`, `scd/scd_data_definitions.py`, `scd/flight_planning_data_definitions.py` | consolidate into `core/entities/scd.py` (create if missing) |
 
-After each move: fix all imports, run `uv run pytest -x`, then delete the old file.
+#### Conformance (tier 3)
+
+| Current | Target |
+|---------|--------|
+| `conformance/conformance_checks_handler.py` | `core/operations/conformance.py` |
+| `conformance/conformance_state_helper.py` | `core/operations/conformance.py` |
+| `conformance/operation_state_helper.py` | `core/operations/conformance.py` |
+| `conformance/data_helper.py` | `core/operations/conformance.py` |
+| `conformance/dss_handlers.py` | `infrastructure/dss/conformance.py` (does I/O) |
+| `conformance/operator_conformance_notifications.py` | `core/operations/conformance.py` or `infrastructure/messaging/` if sends HTTP |
+| `conformance/custom_signals.py` | `core/operations/conformance.py` (pure) |
+| `conformance/utils.py` | `core/operations/conformance.py` (pure) |
+| `conformance/data_definitions.py` | merge into `core/entities/conformance.py` |
+
+#### Flight Declarations (tier 4)
+
+| Current | Target |
+|---------|--------|
+| `flight_declarations/deconfliction_protocol.py` | `core/operations/flight_declarations.py` (Protocol definition) |
+| `flight_declarations/deconfliction_engine.py` | `core/operations/flight_declarations.py` (pure) or `infrastructure/` (if I/O) |
+| `flight_declarations/example_deconfliction_engine.py` | `plugins/examples/` |
+| `flight_declarations/custom_volume_generation.py` | `core/operations/flight_declarations.py` (pure) or `infrastructure/spatial/flight_declarations.py` (geo) |
+| `flight_declarations/custom_utils.py`, `flight_declarations/utils.py` | `core/operations/flight_declarations.py` (pure) |
+| `flight_declarations/data_definitions.py` | merge into `core/entities/flight_declarations.py` |
+
+#### RID (tier 3)
+
+| Current | Target |
+|---------|--------|
+| `rid/rid_telemetry_monitoring.py` | `core/operations/rid.py` (pure) or `infrastructure/` (if I/O) |
+| `rid/rid_utils.py` | `core/operations/rid.py` |
+| `rid/view_port_ops.py` | `core/operations/rid.py` |
+| `rid/data_definitions.py` | merge into `core/entities/rid.py` |
+
+#### Flight Feed (tier 2)
+
+| Current | Target |
+|---------|--------|
+| `flight_feed/flight_stream_helper.py` | `core/operations/flight_feed.py` (pure) or `infrastructure/` (if I/O) |
+| `flight_feed/rid_telemetry_helper.py` | `core/operations/flight_feed.py` or `infrastructure/dss/rid.py` |
+| `flight_feed/data_definitions.py` | merge into `core/entities/flight_feed.py` |
+
+#### Surveillance (tier 1)
+
+| Current | Target |
+|---------|--------|
+| `surveillance/metric_calculator.py` | `core/operations/surveillance.py` |
+| `surveillance/traffic_data_fuser_protocol.py` | `core/repositories/surveillance.py` (Protocol) |
+| `surveillance/custom_utils.py`, `surveillance/utils.py` | `core/operations/surveillance.py` |
+| `surveillance/custom_signals.py` | `core/operations/surveillance.py` (pure) |
+| `surveillance/data_definitions.py` | merge into `core/entities/surveillance.py` |
+
+#### Geo Fence (tier 1)
+
+| Current | Target |
+|---------|--------|
+| `geo_fence/rtree_geo_fence_helper.py` | absorb into `infrastructure/spatial/geo_fence.py` |
+| `geo_fence/buffer_helper.py` | absorb into `infrastructure/spatial/geo_fence.py` |
+| `geo_fence/common.py` | `core/operations/geo_fence.py` (pure) |
+| `geo_fence/data_definitions.py` | merge into `core/entities/geo_fence.py` |
+
+#### Constraint (tier 2)
+
+| Current | Target |
+|---------|--------|
+| `constraint/constraints_helper.py` | absorb into `infrastructure/dss/constraint.py` |
+| `constraint/data_definitions.py` | merge into `core/entities/constraint.py` (create if missing) |
+
+#### Notifications (tier 1)
+
+| Current | Target |
+|---------|--------|
+| `notifications/data_definitions.py` | merge into `core/entities/notifications.py` |
+
+#### USS (tier 4)
+
+| Current | Target |
+|---------|--------|
+| `uss/rid_data_definitions.py`, `uss/uss_data_definitions.py` | merge into `core/entities/uss.py` (create if missing) |
+
+#### Auth / Common (cross-cutting)
+
+| Current | Target |
+|---------|--------|
+| `auth/dss_auth_helper.py` | `infrastructure/auth/` |
+| `auth/common.py` | `infrastructure/auth/` |
+| `common/altitude_helper.py` | `core/operations/` (pure) or `infrastructure/spatial/` (geo) |
+| `common/auth_token_audience_helper.py` | `infrastructure/auth/` |
+| `common/base_traffic_data_fuser.py` | `core/repositories/` (Protocol) or `infrastructure/` |
+| `common/data_definitions.py` | split: entities → `core/entities/`, shared types stay until callers migrated |
+| `common/dispatch.py` | `infrastructure/celery/` |
+| `common/redis_stream_operations.py` | `infrastructure/` (I/O) |
+| `common/utils.py` | `core/operations/` (pure) or split |
+
+After each move: fix all imports, run `uv run pytest -x`, delete old file.
 
 ### 4. Delete dead legacy files
 
-No callers; delete after confirming with `grep -r`:
-- `uss/views.py`, `surveillance/views.py`, `flight_feed/views.py`
-- `flight_feed/serializers.py`, `flight_declarations/serializers.py`
-- `flight_declarations/pagination.py`, `scd/views.py`, `conformance/views.py`
+**Status: DONE.** All files confirmed deleted:
+`uss/views.py`, `surveillance/views.py`, `flight_feed/views.py`, `flight_feed/serializers.py`,
+`flight_declarations/serializers.py`, `flight_declarations/pagination.py`, `scd/views.py`, `conformance/views.py`.
 
 ### 5. Django admin decision
 
@@ -351,13 +448,9 @@ uv run pyright src/
 uvicorn flight_blender.asgi:application --port 8000
 uv run celery -A flight_blender.celery worker --loglevel=info
 
-# Core import gates
+# Core import gates (Task 1)
 rg '^from flight_blender\.(api|infrastructure)|^import flight_blender\.(api|infrastructure)' \
    src/flight_blender/core -n
 rg '^from flight_blender\.[a-z_]+\.(data_definitions|rid_utils|tasks|.*helper)|^from flight_blender\.[a-z_]+ import' \
    src/flight_blender/core -n
-
-# Deletion gate (Task 2)
-grep -r "FlightBlenderDatabaseReader\|FlightBlenderDatabaseWriter\|from.*database_operations" \
-     src/ tests/ --include="*.py" | grep -v database_operations.py
 ```
