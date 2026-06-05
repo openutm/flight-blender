@@ -1,8 +1,11 @@
 import json
-from os import environ as env
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from jwcrypto import jwk
+from loguru import logger
+
+from flight_blender.config import settings
 
 router = APIRouter()
 
@@ -14,17 +17,14 @@ async def ping():
 
 @router.get("/signing_public_key")
 async def signing_public_key():
-    from jwcrypto import jwk
-
     keys = []
-    private_key = env.get("SECRET_KEY", None)
-    if private_key:
+    if settings.SECRET_KEY:
         try:
-            for pem in [private_key]:
+            for pem in [settings.SECRET_KEY]:
                 key = jwk.JWK.from_pem(pem.encode("utf8"))
                 data = {"alg": "RS256", "use": "sig", "kid": key.thumbprint()}
                 data.update(json.loads(key.export_public()))
                 keys.append(data)
         except Exception:
-            pass
+            logger.exception("Error during signing public key.")
     return JSONResponse({"keys": keys}, headers={"Access-Control-Allow-Origin": "*"})

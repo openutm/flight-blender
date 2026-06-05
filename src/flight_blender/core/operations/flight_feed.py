@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import uuid
 from dataclasses import asdict
 from enum import Enum
@@ -16,7 +15,7 @@ from loguru import logger
 from shapely.geometry import Point
 from shapely.geometry import box as shapely_box
 
-from flight_blender.auth.common import get_redis
+from flight_blender.config import settings
 from flight_blender.core.entities.flight_feed import (
     FlightObservationSchema,
     FlightObservationsProcessingResponse,
@@ -32,6 +31,7 @@ from flight_blender.core.entities.rid import (
     SubmittedTelemetryFlightDetails,
 )
 from flight_blender.core.repositories.flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, TelemetryValidator
+from flight_blender.core.repositories.redis import SyncRedisClient
 
 
 def _check_view_port(view_port_coords: list[float]) -> bool:
@@ -53,10 +53,17 @@ def _build_view_port_box(view_port_coords: list[float]):
 
 
 class FlightFeedOperations:
-    def __init__(self, repo: FlightFeedRepository, dispatcher: FlightFeedTaskDispatcher, telemetry_validator: TelemetryValidator):
+    def __init__(
+        self,
+        repo: FlightFeedRepository,
+        dispatcher: FlightFeedTaskDispatcher,
+        telemetry_validator: TelemetryValidator,
+        redis: SyncRedisClient,
+    ):
         self.repo = repo
         self.dispatcher = dispatcher
         self.telemetry_validator = telemetry_validator
+        self.redis = redis
 
     @staticmethod
     def _to_observations(session_id: uuid.UUID, body: ObservationRequest) -> list[SingleAirtrafficObservation]:
@@ -100,16 +107,15 @@ class FlightFeedOperations:
             return {"message": "A incorrect view port bbox was provided"}, 400
 
         view_port_box = _build_view_port_box(view_port_coords=view_port)
-        r = get_redis()
         key = f"last_reading_for_{session_id}"
-        if r.exists(key):
-            last_reading_time = r.get(key)
+        if self.redis.exists(key):
+            last_reading_time = self.redis.get(key)
             after_datetime = arrow.get(last_reading_time)
         else:
             after_datetime = arrow.now().shift(seconds=-20)
 
-        r.set(key, arrow.now().isoformat())
-        r.expire(key, 300)
+        self.redis.set(key, arrow.now().isoformat())
+        self.redis.expire(key, 300)
         observation_rows = await self.repo.get_recent_flight_observations(after_datetime=after_datetime)
         all_observations = []
         for row in observation_rows:
@@ -200,7 +206,7 @@ class FlightFeedOperations:
         rid_observations = raw_data["observations"]
         unsigned_telemetry_observations = []
         allowed_states = [2, 3, 4]
-        if not int(os.environ.get("USSP_NETWORK_ENABLED", 0)):
+        if not settings.USSP_NETWORK_ENABLED:
             allowed_states.append(1)
 
         for flight in rid_observations:
@@ -357,24 +363,24 @@ def batcher(iterable, n):
 
 
 class ObservationReadOperations:
-    def __init__(self, view_port_box=None):
+    def __init__(self, redis: SyncRedisClient, view_port_box=None):
         self.view_port_box: shapely_box = view_port_box
+        self.redis: SyncRedisClient = redis
 
     def get_flight_observations(self, session_id: str) -> list[FlightObservationSchema]:
         from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
 
         my_database_reader = SyncDatabaseFacade()
-        r = get_redis()
         key = f"last_reading_for_{session_id}"
-        if r.exists(key):
-            last_reading_time = r.get(key)
+        if self.redis.exists(key):
+            last_reading_time = self.redis.get(key)
             after_datetime = arrow.get(last_reading_time)
         else:
             now = arrow.now()
             after_datetime = now.shift(seconds=-20)
 
-        r.set(key, arrow.now().isoformat())
-        r.expire(key, 300)
+        self.redis.set(key, arrow.now().isoformat())
+        self.redis.expire(key, 300)
         pending_messages = []
         all_flight_observations = my_database_reader.get_flight_observations(after_datetime=after_datetime)
         logger.info("Retrieved all flight observations..")
@@ -479,17 +485,16 @@ class ObservationReadOperations:
         from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
 
         my_database_reader = SyncDatabaseFacade()
-        r = get_redis()
         key = f"last_reading_for_{session_id}"
-        if r.exists(key):
-            last_reading_time = r.get(key)
+        if self.redis.exists(key):
+            last_reading_time = self.redis.get(key)
             after_datetime = arrow.get(last_reading_time)
         else:
             now = arrow.now()
             after_datetime = now.shift(seconds=-20)
 
-        r.set(key, arrow.now().isoformat())
-        r.expire(key, 300)
+        self.redis.set(key, arrow.now().isoformat())
+        self.redis.expire(key, 300)
         pending_messages = []
         all_flight_observations = my_database_reader.get_temporal_flight_observations_by_session(session_id=session_id, after_datetime=after_datetime)
         for message in all_flight_observations:

@@ -5,8 +5,8 @@ from fastapi.responses import JSONResponse
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.api.schemas.weather import WeatherResponse
-from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE
 from flight_blender.config import settings
+from flight_blender.core.entities.common import FLIGHTBLENDER_READ_SCOPE
 from flight_blender.core.operations.weather import WeatherOperations
 from flight_blender.infrastructure.external.weather_client import WeatherClient
 

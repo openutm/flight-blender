@@ -1,28 +1,21 @@
 import json
 import time
 from dataclasses import asdict
-from os import environ as env
 
 import arrow
 import pandas as pd
 import requests
 from dacite import from_dict
 from dacite.exceptions import DaciteError, WrongTypeError
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from pyproj import Transformer
 
 from flight_blender.celery import app
-from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.config import settings
 from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedSyncRepository
 from flight_blender.infrastructure.database.session import session_scope
-
-load_dotenv(find_dotenv())
-
-ENV_FILE = find_dotenv()
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
+from flight_blender.infrastructure.redis.stream_operations import RedisStreamOperations
 
 #### Airtraffic Endpoint
 
@@ -131,7 +124,7 @@ def start_opensky_network_stream(view_port: str, session_id: str):
         max(view_port[1], view_port[3]),
     )
 
-    heartbeat = int(env.get("HEARTBEAT_RATE_SECS", 2))
+    heartbeat = settings.HEARTBEAT_RATE_SECS
     end_time = arrow.now().shift(seconds=60)
 
     logger.info("Querying OpenSkies Network for one minute.. ")
@@ -140,7 +133,7 @@ def start_opensky_network_stream(view_port: str, session_id: str):
         url_data = f"https://opensky-network.org/api/states/all?lamin={lat_min}&lomin={lng_min}&lamax={lat_max}&lomax={lng_max}"
         response = requests.get(
             url_data,
-            auth=(env.get("OPENSKY_NETWORK_USERNAME", "opensky"), env.get("OPENSKY_NETWORK_PASSWORD", "opensky")),
+            auth=(settings.OPENSKY_NETWORK_USERNAME, settings.OPENSKY_NETWORK_PASSWORD),
             timeout=30,
         )
         logger.info(url_data)

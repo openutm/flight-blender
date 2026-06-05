@@ -18,13 +18,13 @@ See PLUGINS.md for the full guide.
 from loguru import logger
 from sqlalchemy import select
 
-from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
+from flight_blender.core.entities.common import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
 from flight_blender.core.entities.flight_declarations import DeconflictionRequest, DeconflictionResult
 from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
 from flight_blender.infrastructure.database.session import session_scope
 
 # Derive state codes directly from the canonical OPERATION_STATES tuple so this
-# example can never silently drift out of sync with common/data_definitions.py.
+# example can never silently drift out of sync with core/entities/common.py.
 _STATES_LOOKUP = {str(label): code for code, label in OPERATION_STATES}
 _STATE_NOT_SUBMITTED = _STATES_LOOKUP["Not Submitted"]  # 0 — pending USSP network validation
 _STATE_ACCEPTED = _STATES_LOOKUP["Accepted"]  # 1 — locally accepted (no USSP network)

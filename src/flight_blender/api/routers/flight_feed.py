@@ -8,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.api.schemas.flight_feed import ObservationRequest, SignedTelemetryKeyCreate, SignedTelemetryKeyUpdate
-from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from flight_blender.core.entities.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.operations.flight_feed import FlightBlenderTelemetryValidator, FlightFeedOperations
 from flight_blender.infrastructure.auth.pki_helper import MessageVerifier, ResponseSigningOperations
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 from flight_blender.infrastructure.celery.flight_feed_dispatcher import CeleryFlightFeedTaskDispatcher
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.infrastructure.database.session import async_get_db
@@ -25,6 +26,7 @@ async def _ops(db: AsyncSession = Depends(async_get_db)) -> FlightFeedOperations
         repo=SQLAlchemyFlightFeedRepository(db),
         dispatcher=CeleryFlightFeedTaskDispatcher(),
         telemetry_validator=FlightBlenderTelemetryValidator(),
+        redis=get_redis(),
     )
 
 

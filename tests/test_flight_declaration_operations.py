@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from flight_blender.config import settings
 from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE, READ_WRITE_SCOPE
 
 
@@ -403,7 +404,7 @@ class TestSubmitToDSSEnabled:
 
     def test_submit_to_dss_not_found(self, mounted_sync_client, monkeypatch):
         """When the flight declaration does not exist, returns 404."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         pk = str(uuid.uuid4())
         resp = mounted_sync_client.post(
             f"/flight_declaration_ops/flight_declaration/{pk}/submit_to_dss",
@@ -413,7 +414,7 @@ class TestSubmitToDSSEnabled:
 
     def test_submit_to_dss_wrong_state(self, mounted_sync_client, monkeypatch, flight_declaration_payload):
         """Flight declaration not in state=0 returns 409."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         create_resp = mounted_sync_client.post(
             "/flight_declaration_ops/set_flight_declaration",
             json=flight_declaration_payload,
@@ -440,8 +441,8 @@ class TestSubmitToDSSEnabled:
         AUTO_SUBMIT_TO_DSS=0 prevents the creation endpoint from auto-submitting
         (which would consume the state=0 window and return 409 on the explicit call).
         """
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
-        monkeypatch.setenv("AUTO_SUBMIT_TO_DSS", "0")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
+        monkeypatch.setattr(settings, "AUTO_SUBMIT_TO_DSS", 0)
         create_resp = mounted_sync_client.post(
             "/flight_declaration_ops/set_flight_declaration",
             json=flight_declaration_payload,
@@ -462,7 +463,7 @@ class TestNetworkFlightDeclarationsByViewEnabled:
 
     def test_network_by_view_enabled_returns_200(self, mounted_sync_client, monkeypatch, mock_network_opint_empty):
         """With USSP enabled and mocked DSS, returns 200 with empty list."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         resp = mounted_sync_client.get(
             "/flight_declaration_ops/network_flight_declarations_by_view?view=52.500,13.399,52.501,13.400",
             headers=fastapi_auth_header(READ_SCOPE),
@@ -471,7 +472,7 @@ class TestNetworkFlightDeclarationsByViewEnabled:
 
     def test_network_by_id_enabled_no_flight(self, mounted_sync_client, monkeypatch):
         """With USSP enabled but flight not found returns 400 or 404."""
-        monkeypatch.setenv("USSP_NETWORK_ENABLED", "1")
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
         pk = str(uuid.uuid4())
         resp = mounted_sync_client.get(
             f"/flight_declaration_ops/flight_declaration/{pk}/network_flight_declarations",

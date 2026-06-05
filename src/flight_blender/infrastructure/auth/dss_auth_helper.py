@@ -1,16 +1,11 @@
 import json
 from datetime import datetime, timedelta
-from os import environ as env
 
 import requests
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from ...auth.common import get_redis
-
-ENV_FILE = find_dotenv()
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
+from flight_blender.config import settings
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
 
 class AuthorityCredentialsGetter:
@@ -93,12 +88,12 @@ class AuthorityCredentialsGetter:
         issuer = audience if audience == "localhost" else None
         scopes_str = " ".join(scopes)
 
-        auth_server_url = env.get("DSS_AUTH_URL", "http://host.docker.internal:8085") + env.get("DSS_AUTH_TOKEN_ENDPOINT", "/auth/token")
+        auth_server_url = settings.DSS_AUTH_URL + settings.DSS_AUTH_TOKEN_ENDPOINT
 
         if auth_server_url.startswith("http://local_"):
             payload = {
                 "grant_type": "client_credentials",
-                "intended_audience": env.get("DSS_SELF_AUDIENCE"),
+                "intended_audience": settings.DSS_SELF_AUDIENCE,
                 "scope": scopes_str,
                 "issuer": issuer,
             }
@@ -112,8 +107,8 @@ class AuthorityCredentialsGetter:
         else:
             payload = {
                 "grant_type": "client_credentials",
-                "client_id": env.get("AUTH_DSS_CLIENT_ID"),
-                "client_secret": env.get("AUTH_DSS_CLIENT_SECRET"),
+                "client_id": settings.AUTH_DSS_CLIENT_ID,
+                "client_secret": settings.AUTH_DSS_CLIENT_SECRET,
                 "audience": audience,
                 "scope": scopes_str,
             }

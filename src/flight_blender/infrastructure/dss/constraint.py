@@ -1,31 +1,24 @@
 import json
 from dataclasses import asdict
 from enum import Enum
-from os import environ as env
 from urllib.parse import urlparse
 
 import requests
 import urllib3
 from dacite import Config, from_dict
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
+from flight_blender.config import settings
 from flight_blender.core.entities.constraint import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 from flight_blender.core.entities.scd import Time, Volume4D
 from flight_blender.infrastructure.auth import dss_auth_helper
 from flight_blender.infrastructure.auth.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
-load_dotenv(find_dotenv())
-
-ENV_FILE = find_dotenv()
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
-
 
 class ConstraintOperations:
     def __init__(self):
-        self.dss_base_url = env.get("DSS_BASE_URL", "0")
+        self.dss_base_url = settings.DSS_BASE_URL
 
         self.database_reader = SyncDatabaseFacade()
         self.database_writer = SyncDatabaseFacade()
@@ -41,7 +34,7 @@ class ConstraintOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
+        flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
 
         all_constraints_in_aoi: list[Constraint] = []
 
@@ -216,7 +209,7 @@ class ConstraintOperations:
     def get_auth_token(self, audience: str = ""):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
         if not audience:
-            audience = env.get("DSS_SELF_AUDIENCE", "")
+            audience = settings.DSS_SELF_AUDIENCE
         if not audience:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
             return {"error": "DSS_SELF_AUDIENCE is not set in the environment"}

@@ -8,7 +8,6 @@ from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.common.utils import EnhancedJSONEncoder
 from flight_blender.core.entities.scd import (
     CapabilitiesResponse,
     CompositeOperationalIntentPayload,
@@ -22,6 +21,7 @@ from flight_blender.core.entities.scd import (
     SCDTestStatusResponse,
     USSCapabilitiesResponseEnum,
 )
+from flight_blender.core.operations.json_codecs import EnhancedJSONEncoder
 
 router = APIRouter(prefix="/scd")
 
@@ -69,7 +69,7 @@ def _do_flight_planning_clear_area(request_data: dict) -> tuple[dict, int]:
 
 
 def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dict, int]:
-    from flight_blender.common.data_definitions import OPERATION_STATES_LOOKUP
+    from flight_blender.core.entities.common import OPERATION_STATES_LOOKUP
     from flight_blender.core.operations.scd import (
         FlightPlanningDataProcessor,
         FlightPlantoOperationalIntentProcessor,
@@ -157,7 +157,7 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
     generated_operational_intent_state = my_flight_plan_op_intent_bridge.generate_operational_intent_state_from_planning_information()
 
     if flight_plan_exists_in_flight_blender and generated_operational_intent_state in ["Activated", "Nonconforming"]:
-        from flight_blender.common.data_definitions import OPERATION_STATES
+        from flight_blender.core.entities.common import OPERATION_STATES
 
         existing_op_int_details = my_operational_intent_parser.parse_stored_operational_intent_details(operation_id=operation_id_str)
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=operation_id_str)

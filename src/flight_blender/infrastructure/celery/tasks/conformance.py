@@ -1,4 +1,3 @@
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 from flight_blender.celery import app
@@ -6,12 +5,7 @@ from flight_blender.core.entities.scd import LatLngPoint
 from flight_blender.core.operations import conformance as custom_signals
 from flight_blender.core.operations import flight_feed as flight_stream_helper
 from flight_blender.core.operations.conformance import FlightBlenderConformanceEngine
-
-load_dotenv(find_dotenv())
-
-ENV_FILE = find_dotenv()
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
 
 # This method conducts flight conformance checks as a async tasks
@@ -49,7 +43,7 @@ def check_operation_telemetry_conformance(flight_declaration_id: str, dry_run: s
     dry_run = dry_run == "1"
     my_conformance_ops = FlightBlenderConformanceEngine()
     # Get Telemetry
-    obs_helper = flight_stream_helper.ObservationReadOperations()
+    obs_helper = flight_stream_helper.ObservationReadOperations(redis=get_redis())
     latest_rid_observation = obs_helper.get_latest_flight_observation_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
     # Get the latest telemetry
 

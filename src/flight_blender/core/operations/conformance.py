@@ -3,6 +3,7 @@ from datetime import datetime
 
 from loguru import logger
 
+from flight_blender.config import settings
 from flight_blender.core.entities.conformance import ConformanceRecord, ConformanceSummary
 from flight_blender.core.entities.scd import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
 from flight_blender.core.repositories.conformance import ConformanceRepository
@@ -321,17 +322,14 @@ class FlightOperationStateMachine:
 
 class FlightOperationConformanceHelper:
     def __init__(self, flight_declaration_id: str):
-        import os  # noqa: PLC0415
-        from os import environ as env  # noqa: PLC0415
-
         from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
 
         self.flight_declaration_id = flight_declaration_id
         self.database_reader = SyncDatabaseFacade()
         self.flight_declaration = self.database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
         self.database_writer = SyncDatabaseFacade()
-        self.ENABLE_CONFORMANCE_MONITORING = int(os.getenv("ENABLE_CONFORMANCE_MONITORING", 0))
-        self.USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
+        self.ENABLE_CONFORMANCE_MONITORING = settings.ENABLE_CONFORMANCE_MONITORING
+        self.USSP_NETWORK_ENABLED = settings.USSP_NETWORK_ENABLED
 
     def verify_operation_state_transition(self, original_state: int, new_state: int, event: str) -> bool:
         my_operation_state_machine = FlightOperationStateMachine(state=original_state)
@@ -466,8 +464,6 @@ class FlightOperationConformanceHelper:
 
 class OperationConformanceNotification:
     def __init__(self, flight_declaration_id: str):
-        from flight_blender.config import settings  # noqa: PLC0415
-
         self.amqp_connection_url = settings.AMQP_URL
         self.flight_declaration_id = flight_declaration_id
 
@@ -487,7 +483,7 @@ class OperationConformanceNotification:
 
 # ── Signal definitions + receivers (from conformance/custom_signals.py) ───────
 
-from flight_blender.common.dispatch import Signal, receiver  # noqa: E402
+from flight_blender.core.operations.signals import Signal, receiver  # noqa: E402
 
 telemetry_non_conformance_signal = Signal()
 flight_operational_intent_reference_non_conformance_signal = Signal()
@@ -495,8 +491,6 @@ flight_operational_intent_reference_non_conformance_signal = Signal()
 
 @receiver(telemetry_non_conformance_signal)
 def process_telemetry_conformance_message(sender, **kwargs):
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
     non_conformance_state = int(kwargs["non_conformance_state"])
     flight_declaration_id = kwargs["flight_declaration_id"]
     my_operation_notification = OperationConformanceNotification(flight_declaration_id=flight_declaration_id)
@@ -559,6 +553,8 @@ def process_telemetry_conformance_message(sender, **kwargs):
         new_state = 3
         event = "ua_exits_coordinated_op_intent"
 
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
     my_flight_blender_database_reader = SyncDatabaseFacade()
     fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
     my_database_writer = SyncDatabaseFacade()
@@ -585,8 +581,6 @@ def process_telemetry_conformance_message(sender, **kwargs):
 
 @receiver(flight_operational_intent_reference_non_conformance_signal)
 def process_flight_operational_intent_reference_non_conformance_message(sender, **kwargs):
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
-
     non_conformance_state = kwargs["non_conformance_state"]
     flight_declaration_id = kwargs["flight_declaration_id"]
     my_operation_notification = OperationConformanceNotification(flight_declaration_id=flight_declaration_id)
@@ -630,6 +624,8 @@ def process_flight_operational_intent_reference_non_conformance_message(sender, 
         my_operation_notification.send_conformance_status_notification(message=authorization_not_granted_message, level="error")
         event = "flight_blender_confirms_contingent"
 
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
+
     my_flight_blender_database_reader = SyncDatabaseFacade()
     fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
     my_database_writer = SyncDatabaseFacade()
@@ -656,7 +652,6 @@ def process_flight_operational_intent_reference_non_conformance_message(sender, 
 # ── Conformance engine (from conformance/utils.py) ────────────────────────────
 
 import json as _json  # noqa: E402
-from os import environ as _env  # noqa: E402
 
 import arrow  # noqa: E402
 from shapely.geometry import Point as _Point  # noqa: E402
@@ -685,7 +680,7 @@ class FlightBlenderConformanceEngine:
 
         my_database_reader = SyncDatabaseFacade()
         now = arrow.now()
-        USSP_NETWORK_ENABLED = int(_env.get("USSP_NETWORK_ENABLED", 0))
+        USSP_NETWORK_ENABLED = settings.USSP_NETWORK_ENABLED
 
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
 
@@ -820,7 +815,7 @@ class FlightBlenderConformanceEngine:
         flight_operational_intent_reference_exists = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(
             flight_declaration_id=flight_declaration_id
         )
-        ussp_network_enabled = int(_env.get("USSP_NETWORK_ENABLED", 0))
+        ussp_network_enabled = settings.USSP_NETWORK_ENABLED
         if ussp_network_enabled and not flight_operational_intent_reference_exists:
             logger.info(f"Flight authorization / operational intent reference does not exist for {flight_declaration_id}, C11 Check failed.")
             logger.info(f"Raising Error code {ConformanceChecksList.C11}")

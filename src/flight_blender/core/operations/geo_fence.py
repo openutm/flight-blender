@@ -11,7 +11,6 @@ from implicitdict import ImplicitDict
 from shapely.geometry import Point, mapping, shape
 from shapely.ops import transform, unary_union
 
-from flight_blender.auth.common import get_async_redis
 from flight_blender.core.entities.geo_fence import (
     ED269Geometry,
     GeoAwarenessImportResponseEnum,
@@ -29,6 +28,7 @@ from flight_blender.core.entities.geo_fence import (
     ZoneAuthority,
 )
 from flight_blender.core.repositories.geo_fence import GeoFenceRepository, GeoFenceSpatialService, GeoFenceTaskDispatcher
+from flight_blender.core.repositories.redis import AsyncRedisClient
 
 proj_wgs84 = pyproj.Proj("+proj=longlat +datum=WGS84")
 
@@ -50,10 +50,17 @@ def _compute_bounds_and_times(features: list[dict]) -> tuple[str, str, str, Deci
 
 
 class GeoFenceOperations:
-    def __init__(self, repo: GeoFenceRepository, dispatcher: GeoFenceTaskDispatcher, spatial: GeoFenceSpatialService):
+    def __init__(
+        self,
+        repo: GeoFenceRepository,
+        dispatcher: GeoFenceTaskDispatcher,
+        spatial: GeoFenceSpatialService,
+        redis: AsyncRedisClient,
+    ):
         self.repo = repo
         self.dispatcher = dispatcher
         self.spatial = spatial
+        self.redis: AsyncRedisClient = redis
 
     async def list_geofences(
         self,
@@ -136,32 +143,29 @@ class GeoFenceOperations:
         return asdict(result)
 
     async def get_geozone_source_status(self, geozone_source_id: str) -> dict | None:
-        r = get_async_redis()
         key = "geoawarenes_test." + geozone_source_id
-        if await r.exists(key):
-            return json.loads(await r.get(key))
+        if await self.redis.exists(key):
+            return json.loads(await self.redis.get(key))
         return None
 
     async def put_geozone_source(self, geozone_source_id: str, geo_zone_url: str) -> dict:
-        r = get_async_redis()
         key = "geoawarenes_test." + geozone_source_id
         response = GeoAwarenessTestStatus(result=GeoAwarenessImportResponseEnum.Activating, message="")
         self.dispatcher.download_geozone_source(geo_zone_url=geo_zone_url, geozone_source_id=geozone_source_id)
-        await r.set(key, json.dumps(asdict(response)))
-        await r.expire(name=key, time=3000)
+        await self.redis.set(key, json.dumps(asdict(response)))
+        await self.redis.expire(name=key, time=3000)
         return asdict(response)
 
     async def delete_geozone_source(self, geozone_source_id: str) -> dict | None:
-        r = get_async_redis()
         key = "geoawarenes_test." + geozone_source_id
-        if not await r.exists(key):
+        if not await self.redis.exists(key):
             return None
         await self.repo.delete_test_geofences()
         deletion_status = GeoAwarenessTestStatus(
             result=GeoAwarenessImportResponseEnum.Deactivating,
             message="Test data has been scheduled to be deleted",
         )
-        await r.set(key, json.dumps(asdict(deletion_status)))
+        await self.redis.set(key, json.dumps(asdict(deletion_status)))
         return asdict(deletion_status)
 
     async def check_geozones(self, body: GeoZoneCheckRequestBody) -> dict:

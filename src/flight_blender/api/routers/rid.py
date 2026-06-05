@@ -13,8 +13,7 @@ from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiag
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.api.schemas.rid import CreateTestBody, ISACallbackBody
-from flight_blender.auth.common import get_redis
-from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from flight_blender.core.entities.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.entities.uss import (
     FlightDetailsNotFoundMessage,
     GenericErrorResponseMessage,
@@ -34,6 +33,7 @@ from flight_blender.core.operations.rid import (
     RIDVolume4D,
     SubscriptionState,
 )
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.infrastructure.database.repositories.sa_rid import SQLAlchemyRIDRepository
 from flight_blender.infrastructure.database.session import async_get_db
@@ -109,8 +109,11 @@ async def get_rid_data(
         return JSONResponse({}, status_code=404)
 
     from flight_blender.core.operations import flight_feed as flight_stream_helper
+    from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
-    observations = flight_stream_helper.ObservationReadOperations().get_temporal_flight_observations_by_session(session_id=sub_id_str)
+    observations = flight_stream_helper.ObservationReadOperations(redis=get_redis()).get_temporal_flight_observations_by_session(
+        session_id=sub_id_str
+    )
     return JSONResponse(observations or {}, status_code=200 if observations else 404)
 
 

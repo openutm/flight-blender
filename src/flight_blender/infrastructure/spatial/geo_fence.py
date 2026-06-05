@@ -11,8 +11,8 @@ from rtree.exceptions import RTreeError
 from shapely.geometry import Point
 from shapely.geometry import Polygon as ShpPolygon
 
-from flight_blender.auth.common import get_redis
 from flight_blender.core.entities.geo_fence import GEOFENCE_INDEX_BASEPATH, GeoFenceMetadata
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
 # ── buffer helpers (from geo_fence/buffer_helper.py) ─────────────────────────
 

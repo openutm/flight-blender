@@ -13,9 +13,15 @@ from unittest.mock import MagicMock, patch
 
 import arrow
 
-from flight_blender.common.redis_stream_operations import RedisStreamOperations
+from flight_blender.config import settings
+
 from flight_blender.core.operations.surveillance import SurveillanceMetricCalculator
-from flight_blender.infrastructure.celery.tasks.surveillance import cleanup_old_heartbeat_events, send_and_generate_track_to_consumer, send_heartbeat_to_consumer
+from flight_blender.infrastructure.celery.tasks.surveillance import (
+    cleanup_old_heartbeat_events,
+    send_and_generate_track_to_consumer,
+    send_heartbeat_to_consumer,
+)
+from flight_blender.infrastructure.redis.stream_operations import RedisStreamOperations
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -258,6 +264,7 @@ def _mock_sa_repo():
 
 def _sa_repo_patch(mock_repo):
     """Context manager: patch SessionLocal (via session_scope) + the repo class as looked up in tasks."""
+
     @contextmanager
     def _ctx():
         mock_session = MagicMock()
@@ -268,9 +275,7 @@ def _sa_repo_patch(mock_repo):
         mock_repo_cls = MagicMock(return_value=mock_repo)
 
         with ExitStack() as stack:
-            stack.enter_context(
-                patch("flight_blender.infrastructure.database.session.SessionLocal", return_value=mock_session)
-            )
+            stack.enter_context(patch("flight_blender.infrastructure.database.session.SessionLocal", return_value=mock_session))
             stack.enter_context(
                 patch(
                     "flight_blender.infrastructure.celery.tasks.surveillance.SQLAlchemySurveillanceSyncRepository",
@@ -344,7 +349,7 @@ class TestCleanupOldHeartbeatEvents:
 
     def test_cleanup_with_custom_retention(self, monkeypatch):
         """cleanup_old_heartbeat_events respects HEARTBEAT_RETENTION_DAYS env var."""
-        monkeypatch.setenv("HEARTBEAT_RETENTION_DAYS", "7")
+        monkeypatch.setattr(settings, "HEARTBEAT_RETENTION_DAYS", 7)
         mock_repo = _mock_sa_repo()
         with _sa_repo_patch(mock_repo):
             cleanup_old_heartbeat_events()

@@ -1,21 +1,18 @@
 import hashlib
 import json
-from os import environ as env
 
 import http_sfv
 import jwt
 import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from dotenv import find_dotenv, load_dotenv
-from http_message_signatures import HTTPMessageVerifier, HTTPSignatureKeyResolver, algorithms
+from http_message_signatures import HTTPMessageVerifier, HTTPSignatureKeyResolver, algorithms  # type: ignore
 from jwcrypto import jwk, jws
 from jwcrypto.common import json_encode
 from loguru import logger
 
-from flight_blender.auth.common import get_redis
-
-load_dotenv(find_dotenv())
+from flight_blender.config import settings
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
 
 class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):
@@ -64,7 +61,7 @@ class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):
             Exception: If there is an error loading the private key.
         """
 
-        private_key_pem = env.get("IETF_SIGNING_KEY", "")
+        private_key_pem = settings.IETF_SIGNING_KEY
         if not private_key_pem:
             raise ValueError("Private key not found in environment variables.")
         try:
@@ -232,12 +229,12 @@ class ResponseSigningOperations:
     """
 
     def __init__(self):
-        self.signing_url = env.get("FLIGHT_PASSPORT_SIGNING_URL", None)
-        self.signing_client_id = env.get("FLIGHT_PASSPORT_SIGNING_CLIENT_ID")
-        self.signing_client_secret = env.get("FLIGHT_PASSPORT_SIGNING_CLIENT_SECRET")
+        self.signing_url = settings.FLIGHT_PASSPORT_SIGNING_URL
+        self.signing_client_id = settings.FLIGHT_PASSPORT_SIGNING_CLIENT_ID
+        self.signing_client_secret = settings.FLIGHT_PASSPORT_SIGNING_CLIENT_SECRET
 
-        self.signing_key_id = env.get("IETF_SIGNING_KEY_ID", "temp_id")
-        self.signing_key_label = env.get("IETF_SIGNING_KEY_LABEL", "temp_label")
+        self.signing_key_id = settings.IETF_SIGNING_KEY_ID
+        self.signing_key_label = settings.IETF_SIGNING_KEY_LABEL
 
     def generate_content_digest(self, payload):
         payload_str = json.dumps(payload)
@@ -247,7 +244,7 @@ class ResponseSigningOperations:
         import hashlib as _hashlib
         import hmac
 
-        secret = env.get("SECRET_KEY", "changeme")
+        secret = settings.SECRET_KEY
         payload = json.dumps(data_to_sign, separators=(",", ":"))
         sig = hmac.new(secret.encode(), payload.encode(), _hashlib.sha256).hexdigest()
         return f"{payload}:{sig}"
@@ -272,7 +269,7 @@ class ResponseSigningOperations:
 
         """
         algorithm = "RS256"
-        private_key_pem = env.get("SECRET_KEY", None)
+        private_key_pem = settings.SECRET_KEY
 
         if not private_key_pem:
             return {}

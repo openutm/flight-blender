@@ -20,6 +20,17 @@ FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (15, "Drone sensed by another means"),
 )
 
+SURVEILLANCE_SENSOR_HEALTH_CHOICES = [
+    ("operational", "Operational"),
+    ("degraded", "Degraded"),
+    ("outage", "Outage"),
+]
+
+SURVEILLANCE_SENSOR_MAINTENANCE_CHOICES = [
+    ("planned", "Planned"),
+    ("unplanned", "Unplanned"),
+]
+
 
 class SurveillanceStatus(str, Enum):
     OPERATIONAL = "operational"

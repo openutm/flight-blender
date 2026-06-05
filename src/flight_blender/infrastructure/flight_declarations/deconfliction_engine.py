@@ -7,7 +7,8 @@ inlined in ``FlightDeclarationRequestValidator``:
 2. Check active flight declaration bbox conflicts (RTree).
 3. Any intersection → rejected (state 8).
 
-This class satisfies :class:`~flight_blender.flight_declarations.deconfliction_protocol.DeconflictionEngine`
+This class satisfies
+:class:`~flight_blender.core.operations.flight_declarations.DeconflictionEngine`
 without inheriting from it (structural subtyping).
 """
 
@@ -15,7 +16,7 @@ import uuid
 
 from sqlalchemy import select
 
-from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
+from flight_blender.core.entities.common import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
 from flight_blender.core.entities.flight_declarations import DeconflictionRequest, DeconflictionResult
 from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM

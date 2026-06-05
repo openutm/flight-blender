@@ -4,8 +4,8 @@ import arrow
 from rtree import index
 from shapely.geometry import Polygon
 
-from flight_blender.auth.common import get_redis
 from flight_blender.core.entities.scd import Altitude, OpInttoCheckDetails, Time
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 

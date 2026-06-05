@@ -2,7 +2,6 @@ import asyncio
 import json
 import uuid
 from dataclasses import asdict
-from os import environ as env
 from typing import Any, Protocol, runtime_checkable
 
 import arrow
@@ -17,9 +16,11 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import box as shapely_box
 from shapely.ops import unary_union
 
-from flight_blender.common.data_definitions import DEFAULT_UAV_CLIMB_RATE_M_PER_S, DEFAULT_UAV_DESCENT_RATE_M_PER_S, DEFAULT_UAV_SPEED_M_PER_S
 from flight_blender.config import settings
 from flight_blender.core.entities.flight_declarations import (
+    DEFAULT_UAV_CLIMB_RATE_M_PER_S,
+    DEFAULT_UAV_DESCENT_RATE_M_PER_S,
+    DEFAULT_UAV_SPEED_M_PER_S,
     BulkFlightDeclarationCreateResponse,
     CreateFlightDeclarationRequestSchema,
     CreateFlightDeclarationViaOperationalIntentRequestSchema,
@@ -63,7 +64,7 @@ class DeconflictionEngine(Protocol):
 class OperationalIntentsConverter:
     def __init__(self):
         self.geo_json = {"type": "FeatureCollection", "features": []}
-        self.utm_zone = env.get("UTM_ZONE", "54N")
+        self.utm_zone = settings.UTM_ZONE
         self.all_features = []
 
     def generate_bounds_altitude_time_for_volumes(
@@ -401,7 +402,7 @@ async def _create_flight_declaration_record(
         return {"message": dates_error}, 400
 
     partial_op_int, bounds = _build_partial_operational_intent(request_data)
-    ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+    ussp_network_enabled = settings.USSP_NETWORK_ENABLED
     default_state = 0 if ussp_network_enabled else 1
 
     provided_state = request_data.get("flight_state", default_state)
@@ -464,9 +465,7 @@ def _run_deconfliction_sa(
 
 
 def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
-    from flight_blender.infrastructure.dss.scd import SCDOperations  # noqa: PLC0415
-
-    ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+    ussp_network_enabled = settings.USSP_NETWORK_ENABLED
 
     if not view:
         return {"message": "A view bbox is necessary with four values: lat1, lng1, lat2, lng2"}, 400
@@ -496,6 +495,8 @@ def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
     )
     volumes = temporary_ref.volumes
     my_operational_intent_converter.convert_operational_intent_to_geo_json(volumes=volumes)
+
+    from flight_blender.infrastructure.dss.scd import SCDOperations  # noqa: PLC0415
 
     my_scd_helper = SCDOperations()
     try:
@@ -608,7 +609,7 @@ class FlightDeclarationOperations:
         return 204
 
     async def submit_flight_declaration_to_dss(self, pk: uuid.UUID) -> tuple[dict, int]:
-        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+        ussp_network_enabled = settings.USSP_NETWORK_ENABLED
         if not ussp_network_enabled:
             return {"message": "USSP network is not enabled; DSS submission is only available when USSP_NETWORK_ENABLED=1."}, 400
 
@@ -627,7 +628,7 @@ class FlightDeclarationOperations:
         return {"message": "DSS submission initiated.", "id": str(flight_declaration.id)}, 200
 
     async def set_operational_intent(self, request_data: dict) -> tuple[dict, int]:
-        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+        ussp_network_enabled = settings.USSP_NETWORK_ENABLED
         default_state = 0 if ussp_network_enabled else 1
 
         schema = CreateFlightDeclarationViaOperationalIntentRequestSchema()
@@ -670,7 +671,7 @@ class FlightDeclarationOperations:
         return asdict(creation_response), 200
 
     async def set_operational_intents_bulk(self, operational_intents_list: list) -> tuple[dict, int]:
-        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+        ussp_network_enabled = settings.USSP_NETWORK_ENABLED
         default_state = 0 if ussp_network_enabled else 1
 
         saved: dict[int, Any] = {}
@@ -749,10 +750,10 @@ class FlightDeclarationOperations:
         intersection_result: IntersectionCheckResult,
         ussp_network_enabled: int,
     ) -> FlightDeclarationCreateResponse:
-        from flight_blender.infrastructure.celery.tasks.flight_declarations import (
+        from flight_blender.infrastructure.celery.tasks.flight_declarations import (  # noqa: PLC0415
             send_operational_update_message,
             submit_flight_declaration_to_dss_async,
-        )  # noqa: PLC0415
+        )
 
         is_approved = intersection_result.is_approved
         declaration_state = intersection_result.declaration_state
@@ -785,7 +786,7 @@ class FlightDeclarationOperations:
                 level="error",
             )
 
-        auto_submit_to_dss = int(env.get("AUTO_SUBMIT_TO_DSS", 1))
+        auto_submit_to_dss = settings.AUTO_SUBMIT_TO_DSS
         if is_approved and declaration_state == 0 and ussp_network_enabled and auto_submit_to_dss:
             submit_flight_declaration_to_dss_async.delay(flight_declaration_id=flight_declaration_id)
 
@@ -797,9 +798,7 @@ class FlightDeclarationOperations:
         )
 
     async def get_network_declarations_by_id(self, flight_declaration_id: str) -> tuple[dict, int]:
-        from flight_blender.infrastructure.dss.scd import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
-
-        ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
+        ussp_network_enabled = settings.USSP_NETWORK_ENABLED
 
         if not ussp_network_enabled:
             return asdict(HTTP400Response(message="USSP network cannot be queried since it is not enabled in Flight Blender")), 400
@@ -812,6 +811,8 @@ class FlightDeclarationOperations:
         fd = await self.repo.get_by_id(fd_uuid)
         if fd is None:
             return asdict(HTTP404Response(message=f"Flight Declaration with ID {flight_declaration_id} not found")), 404
+
+        from flight_blender.infrastructure.dss.scd import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
 
         if fd.state not in [0, 1, 2, 3, 4]:
             return asdict(HTTP400Response(message="USSP network can only be queried for operational intents that are active")), 400

@@ -139,14 +139,40 @@ def _mock_all_redis(monkeypatch):
     fake = fakeredis.FakeRedis(server=server, decode_responses=True)
     fake_async = _AsyncRedisAdapter(fake)
 
-    import flight_blender.auth.common
+    import flight_blender.infrastructure.auth.redis_helpers as auth_redis_helpers
 
-    monkeypatch.setattr(flight_blender.auth.common, "get_redis", lambda: fake)
-    monkeypatch.setattr(flight_blender.auth.common, "get_async_redis", lambda: fake_async)
+    monkeypatch.setattr(auth_redis_helpers, "get_redis", lambda: fake)
+    monkeypatch.setattr(auth_redis_helpers, "get_async_redis", lambda: fake_async)
 
-    import flight_blender.core.operations.geo_fence as _geo_fence_ops
+    _patched_get_redis = lambda: fake
+    _patched_get_async_redis = lambda: fake_async
 
-    monkeypatch.setattr(_geo_fence_ops, "get_async_redis", lambda: fake_async)
+    for _mod_path in (
+        "flight_blender.api.routers.flight_feed",
+        "flight_blender.api.routers.geo_fence",
+        "flight_blender.api.routers.rid",
+        "flight_blender.api.routers.uss",
+        "flight_blender.infrastructure.celery.tasks.conformance",
+        "flight_blender.infrastructure.celery.tasks.geo_fence",
+        "flight_blender.infrastructure.celery.tasks.rid",
+        "flight_blender.infrastructure.celery.tasks.surveillance",
+        "flight_blender.infrastructure.redis.stream_operations",
+        "flight_blender.infrastructure.spatial.flight_declarations",
+        "flight_blender.infrastructure.spatial.geo_fence",
+        "flight_blender.infrastructure.spatial.rid",
+        "flight_blender.infrastructure.dss.rid",
+        "flight_blender.infrastructure.dss.scd",
+        "flight_blender.infrastructure.auth.pki_helper",
+        "flight_blender.infrastructure.auth.dss_auth_helper",
+    ):
+        try:
+            _mod = __import__(_mod_path, fromlist=["*"])
+        except ImportError:
+            continue
+        if hasattr(_mod, "get_redis"):
+            monkeypatch.setattr(_mod, "get_redis", _patched_get_redis)
+        if hasattr(_mod, "get_async_redis"):
+            monkeypatch.setattr(_mod, "get_async_redis", _patched_get_async_redis)
 
     class FakeRedisWrapper:
         """Stand-in for redis.Redis that delegates to a shared fakeredis."""
@@ -316,7 +342,9 @@ def mock_scd_dss_success(monkeypatch):
         lambda self, **kwargs: fakes.fake_submission_success(),
     )
     monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_nearby_operational_intents", lambda self, **kwargs: fakes.fake_empty_nearby_operational_intents())
+    monkeypatch.setattr(
+        dss_helper.SCDOperations, "get_nearby_operational_intents", lambda self, **kwargs: fakes.fake_empty_nearby_operational_intents()
+    )
 
 
 @pytest.fixture

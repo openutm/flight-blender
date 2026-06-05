@@ -2,7 +2,22 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
-from flight_blender.core.entities.surveillance import TrackMessage
+from flight_blender.core.entities.surveillance import ActiveTrack, TrackMessage
+
+
+@runtime_checkable
+class TrackStore(Protocol):
+    """Structural interface for the track persistence surface used by fusers.
+
+    Concrete implementations (e.g. ``infrastructure.redis.stream_operations.RedisStreamOperations``)
+    provide Redis-backed active-track storage. Core operations only see this Protocol.
+    """
+
+    def check_active_track_exists(self, session_id: str, unique_aircraft_identifier: str) -> bool: ...
+    def get_active_track(self, session_id: str, unique_aircraft_identifier: str) -> ActiveTrack | None: ...
+    def add_active_track_to_session(self, session_id: str, active_track: ActiveTrack) -> None: ...
+    def update_active_track(self, session_id: str, active_track: ActiveTrack) -> None: ...
+    def get_all_active_tracks_in_session(self, session_id: str) -> list[ActiveTrack]: ...
 
 
 @runtime_checkable

@@ -1,22 +1,17 @@
 import json
-from os import environ as env
 
 import arrow
 from dacite import from_dict
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 from flight_blender.celery import app
-from flight_blender.common.data_definitions import OPERATION_STATES
 from flight_blender.config import settings
+from flight_blender.core.entities.common import OPERATION_STATES
 from flight_blender.core.entities.notifications import FlightDeclarationUpdateMessage
 from flight_blender.core.entities.scd import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
-from flight_blender.core.operations.conformance import FlightOperationConformanceHelper
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.infrastructure.dss.scd import DSSOperationalIntentsCreator
 from flight_blender.infrastructure.messaging.notification_helper import NotificationFactory
-
-load_dotenv(find_dotenv())
 
 
 @app.task(name="submit_flight_declaration_to_dss_async")
@@ -110,6 +105,8 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
         logger.info("Changing operation state..")
         original_state = flight_declaration.state
         accepted_state = OPERATION_STATES[1][0]
+        from flight_blender.core.operations.conformance import FlightOperationConformanceHelper  # noqa: PLC0415  # Lazy import — break circular
+
         my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id)
         transition_valid = my_conformance_helper.verify_operation_state_transition(
             original_state=original_state,
@@ -141,7 +138,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
             for subscriber in subscribers:
                 subscriptions_raw = subscriber.subscriptions
                 uss_base_url = subscriber.uss_base_url
-                flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
+                flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
 
                 if uss_base_url != flight_blender_base_url:  # There are others who are subscribesd, not just ourselves
                     op_int_details = from_dict(

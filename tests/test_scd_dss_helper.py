@@ -14,6 +14,7 @@ Covers the pure-logic classes that do not require a live DSS:
 import arrow
 import pytest
 
+from flight_blender.config import settings
 from flight_blender.infrastructure.dss.scd import (
     FlightPlanningDataValidator,
     OperationalIntentReferenceHelper,
@@ -347,7 +348,7 @@ class TestVolumesConverter:
 
     def test_convert_circle_volume(self, monkeypatch):
         """Circle volumes require UTM conversion.  Use zone '32' (Central Europe) to avoid pyproj issues."""
-        monkeypatch.setenv("UTM_ZONE", "32")
+        monkeypatch.setattr(settings, "UTM_ZONE", "32")
         vol = _make_circle_volume4d()
         converter = VolumesConverter()
         converter.convert_volumes_to_geojson(volumes=[vol])

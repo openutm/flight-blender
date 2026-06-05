@@ -1,4 +1,8 @@
-"""Minimal Signal implementation — drop-in for django.dispatch.Signal."""
+"""Minimal Signal implementation — drop-in for django.dispatch.Signal.
+
+Pure dispatch pattern with no I/O; lives in core so operations modules can
+declare and connect receivers without depending on infrastructure.
+"""
 
 
 class Signal:

@@ -1,30 +1,26 @@
 import json
-import os
 import uuid
 from dataclasses import asdict
 
 import arrow
 import redis
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 from flight_blender.celery import app
-from flight_blender.common.redis_stream_operations import RedisStreamOperations
-from flight_blender.config import settings as _s
-from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceSyncRepository
-from flight_blender.infrastructure.database.session import session_scope
-from flight_blender.plugins.loader import load_plugin
-
-BROKER_URL = _s.REDIS_BROKER_URL
-FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = _s.FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
+from flight_blender.config import settings
 from flight_blender.core.entities.surveillance import HeartbeatMessage
 from flight_blender.core.repositories.surveillance import TrafficDataFuser as TrafficDataFuserProtocol
+from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceSyncRepository
+from flight_blender.infrastructure.database.session import session_scope
+from flight_blender.infrastructure.redis.stream_operations import RedisStreamOperations
+from flight_blender.plugins.loader import load_plugin
 
-load_dotenv(find_dotenv())
+BROKER_URL = settings.REDIS_BROKER_URL
+FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = settings.FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
 
 # A heartbeat is considered on-time if the dispatch succeeds within this many seconds
 # of the scheduled tick (accommodates Celery scheduling jitter).
-_MAX_ACCEPTABLE_LATENCY_SECS = float(os.getenv("HEARTBEAT_MAX_LATENCY_SECS", "1.5"))
+_MAX_ACCEPTABLE_LATENCY_SECS = settings.HEARTBEAT_MAX_LATENCY_SECS
 
 
 def _publish_realtime_message(channel_name: str, payload: object) -> None:
@@ -37,7 +33,7 @@ def _publish_realtime_message(channel_name: str, payload: object) -> None:
 
 @app.task(name="send_and_generate_track_to_consumer")
 def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: None | str = None, expires_iso: str | None = None) -> None:
-    from flight_blender.auth.common import get_redis
+    from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
     r = get_redis()
     if r.exists(f"stop_task_{session_id}"):
@@ -56,7 +52,11 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
 
     FuserClass = load_plugin(FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER, expected_protocol=TrafficDataFuserProtocol)
 
-    traffic_data_fuser = FuserClass(session_id=surveillance_session_id, raw_observations=raw_observations)
+    traffic_data_fuser = FuserClass(
+        session_id=surveillance_session_id,
+        raw_observations=raw_observations,
+        track_store=stream_ops,
+    )
     track_messages = traffic_data_fuser.generate_track_messages()
 
     all_track_data = []
@@ -83,7 +83,7 @@ def send_and_generate_track_to_consumer(session_id: str, flight_declaration_id: 
 
 @app.task(name="send_heartbeat_to_consumer")
 def send_heartbeat_to_consumer(session_id: str, flight_declaration_id: None | str = None, expires_iso: str | None = None) -> None:
-    from flight_blender.auth.common import get_redis
+    from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
     r = get_redis()
     if r.exists(f"stop_task_{session_id}"):
@@ -151,7 +151,7 @@ def cleanup_old_heartbeat_events() -> None:
     At 1 Hz per session this prevents unbounded table growth.
     Schedule this task daily via django-celery-beat.
     """
-    retention_days = int(os.getenv("HEARTBEAT_RETENTION_DAYS", "30"))
+    retention_days = settings.HEARTBEAT_RETENTION_DAYS
     cutoff = arrow.utcnow().shift(days=-retention_days).datetime
 
     with session_scope() as db:

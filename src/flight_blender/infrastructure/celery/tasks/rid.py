@@ -3,18 +3,16 @@ import time
 from dataclasses import asdict
 from datetime import timedelta
 from enum import Enum
-from os import environ as env
 
 import arrow
 from arrow.parser import ParserError
 from dacite import Config, from_dict
 from dacite.exceptions import DaciteFieldError
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from shapely.geometry import MultiPoint, Point, box
 
-from flight_blender.auth.common import get_redis
 from flight_blender.celery import app
+from flight_blender.config import settings
 from flight_blender.core.entities.flight_feed import SingleRIDObservation
 from flight_blender.core.entities.rid import (
     UASID,
@@ -44,11 +42,10 @@ from flight_blender.core.operations.rid import (
     RIDVolume4D,
     SingleObservationMetadata,
 )
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 from flight_blender.infrastructure.celery.tasks.flight_feed import write_incoming_air_traffic_data
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.infrastructure.dss import rid as dss_rid_helper
-
-load_dotenv(find_dotenv())
 
 
 def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:
@@ -488,7 +485,7 @@ def stream_rid_test_data(requested_flights, test_id):
         time_end=RIDTime(value=astm_rid_standard_end_time.isoformat(), format="RFC3339"),
     )
 
-    uss_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
+    uss_base_url = settings.FLIGHTBLENDER_FQDN
     my_dss_helper = dss_rid_helper.RemoteIDOperations()
 
     logger.info("Creating a DSS ISA..")

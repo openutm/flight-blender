@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE
+from flight_blender.core.entities.common import FLIGHTBLENDER_READ_SCOPE
 from flight_blender.core.operations.conformance import ConformanceOperations
 from flight_blender.infrastructure.database.repositories.sa_conformance import SQLAlchemyConformanceRepository
 from flight_blender.infrastructure.database.session import async_get_db

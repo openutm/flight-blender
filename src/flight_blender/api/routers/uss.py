@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, Response
 from loguru import logger
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.common.utils import EnhancedJSONEncoder
+from flight_blender.core.operations.json_codecs import EnhancedJSONEncoder
 
 router = APIRouter(prefix="/uss")
 
@@ -199,6 +199,7 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
     )
     from flight_blender.core.operations import flight_feed as flight_stream_helper
     from flight_blender.core.operations import rid as view_port_ops
+    from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
     try:
         view_port = [float(i) for i in view.split(",")]
@@ -216,7 +217,7 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
 
     time.sleep(0.5)
 
-    obs_helper = flight_stream_helper.ObservationReadOperations(view_port_box=view_box)
+    obs_helper = flight_stream_helper.ObservationReadOperations(redis=get_redis(), view_port_box=view_box)
     all_flights_telemetry_data = obs_helper.get_closest_observation_for_now(now=arrow.now())
 
     now = arrow.now().isoformat()

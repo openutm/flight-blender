@@ -8,19 +8,17 @@ import math
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta
-from os import environ as env
 
 import requests
 import tldextract
 from dacite import from_dict
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from pyproj import Geod
 from shapely.geometry import LineString, Point, Polygon
 from uas_standards.astm.f3411.v22a.constants import NetMinClusterSizePercent, NetMinObfuscationDistanceM
 
-from flight_blender.auth.common import get_redis
-from flight_blender.common.data_definitions import RESPONSE_CONTENT_TYPE
+from flight_blender.config import settings
+from flight_blender.core.entities.common import RESPONSE_CONTENT_TYPE
 from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
 from flight_blender.core.entities.rid import UASID, OperatorLocation, UAClassificationEU
 from flight_blender.core.operations.rid import (
@@ -48,21 +46,15 @@ from flight_blender.core.operations.rid import (
 )
 from flight_blender.infrastructure.auth import dss_auth_helper
 from flight_blender.infrastructure.auth.auth_token_audience_helper import generate_audience_from_base_url
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-
-load_dotenv(find_dotenv())
-
-ENV_FILE = find_dotenv()
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
-
 
 geod = Geod(ellps="WGS84")
 
 
 class RemoteIDOperations:
     def __init__(self):
-        self.dss_base_url = env.get("DSS_BASE_URL", "000")
+        self.dss_base_url = settings.DSS_BASE_URL
         self.r = get_redis()
 
     def compute_polygon_area(self, polygon: Polygon):
@@ -189,7 +181,7 @@ class RemoteIDOperations:
         new_isa_id = str(uuid.uuid4())
 
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
-        audience = env.get("DSS_SELF_AUDIENCE", "000")
+        audience = settings.DSS_SELF_AUDIENCE
         error = None
 
         if not audience:
@@ -326,7 +318,7 @@ class RemoteIDOperations:
         subscription_response = SubscriptionResponse(created=False, dss_subscription_id=None, notification_index=0)
 
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()
-        audience = env.get("DSS_SELF_AUDIENCE", "000")
+        audience = settings.DSS_SELF_AUDIENCE
         error = None
 
         if not audience:
@@ -354,7 +346,7 @@ class RemoteIDOperations:
 
             # callback_url += "/" + new_subscription_id
 
-            uss_base_url = env.get("FLIGHTBLENDER_FQDN", "https://www.https://www.flightblender.com") + "/rid"
+            uss_base_url = settings.FLIGHTBLENDER_FQDN + "/rid"
 
             subscription_seconds_timedelta = timedelta(seconds=subscription_duration_seconds)
             current_time = now.isoformat() + "Z"

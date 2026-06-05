@@ -7,9 +7,9 @@ from typing import Protocol, runtime_checkable
 
 import pytest
 
+from flight_blender.core.operations.json_codecs import EnhancedJSONDecoder, EnhancedJSONEncoder, LazyEncoder
 from flight_blender.infrastructure.auth.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.plugins.loader import load_plugin
-from flight_blender.common.utils import EnhancedJSONDecoder, EnhancedJSONEncoder, LazyEncoder
 
 
 # ---------------------------------------------------------------------------
@@ -121,28 +121,30 @@ class TestLoadPlugin:
 
     def test_raises_attribute_error_for_bad_class(self):
         with pytest.raises(AttributeError):
-            load_plugin("flight_blender.common.utils.NonExistentClass")
+            load_plugin("flight_blender.core.operations.json_codecs.NonExistentClass")
 
     def test_validates_protocol(self):
         @runtime_checkable
         class HasGenerateTrackMessages(Protocol):
-            def generate_track_messages(self) -> list:
-                ...
+            def generate_track_messages(self) -> list: ...
 
-        cls = load_plugin(
-            "flight_blender.plugins.examples.hello_world_fuser.HelloWorldFuser2",  # bad name
-            expected_protocol=HasGenerateTrackMessages,
-        ) if False else None  # skip — just ensure the code path exists
+        cls = (
+            load_plugin(
+                "flight_blender.plugins.examples.hello_world_fuser.HelloWorldFuser2",  # bad name
+                expected_protocol=HasGenerateTrackMessages,
+            )
+            if False
+            else None
+        )  # skip — just ensure the code path exists
 
     def test_raises_type_error_for_protocol_mismatch(self):
         @runtime_checkable
         class RequiresMethodXYZ(Protocol):
-            def method_xyz_does_not_exist(self) -> None:
-                ...
+            def method_xyz_does_not_exist(self) -> None: ...
 
         # This class doesn't have method_xyz_does_not_exist
         with pytest.raises(TypeError):
             load_plugin(
-                "flight_blender.common.utils.EnhancedJSONEncoder",
+                "flight_blender.core.operations.json_codecs.EnhancedJSONEncoder",
                 expected_protocol=RequiresMethodXYZ,
             )

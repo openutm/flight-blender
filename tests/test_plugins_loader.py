@@ -18,9 +18,9 @@ from flight_blender.core.entities.flight_declarations import (
     DeconflictionResult,
     IntersectionCheckResult,
 )
-from flight_blender.flight_declarations.deconfliction_engine import DefaultDeconflictionEngine
+from flight_blender.infrastructure.flight_declarations.deconfliction_engine import DefaultDeconflictionEngine
 from flight_blender.core.operations.flight_declarations import DeconflictionEngine
-from flight_blender.flight_declarations.example_deconfliction_engine import (
+from flight_blender.plugins.examples.altitude_aware_deconfliction_engine import (
     AltitudeAwareDeconflictionEngine,
 )
 from flight_blender.core.repositories.surveillance import (
@@ -44,12 +44,12 @@ class LoadPluginTests(TestCase):
     # -- valid path --------------------------------------------------------
 
     def test_valid_path_returns_correct_class(self):
-        cls = load_plugin("flight_blender.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine")
+        cls = load_plugin("flight_blender.infrastructure.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine")
         self.assertIs(cls, DefaultDeconflictionEngine)
 
     def test_valid_path_different_module(self):
         """load_plugin works across modules."""
-        cls = load_plugin("flight_blender.flight_declarations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine")
+        cls = load_plugin("flight_blender.plugins.examples.altitude_aware_deconfliction_engine.AltitudeAwareDeconflictionEngine")
         self.assertIs(cls, AltitudeAwareDeconflictionEngine)
 
     # -- invalid paths -----------------------------------------------------
@@ -60,7 +60,7 @@ class LoadPluginTests(TestCase):
 
     def test_invalid_class_raises_attribute_error(self):
         with self.assertRaises(AttributeError):
-            load_plugin("flight_blender.flight_declarations.deconfliction_engine.NonExistentClass")
+            load_plugin("flight_blender.infrastructure.flight_declarations.deconfliction_engine.NonExistentClass")
 
     def test_no_dot_in_path_raises_value_error(self):
         """A path without a dot cannot be split into module + class."""
@@ -84,14 +84,14 @@ class LoadPluginTests(TestCase):
 
     def test_valid_protocol_passes(self):
         cls = load_plugin(
-            "flight_blender.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine",
+            "flight_blender.infrastructure.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine",
             expected_protocol=DeconflictionEngine,
         )
         self.assertIs(cls, DefaultDeconflictionEngine)
 
     def test_example_engine_passes_protocol_check(self):
         cls = load_plugin(
-            "flight_blender.flight_declarations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine",
+            "flight_blender.plugins.examples.altitude_aware_deconfliction_engine.AltitudeAwareDeconflictionEngine",
             expected_protocol=DeconflictionEngine,
         )
         self.assertIs(cls, AltitudeAwareDeconflictionEngine)
@@ -104,20 +104,20 @@ class LoadPluginTests(TestCase):
     # -- caching -----------------------------------------------------------
 
     def test_same_path_returns_same_object(self):
-        path = "flight_blender.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine"
+        path = "flight_blender.infrastructure.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine"
         cls1 = load_plugin(path)
         cls2 = load_plugin(path)
         self.assertIs(cls1, cls2)
 
     def test_cache_info_reflects_hits(self):
-        path = "flight_blender.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine"
+        path = "flight_blender.infrastructure.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine"
         load_plugin(path)
         load_plugin(path)
         info = load_plugin.cache_info()
         self.assertGreaterEqual(info.hits, 1)
 
     def test_cache_clear_resets(self):
-        path = "flight_blender.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine"
+        path = "flight_blender.infrastructure.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine"
         load_plugin(path)
         load_plugin.cache_clear()
         info = load_plugin.cache_info()
@@ -341,7 +341,7 @@ class PluginSettingsTests(TestCase):
 
         self.assertEqual(
             settings.FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE,
-            "flight_blender.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine",
+            "flight_blender.infrastructure.flight_declarations.deconfliction_engine.DefaultDeconflictionEngine",
         )
 
     def test_default_traffic_data_fuser_setting(self):

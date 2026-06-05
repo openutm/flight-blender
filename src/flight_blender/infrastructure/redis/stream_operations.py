@@ -1,23 +1,15 @@
 import json
-import os
 import uuid
 from typing import List, Optional
 
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from flight_blender.auth.common import get_redis
+from flight_blender.config import settings
 from flight_blender.core.entities.flight_feed import SingleAirtrafficObservation
 from flight_blender.core.entities.surveillance import ActiveTrack
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 
-load_dotenv(find_dotenv())
-
-ENV_FILE = find_dotenv()
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
-
-# Read TTL for air traffic stream data from environment, default to 4000ms
-AIR_TRAFFIC_STREAM_TTL_MS = int(os.getenv("AIR_TRAFFIC_STREAM_TTL_MS", "4000"))
+AIR_TRAFFIC_STREAM_TTL_MS = settings.AIR_TRAFFIC_STREAM_TTL_MS
 
 
 class RedisStreamOperations:
@@ -103,7 +95,7 @@ class RedisStreamOperations:
 
         Args:
             stream_name (str): The name of the Redis stream.
-            group_name (str): The name of the consumer group to delete.
+            group_name (str): The name of the consumer group.
 
         Returns:
             bool: True if group was deleted successfully, False otherwise.
@@ -125,7 +117,7 @@ class RedisStreamOperations:
         Clear all messages from a Redis stream.
 
         Args:
-            stream_name (str): The name of the Redis stream to clear.
+            stream_name (str): The name of the Redis stream.
 
         Returns:
             bool: True if stream was cleared successfully, False otherwise.

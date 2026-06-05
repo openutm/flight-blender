@@ -5,14 +5,14 @@ de-confliction engine for Flight Blender.
 
 To use, set the environment variable::
 
-    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE = flight_blender.flight_declarations.example_deconfliction_engine.AltitudeAwareDeconflictionEngine
+    FLIGHT_BLENDER_PLUGIN_DECONFLICTION_ENGINE = flight_blender.plugins.examples.altitude_aware_deconfliction_engine.AltitudeAwareDeconflictionEngine
 
-The class must satisfy the
-:class:`~flight_blender.flight_declarations.deconfliction_protocol.DeconflictionEngine`
-protocol by implementing a ``check_deconfliction`` method that accepts a
-:class:`~flight_blender.flight_declarations.data_definitions.DeconflictionRequest`
+The class must satisfy
+:class:`~flight_blender.core.operations.flight_declarations.DeconflictionEngine`
+by implementing a ``check_deconfliction`` method that accepts a
+:class:`~flight_blender.core.entities.flight_declarations.DeconflictionRequest`
 and returns a
-:class:`~flight_blender.flight_declarations.data_definitions.DeconflictionResult`.
+:class:`~flight_blender.core.entities.flight_declarations.DeconflictionResult`.
 """
 
 from flight_blender.core.entities.flight_declarations import DeconflictionRequest, DeconflictionResult

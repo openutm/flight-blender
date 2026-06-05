@@ -3,6 +3,12 @@ from datetime import datetime
 
 from marshmallow import Schema, fields
 
+from flight_blender.config import settings
+
+DEFAULT_UAV_SPEED_M_PER_S = settings.DEFAULT_UAV_SPEED_M_PER_S  # ~20 km/h
+DEFAULT_UAV_CLIMB_RATE_M_PER_S = settings.DEFAULT_UAV_CLIMB_RATE_M_PER_S  # ~7.2 km/h
+DEFAULT_UAV_DESCENT_RATE_M_PER_S = settings.DEFAULT_UAV_DESCENT_RATE_M_PER_S  # ~7.2 km/h
+
 
 class CreateFlightDeclarationViaOperationalIntentRequestSchema(Schema):
     originating_party = fields.Str(required=True)

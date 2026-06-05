@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -9,9 +9,10 @@ from marshmallow import ValidationError as MarshmallowValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
-from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
+from flight_blender.core.entities.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.entities.geo_fence import GeoFencePutSchema, GeoZoneCheckRequestBody, GeoZoneHttpsSource
 from flight_blender.core.operations.geo_fence import GeoFenceOperations, validate_geo_zone
+from flight_blender.infrastructure.auth.redis_helpers import get_async_redis
 from flight_blender.infrastructure.celery.geo_fence_dispatcher import CeleryGeoFenceTaskDispatcher
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
 from flight_blender.infrastructure.database.session import async_get_db
@@ -27,6 +28,7 @@ async def _ops(db: AsyncSession = Depends(async_get_db)) -> GeoFenceOperations:
         repo=SQLAlchemyGeoFenceRepository(db),
         dispatcher=CeleryGeoFenceTaskDispatcher(),
         spatial=RTreeGeoFenceSpatialService(),
+        redis=get_async_redis(),
     )
 
 
@@ -50,7 +52,7 @@ async def set_geo_fence(
     body = await request.json()
     schema = GeoFencePutSchema()
     try:
-        validated = schema.load(body)
+        validated = cast(dict[str, Any], schema.load(body))
     except MarshmallowValidationError as e:
         return JSONResponse(e.messages, status_code=400)
 

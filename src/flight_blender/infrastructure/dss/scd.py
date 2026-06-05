@@ -2,7 +2,6 @@ import json
 import uuid
 from dataclasses import asdict
 from datetime import datetime
-from os import environ as env
 from typing import Any
 
 import arrow
@@ -10,16 +9,14 @@ import requests
 import shapely.geometry
 import tldextract
 import urllib3
-from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 from pyproj import Proj
 from shapely.geometry import Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-from flight_blender.auth.common import get_redis
-from flight_blender.common.data_definitions import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
-from flight_blender.common.utils import LazyEncoder
+from flight_blender.config import settings
+from flight_blender.core.entities.common import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
 from flight_blender.core.entities.constraint import CompositeConstraintPayload, Constraint
 from flight_blender.core.entities.geo_fence import GeofencePayload
 from flight_blender.core.entities.scd import (
@@ -64,17 +61,13 @@ from flight_blender.core.entities.scd import (
     Volume4D,
 )
 from flight_blender.core.entities.scd import Polygon as Plgn
+from flight_blender.core.operations.json_codecs import LazyEncoder
 from flight_blender.infrastructure.auth.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.infrastructure.auth.dss_auth_helper import AuthorityCredentialsGetter
+from flight_blender.infrastructure.auth.redis_helpers import get_redis
 from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.infrastructure.dss.constraint import ConstraintOperations
 from flight_blender.infrastructure.spatial import rid as rtree_helper
-
-load_dotenv(find_dotenv())
-
-ENV_FILE = find_dotenv()
-if ENV_FILE:
-    load_dotenv(ENV_FILE)
 
 
 def is_time_within_time_period(start_time: datetime, end_time: datetime, time_to_check: datetime):
@@ -228,7 +221,7 @@ class VolumesConverter:
 
     def __init__(self):
         self.geo_json = {"type": "FeatureCollection", "features": []}
-        self.utm_zone = env.get("UTM_ZONE", "54N")
+        self.utm_zone = settings.UTM_ZONE
         self.all_volume_features = []
         self.upper_altitude = 0
         self.lower_altitude = 0
@@ -690,7 +683,7 @@ class OperationalIntentReferenceHelper:
 
 class SCDOperations:
     def __init__(self):
-        self.dss_base_url = env.get("DSS_BASE_URL", "0")
+        self.dss_base_url = settings.DSS_BASE_URL
         self.r = get_redis()
         self.database_reader = SyncDatabaseFacade()
         self.database_writer = SyncDatabaseFacade()
@@ -709,7 +702,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
+        flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
         my_op_int_ref_helper = OperationalIntentReferenceHelper()
         all_uss_operational_intent_details = []
 
@@ -920,7 +913,7 @@ class SCDOperations:
     def get_auth_token(self, audience: str = ""):
         my_authorization_helper = AuthorityCredentialsGetter()
         if not audience:
-            audience = env.get("DSS_SELF_AUDIENCE", "localhost")
+            audience = settings.DSS_SELF_AUDIENCE
         if not audience:
             logger.error("Error in getting Authority Access Token DSS_SELF_AUDIENCE is not set in the environment")
             return {"error": "DSS_SELF_AUDIENCE is not set in the environment"}
@@ -1301,7 +1294,7 @@ class SCDOperations:
         """
         auth_token = self.get_auth_token()
         logger.info(f"Updating operational intent reference: {operational_intent_ref_id}")
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://localhost:8000")
+        flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
 
         # Initialize the update request with empty airspace key
         operational_intent_update_payload = OperationalIntentUpdateRequest(
@@ -1377,7 +1370,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
+        flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
         dss_r = requests.put(
             dss_opint_update_url,
             json=json.loads(json.dumps(asdict(operational_intent_update_payload), cls=LazyEncoder)),
@@ -1456,7 +1449,7 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
         airspace_keys = []
-        flight_blender_base_url = env.get("FLIGHTBLENDER_FQDN", "http://flight-blender:8000")
+        flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
         implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=flight_blender_base_url, notify_for_constraints=True)
         operational_intent_reference = OperationalIntentReference(
             extents=volumes,
@@ -1664,7 +1657,7 @@ class DSSAreaClearHandler:
     def clear_area_request(self, extent_raw):
         import arrow  # noqa: PLC0415
 
-        from flight_blender.common.data_definitions import OPINT_INDEX_BASEPATH  # noqa: PLC0415
+        from flight_blender.core.entities.common import OPINT_INDEX_BASEPATH  # noqa: PLC0415
         from flight_blender.core.entities.scd import ClearAreaResponse, ClearAreaResponseOutcome  # noqa: PLC0415
         from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
         from flight_blender.infrastructure.spatial import rid as rtree_helper  # noqa: PLC0415
@@ -1930,7 +1923,7 @@ class SCDTestHarnessHelper:
     """Used in the SCD Test harness to include transformations."""
 
     def __init__(self):
-        from flight_blender.auth.common import get_redis  # noqa: PLC0415
+        from flight_blender.infrastructure.auth.redis_helpers import get_redis  # noqa: PLC0415
         from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
         from flight_blender.infrastructure.spatial import rid as rtree_helper  # noqa: PLC0415
 
