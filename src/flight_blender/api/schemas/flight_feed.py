@@ -1,21 +1,13 @@
 from pydantic import BaseModel, ConfigDict
 
+from flight_blender.core.entities.flight_feed import ObservationIn, ObservationRequest
 
-class ObservationIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    lat_dd: float
-    lon_dd: float
-    altitude_mm: float
-    icao_address: str
-    traffic_source: int
-    timestamp: int
-    source_type: int = 0
-    metadata: dict = {}
-
-
-class ObservationRequest(BaseModel):
-    observations: list[ObservationIn]
+__all__ = [
+    "ObservationIn",
+    "ObservationRequest",
+    "SignedTelemetryKeyCreate",
+    "SignedTelemetryKeyUpdate",
+]
 
 
 class SignedTelemetryKeyCreate(BaseModel):

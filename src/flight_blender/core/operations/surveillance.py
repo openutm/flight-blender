@@ -6,10 +6,8 @@ from typing import Optional
 import arrow
 from loguru import logger
 
-from flight_blender.common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE
-from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService
-from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceRepository
-from flight_blender.surveillance.data_definitions import (
+from flight_blender.core.entities.surveillance import (
+    FLIGHT_OBSERVATION_TRAFFIC_SOURCE,
     AggregateHealthMetrics,
     HealthMessage,
     HeartbeatDeliveryProbability,
@@ -21,11 +19,19 @@ from flight_blender.surveillance.data_definitions import (
     SurveillanceStatus,
     TrackUpdateProbability,
 )
+from flight_blender.core.repositories.flight_feed import FlightFeedRepository
+from flight_blender.core.repositories.surveillance import SurveillanceRepository, SurveillanceTaskScheduler
 
 
 class SurveillanceOperations:
-    def __init__(self, repo: SQLAlchemySurveillanceRepository, flight_feed_repo=None):
+    def __init__(
+        self,
+        repo: SurveillanceRepository,
+        scheduler: SurveillanceTaskScheduler,
+        flight_feed_repo: FlightFeedRepository | None = None,
+    ):
         self.repo = repo
+        self.scheduler = scheduler
         self.flight_feed_repo = flight_feed_repo
 
     async def get_health(self) -> dict:
@@ -80,19 +86,19 @@ class SurveillanceOperations:
             if session is None:
                 return {"error": f"Invalid surveillance_session_id provided: {session_id}"}, 400
 
-            TaskSchedulerService.cancel_session_tasks(str(session_id))
+            self.scheduler.cancel_session_tasks(str(session_id))
             return {"status": "Surveillance monitoring tasks removed successfully"}, 200
 
     async def _create_heartbeat_task(self, session_id: str) -> bool:
         try:
-            return TaskSchedulerService.schedule_surveillance_heartbeat(session_id)
+            return self.scheduler.schedule_surveillance_heartbeat(session_id)
         except Exception:
             logger.exception("Failed to create heartbeat periodic task for session %s", session_id)
             return False
 
     async def _create_track_task(self, session_id: str) -> bool:
         try:
-            return TaskSchedulerService.schedule_surveillance_track(session_id)
+            return self.scheduler.schedule_surveillance_track(session_id)
         except Exception:
             logger.exception("Failed to create track periodic task for session %s", session_id)
             return False

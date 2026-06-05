@@ -9,26 +9,42 @@ import arrow
 import dacite.exceptions
 import shapely
 from shapely.geometry import Point
+from shapely.geometry import box as shapely_box
 
-from flight_blender.api.schemas.flight_feed import ObservationRequest
 from flight_blender.auth.common import get_redis
-from flight_blender.flight_feed.data_definitions import FlightObservationSchema, FlightObservationsProcessingResponse, SingleAirtrafficObservation
-from flight_blender.flight_feed.rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
-from flight_blender.flight_feed.tasks import bulk_write_incoming_air_traffic_data, start_opensky_network_stream
-from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
-from flight_blender.rid import view_port_ops
-from flight_blender.rid.data_definitions import SignedUnSignedTelemetryObservations
-from flight_blender.rid.tasks import stream_rid_telemetry_data
+from flight_blender.core.entities.flight_feed import (
+    FlightObservationSchema,
+    FlightObservationsProcessingResponse,
+    ObservationRequest,
+    SingleAirtrafficObservation,
+)
+from flight_blender.core.entities.rid import NestedDict, SignedUnSignedTelemetryObservations
+from flight_blender.core.repositories.flight_feed import FlightFeedRepository, FlightFeedTaskDispatcher, TelemetryValidator
 
 
-def _dispatch_observations(all_parsed: list[dict]) -> None:
-    for i in range(0, len(all_parsed), 250):
-        bulk_write_incoming_air_traffic_data.delay(json.dumps(all_parsed[i : i + 250]))
+def _check_view_port(view_port_coords: list[float]) -> bool:
+    if len(view_port_coords) != 4:
+        return False
+
+    lat_min, lat_max = sorted(view_port_coords[::2])
+    lng_min, lng_max = sorted(view_port_coords[1::2])
+    return -90 <= lat_min < 90 and -90 < lat_max <= 90 and -180 <= lng_min < 360 and -180 < lng_max <= 360
+
+
+def _build_view_port_box(view_port_coords: list[float]):
+    return shapely_box(
+        view_port_coords[0],
+        view_port_coords[1],
+        view_port_coords[2],
+        view_port_coords[3],
+    )
 
 
 class FlightFeedOperations:
-    def __init__(self, repo: SQLAlchemyFlightFeedRepository):
+    def __init__(self, repo: FlightFeedRepository, dispatcher: FlightFeedTaskDispatcher, telemetry_validator: TelemetryValidator):
         self.repo = repo
+        self.dispatcher = dispatcher
+        self.telemetry_validator = telemetry_validator
 
     @staticmethod
     def _to_observations(session_id: uuid.UUID, body: ObservationRequest) -> list[SingleAirtrafficObservation]:
@@ -50,13 +66,13 @@ class FlightFeedOperations:
 
     async def set_air_traffic(self, session_id: uuid.UUID, body: ObservationRequest) -> tuple[dict, int]:
         all_parsed = [asdict(so) for so in self._to_observations(session_id, body)]
-        asyncio.create_task(asyncio.to_thread(_dispatch_observations, all_parsed))
+        asyncio.create_task(asyncio.to_thread(self.dispatcher.dispatch_observations, all_parsed))
         op = FlightObservationsProcessingResponse(message="OK", status=201)
         return asdict(op), 201
 
     async def bulk_set_air_traffic(self, session_id: uuid.UUID, body: ObservationRequest) -> tuple[dict, int]:
         all_parsed = [asdict(so) for so in self._to_observations(session_id, body)]
-        asyncio.create_task(asyncio.to_thread(_dispatch_observations, all_parsed))
+        asyncio.create_task(asyncio.to_thread(self.dispatcher.dispatch_observations, all_parsed))
         op = FlightObservationsProcessingResponse(message="OK", status=201)
         return asdict(op), 201
 
@@ -68,10 +84,10 @@ class FlightFeedOperations:
         except ValueError:
             return {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}, 400
 
-        if not view_port_ops.check_view_port(view_port_coords=view_port):
+        if not _check_view_port(view_port_coords=view_port):
             return {"message": "A incorrect view port bbox was provided"}, 400
 
-        view_port_box = view_port_ops.build_view_port_box(view_port_coords=view_port)
+        view_port_box = _build_view_port_box(view_port_coords=view_port)
         r = get_redis()
         key = f"last_reading_for_{session_id}"
         if r.exists(key):
@@ -132,12 +148,12 @@ class FlightFeedOperations:
         except ValueError:
             return {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}, 400
 
-        if not view_port_ops.check_view_port(view_port_coords=view_port):
+        if not _check_view_port(view_port_coords=view_port):
             return {"message": "An incorrect view port bbox was provided"}, 400
 
         session_id = uuid.uuid4()
 
-        start_opensky_network_stream.delay(view_port=json.dumps(view_port), session_id=str(session_id))
+        self.dispatcher.start_opensky_network_stream(view_port=json.dumps(view_port), session_id=str(session_id))
         return {"message": "Openskies Network stream started"}, 200
 
     async def list_signed_telemetry_keys(self) -> list[dict]:
@@ -164,7 +180,7 @@ class FlightFeedOperations:
         return await self.repo.delete_signed_telemetry_public_key(pk)
 
     async def submit_telemetry(self, raw_data: dict) -> tuple[dict, int]:
-        validator = FlightBlenderTelemetryValidator()
+        validator = self.telemetry_validator
 
         if not validator.validate_observation_key_exists(raw_request_data=raw_data):
             return {"message": "A flight observation object with current state and flight details is necessary"}, 400
@@ -202,7 +218,7 @@ class FlightFeedOperations:
             flight_operation = await self.repo.get_flight_declaration_by_id(flight_declaration_id=operation_id)
             if flight_operation.state in allowed_states:
                 serialized = [asdict(obs, dict_factory=NestedDict) for obs in unsigned_telemetry_observations]
-                stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(serialized))
+                self.dispatcher.stream_rid_telemetry_data(rid_telemetry_observations=json.dumps(serialized))
             else:
                 return {
                     "message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states in Flight Blender, telemetry submission will be ignored, please change the state first."
@@ -211,7 +227,7 @@ class FlightFeedOperations:
         return {"message": "Telemetry data successfully submitted"}, 201
 
     async def submit_signed_telemetry(self, raw_data: dict) -> tuple[dict, int]:
-        validator = FlightBlenderTelemetryValidator()
+        validator = self.telemetry_validator
 
         if not validator.validate_observation_key_exists(raw_request_data=raw_data):
             return {"message": "A flight observation object with current state and flight details is necessary"}, 400
@@ -245,7 +261,7 @@ class FlightFeedOperations:
 
             flight_operation = await self.repo.get_flight_declaration_by_id(flight_declaration_id=operation_id)
             if flight_operation.state in [2, 3, 4]:
-                stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
+                self.dispatcher.stream_rid_telemetry_data(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
             else:
                 return {"message": f"The operation ID: {operation_id} is not one of Activated, Contingent or Non-conforming states."}, 400
 

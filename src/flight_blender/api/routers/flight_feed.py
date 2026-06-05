@@ -11,6 +11,8 @@ from flight_blender.api.schemas.flight_feed import ObservationRequest, SignedTel
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.operations.flight_feed import FlightFeedOperations
 from flight_blender.flight_feed.pki_helper import MessageVerifier, ResponseSigningOperations
+from flight_blender.flight_feed.rid_telemetry_helper import FlightBlenderTelemetryValidator
+from flight_blender.infrastructure.celery.flight_feed_dispatcher import CeleryFlightFeedTaskDispatcher
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.infrastructure.database.session import async_get_db
 
@@ -20,7 +22,11 @@ GA_TEST_SCOPE = "geo-awareness.test"
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> FlightFeedOperations:
-    return FlightFeedOperations(repo=SQLAlchemyFlightFeedRepository(db))
+    return FlightFeedOperations(
+        repo=SQLAlchemyFlightFeedRepository(db),
+        dispatcher=CeleryFlightFeedTaskDispatcher(),
+        telemetry_validator=FlightBlenderTelemetryValidator(),
+    )
 
 
 # ── Air Traffic ───────────────────────────────────────────────────────────────

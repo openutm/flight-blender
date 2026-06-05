@@ -6,13 +6,15 @@ from typing import Any
 
 import arrow
 from asgiref.sync import sync_to_async
+from geojson import Feature, FeatureCollection, Polygon
 from loguru import logger
 from marshmallow.exceptions import ValidationError
+from shapely.geometry import box as shapely_box
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
 from flight_blender.config import settings
-from flight_blender.flight_declarations.data_definitions import (
+from flight_blender.core.entities.flight_declarations import (
     BulkFlightDeclarationCreateResponse,
     CreateFlightDeclarationRequestSchema,
     CreateFlightDeclarationViaOperationalIntentRequestSchema,
@@ -22,12 +24,40 @@ from flight_blender.flight_declarations.data_definitions import (
     HTTP404Response,
     IntersectionCheckResult,
 )
+from flight_blender.core.repositories.flight_declarations import FlightDeclarationRepository
 from flight_blender.flight_declarations.deconfliction_protocol import DeconflictionEngine
 from flight_blender.flight_declarations.utils import OperationalIntentsConverter
-from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
-from flight_blender.infrastructure.database.repositories.sa_flight_declarations import SQLAlchemyFlightDeclarationRepository
 from flight_blender.plugins.loader import load_plugin
-from flight_blender.rid import view_port_ops
+
+
+def _check_view_port(view_port_coords: list[float]) -> bool:
+    if len(view_port_coords) != 4:
+        return False
+
+    lat_min, lat_max = sorted(view_port_coords[::2])
+    lng_min, lng_max = sorted(view_port_coords[1::2])
+    return -90 <= lat_min < 90 and -90 < lat_max <= 90 and -180 <= lng_min < 360 and -180 < lng_max <= 360
+
+
+def _build_view_port_box_lng_lat(view_port_coords: list[float]):
+    return shapely_box(
+        view_port_coords[1],
+        view_port_coords[0],
+        view_port_coords[3],
+        view_port_coords[2],
+    )
+
+
+def _convert_box_to_geojson_feature(box) -> FeatureCollection:
+    geo_json_polygon = Polygon(coordinates=[list(box.exterior.coords)])
+    geo_json_feature = Feature(
+        geometry=geo_json_polygon,
+        properties={
+            "min_altitude": {"meters": 0, "datum": "W84"},
+            "max_altitude": {"meters": 120, "datum": "W84"},
+        },
+    )
+    return FeatureCollection(features=[geo_json_feature])
 
 
 def _get_deconfliction_engine():
@@ -94,7 +124,7 @@ def _build_partial_operational_intent(request_data: dict) -> tuple[dict, str]:
 
 
 async def _create_flight_declaration_record(
-    repo: SQLAlchemyFlightDeclarationRepository,
+    repo: FlightDeclarationRepository,
     request_data: dict,
     *,
     response_message: str,
@@ -146,7 +176,7 @@ async def _create_flight_declaration_record(
 
 
 def _run_deconfliction_sa(
-    flight_declarations: list[FlightDeclarationORM],
+    flight_declarations: list[Any],
     ussp_network_enabled: int,
 ) -> dict[str, IntersectionCheckResult]:
     if not flight_declarations:
@@ -177,7 +207,7 @@ def _run_deconfliction_sa(
 
 
 def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
-    from flight_blender.scd.dss_scd_helper import SCDOperations
+    from flight_blender.scd.dss_scd_helper import SCDOperations  # noqa: PLC0415
 
     ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
 
@@ -189,7 +219,7 @@ def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
     except ValueError:
         return {"message": "A view bbox is necessary with four values: lat1, lng1, lat2, lng2"}, 400
 
-    if not view_port_ops.check_view_port(view_port_coords=view_port):
+    if not _check_view_port(view_port_coords=view_port):
         return {"message": "An incorrect view port bbox was provided"}, 400
 
     if not ussp_network_enabled:
@@ -197,8 +227,8 @@ def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
 
     start_datetime = arrow.now().shift(minutes=-1).isoformat()
     end_datetime = arrow.now().shift(minutes=10).isoformat()
-    view_port_box = view_port_ops.build_view_port_box_lng_lat(view_port_coords=view_port)
-    converted_geo_json = view_port_ops.convert_box_to_geojson_feature(box=view_port_box)
+    view_port_box = _build_view_port_box_lng_lat(view_port_coords=view_port)
+    converted_geo_json = _convert_box_to_geojson_feature(box=view_port_box)
 
     my_operational_intent_converter = OperationalIntentsConverter()
     temporary_ref = my_operational_intent_converter.create_partial_operational_intent_ref(
@@ -220,7 +250,7 @@ def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
 
 
 class FlightDeclarationOperations:
-    def __init__(self, repo: SQLAlchemyFlightDeclarationRepository):
+    def __init__(self, repo: FlightDeclarationRepository):
         self.repo = repo
 
     async def create_flight_declaration(
@@ -386,7 +416,7 @@ class FlightDeclarationOperations:
         ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
         default_state = 0 if ussp_network_enabled else 1
 
-        saved: dict[int, FlightDeclarationORM] = {}
+        saved: dict[int, Any] = {}
         results: list[dict] = []
         failed_count = 0
 
@@ -456,11 +486,11 @@ class FlightDeclarationOperations:
 
     async def _process_intersection_result_sa(
         self,
-        fd: FlightDeclarationORM,
+        fd: Any,
         intersection_result: IntersectionCheckResult,
         ussp_network_enabled: int,
     ) -> FlightDeclarationCreateResponse:
-        from flight_blender.flight_declarations.tasks import send_operational_update_message, submit_flight_declaration_to_dss_async
+        from flight_blender.flight_declarations.tasks import send_operational_update_message, submit_flight_declaration_to_dss_async  # noqa: PLC0415
 
         is_approved = intersection_result.is_approved
         declaration_state = intersection_result.declaration_state
@@ -505,7 +535,7 @@ class FlightDeclarationOperations:
         )
 
     async def get_network_declarations_by_id(self, flight_declaration_id: str) -> tuple[dict, int]:
-        from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations
+        from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
 
         ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
 

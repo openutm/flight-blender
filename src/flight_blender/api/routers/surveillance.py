@@ -10,6 +10,7 @@ from flight_blender.api.dependencies import require_scopes
 from flight_blender.api.schemas.surveillance import SensorHealthUpdate, SurveillanceSessionAction
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.core.operations.surveillance import SurveillanceOperations
+from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceRepository
 from flight_blender.infrastructure.database.session import async_get_db
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/surveillance_monitoring_ops")
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> SurveillanceOperations:
     surveillance_repo = SQLAlchemySurveillanceRepository(db)
     flight_feed_repo = SQLAlchemyFlightFeedRepository(db)
-    return SurveillanceOperations(repo=surveillance_repo, flight_feed_repo=flight_feed_repo)
+    return SurveillanceOperations(repo=surveillance_repo, scheduler=TaskSchedulerService, flight_feed_repo=flight_feed_repo)
 
 
 @router.get("/health/")

@@ -5,15 +5,11 @@ from decimal import Decimal
 from typing import Any
 
 import arrow
-import pyproj
-from shapely.geometry import Point, shape
+from shapely.geometry import shape
 from shapely.ops import unary_union
 
 from flight_blender.auth.common import get_async_redis
-from flight_blender.common.data_definitions import GEOFENCE_INDEX_BASEPATH
-from flight_blender.geo_fence import rtree_geo_fence_helper
-from flight_blender.geo_fence.buffer_helper import toFromUTM
-from flight_blender.geo_fence.data_definitions import (
+from flight_blender.core.entities.geo_fence import (
     GeoAwarenessImportResponseEnum,
     GeoAwarenessStatusResponseEnum,
     GeoAwarenessTestStatus,
@@ -24,8 +20,7 @@ from flight_blender.geo_fence.data_definitions import (
     GeoZoneChecksResponse,
     GeoZoneFilterPosition,
 )
-from flight_blender.geo_fence.tasks import download_geozone_source
-from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
+from flight_blender.core.repositories.geo_fence import GeoFenceRepository, GeoFenceSpatialService, GeoFenceTaskDispatcher
 
 
 def _compute_bounds_and_times(features: list[dict]) -> tuple[str, str, str, Decimal, Decimal, str]:
@@ -45,8 +40,10 @@ def _compute_bounds_and_times(features: list[dict]) -> tuple[str, str, str, Deci
 
 
 class GeoFenceOperations:
-    def __init__(self, repo: SQLAlchemyGeoFenceRepository):
+    def __init__(self, repo: GeoFenceRepository, dispatcher: GeoFenceTaskDispatcher, spatial: GeoFenceSpatialService):
         self.repo = repo
+        self.dispatcher = dispatcher
+        self.spatial = spatial
 
     async def list_geofences(
         self,
@@ -70,12 +67,7 @@ class GeoFenceOperations:
 
         if viewport:
             view_port = [float(x) for x in viewport.split(",")]
-            my_rtree = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
-            my_rtree.generate_geo_fence_index(all_fences=fences)
-            relevant = my_rtree.check_box_intersection(view_box=view_port)
-            my_rtree.clear_rtree_index(all_fences=fences)
-            relevant_ids = {r["geo_fence_id"] for r in relevant}
-            fences = [f for f in fences if str(f.id) in relevant_ids]
+            fences = self.spatial.filter_fences_by_viewport(fences=fences, viewport=view_port)
 
         return [_fence_to_dict(f) for f in fences]
 
@@ -144,7 +136,7 @@ class GeoFenceOperations:
         r = get_async_redis()
         key = "geoawarenes_test." + geozone_source_id
         response = GeoAwarenessTestStatus(result=GeoAwarenessImportResponseEnum.Activating, message="")
-        download_geozone_source.delay(geo_zone_url=geo_zone_url, geozone_source_id=geozone_source_id)
+        self.dispatcher.download_geozone_source(geo_zone_url=geo_zone_url, geozone_source_id=geozone_source_id)
         await r.set(key, json.dumps(asdict(response)))
         await r.expire(name=key, time=3000)
         return asdict(response)
@@ -163,7 +155,6 @@ class GeoFenceOperations:
         return asdict(deletion_status)
 
     async def check_geozones(self, body: GeoZoneCheckRequestBody) -> dict:
-        proj = pyproj.Proj("+proj=utm +zone=24 +south +datum=WGS84 +units=m +no_defs ")
         geo_zones_of_interest = False
 
         test_fences = await self.repo.get_test_geofences()
@@ -172,16 +163,11 @@ class GeoFenceOperations:
             for filter_set in geo_zone_check["filter_sets"]:
                 if "position" in filter_set and filter_set["position"]:
                     filter_position = GeoZoneFilterPosition(**filter_set["position"])
-                    my_rtree = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(index_name=GEOFENCE_INDEX_BASEPATH)
-                    init_point = Point(filter_position.longitude, filter_position.latitude)
-                    init_shape_utm = toFromUTM(init_point, proj)
-                    buffer_shape_utm = init_shape_utm.buffer(1)
-                    buffer_shape_lonlat = toFromUTM(buffer_shape_utm, proj, inv=True)
-                    view_port = buffer_shape_lonlat.bounds
-                    my_rtree.generate_geo_fence_index(all_fences=test_fences)
-                    relevant = my_rtree.check_box_intersection(view_box=view_port)
-                    my_rtree.clear_rtree_index(all_fences=test_fences)
-                    if relevant:
+                    if self.spatial.has_intersection_at_position(
+                        fences=test_fences,
+                        longitude=filter_position.longitude,
+                        latitude=filter_position.latitude,
+                    ):
                         geo_zones_of_interest = True
 
                 if "after" in filter_set and filter_set["after"]:

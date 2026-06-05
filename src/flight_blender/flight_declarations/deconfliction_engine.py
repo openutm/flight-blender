@@ -11,6 +11,8 @@ This class satisfies :class:`~flight_blender.flight_declarations.deconfliction_p
 without inheriting from it (structural subtyping).
 """
 
+import uuid
+
 from sqlalchemy import select
 
 from flight_blender.common.data_definitions import ACTIVE_OPERATIONAL_STATES, FLIGHT_DECLARATION_INDEX_BASEPATH, GEOFENCE_INDEX_BASEPATH
@@ -53,8 +55,6 @@ class DefaultDeconflictionEngine:
         declaration_state = 0 if ussp_network_enabled else 1
 
         # ── GeoFence spatial check ───────────────────────────────────────
-        import uuid
-
         with session_scope() as db:
             all_fences = list(
                 db.execute(
@@ -67,18 +67,18 @@ class DefaultDeconflictionEngine:
                 .all()
             )
 
-        if all_fences:
-            geo_fence_index = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(
-                index_name=GEOFENCE_INDEX_BASEPATH,
-            )
-            try:
-                geo_fence_index.generate_geo_fence_index(all_fences=all_fences)
-                all_relevant_fences = geo_fence_index.check_box_intersection(view_box=view_box)
-                if all_relevant_fences:
-                    is_approved = False
-                    declaration_state = 8
-            finally:
-                geo_fence_index.clear_rtree_index(all_fences=all_fences)
+            if all_fences:
+                geo_fence_index = rtree_geo_fence_helper.GeoFenceRTreeIndexFactory(
+                    index_name=GEOFENCE_INDEX_BASEPATH,
+                )
+                try:
+                    geo_fence_index.generate_geo_fence_index(all_fences=all_fences)
+                    all_relevant_fences = geo_fence_index.check_box_intersection(view_box=view_box)
+                    if all_relevant_fences:
+                        is_approved = False
+                        declaration_state = 8
+                finally:
+                    geo_fence_index.clear_rtree_index(all_fences=all_fences)
 
         # ── Flight declaration intersection ──────────────────────────────
         with session_scope() as db:
@@ -92,22 +92,22 @@ class DefaultDeconflictionEngine:
                 stmt = stmt.where(FlightDeclarationORM.id != uuid.UUID(str(current_declaration_id)))
             declaration_list = list(db.execute(stmt).scalars().all())
 
-        if declaration_list:
-            fd_rtree_helper = FlightDeclarationRTreeIndexFactory(
-                index_name=FLIGHT_DECLARATION_INDEX_BASEPATH,
-            )
-            try:
-                fd_rtree_helper.generate_flight_declaration_index(
-                    all_flight_declarations=declaration_list,
+            if declaration_list:
+                fd_rtree_helper = FlightDeclarationRTreeIndexFactory(
+                    index_name=FLIGHT_DECLARATION_INDEX_BASEPATH,
                 )
-                all_relevant_declarations = fd_rtree_helper.check_flight_declaration_box_intersection(
-                    view_box=view_box,
-                )
-                if all_relevant_declarations:
-                    is_approved = False
-                    declaration_state = 8
-            finally:
-                fd_rtree_helper.clear_rtree_index()
+                try:
+                    fd_rtree_helper.generate_flight_declaration_index(
+                        all_flight_declarations=declaration_list,
+                    )
+                    all_relevant_declarations = fd_rtree_helper.check_flight_declaration_box_intersection(
+                        view_box=view_box,
+                    )
+                    if all_relevant_declarations:
+                        is_approved = False
+                        declaration_state = 8
+                finally:
+                    fd_rtree_helper.clear_rtree_index()
 
         return DeconflictionResult(
             all_relevant_fences=all_relevant_fences,

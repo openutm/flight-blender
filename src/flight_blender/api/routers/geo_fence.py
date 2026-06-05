@@ -1,4 +1,3 @@
-import json
 import uuid
 from typing import Any
 from urllib.parse import urlparse
@@ -14,8 +13,10 @@ from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLI
 from flight_blender.core.operations.geo_fence import GeoFenceOperations
 from flight_blender.geo_fence.common import validate_geo_zone
 from flight_blender.geo_fence.data_definitions import GeoFencePutSchema, GeoZoneCheckRequestBody, GeoZoneHttpsSource
+from flight_blender.infrastructure.celery.geo_fence_dispatcher import CeleryGeoFenceTaskDispatcher
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
 from flight_blender.infrastructure.database.session import async_get_db
+from flight_blender.infrastructure.spatial.geo_fence import RTreeGeoFenceSpatialService
 
 router = APIRouter(prefix="/geo_fence_ops")
 
@@ -23,7 +24,11 @@ GA_TEST_SCOPE = "geo-awareness.test"
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> GeoFenceOperations:
-    return GeoFenceOperations(repo=SQLAlchemyGeoFenceRepository(db))
+    return GeoFenceOperations(
+        repo=SQLAlchemyGeoFenceRepository(db),
+        dispatcher=CeleryGeoFenceTaskDispatcher(),
+        spatial=RTreeGeoFenceSpatialService(),
+    )
 
 
 def _is_valid_http_url(value: str) -> bool:
@@ -62,8 +67,6 @@ async def set_geozone(
     request: Request,
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    from flight_blender.geo_fence.tasks import write_geo_zone
-
     if request.headers.get("content-type") != "application/json":
         return JSONResponse({"message": "Unsupported Media Type"}, status_code=415)
 
@@ -74,7 +77,7 @@ async def set_geozone(
             status_code=400,
         )
 
-    write_geo_zone.delay(geo_zone=json.dumps(body))
+    CeleryGeoFenceTaskDispatcher().write_geo_zone(body)
     fence_id = str(uuid.uuid4())
     return JSONResponse({"message": "GeoZone Declaration submitted", "id": fence_id}, status_code=200)
 

@@ -1,12 +1,12 @@
 from dataclasses import asdict
 from datetime import datetime
 
-from flight_blender.conformance.data_definitions import ConformanceRecord, ConformanceSummary
-from flight_blender.infrastructure.database.repositories.sa_conformance import SQLAlchemyConformanceRepository
+from flight_blender.core.entities.conformance import ConformanceRecord, ConformanceSummary
+from flight_blender.core.repositories.conformance import ConformanceRepository
 
 
 class ConformanceOperations:
-    def __init__(self, repo: SQLAlchemyConformanceRepository) -> None:
+    def __init__(self, repo: ConformanceRepository) -> None:
         self._repo = repo
 
     async def get_records(self, start_time: datetime, end_time: datetime) -> list[dict]:

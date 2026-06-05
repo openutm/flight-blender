@@ -1,6 +1,6 @@
 import arrow
 
-from flight_blender.infrastructure.external.weather_client import WeatherClient
+from flight_blender.core.repositories.weather import WeatherClient
 
 
 class WeatherOperations:
