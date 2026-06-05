@@ -511,6 +511,8 @@ class OperationalIntentReferenceHelper:
         composite_operational_intent_details = self.my_database_reader.get_composite_operational_intent_by_declaration_id(
             flight_declaration_id=operation_id
         )
+        if composite_operational_intent_details is None:
+            return None
 
         stored = OperationalIntentStorage(
             bounds=composite_operational_intent_details.bounds,

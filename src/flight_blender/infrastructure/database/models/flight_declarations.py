@@ -1,11 +1,24 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import ClassVar, Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from flight_blender.infrastructure.database.session import Base
+
+
+@dataclass
+class FDProxy:
+    """Proxy so `reference.declaration.id` works on an SA reference row.
+
+    Attached at runtime by ``SyncDatabaseFacade`` after the row is loaded; not a
+    SQLAlchemy-mapped attribute.
+    """
+
+    id: uuid.UUID
 
 
 class FlightDeclarationORM(Base):
@@ -70,6 +83,11 @@ class FlightOperationalIntentReferenceORM(Base):
     is_live: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    # Runtime-attached proxy object (set by ``SyncDatabaseFacade``) so callers
+    # can read ``reference.declaration.id`` after the SA session detaches the
+    # row. Not a SQLAlchemy-mapped column; ``ClassVar`` excludes it from SA.
+    declaration: ClassVar[Optional[FDProxy]]
 
 
 class SubscriberORM(Base):

@@ -197,6 +197,8 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
             flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(
                 stored_operational_intent_details.reference.id
             )
+            if flight_operational_intent_reference is None:
+                return {"message": "Flight operational intent reference not found"}, 404
             flight_declaration = flight_operational_intent_reference.declaration
             flight_operational_intent_details = my_database_reader.get_operational_intent_details_by_flight_declaration_id(
                 declaration_id=str(flight_declaration.id)

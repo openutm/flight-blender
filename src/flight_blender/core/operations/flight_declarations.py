@@ -43,7 +43,7 @@ from flight_blender.core.entities.scd import (
 )
 from flight_blender.core.entities.scd import Polygon as Plgn
 from flight_blender.core.repositories.flight_declarations import (
-    FlightDeclarationRepository,
+    AsyncFlightDeclarationRepository,
     OperationalIntentParser,
     SCDNotificationDispatcher,
     SCDQueryClient,
@@ -387,7 +387,7 @@ def _build_partial_operational_intent(request_data: dict) -> tuple[dict, str]:
 
 
 async def _create_flight_declaration_record(
-    repo: FlightDeclarationRepository,
+    repo: AsyncFlightDeclarationRepository,
     request_data: dict,
     *,
     response_message: str,
@@ -515,7 +515,7 @@ def do_network_declarations_by_view(
 class FlightDeclarationOperations:
     def __init__(
         self,
-        repo: FlightDeclarationRepository,
+        repo: AsyncFlightDeclarationRepository,
         scd_client: SCDQueryClient,
         parser: OperationalIntentParser,
         notifier: SCDNotificationDispatcher,

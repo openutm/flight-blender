@@ -14,8 +14,13 @@ from flight_blender.core.entities.scd import (
 
 
 @runtime_checkable
-class FlightDeclarationRepository(Protocol):
-    # FastAPI CRUD operations
+class AsyncFlightDeclarationRepository(Protocol):
+    """Async repository used by FastAPI handlers (``FlightDeclarationOperations``).
+
+    Concrete implementation: ``SQLAlchemyFlightDeclarationRepository`` in
+    ``flight_blender.infrastructure.database.repositories.sa_flight_declarations``.
+    """
+
     async def create(self, **kwargs: Any) -> Any: ...
     async def get_by_id(self, declaration_id: UUID) -> Any | None: ...
     async def list(
@@ -28,6 +33,15 @@ class FlightDeclarationRepository(Protocol):
     async def add_state_history_entry(self, flight_declaration_id: UUID, original_state: int, new_state: int, notes: str = "") -> None: ...
     async def delete(self, declaration_id: UUID) -> bool: ...
     def serialize(self, obj: Any) -> dict: ...
+
+
+@runtime_checkable
+class SyncFlightDeclarationRepository(Protocol):
+    """Sync DB surface used by Celery tasks and DSS dispatch.
+
+    Concrete implementation: ``SyncDatabaseFacade`` in
+    ``flight_blender.infrastructure.database.repositories.sync_facade``.
+    """
 
     # peer ops
     def get_peer_operational_intent_details_by_id(self, operational_intent_id: str) -> Any | None: ...

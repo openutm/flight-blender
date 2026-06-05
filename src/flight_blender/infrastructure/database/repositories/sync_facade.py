@@ -16,9 +16,10 @@ import arrow
 from sqlalchemy import delete, select
 
 from flight_blender.infrastructure.database.models.conformance import ConformanceRecordORM
-from flight_blender.infrastructure.database.models.constraint import ConstraintDetailORM, ConstraintReferenceORM
+from flight_blender.infrastructure.database.models.constraint import CompositeConstraintORM, ConstraintDetailORM, ConstraintReferenceORM
 from flight_blender.infrastructure.database.models.flight_declarations import (
     CompositeOperationalIntentORM,
+    FDProxy,
     FlightDeclarationORM,
     FlightOperationalIntentDetailORM,
     FlightOperationalIntentReferenceORM,
@@ -49,17 +50,21 @@ class _CompositeBundle:
         composite_id: uuid.UUID,
         details: Optional[FlightOperationalIntentDetailORM],
         reference: Optional[FlightOperationalIntentReferenceORM],
+        bounds: str = "",
+        start_datetime: Optional[datetime] = None,
+        end_datetime: Optional[datetime] = None,
+        alt_max: float = 0.0,
+        alt_min: float = 0.0,
     ) -> None:
+        self.id = composite_id
         self._composite_id = composite_id
         self.operational_intent_details = details
         self.operational_intent_reference = reference
-
-
-class _FDProxy:
-    """Proxy so `reference.declaration.id` works on an SA reference row."""
-
-    def __init__(self, declaration_id: uuid.UUID) -> None:
-        self.id = declaration_id
+        self.bounds = bounds
+        self.start_datetime = start_datetime
+        self.end_datetime = end_datetime
+        self.alt_max = alt_max
+        self.alt_min = alt_min
 
 
 def _serialize_dc(obj) -> str:
@@ -150,7 +155,7 @@ class SyncDatabaseFacade:
             )
             ref = result.scalar_one_or_none()
             if ref is not None:
-                ref.declaration = _FDProxy(ref.declaration_id)
+                ref.declaration = FDProxy(ref.declaration_id)
                 db.expunge(ref)
             return ref
 
@@ -158,7 +163,7 @@ class SyncDatabaseFacade:
         with session_scope() as db:
             ref = db.get(FlightOperationalIntentReferenceORM, uuid.UUID(str(opint_ref_id)))
             if ref is not None:
-                ref.declaration = _FDProxy(ref.declaration_id)
+                ref.declaration = FDProxy(ref.declaration_id)
                 db.expunge(ref)
             return ref
 
@@ -173,7 +178,7 @@ class SyncDatabaseFacade:
             )
             ref = result.scalar_one_or_none()
             if ref is not None:
-                ref.declaration = _FDProxy(ref.declaration_id)
+                ref.declaration = FDProxy(ref.declaration_id)
                 db.expunge(ref)
             return ref
 
@@ -218,7 +223,7 @@ class SyncDatabaseFacade:
             )
             db.add(obj)
             db.flush()
-            obj.declaration = _FDProxy(flight_declaration.id)
+            obj.declaration = FDProxy(flight_declaration.id)
             db.expunge(obj)
             return obj
 
@@ -242,6 +247,47 @@ class SyncDatabaseFacade:
                     subscriptions=json.dumps(all_subscriptions),
                 )
                 db.add(obj)
+            return True
+
+    def get_subscribers_of_operational_intent_reference(self, flight_operational_intent_reference) -> list:
+        ref_id = (
+            flight_operational_intent_reference.id
+            if hasattr(flight_operational_intent_reference, "id")
+            else uuid.UUID(str(flight_operational_intent_reference))
+        )
+        with session_scope() as db:
+            result = db.execute(select(SubscriberORM).where(SubscriberORM.operational_intent_reference_id == ref_id))
+            objs = list(result.scalars().all())
+            for o in objs:
+                db.expunge(o)
+            return objs
+
+    def check_flight_operational_intent_reference_by_id_exists(self, operational_intent_ref_id: str) -> bool:
+        with session_scope() as db:
+            result = db.execute(
+                select(FlightOperationalIntentReferenceORM).where(FlightOperationalIntentReferenceORM.id == uuid.UUID(operational_intent_ref_id))
+            )
+            return result.scalar_one_or_none() is not None
+
+    def get_operational_intent_reference_by_id(self, operational_intent_ref_id: str) -> Optional[FlightOperationalIntentReferenceORM]:
+        with session_scope() as db:
+            ref = db.get(FlightOperationalIntentReferenceORM, uuid.UUID(operational_intent_ref_id))
+            if ref is not None:
+                ref.declaration = FDProxy(ref.declaration_id)
+                db.expunge(ref)
+            return ref
+
+    def update_flight_operational_intent_reference_ovn(self, flight_operational_intent_reference, ovn: str) -> bool:
+        ref_id = (
+            flight_operational_intent_reference.id
+            if hasattr(flight_operational_intent_reference, "id")
+            else uuid.UUID(str(flight_operational_intent_reference))
+        )
+        with session_scope() as db:
+            obj = db.get(FlightOperationalIntentReferenceORM, ref_id)
+            if obj is None:
+                return False
+            obj.ovn = ovn
             return True
 
     # ─── FlightOperationalIntentDetail ────────────────────────────────────────
@@ -305,9 +351,18 @@ class SyncDatabaseFacade:
             if details is not None:
                 db.expunge(details)
             if reference is not None:
-                reference.declaration = _FDProxy(reference.declaration_id)
+                reference.declaration = FDProxy(reference.declaration_id)
                 db.expunge(reference)
-            return _CompositeBundle(composite.id, details, reference)
+            return _CompositeBundle(
+                composite.id,
+                details,
+                reference,
+                bounds=composite.bounds,
+                start_datetime=composite.start_datetime,
+                end_datetime=composite.end_datetime,
+                alt_max=composite.alt_max,
+                alt_min=composite.alt_min,
+            )
 
     def create_or_update_composite_operational_intent(
         self,
@@ -474,6 +529,175 @@ class SyncDatabaseFacade:
         with session_scope() as db:
             details_json = json.dumps(asdict(constraint)) if hasattr(constraint, "__dataclass_fields__") else json.dumps(constraint)
             db.add(ConstraintReferenceORM(details=details_json))
+
+    def get_constraint_reference_by_id(self, constraint_reference_id: str) -> Optional[ConstraintReferenceORM]:
+        with session_scope() as db:
+            obj = db.get(ConstraintReferenceORM, uuid.UUID(constraint_reference_id))
+            if obj is not None:
+                db.expunge(obj)
+            return obj
+
+    def get_constraint_by_geofence(self, geofence) -> Optional[ConstraintDetailORM]:
+        with session_scope() as db:
+            geofence_uuid = geofence.id if hasattr(geofence, "id") else uuid.UUID(str(geofence))
+            result = db.execute(select(ConstraintDetailORM).where(ConstraintDetailORM.geofence_id == geofence_uuid))
+            obj = result.scalar_one_or_none()
+            if obj is not None:
+                db.expunge(obj)
+            return obj
+
+    def get_geofence_by_constraint_reference_id(self, constraint_reference_id: str) -> Optional[GeoFenceORM]:
+        with session_scope() as db:
+            ref = db.get(ConstraintReferenceORM, uuid.UUID(constraint_reference_id))
+            if ref is None or ref.geofence_id is None:
+                return None
+            obj = db.get(GeoFenceORM, ref.geofence_id)
+            if obj is not None:
+                db.expunge(obj)
+            return obj
+
+    def update_constraint_reference_ovn(self, constraint_reference, ovn: str) -> bool:
+        ref_id = constraint_reference.id if hasattr(constraint_reference, "id") else constraint_reference
+        with session_scope() as db:
+            obj = db.get(ConstraintReferenceORM, uuid.UUID(str(ref_id)))
+            if obj is None:
+                return False
+            obj.ovn = ovn
+            return True
+
+    def create_or_update_constraint_detail(self, constraint, geofence) -> Optional[ConstraintDetailORM]:
+        geofence_uuid = geofence.id if hasattr(geofence, "id") else uuid.UUID(str(geofence))
+        with session_scope() as db:
+            existing = db.execute(select(ConstraintDetailORM).where(ConstraintDetailORM.geofence_id == geofence_uuid)).scalar_one_or_none()
+            details_json = json.dumps(asdict(constraint)) if hasattr(constraint, "__dataclass_fields__") else json.dumps(constraint)
+            if existing is not None:
+                existing.volumes = details_json
+                obj = existing
+            else:
+                obj = ConstraintDetailORM(geofence_id=geofence_uuid, volumes=details_json)
+                db.add(obj)
+            db.flush()
+            db.expunge(obj)
+            return obj
+
+    def create_or_update_constraint_reference(self, constraint_reference, geofence, flight_declaration) -> Optional[ConstraintReferenceORM]:
+        geofence_uuid = geofence.id if hasattr(geofence, "id") else uuid.UUID(str(geofence))
+        ref_id = constraint_reference.id if hasattr(constraint_reference, "id") else uuid.UUID(str(constraint_reference))
+        fd_id = flight_declaration.id if hasattr(flight_declaration, "id") else uuid.UUID(str(flight_declaration))
+        with session_scope() as db:
+            existing = db.get(ConstraintReferenceORM, ref_id)
+            if existing is not None:
+                existing.ovn = constraint_reference.ovn
+                existing.geofence_id = geofence_uuid
+                existing.flight_declaration_id = fd_id
+                existing.uss_availability = getattr(constraint_reference, "uss_availability", existing.uss_availability)
+                existing.uss_base_url = getattr(constraint_reference, "uss_base_url", existing.uss_base_url)
+                existing.version = str(getattr(constraint_reference, "version", existing.version))
+                existing.manager = getattr(constraint_reference, "manager", existing.manager)
+                if hasattr(constraint_reference, "time_start"):
+                    existing.time_start = _coerce_datetime(
+                        constraint_reference.time_start.value
+                        if hasattr(constraint_reference.time_start, "value")
+                        else constraint_reference.time_start
+                    )
+                if hasattr(constraint_reference, "time_end"):
+                    existing.time_end = _coerce_datetime(
+                        constraint_reference.time_end.value if hasattr(constraint_reference.time_end, "value") else constraint_reference.time_end
+                    )
+                obj = existing
+            else:
+                obj = ConstraintReferenceORM(
+                    id=ref_id,
+                    geofence_id=geofence_uuid,
+                    flight_declaration_id=fd_id,
+                    ovn=constraint_reference.ovn,
+                    uss_availability=getattr(constraint_reference, "uss_availability", ""),
+                    uss_base_url=getattr(constraint_reference, "uss_base_url", ""),
+                    version=str(getattr(constraint_reference, "version", "")),
+                    manager=getattr(constraint_reference, "manager", None),
+                    time_start=_coerce_datetime(
+                        constraint_reference.time_start.value
+                        if hasattr(constraint_reference.time_start, "value")
+                        else constraint_reference.time_start
+                    ),
+                    time_end=_coerce_datetime(
+                        constraint_reference.time_end.value if hasattr(constraint_reference.time_end, "value") else constraint_reference.time_end
+                    ),
+                )
+                db.add(obj)
+            db.flush()
+            db.expunge(obj)
+            return obj
+
+    def create_or_update_geofence(self, geofence_payload) -> GeoFenceORM:
+        payload_id = getattr(geofence_payload, "id", None)
+        with session_scope() as db:
+            existing = db.get(GeoFenceORM, uuid.UUID(str(payload_id))) if payload_id is not None else None
+            if existing is not None:
+                existing.raw_geo_fence = getattr(geofence_payload, "raw_geo_fence", existing.raw_geo_fence)
+                existing.geozone = getattr(geofence_payload, "geozone", existing.geozone)
+                existing.upper_limit = getattr(geofence_payload, "upper_limit", existing.upper_limit)
+                existing.lower_limit = getattr(geofence_payload, "lower_limit", existing.lower_limit)
+                existing.altitude_ref = getattr(geofence_payload, "altitude_ref", existing.altitude_ref)
+                existing.name = getattr(geofence_payload, "name", existing.name)
+                existing.bounds = getattr(geofence_payload, "bounds", existing.bounds)
+                existing.status = getattr(geofence_payload, "status", existing.status)
+                existing.message = getattr(geofence_payload, "message", existing.message)
+                existing.is_test_dataset = getattr(geofence_payload, "is_test_dataset", existing.is_test_dataset)
+                if hasattr(geofence_payload, "start_datetime"):
+                    existing.start_datetime = _coerce_datetime(geofence_payload.start_datetime)
+                if hasattr(geofence_payload, "end_datetime"):
+                    existing.end_datetime = _coerce_datetime(geofence_payload.end_datetime)
+                obj = existing
+            else:
+                obj = GeoFenceORM(
+                    id=uuid.UUID(str(payload_id)) if payload_id is not None else uuid.uuid4(),
+                    raw_geo_fence=getattr(geofence_payload, "raw_geo_fence", None),
+                    geozone=getattr(geofence_payload, "geozone", None),
+                    upper_limit=getattr(geofence_payload, "upper_limit", 0),
+                    lower_limit=getattr(geofence_payload, "lower_limit", 0),
+                    altitude_ref=getattr(geofence_payload, "altitude_ref", 0),
+                    name=getattr(geofence_payload, "name", "constraint"),
+                    bounds=getattr(geofence_payload, "bounds", ""),
+                    status=getattr(geofence_payload, "status", 1),
+                    message=getattr(geofence_payload, "message", ""),
+                    is_test_dataset=getattr(geofence_payload, "is_test_dataset", False),
+                    start_datetime=_coerce_datetime(geofence_payload.start_datetime),
+                    end_datetime=_coerce_datetime(geofence_payload.end_datetime),
+                )
+                db.add(obj)
+            db.flush()
+            db.expunge(obj)
+            return obj
+
+    def create_or_update_composite_constraint(self, composite_constraint_payload) -> bool:
+        with session_scope() as db:
+            ref_id = uuid.UUID(str(composite_constraint_payload.constraint_reference_id))
+            det_id = uuid.UUID(str(composite_constraint_payload.constraint_detail_id))
+            fd_id = uuid.UUID(str(composite_constraint_payload.flight_declaration_id))
+            existing = db.execute(select(CompositeConstraintORM).where(CompositeConstraintORM.constraint_reference_id == ref_id)).scalar_one_or_none()
+            if existing is not None:
+                existing.declaration_id = fd_id
+                existing.bounds = str(composite_constraint_payload.bounds)
+                existing.start_datetime = _coerce_datetime(composite_constraint_payload.start_datetime)
+                existing.end_datetime = _coerce_datetime(composite_constraint_payload.end_datetime)
+                existing.alt_max = float(composite_constraint_payload.alt_max)
+                existing.alt_min = float(composite_constraint_payload.alt_min)
+                existing.constraint_detail_id = det_id
+            else:
+                db.add(
+                    CompositeConstraintORM(
+                        declaration_id=fd_id,
+                        bounds=str(composite_constraint_payload.bounds),
+                        start_datetime=_coerce_datetime(composite_constraint_payload.start_datetime),
+                        end_datetime=_coerce_datetime(composite_constraint_payload.end_datetime),
+                        alt_max=float(composite_constraint_payload.alt_max),
+                        alt_min=float(composite_constraint_payload.alt_min),
+                        constraint_reference_id=ref_id,
+                        constraint_detail_id=det_id,
+                    )
+                )
+            return True
 
     # ─── RID FlightDetail ─────────────────────────────────────────────────────
 

@@ -1,16 +1,18 @@
 from dataclasses import asdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from loguru import logger
 
 from flight_blender.config import settings
 from flight_blender.core.entities.conformance import ConformanceRecord, ConformanceSummary
 from flight_blender.core.entities.scd import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
-from flight_blender.core.repositories.conformance import ConformanceRepository, DSSConformanceDispatcher, NotificationDispatcher, SyncConformanceDB
-
-if TYPE_CHECKING:
-    pass
+from flight_blender.core.repositories.conformance import (
+    AsyncConformanceRepository,
+    DSSConformanceDispatcher,
+    NotificationDispatcher,
+    SyncConformanceDB,
+)
 
 
 class StatusCode:
@@ -112,7 +114,7 @@ class ConformanceChecksList(StatusCode):
 
 
 class ConformanceOperations:
-    def __init__(self, repo: ConformanceRepository) -> None:
+    def __init__(self, repo: AsyncConformanceRepository) -> None:
         self._repo = repo
 
     async def get_records(self, start_time: datetime, end_time: datetime) -> list[dict]:
