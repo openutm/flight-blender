@@ -3,7 +3,8 @@ from dataclasses import asdict
 from typing import Any
 from uuid import UUID
 
-from asgiref.sync import sync_to_async
+import asyncio
+
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
@@ -398,20 +399,20 @@ def _do_delete_flight_plan(flight_plan_id: str) -> tuple[dict, int]:
 
 @router.get("/v1/status")
 async def scd_test_status(_auth: Any = Depends(require_scopes(["utm.inject_test_data"]))):
-    data = await sync_to_async(_do_scd_test_status)()
+    data = await asyncio.to_thread(_do_scd_test_status)
     return JSONResponse(data, status_code=200)
 
 
 @router.get("/v1/capabilities")
 async def scd_test_capabilities(_auth: Any = Depends(require_scopes(["utm.inject_test_data"]))):
-    data = await sync_to_async(_do_scd_test_capabilities)()
+    data = await asyncio.to_thread(_do_scd_test_capabilities)
     return JSONResponse(data, status_code=200)
 
 
 @router.get("/flight_planning/status")
 @router.get("/flight_planning/u_space/status")
 async def flight_planning_status(_auth: Any = Depends(require_scopes(["interuss.flight_planning.direct_automated_test"]))):
-    data = await sync_to_async(_do_flight_planning_status)()
+    data = await asyncio.to_thread(_do_flight_planning_status)
     return JSONResponse(data, status_code=200)
 
 
@@ -421,7 +422,7 @@ async def flight_planning_clear_area_request(
     body: dict = Body(...),
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.direct_automated_test"])),
 ):
-    data, status_code = await sync_to_async(_do_flight_planning_clear_area)(body)
+    data, status_code = await asyncio.to_thread(_do_flight_planning_clear_area, body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -432,7 +433,7 @@ async def upsert_flight_plan(
     body: dict = Body(...),
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
 ):
-    data, status_code = await sync_to_async(_do_upsert_flight_plan)(str(flight_plan_id), body)
+    data, status_code = await asyncio.to_thread(_do_upsert_flight_plan, str(flight_plan_id), body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -442,5 +443,5 @@ async def delete_flight_plan(
     flight_plan_id: UUID,
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
 ):
-    data, status_code = await sync_to_async(_do_delete_flight_plan)(str(flight_plan_id))
+    data, status_code = await asyncio.to_thread(_do_delete_flight_plan, str(flight_plan_id))
     return JSONResponse(data, status_code=status_code)

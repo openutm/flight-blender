@@ -5,7 +5,7 @@ from os import environ as env
 from typing import Any
 
 import arrow
-from asgiref.sync import sync_to_async
+import asyncio
 from geojson import Feature, FeatureCollection, Polygon
 from loguru import logger
 from marshmallow.exceptions import ValidationError
@@ -408,7 +408,7 @@ class FlightDeclarationOperations:
         )
         await self.repo.add_state_history_entry(fd.id, 0, default_state, "Created Declaration")
 
-        intersection_results = await sync_to_async(_run_deconfliction_sa)([fd], ussp_network_enabled)
+        intersection_results = await asyncio.to_thread(_run_deconfliction_sa, [fd], ussp_network_enabled)
         creation_response = await self._process_intersection_result_sa(fd, intersection_results[str(fd.id)], ussp_network_enabled)
         return asdict(creation_response), 200
 
@@ -466,7 +466,7 @@ class FlightDeclarationOperations:
                 failed_count += 1
                 results.append({"index": idx, "success": False, "message": str(exc)})
 
-        intersection_results = await sync_to_async(_run_deconfliction_sa)(list(saved.values()), ussp_network_enabled)
+        intersection_results = await asyncio.to_thread(_run_deconfliction_sa, list(saved.values()), ussp_network_enabled)
         submitted_count = 0
         for idx, fd in saved.items():
             creation_response = await self._process_intersection_result_sa(fd, intersection_results[str(fd.id)], ussp_network_enabled)

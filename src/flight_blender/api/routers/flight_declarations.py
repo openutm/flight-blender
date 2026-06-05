@@ -1,7 +1,8 @@
 import uuid
 from typing import Any
 
-from asgiref.sync import sync_to_async
+import asyncio
+
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,7 +119,7 @@ async def network_flight_declarations_by_view(
     view: str | None = None,
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_READ_SCOPE])),
 ):
-    data, status_code = await sync_to_async(do_network_declarations_by_view)(view)
+    data, status_code = await asyncio.to_thread(do_network_declarations_by_view, view)
     return JSONResponse(data, status_code=status_code)
 
 
