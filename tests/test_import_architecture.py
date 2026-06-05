@@ -6,21 +6,24 @@ utils ────────────────────────�
 auth ────────────────────────────↗ (via api/dependencies.py)
 """
 
-import subprocess
+import re
+from pathlib import Path
 
 
-def _rg(pattern: str, path: str) -> list[str]:
-    result = subprocess.run(
-        ["rg", "-n", "--no-heading", pattern, path],
-        capture_output=True,
-        text=True,
-    )
-    return [line for line in result.stdout.splitlines() if line.strip()]
+def _find_violations(pattern: str, path: str) -> list[str]:
+    regex = re.compile(pattern)
+    root = Path(path)
+    matches: list[str] = []
+    for py_file in sorted(root.rglob("*.py")):
+        for line_no, line in enumerate(py_file.read_text().splitlines(), start=1):
+            if regex.search(line):
+                matches.append(f"{py_file}:{line_no}:{line.rstrip()}")
+    return matches
 
 
 def test_models_import_nothing_above():
     """models/ must not import from repositories, services, api, tasks, clients."""
-    violations = _rg(
+    violations = _find_violations(
         r"^from flight_blender\.(repositories|services|api|tasks|clients)",
         "src/flight_blender/models",
     )
@@ -28,7 +31,7 @@ def test_models_import_nothing_above():
 
 
 def test_repositories_do_not_import_services_or_api():
-    violations = _rg(
+    violations = _find_violations(
         r"^from flight_blender\.(services|api|tasks)",
         "src/flight_blender/repositories",
     )
@@ -36,7 +39,7 @@ def test_repositories_do_not_import_services_or_api():
 
 
 def test_services_do_not_import_api():
-    violations = _rg(
+    violations = _find_violations(
         r"^from flight_blender\.api",
         "src/flight_blender/services",
     )
@@ -44,7 +47,7 @@ def test_services_do_not_import_api():
 
 
 def test_clients_do_not_import_api_or_services():
-    violations = _rg(
+    violations = _find_violations(
         r"^from flight_blender\.(api|services)",
         "src/flight_blender/clients",
     )
@@ -52,7 +55,7 @@ def test_clients_do_not_import_api_or_services():
 
 
 def test_utils_do_not_import_api_services_or_tasks():
-    violations = _rg(
+    violations = _find_violations(
         r"^from flight_blender\.(api|services|tasks)",
         "src/flight_blender/utils",
     )
@@ -60,7 +63,7 @@ def test_utils_do_not_import_api_services_or_tasks():
 
 
 def test_schemas_do_not_import_api_or_services():
-    violations = _rg(
+    violations = _find_violations(
         r"^from flight_blender\.(api|services|tasks|repositories)",
         "src/flight_blender/schemas",
     )
