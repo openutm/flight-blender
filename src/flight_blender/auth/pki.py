@@ -125,8 +125,8 @@ class MessageVerifier:
         public_keys = {}
         from sqlalchemy import select  # noqa: PLC0415
 
-        from flight_blender.infrastructure.database.models.flight_feed import SignedTelmetryPublicKeyORM  # noqa: PLC0415
-        from flight_blender.infrastructure.database.session import SessionLocal  # noqa: PLC0415
+        from flight_blender.models.flight_feed_orm import SignedTelmetryPublicKeyORM  # noqa: PLC0415
+        from flight_blender.db.session import SessionLocal  # noqa: PLC0415
 
         _db = SessionLocal()
         try:

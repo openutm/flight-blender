@@ -13,7 +13,7 @@ from flight_blender.domain_types.constraint import Constraint, ConstraintDetails
 from flight_blender.domain_types.scd import Time, Volume4D
 from flight_blender.auth import dss_auth as dss_auth_helper
 from flight_blender.auth.token_audience import generate_audience_from_base_url
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
 
 
 class ConstraintOperations:

@@ -236,4 +236,23 @@ class SQLAlchemyFlightFeedSyncRepository:
         self.db.flush()
         return True
 
+    def get_active_rid_observations_for_session_between_interval(self, session_id: str, start_time, end_time) -> list:
+        from sqlalchemy import select
+        start_dt = start_time.datetime if hasattr(start_time, "datetime") else start_time
+        end_dt = end_time.datetime if hasattr(end_time, "datetime") else end_time
+        result = self.db.execute(
+            select(FlightObservationORM)
+            .where(
+                FlightObservationORM.session_id == uuid.UUID(session_id),
+                FlightObservationORM.created_at >= start_dt,
+                FlightObservationORM.created_at <= end_dt,
+            )
+            .order_by(FlightObservationORM.created_at)
+        )
+        objs = list(result.scalars().all())
+        for o in objs:
+            self.db.expunge(o)
+        return objs
+
+
 SyncFlightFeedReader = SQLAlchemyFlightFeedSyncRepository

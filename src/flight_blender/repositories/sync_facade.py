@@ -15,9 +15,9 @@ from typing import Optional
 import arrow
 from sqlalchemy import delete, select
 
-from flight_blender.infrastructure.database.models.conformance import ConformanceRecordORM
-from flight_blender.infrastructure.database.models.constraint import CompositeConstraintORM, ConstraintDetailORM, ConstraintReferenceORM
-from flight_blender.infrastructure.database.models.flight_declarations import (
+from flight_blender.models.conformance_orm import ConformanceRecordORM
+from flight_blender.models.constraint_orm import CompositeConstraintORM, ConstraintDetailORM, ConstraintReferenceORM
+from flight_blender.models.flight_declarations_orm import (
     CompositeOperationalIntentORM,
     FDProxy,
     FlightDeclarationORM,
@@ -29,14 +29,14 @@ from flight_blender.infrastructure.database.models.flight_declarations import (
     PeerOperationalIntentReferenceORM,
     SubscriberORM,
 )
-from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM
-from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
-from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM
-from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM
-from flight_blender.infrastructure.database.models.surveillance import SurveillanceSensorORM
-from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedSyncRepository
-from flight_blender.infrastructure.database.repositories.sa_flight_feed import _normalize_timestamp as _sa_normalize_timestamp
-from flight_blender.infrastructure.database.session import session_scope
+from flight_blender.models.flight_feed_orm import FlightObservationORM
+from flight_blender.models.geo_fence_orm import GeoFenceORM
+from flight_blender.models.notifications_orm import OperatorRIDNotificationORM
+from flight_blender.models.rid_orm import ISASubscriptionORM, RIDFlightDetailORM
+from flight_blender.models.surveillance_orm import SurveillanceSensorORM
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedSyncRepository
+from flight_blender.repositories.flight_feed_repo import _normalize_timestamp as _sa_normalize_timestamp
+from flight_blender.db.session import session_scope
 
 
 class _CompositeBundle:

@@ -13,8 +13,7 @@ from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus, GeoZon
 from flight_blender.services.geo_fence_svc import GeoZoneParser
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.models.geo_fence_orm import GeoFenceORM
-from flight_blender.db.session import AsyncSessionLocal
-from flight_blender.infrastructure.database.session import session_scope
+from flight_blender.db.session import session_scope
 
 
 @app.task(name="download_geozone_source")

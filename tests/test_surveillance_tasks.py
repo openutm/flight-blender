@@ -275,7 +275,7 @@ def _sa_repo_patch(mock_repo):
         mock_repo_cls = MagicMock(return_value=mock_repo)
 
         with ExitStack() as stack:
-            stack.enter_context(patch("flight_blender.infrastructure.database.session.SessionLocal", return_value=mock_session))
+            stack.enter_context(patch("flight_blender.db.session.SessionLocal", return_value=mock_session))
             stack.enter_context(
                 patch(
                     "flight_blender.tasks.surveillance_task.SQLAlchemySurveillanceSyncRepository",

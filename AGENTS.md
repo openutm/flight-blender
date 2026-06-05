@@ -114,6 +114,8 @@ async def list_geofences(
 
 ### Import rule enforcement
 
+Always use module level imports, don't use lazy imports.
+
 The layer rule is enforced by `tests/test_import_architecture.py`. This test runs as part of the normal pytest suite. It checks:
 - `models/` imports nothing from repositories, services, api, tasks, clients
 - `repositories/` imports nothing from services or api

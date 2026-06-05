@@ -8,9 +8,8 @@ Create Date: 2026-06-05
 from collections.abc import Sequence
 
 from alembic import op
-
-from flight_blender.infrastructure.database import models  # noqa: F401
-from flight_blender.infrastructure.database.session import Base
+from flight_blender import models  # noqa: F401
+from flight_blender.db.session import Base
 
 revision: str = "8c998de89757"
 down_revision: str | Sequence[str] | None = None

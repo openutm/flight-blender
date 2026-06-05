@@ -11,8 +11,7 @@ from flight_blender.config import settings
 from flight_blender.domain_types.surveillance import HeartbeatMessage
 # Protocol removed — TrafficDataFuser injected directly
 from flight_blender.repositories.surveillance_repo import SQLAlchemySurveillanceSyncRepository
-from flight_blender.db.session import AsyncSessionLocal
-from flight_blender.infrastructure.database.session import session_scope
+from flight_blender.db.session import session_scope
 from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.domain_types.protocols_surveillance import TrafficDataFuser as TrafficDataFuserProtocol
 from flight_blender.plugins.loader import load_plugin

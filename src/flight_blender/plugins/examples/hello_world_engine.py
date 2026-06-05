@@ -21,7 +21,7 @@ from sqlalchemy import select
 from flight_blender.domain_types.common import ACTIVE_OPERATIONAL_STATES, OPERATION_STATES
 from flight_blender.domain_types.flight_declarations import DeconflictionRequest, DeconflictionResult
 from flight_blender.models.flight_declarations_orm import FlightDeclarationORM
-from flight_blender.infrastructure.database.session import session_scope
+from flight_blender.db.session import session_scope
 
 # Derive state codes directly from the canonical OPERATION_STATES tuple so this
 # example can never silently drift out of sync with core/entities/common.py.

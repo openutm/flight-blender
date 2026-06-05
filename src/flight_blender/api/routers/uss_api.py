@@ -42,7 +42,7 @@ def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
         OperationalIntentUSSDetails,
         Time,
     )
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 
     my_database_reader = SyncDatabaseFacade()
     flight_operational_intent_reference = my_database_reader.get_flight_operational_intent_reference_by_id(opint_id)
@@ -92,7 +92,7 @@ def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
 def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
     from flight_blender.domain_types.scd import CompositeOperationalIntentPayload
     from flight_blender.domain_types.uss import UpdateChangedOpIntDetailsPost
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
     from flight_blender.clients.dss_scd_client import VolumesConverter
 
     database_writer = SyncDatabaseFacade()
@@ -150,7 +150,7 @@ def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
 
 def _do_uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
     from flight_blender.domain_types.uss import GenericErrorResponseMessage
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 
     my_database_reader = SyncDatabaseFacade()
     constraint_id_exists = my_database_reader.check_constraint_id_exists(constraint_id=constraint_id)
@@ -168,7 +168,7 @@ def _do_uss_constraint_details(constraint_id: str) -> tuple[dict, int]:
 
 def _do_uss_update_constraint_details(request_data: dict) -> int:
     from flight_blender.domain_types.constraint import PutConstraintDetailsParameters
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 
     my_database_reader = SyncDatabaseFacade()
     my_database_writer = SyncDatabaseFacade()
@@ -200,7 +200,7 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
     from flight_blender.services import flight_feed_svc as flight_stream_helper
     from flight_blender.services import rid_svc as view_port_ops
     from flight_blender.auth.token_cache import get_redis
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 
     try:
         view_port = [float(i) for i in view.split(",")]
@@ -279,7 +279,7 @@ def _do_get_uss_flights(view: str) -> tuple[dict, int]:
 def _do_get_uss_flight_details(flight_id: str) -> tuple[dict, int]:
     from flight_blender.domain_types.rid import UASID, OperatorLocation, UAClassificationEU
     from flight_blender.domain_types.uss import FlightDetailsNotFoundMessage, OperatorDetailsSuccessResponse, RIDAuthData, RIDFlightDetails
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 
     my_database_reader = SyncDatabaseFacade()
     flight_details_exists = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)

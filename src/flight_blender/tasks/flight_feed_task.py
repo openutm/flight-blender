@@ -14,7 +14,7 @@ from flight_blender.celery import app
 from flight_blender.config import settings
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedSyncRepository
-from flight_blender.db.session import AsyncSessionLocal
+from flight_blender.db.session import session_scope
 from flight_blender.clients.redis_client import RedisStreamOperations
 
 #### Airtraffic Endpoint

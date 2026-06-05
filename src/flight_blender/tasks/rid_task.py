@@ -44,7 +44,7 @@ from flight_blender.services.rid_svc import (
 )
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.tasks.flight_feed_task import write_incoming_air_traffic_data
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 from flight_blender.clients import dss_rid_client as dss_rid_helper
 
 

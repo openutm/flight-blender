@@ -59,7 +59,7 @@ class SyncFlightFeedReader(Protocol):
     """Sync read-side surface used by Celery tasks and ``ObservationReadOperations``.
 
     Concrete implementation: ``SyncDatabaseFacade`` in
-    ``flight_blender.infrastructure.database.repositories.sync_facade``.
+    ``flight_blender.repositories.sync_facade``.
     """
 
     def get_flight_observations(self, after_datetime: Any) -> list[dict]: ...

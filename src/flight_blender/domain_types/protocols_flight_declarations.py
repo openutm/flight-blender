@@ -40,7 +40,7 @@ class SyncFlightDeclarationRepository(Protocol):
     """Sync DB surface used by Celery tasks and DSS dispatch.
 
     Concrete implementation: ``SyncDatabaseFacade`` in
-    ``flight_blender.infrastructure.database.repositories.sync_facade``.
+    ``flight_blender.repositories.sync_facade``.
     """
 
     # peer ops

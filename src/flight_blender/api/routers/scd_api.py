@@ -85,7 +85,7 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
         planned_test_injection_response,
         ready_to_fly_planning_response,
     )
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
     from flight_blender.clients import dss_scd_client as dss_scd_helper
     from flight_blender.clients.dss_scd_client import SCDTestHarnessHelper
 
@@ -369,7 +369,7 @@ def _do_upsert_flight_plan(flight_plan_id: str, request_data: dict) -> tuple[dic
 def _do_delete_flight_plan(flight_plan_id: str) -> tuple[dict, int]:
 
     from flight_blender.services.scd_svc import flight_planning_deletion_failure_response, flight_planning_deletion_success_response
-    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+    from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
     from flight_blender.clients import dss_scd_client as dss_scd_helper
 
     operation_id_str = str(flight_plan_id)

@@ -228,12 +228,12 @@ def _stub_conformance_deps():
 
 class TestFlightBlenderConformanceEngineC2C3:
     def test_c2_no_flight_declaration(self):
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+        from flight_blender.repositories.sync_facade import SyncDatabaseFacade
 
         engine = FlightBlenderConformanceEngine(db=SyncDatabaseFacade())
         # Non-existent flight declaration ID
         with patch(
-            "flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
+            "flight_blender.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
         ):
             result = engine.is_operation_conformant_via_telemetry(
                 flight_declaration_id=str(uuid.uuid4()),
@@ -247,15 +247,15 @@ class TestFlightBlenderConformanceEngineC2C3:
 
 class TestCheckFlightOperationalIntentReferenceConformance:
     def test_nonexistent_declaration_returns_c11(self):
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+        from flight_blender.repositories.sync_facade import SyncDatabaseFacade
 
         engine = FlightBlenderConformanceEngine(db=SyncDatabaseFacade())
         with (
             patch(
-                "flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
+                "flight_blender.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None
             ),
             patch(
-                "flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_operational_intent_reference_by_flight_declaration_id",
+                "flight_blender.repositories.sync_facade.SyncDatabaseFacade.get_flight_operational_intent_reference_by_flight_declaration_id",
                 return_value=None,
             ),
         ):

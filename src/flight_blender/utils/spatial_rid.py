@@ -6,7 +6,7 @@ from shapely.geometry import Polygon
 
 from flight_blender.domain_types.scd import Altitude, OpInttoCheckDetails, Time
 from flight_blender.auth.token_cache import get_redis
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 
 
 class OperationalIntentComparisonFactory:

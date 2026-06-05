@@ -65,7 +65,7 @@ from flight_blender.utils.json_codecs import LazyEncoder
 from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.auth.dss_auth import AuthorityCredentialsGetter
 from flight_blender.auth.token_cache import get_redis
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
 from flight_blender.clients.dss_constraint_client import ConstraintOperations
 from flight_blender.utils import spatial_rid as rtree_helper
 
@@ -1661,7 +1661,7 @@ class DSSAreaClearHandler:
 
         from flight_blender.domain_types.common import OPINT_INDEX_BASEPATH  # noqa: PLC0415
         from flight_blender.domain_types.scd import ClearAreaResponse, ClearAreaResponseOutcome  # noqa: PLC0415
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
+        from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
         from flight_blender.utils import spatial_rid as rtree_helper  # noqa: PLC0415
 
         my_database_writer = SyncDatabaseFacade()
@@ -1732,7 +1732,7 @@ class DSSOperationalIntentsCreator:
 
     def __init__(self, flight_declaration_id: str):
         from flight_blender.services.flight_declarations_svc import OperationalIntentsConverter  # noqa: PLC0415
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
+        from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
 
         self.flight_declaration_id = flight_declaration_id
         self.my_scd_dss_helper = SCDOperations()
@@ -1926,7 +1926,7 @@ class SCDTestHarnessHelper:
 
     def __init__(self):
         from flight_blender.auth.token_cache import get_redis  # noqa: PLC0415
-        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
+        from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration  # noqa: PLC0415
         from flight_blender.utils import spatial_rid as rtree_helper  # noqa: PLC0415
 
         self.my_operational_intent_helper = OperationalIntentReferenceHelper()

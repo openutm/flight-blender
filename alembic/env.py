@@ -4,8 +4,8 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from flight_blender.config import settings
-from flight_blender.infrastructure.database import models  # noqa: F401
-from flight_blender.infrastructure.database.session import Base
+from flight_blender import models  # noqa: F401
+from flight_blender.db.session import Base
 
 config = context.config
 

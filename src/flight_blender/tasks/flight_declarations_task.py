@@ -9,7 +9,7 @@ from flight_blender.config import settings
 from flight_blender.domain_types.common import OPERATION_STATES
 from flight_blender.domain_types.notifications import FlightDeclarationUpdateMessage
 from flight_blender.domain_types.scd import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo
 from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator
 from flight_blender.clients.notification_client import NotificationFactory
 

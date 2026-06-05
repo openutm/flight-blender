@@ -18,7 +18,7 @@ class SyncConformanceDB(Protocol):
     """Sync DB facade used by conformance helpers (Celery tasks, sync DSS dispatch).
 
     Concrete implementation: ``SyncDatabaseFacade`` in
-    ``flight_blender.infrastructure.database.repositories.sync_facade``.
+    ``flight_blender.repositories.sync_facade``.
     """
 
     def get_flight_declaration_by_id(self, flight_declaration_id: str) -> Any | None: ...

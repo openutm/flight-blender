@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import arrow
 import pytest
 
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.domain_types.rid import RIDStreamErrorDetail
 from flight_blender.services.rid_svc import FlightTelemetryRIDEngine
 from flight_blender.tasks.rid_task import (

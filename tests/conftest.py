@@ -5,39 +5,7 @@ import redis
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from flight_blender.api.main import create_fastapi_app
-from flight_blender.infrastructure.database.models.constraint import (  # noqa: F401 — triggers metadata
-    CompositeConstraintORM,
-    ConstraintDetailORM,
-    ConstraintReferenceORM,
-)
-from flight_blender.infrastructure.database.models.conformance import ConformanceRecordORM  # noqa: F401 — triggers metadata
-from flight_blender.infrastructure.database.models.flight_declarations import (  # noqa: F401 — triggers metadata
-    CompositeOperationalIntentORM,
-    FlightDeclarationORM,
-    FlightOperationalIntentDetailORM,
-    FlightOperationalIntentReferenceORM,
-    FlightOperationTrackingORM,
-    PeerCompositeOperationalIntentORM,
-    PeerOperationalIntentDetailORM,
-    PeerOperationalIntentReferenceORM,
-    SubscriberORM,
-)
-from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM  # noqa: F401 — triggers metadata
-from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM  # noqa: F401 — triggers metadata
-from flight_blender.infrastructure.database.models.notifications import OperatorRIDNotificationORM  # noqa: F401 — triggers metadata
-from flight_blender.infrastructure.database.models.rid import ISASubscriptionORM, RIDFlightDetailORM  # noqa: F401 — triggers metadata
-from flight_blender.infrastructure.database.models.surveillance import (  # noqa: F401 — triggers metadata
-    SurveillanceHeartbeatEventORM,
-    SurveillanceSensorFailureNotificationORM,
-    SurveillanceSensorHealthORM,
-    SurveillanceSensorHealthTrackingORM,
-    SurveillanceSensorORM,
-    SurveillanceSessionORM,
-    SurveillanceTrackEventORM,
-)
-from flight_blender.infrastructure.database.session import Base as OldBase, async_get_db as old_async_get_db
-from flight_blender.infrastructure.database.session import engine as sync_engine
-from flight_blender.db.session import Base, async_get_db
+from flight_blender.db.session import Base, async_get_db, engine as sync_engine
 from flight_blender.models.conformance_orm import ConformanceRecordORM as _NewConformanceORM  # noqa: F401 — triggers new metadata
 from flight_blender.models.constraint_orm import ConstraintDetailORM as _NewConstraintORM  # noqa: F401
 from flight_blender.models.flight_declarations_orm import FlightDeclarationORM as _NewFlightDeclORM  # noqa: F401
@@ -111,12 +79,9 @@ def _celery_eager(monkeypatch):
 @pytest.fixture(scope="session", autouse=True)
 def _sync_sqlalchemy_schema():
     """Create tables for migrated sync code paths that still use session_scope()."""
-    OldBase.metadata.drop_all(sync_engine)
-    OldBase.metadata.create_all(sync_engine)
     Base.metadata.drop_all(sync_engine)
     Base.metadata.create_all(sync_engine)
     yield
-    OldBase.metadata.drop_all(sync_engine)
     Base.metadata.drop_all(sync_engine)
 
 
@@ -224,7 +189,6 @@ async def mounted_sync_client():
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async with test_engine.begin() as conn:
-        await conn.run_sync(OldBase.metadata.create_all)
         await conn.run_sync(Base.metadata.create_all)
 
     async def override_get_db():
@@ -238,7 +202,6 @@ async def mounted_sync_client():
 
     app = create_fastapi_app()
     app.dependency_overrides[async_get_db] = override_get_db
-    app.dependency_overrides[old_async_get_db] = override_get_db
 
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c
@@ -253,7 +216,6 @@ async def fastapi_client():
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async with test_engine.begin() as conn:
-        await conn.run_sync(OldBase.metadata.create_all)
         await conn.run_sync(Base.metadata.create_all)
 
     async def override_get_db():
@@ -267,7 +229,6 @@ async def fastapi_client():
 
     app = create_fastapi_app()
     app.dependency_overrides[async_get_db] = override_get_db
-    app.dependency_overrides[old_async_get_db] = override_get_db
 
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c
@@ -282,7 +243,6 @@ async def mounted_fastapi_client():
     TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
     async with test_engine.begin() as conn:
-        await conn.run_sync(OldBase.metadata.create_all)
         await conn.run_sync(Base.metadata.create_all)
 
     async def override_get_db():
@@ -296,7 +256,6 @@ async def mounted_fastapi_client():
 
     fastapi_app = create_fastapi_app()
     fastapi_app.dependency_overrides[async_get_db] = override_get_db
-    fastapi_app.dependency_overrides[old_async_get_db] = override_get_db
     with TestClient(fastapi_app, raise_server_exceptions=True) as c:
         yield c
 

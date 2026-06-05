@@ -2,7 +2,7 @@
 
 from loguru import logger
 
-from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
+from flight_blender.repositories.sync_facade import SyncDatabaseFacade  # TODO: replace with async repo after task migration
 
 
 def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> None:
