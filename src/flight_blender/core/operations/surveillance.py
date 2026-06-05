@@ -6,6 +6,8 @@ from typing import Optional
 import arrow
 from loguru import logger
 
+from flight_blender.common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE
+from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService
 from flight_blender.infrastructure.database.repositories.sa_surveillance import SQLAlchemySurveillanceRepository
 from flight_blender.surveillance.data_definitions import (
     AggregateHealthMetrics,
@@ -78,14 +80,10 @@ class SurveillanceOperations:
             if session is None:
                 return {"error": f"Invalid surveillance_session_id provided: {session_id}"}, 400
 
-            from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService  # noqa: PLC0415
-
             TaskSchedulerService.cancel_session_tasks(str(session_id))
             return {"status": "Surveillance monitoring tasks removed successfully"}, 200
 
     async def _create_heartbeat_task(self, session_id: str) -> bool:
-        from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService  # noqa: PLC0415
-
         try:
             return TaskSchedulerService.schedule_surveillance_heartbeat(session_id)
         except Exception:
@@ -93,8 +91,6 @@ class SurveillanceOperations:
             return False
 
     async def _create_track_task(self, session_id: str) -> bool:
-        from flight_blender.infrastructure.celery.task_scheduler import TaskSchedulerService  # noqa: PLC0415
-
         try:
             return TaskSchedulerService.schedule_surveillance_track(session_id)
         except Exception:
@@ -106,7 +102,6 @@ class SurveillanceOperations:
 
     async def list_surveillance_sensors(self) -> list[dict]:
         sensors = await self.repo.get_active_surveillance_sensors()
-        from flight_blender.common.data_definitions import FLIGHT_OBSERVATION_TRAFFIC_SOURCE  # noqa: PLC0415
 
         source_map = dict(FLIGHT_OBSERVATION_TRAFFIC_SOURCE)
         return [

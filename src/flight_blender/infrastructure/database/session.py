@@ -40,7 +40,7 @@ def session_scope() -> Iterator[Session]:
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Sync session for FastAPI-style dependency injection."""
+    """Sync session for Celery tasks."""
     with session_scope() as db:
         yield db
 

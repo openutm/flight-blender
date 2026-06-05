@@ -7,15 +7,18 @@ from typing import Optional
 
 import arrow
 import dacite.exceptions
-from asgiref.sync import sync_to_async
+import shapely
+from shapely.geometry import Point
 
 from flight_blender.api.schemas.flight_feed import ObservationRequest
-from flight_blender.flight_feed.data_definitions import FlightObservationsProcessingResponse, SingleAirtrafficObservation
+from flight_blender.auth.common import get_redis
+from flight_blender.flight_feed.data_definitions import FlightObservationSchema, FlightObservationsProcessingResponse, SingleAirtrafficObservation
 from flight_blender.flight_feed.rid_telemetry_helper import FlightBlenderTelemetryValidator, NestedDict
 from flight_blender.flight_feed.tasks import bulk_write_incoming_air_traffic_data, start_opensky_network_stream
 from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
 from flight_blender.rid import view_port_ops
 from flight_blender.rid.data_definitions import SignedUnSignedTelemetryObservations
+from flight_blender.rid.tasks import stream_rid_telemetry_data
 
 
 def _dispatch_observations(all_parsed: list[dict]) -> None:
@@ -58,8 +61,6 @@ class FlightFeedOperations:
         return asdict(op), 201
 
     async def get_air_traffic(self, session_id: uuid.UUID, view: Optional[str]) -> tuple[dict, int]:
-        from flight_blender.flight_feed import flight_stream_helper  # noqa: PLC0415
-
         if not view:
             return {"message": "A view bbox is necessary with four values: minx, miny, maxx and maxy"}, 400
         try:
@@ -71,9 +72,34 @@ class FlightFeedOperations:
             return {"message": "A incorrect view port bbox was provided"}, 400
 
         view_port_box = view_port_ops.build_view_port_box(view_port_coords=view_port)
+        r = get_redis()
+        key = f"last_reading_for_{session_id}"
+        if r.exists(key):
+            last_reading_time = r.get(key)
+            after_datetime = arrow.get(last_reading_time)
+        else:
+            after_datetime = arrow.now().shift(seconds=-20)
 
-        my_reader = flight_stream_helper.ObservationReadOperations(view_port_box=view_port_box)
-        all_observations = await sync_to_async(my_reader.get_flight_observations)(session_id=str(session_id))
+        r.set(key, arrow.now().isoformat())
+        r.expire(key, 300)
+        observation_rows = await self.repo.get_recent_flight_observations(after_datetime=after_datetime)
+        all_observations = []
+        for row in observation_rows:
+            obs = FlightObservationSchema(
+                id=str(row.id),
+                session_id=str(row.session_id) if row.session_id else "",
+                latitude_dd=row.latitude_dd,
+                longitude_dd=row.longitude_dd,
+                altitude_mm=row.altitude_mm,
+                traffic_source=row.traffic_source,
+                source_type=row.source_type,
+                icao_address=row.icao_address,
+                created_at=row.created_at.isoformat(),
+                updated_at=row.updated_at.isoformat(),
+                metadata=json.loads(row.raw_metadata),
+            )
+            if shapely.contains(view_port_box, Point(obs.latitude_dd, obs.longitude_dd)):
+                all_observations.append(obs)
 
         latest_observations: dict = {}
         for obs in all_observations:
@@ -138,11 +164,7 @@ class FlightFeedOperations:
         return await self.repo.delete_signed_telemetry_public_key(pk)
 
     async def submit_telemetry(self, raw_data: dict) -> tuple[dict, int]:
-        from flight_blender.common.database_operations import FlightBlenderDatabaseReader  # noqa: PLC0415
-        from flight_blender.rid.tasks import stream_rid_telemetry_data  # noqa: PLC0415
-
         validator = FlightBlenderTelemetryValidator()
-        db_reader = FlightBlenderDatabaseReader()
 
         if not validator.validate_observation_key_exists(raw_request_data=raw_data):
             return {"message": "A flight observation object with current state and flight details is necessary"}, 400
@@ -171,13 +193,13 @@ class FlightFeedOperations:
 
             operation_id = f_details.id
             now = arrow.now().datetime
-            flight_declaration_active = await sync_to_async(db_reader.check_flight_declaration_active)(flight_declaration_id=operation_id, now=now)
+            flight_declaration_active = await self.repo.check_flight_declaration_active(flight_declaration_id=operation_id, now=now)
             if not flight_declaration_active:
                 return {
                     "message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"
                 }, 400
 
-            flight_operation = await sync_to_async(db_reader.get_flight_declaration_by_id)(flight_declaration_id=operation_id)
+            flight_operation = await self.repo.get_flight_declaration_by_id(flight_declaration_id=operation_id)
             if flight_operation.state in allowed_states:
                 serialized = [asdict(obs, dict_factory=NestedDict) for obs in unsigned_telemetry_observations]
                 stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(serialized))
@@ -189,11 +211,7 @@ class FlightFeedOperations:
         return {"message": "Telemetry data successfully submitted"}, 201
 
     async def submit_signed_telemetry(self, raw_data: dict) -> tuple[dict, int]:
-        from flight_blender.common.database_operations import FlightBlenderDatabaseReader  # noqa: PLC0415
-        from flight_blender.rid.tasks import stream_rid_telemetry_data  # noqa: PLC0415
-
         validator = FlightBlenderTelemetryValidator()
-        db_reader = FlightBlenderDatabaseReader()
 
         if not validator.validate_observation_key_exists(raw_request_data=raw_data):
             return {"message": "A flight observation object with current state and flight details is necessary"}, 400
@@ -219,13 +237,13 @@ class FlightFeedOperations:
 
             operation_id = f_details.id
             now = arrow.now().datetime
-            flight_declaration_active = await sync_to_async(db_reader.check_flight_declaration_active)(flight_declaration_id=operation_id, now=now)
+            flight_declaration_active = await self.repo.check_flight_declaration_active(flight_declaration_id=operation_id, now=now)
             if not flight_declaration_active:
                 return {
                     "message": f"The operation ID: {operation_id} in the flight details object provided does not match any current operation in Flight Blender"
                 }, 400
 
-            flight_operation = await sync_to_async(db_reader.get_flight_declaration_by_id)(flight_declaration_id=operation_id)
+            flight_operation = await self.repo.get_flight_declaration_by_id(flight_declaration_id=operation_id)
             if flight_operation.state in [2, 3, 4]:
                 stream_rid_telemetry_data.delay(rid_telemetry_observations=json.dumps(unsigned_telemetry_observations))
             else:

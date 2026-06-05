@@ -9,6 +9,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
+from flight_blender.infrastructure.database.models.flight_declarations import FlightDeclarationORM
 from flight_blender.infrastructure.database.models.flight_feed import FlightObservationORM, SignedTelmetryPublicKeyORM
 
 
@@ -77,6 +78,11 @@ class SQLAlchemyFlightFeedRepository:
         result = await self.db.execute(
             select(FlightObservationORM).where(FlightObservationORM.created_at >= after_datetime.datetime).order_by(FlightObservationORM.created_at)
         )
+        return list(result.scalars().all())
+
+    async def get_recent_flight_observations(self, after_datetime: arrow.Arrow | datetime) -> list[FlightObservationORM]:
+        cutoff = after_datetime.datetime if hasattr(after_datetime, "datetime") else after_datetime
+        result = await self.db.execute(select(FlightObservationORM).where(FlightObservationORM.created_at >= cutoff).order_by(FlightObservationORM.created_at))
         return list(result.scalars().all())
 
     async def get_closest_flight_observation_for_now(self, now: arrow.Arrow) -> list[FlightObservationORM]:
@@ -161,6 +167,27 @@ class SQLAlchemyFlightFeedRepository:
     async def get_active_signed_telemetry_public_keys(self) -> list[SignedTelmetryPublicKeyORM]:
         result = await self.db.execute(select(SignedTelmetryPublicKeyORM).where(SignedTelmetryPublicKeyORM.is_active == True))  # noqa: E712
         return list(result.scalars().all())
+
+    async def check_flight_declaration_active(self, flight_declaration_id: str, now: datetime) -> bool:
+        try:
+            declaration_uuid = uuid.UUID(flight_declaration_id)
+        except ValueError:
+            return False
+        result = await self.db.execute(
+            select(FlightDeclarationORM).where(
+                FlightDeclarationORM.id == declaration_uuid,
+                FlightDeclarationORM.start_datetime <= now,
+                FlightDeclarationORM.end_datetime >= now,
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def get_flight_declaration_by_id(self, flight_declaration_id: str) -> Optional[FlightDeclarationORM]:
+        try:
+            declaration_uuid = uuid.UUID(flight_declaration_id)
+        except ValueError:
+            return None
+        return await self.db.get(FlightDeclarationORM, declaration_uuid)
 
 
 class SQLAlchemyFlightFeedSyncRepository:
