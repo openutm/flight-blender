@@ -4,10 +4,10 @@ import arrow
 from loguru import logger
 
 from flight_blender.common.data_definitions import OPINT_INDEX_BASEPATH
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-from flight_blender.rid import rtree_helper
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.infrastructure.spatial import rid as rtree_helper
 
-from . import dss_scd_helper
+from flight_blender.infrastructure.dss import scd as dss_scd_helper
 from .scd_data_definitions import ClearAreaResponse, ClearAreaResponseOutcome
 
 
@@ -195,8 +195,8 @@ class DSSAreaClearHandler:
         self.request_id = request_id
 
     def clear_area_request(self, extent_raw) -> ClearAreaResponse:
-        my_database_writer = FlightBlenderDatabaseWriter()
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_writer = SyncDatabaseFacade()
+        my_database_reader = SyncDatabaseFacade()
         my_scd_dss_helper = dss_scd_helper.SCDOperations()
         # Create a list of Volume4D objects
         my_operational_intent_parser = dss_scd_helper.OperationalIntentReferenceHelper()

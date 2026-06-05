@@ -30,7 +30,7 @@ from flight_blender.conformance.operation_state_helper import (
     match_state,
 )
 from flight_blender.conformance.operator_conformance_notifications import OperationConformanceNotification
-from flight_blender.conformance.tasks import check_flight_conformance, check_operation_telemetry_conformance
+from flight_blender.infrastructure.celery.tasks.conformance import check_flight_conformance, check_operation_telemetry_conformance
 from flight_blender.conformance.utils import FlightBlenderConformanceEngine, is_time_between
 from flight_blender.scd.scd_data_definitions import LatLngPoint
 
@@ -213,7 +213,7 @@ class TestFlightBlenderConformanceEngineC2C3:
     def test_c2_no_flight_declaration(self):
         engine = FlightBlenderConformanceEngine()
         # Non-existent flight declaration ID
-        with patch("flight_blender.common.database_operations.FlightBlenderDatabaseReader.get_flight_declaration_by_id", return_value=None):
+        with patch("flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None):
             result = engine.is_operation_conformant_via_telemetry(
                 flight_declaration_id=str(uuid.uuid4()),
                 aircraft_id="TEST-UAV",
@@ -228,9 +228,9 @@ class TestCheckFlightOperationalIntentReferenceConformance:
     def test_nonexistent_declaration_returns_c11(self):
         engine = FlightBlenderConformanceEngine()
         with (
-            patch("flight_blender.common.database_operations.FlightBlenderDatabaseReader.get_flight_declaration_by_id", return_value=None),
+            patch("flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_declaration_by_id", return_value=None),
             patch(
-                "flight_blender.common.database_operations.FlightBlenderDatabaseReader.get_flight_operational_intent_reference_by_flight_declaration_id",
+                "flight_blender.infrastructure.database.repositories.sync_facade.SyncDatabaseFacade.get_flight_operational_intent_reference_by_flight_declaration_id",
                 return_value=None,
             ),
         ):
@@ -250,26 +250,26 @@ class TestCheckFlightOperationalIntentReferenceConformance:
 class TestCheckFlightConformanceTask:
     def test_conformant_calls_telemetry_check(self):
         with patch(
-            "flight_blender.conformance.tasks.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
+            "flight_blender.infrastructure.celery.tasks.conformance.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
             return_value=1,
         ):
-            with patch("flight_blender.conformance.tasks.check_operation_telemetry_conformance") as mock_telem:
+            with patch("flight_blender.infrastructure.celery.tasks.conformance.check_operation_telemetry_conformance") as mock_telem:
                 check_flight_conformance(flight_declaration_id=str(uuid.uuid4()), session_id="test-sess")
                 mock_telem.assert_called_once()
 
     def test_nonconformant_sends_signal(self):
         with patch(
-            "flight_blender.conformance.tasks.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
+            "flight_blender.infrastructure.celery.tasks.conformance.FlightBlenderConformanceEngine.check_flight_operational_intent_reference_conformance",
             return_value=ConformanceChecksList.C9a,
         ):
-            with patch("flight_blender.conformance.tasks.custom_signals.flight_operational_intent_reference_non_conformance_signal.send") as mock_signal:
+            with patch("flight_blender.infrastructure.celery.tasks.conformance.custom_signals.flight_operational_intent_reference_non_conformance_signal.send") as mock_signal:
                 check_flight_conformance(flight_declaration_id=str(uuid.uuid4()), session_id="test-sess")
                 mock_signal.assert_called_once()
 
 
 class TestCheckOperationTelemetryConformanceTask:
     def test_no_observation_returns_early(self):
-        with patch("flight_blender.conformance.tasks.flight_stream_helper.ObservationReadOperations") as mock_obs_cls:
+        with patch("flight_blender.infrastructure.celery.tasks.conformance.flight_stream_helper.ObservationReadOperations") as mock_obs_cls:
             mock_obs_instance = MagicMock()
             mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id.return_value = None
             mock_obs_cls.return_value = mock_obs_instance

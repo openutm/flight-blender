@@ -13,8 +13,8 @@ from flight_blender.celery import app
 from flight_blender.infrastructure.database.models.geo_fence import GeoFenceORM
 from flight_blender.infrastructure.database.session import session_scope
 
-from .common import GeoZoneParser
-from .data_definitions import GeoAwarenessTestStatus, GeoZone
+from flight_blender.geo_fence.common import GeoZoneParser
+from flight_blender.geo_fence.data_definitions import GeoAwarenessTestStatus, GeoZone
 
 
 @app.task(name="download_geozone_source")

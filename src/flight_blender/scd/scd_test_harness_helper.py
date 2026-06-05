@@ -5,10 +5,10 @@ from dacite import from_dict
 from loguru import logger
 
 from flight_blender.auth.common import get_redis
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
-from flight_blender.rid import rtree_helper
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.infrastructure.spatial import rid as rtree_helper
 
-from .dss_scd_helper import OperationalIntentReferenceHelper, VolumesConverter
+from flight_blender.infrastructure.dss.scd import OperationalIntentReferenceHelper, VolumesConverter
 from .flight_planning_data_definitions import (
     AdvisoryInclusion,
     ASTMF354821OpIntentInformation,
@@ -140,7 +140,7 @@ class SCDTestHarnessHelper:
         self.my_operational_intent_helper = OperationalIntentReferenceHelper()
         self.r = get_redis()
         self.my_volumes_converter = VolumesConverter()
-        self.my_database_reader = FlightBlenderDatabaseReader()
+        self.my_database_reader = SyncDatabaseFacade()
         self.my_operational_intent_comparator = rtree_helper.OperationalIntentComparisonFactory()
 
     def check_if_same_flight_id_exists(self, operation_id: str) -> bool:

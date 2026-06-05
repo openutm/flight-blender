@@ -23,11 +23,11 @@ from flight_blender.auth import dss_auth_helper
 from flight_blender.auth.common import get_redis
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.common.data_definitions import RESPONSE_CONTENT_TYPE
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.flight_feed.data_definitions import SingleAirtrafficObservation
 from flight_blender.rid.data_definitions import UASID, OperatorLocation, UAClassificationEU
 
-from .rid_utils import (
+from flight_blender.rid.rid_utils import (
     Cluster,
     ClusterDetail,
     ClusterPosition,
@@ -412,7 +412,7 @@ class RemoteIDOperations:
 
                 view_hash = int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
 
-                my_database_writer = FlightBlenderDatabaseWriter()
+                my_database_writer = SyncDatabaseFacade()
                 my_database_writer.create_rid_subscription_record(
                     subscription_id=subscription_id,
                     record_id=request_uuid,
@@ -452,8 +452,8 @@ class RemoteIDOperations:
             - The stored flight details expire after 5 minutes (3000 seconds).
         """
 
-        my_database_reader = FlightBlenderDatabaseReader()
-        my_database_writer = FlightBlenderDatabaseWriter()
+        my_database_reader = SyncDatabaseFacade()
+        my_database_writer = SyncDatabaseFacade()
 
         flight_details_exist = my_database_reader.check_flight_details_exist(flight_detail_id=flight_id)
         if not flight_details_exist:
@@ -503,7 +503,7 @@ class RemoteIDOperations:
     def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
         _flight_details = from_dict(data_class=RIDFlightsRecord, data=json.loads(flight_details))
 
-        my_database_writer = FlightBlenderDatabaseWriter()
+        my_database_writer = SyncDatabaseFacade()
         authority_credentials = dss_auth_helper.AuthorityCredentialsGetter()
 
         all_flights_url = []

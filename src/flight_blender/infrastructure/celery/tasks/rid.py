@@ -16,9 +16,9 @@ from shapely.geometry import MultiPoint, Point, box
 from flight_blender.auth.common import get_redis
 from flight_blender.celery import app
 from flight_blender.common.altitude_helper import wgs84_to_barometric
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.flight_feed.data_definitions import SingleRIDObservation
-from flight_blender.flight_feed.tasks import write_incoming_air_traffic_data
+from flight_blender.infrastructure.celery.tasks.flight_feed import write_incoming_air_traffic_data
 from flight_blender.rid.data_definitions import (
     UASID,
     LatLngPoint,
@@ -26,12 +26,11 @@ from flight_blender.rid.data_definitions import (
     SignedUnsignedTelemetryObservation,
     UAClassificationEU,
 )
-
-from . import dss_rid_helper
-from .data_definitions import RIDAircraftState as LocalRIDAircraftState
-from .data_definitions import RIDFlightDetails as LocalRIDFlightDetails
-from .rid_telemetry_monitoring import FlightTelemetryRIDEngine
-from .rid_utils import (
+from flight_blender.infrastructure.dss import rid as dss_rid_helper
+from flight_blender.rid.data_definitions import RIDAircraftState as LocalRIDAircraftState
+from flight_blender.rid.data_definitions import RIDFlightDetails as LocalRIDFlightDetails
+from flight_blender.rid.rid_telemetry_monitoring import FlightTelemetryRIDEngine
+from flight_blender.rid.rid_utils import (
     OperatorLocation,
     RIDAircraftPosition,
     RIDAircraftState,
@@ -73,7 +72,7 @@ def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:
 @app.task(name="write_operator_rid_notification")
 def write_operator_rid_notification(message: str, session_id: str):
     operator_rid_notification = OperatorRIDNotificationCreationPayload(message=message, session_id=session_id)
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer = SyncDatabaseFacade()
     my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)
 
 
@@ -112,7 +111,7 @@ def process_requested_flight(
     all_altitudes = []
     provided_telemetries = requested_flight["telemetry"]
     provided_flight_details = requested_flight["details_responses"]
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer = SyncDatabaseFacade()
 
     MANDATORY_TELEMETRY_FIELDS = [
         "timestamp",
@@ -314,7 +313,7 @@ def run_ussp_polling_for_rid(end_time: str, session_id: str):
     polling_duration = delta.total_seconds()
     logger.info("Polling duration: %s" % polling_duration)
 
-    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_reader = SyncDatabaseFacade()
     subscription_record = my_database_reader.get_rid_subscription_record_by_id(id=session_id)
     logger.info("Polling USSP for RID data..")
 
@@ -350,7 +349,7 @@ def run_ussp_polling_for_rid(end_time: str, session_id: str):
 
 @app.task(name="stream_rid_telemetry_data")
 def stream_rid_telemetry_data(rid_telemetry_observations):
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer = SyncDatabaseFacade()
     telemetry_observations = json.loads(rid_telemetry_observations)
 
     for observation in telemetry_observations:
@@ -642,7 +641,7 @@ def check_rid_stream_conformance(session_id: str, flight_declaration_id=None, dr
 
     else:
         logger.info(f"RID Data stream for {session_id} is NOT OK...")
-        my_database_writer = FlightBlenderDatabaseWriter()
+        my_database_writer = SyncDatabaseFacade()
         for error_detail in error_details:
             operator_rid_notification = OperatorRIDNotificationCreationPayload(message=error_detail.error_description, session_id=session_id)
             my_database_writer.create_operator_rid_notification(operator_rid_notification=operator_rid_notification)

@@ -8,11 +8,11 @@ from loguru import logger
 
 from flight_blender.celery import app
 from flight_blender.common.data_definitions import OPERATION_STATES
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.config import settings
 from flight_blender.conformance.conformance_checks_handler import FlightOperationConformanceHelper
 from flight_blender.notifications.data_definitions import FlightDeclarationUpdateMessage
-from flight_blender.notifications.notification_helper import NotificationFactory
+from flight_blender.infrastructure.messaging.notification_helper import NotificationFactory
 from flight_blender.scd.opint_helper import DSSOperationalIntentsCreator
 from flight_blender.scd.scd_data_definitions import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
 
@@ -22,8 +22,8 @@ load_dotenv(find_dotenv())
 @app.task(name="submit_flight_declaration_to_dss_async")
 def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
     my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=flight_declaration_id)
-    my_database_reader = FlightBlenderDatabaseReader()
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_reader = SyncDatabaseFacade()
+    my_database_writer = SyncDatabaseFacade()
 
     start_end_time_validated = my_dss_opint_creator.validate_flight_declaration_start_end_time()
 

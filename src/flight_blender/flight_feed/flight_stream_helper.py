@@ -9,7 +9,7 @@ from shapely.geometry import Point
 from shapely.geometry import box as shapely_box
 
 from flight_blender.auth.common import get_redis
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 from .data_definitions import FlightObservationSchema
 
@@ -62,7 +62,7 @@ class ObservationReadOperations:
             - "metadata": The metadata extracted and parsed from the message data.
         """
 
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
 
         r = get_redis()
         key = f"last_reading_for_{session_id}"
@@ -105,7 +105,7 @@ class ObservationReadOperations:
         return pending_messages
 
     def get_closest_observation_for_now(self, now: arrow.arrow.Arrow):
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
 
         all_observations = []
         closest_observations = my_database_reader.get_closest_flight_observation_for_now(now=now)
@@ -135,7 +135,7 @@ class ObservationReadOperations:
         return all_observations
 
     def get_all_flight_observations(self) -> list[FlightObservationSchema]:
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
 
         pending_messages = []
         all_flight_observations = my_database_reader.get_flight_observation_objects()
@@ -165,7 +165,7 @@ class ObservationReadOperations:
         return pending_messages
 
     def get_latest_flight_observation_by_flight_declaration_id(self, flight_declaration_id: str) -> FlightObservationSchema | None:
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
 
         latest_observation = my_database_reader.get_latest_flight_observation_by_session(session_id=flight_declaration_id)
         if latest_observation:
@@ -198,7 +198,7 @@ class ObservationReadOperations:
             - "metadata": The metadata extracted and parsed from the message data.
         """
 
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
 
         r = get_redis()
         key = f"last_reading_for_{session_id}"

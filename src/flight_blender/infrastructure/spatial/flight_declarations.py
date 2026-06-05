@@ -10,7 +10,7 @@ from rtree.exceptions import RTreeError
 
 from flight_blender.auth.common import get_redis
 
-from .data_definitions import FlightDeclarationMetadata
+from flight_blender.flight_declarations.data_definitions import FlightDeclarationMetadata
 
 
 def _open_or_recover_index(base_path: str) -> index.Index:
@@ -58,9 +58,9 @@ class FlightDeclarationRTreeIndexFactory:
             )
 
     def clear_rtree_index(self) -> None:
-        from flight_blender.common.database_operations import FlightBlenderDatabaseReader  # noqa: PLC0415
+        from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade  # noqa: PLC0415
 
-        all_declarations = FlightBlenderDatabaseReader().get_active_activated_flight_declarations()
+        all_declarations = SyncDatabaseFacade().get_active_activated_flight_declarations()
         for declaration in all_declarations:
             declaration_idx_str = str(declaration.id)
             declaration_id = int(hashlib.sha256(declaration_idx_str.encode("utf-8")).hexdigest(), 16) % 10**8

@@ -1,6 +1,6 @@
 import json
 
-from flight_blender.geo_fence.tasks import download_geozone_source, write_geo_zone
+from flight_blender.infrastructure.celery.tasks.geo_fence import download_geozone_source, write_geo_zone
 
 
 class CeleryGeoFenceTaskDispatcher:

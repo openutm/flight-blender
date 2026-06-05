@@ -12,8 +12,8 @@ from loguru import logger
 from flight_blender.auth import dss_auth_helper
 from flight_blender.auth.common import get_redis
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
-from flight_blender.scd.dss_scd_helper import Volume4D
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
+from flight_blender.infrastructure.dss.scd import Volume4D
 
 from .data_definitions import Constraint, ConstraintReference, QueryConstraintsPayload
 
@@ -28,8 +28,8 @@ class USSConstraintsOperations:
     def __init__(self):
         self.dss_base_url = env.get("DSS_BASE_URL", "0")
         self.r = get_redis()
-        self.database_reader = FlightBlenderDatabaseReader()
-        self.database_writer = FlightBlenderDatabaseWriter()
+        self.database_reader = SyncDatabaseFacade()
+        self.database_writer = SyncDatabaseFacade()
 
     def get_auth_token(self, audience: str = ""):
         my_authorization_helper = dss_auth_helper.AuthorityCredentialsGetter()

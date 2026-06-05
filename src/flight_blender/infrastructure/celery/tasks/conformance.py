@@ -5,8 +5,8 @@ from flight_blender.celery import app
 from flight_blender.flight_feed import flight_stream_helper
 from flight_blender.scd.scd_data_definitions import LatLngPoint
 
-from . import custom_signals
-from .utils import FlightBlenderConformanceEngine
+from flight_blender.conformance import custom_signals
+from flight_blender.conformance.utils import FlightBlenderConformanceEngine
 
 load_dotenv(find_dotenv())
 

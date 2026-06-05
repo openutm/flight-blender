@@ -19,7 +19,7 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_conformance_check(flight_declaration_id: str, session_id: str, expires: str) -> bool:
-        from flight_blender.conformance.tasks import check_flight_conformance
+        from flight_blender.infrastructure.celery.tasks.conformance import check_flight_conformance
 
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
         logger.info("TaskSchedulerService: scheduling conformance check, expires at %s" % expires)
@@ -36,7 +36,7 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_rid_stream_monitoring(session_id: str, end_datetime: str) -> bool:
-        from flight_blender.conformance.tasks import check_rid_stream_conformance
+        from flight_blender.infrastructure.celery.tasks.conformance import check_rid_stream_conformance
 
         every = int(os.getenv("HEARTBEAT_RATE_SECS", default=5))
         try:
@@ -52,7 +52,7 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_surveillance_heartbeat(surveillance_session_id: str) -> bool:
-        from flight_blender.surveillance.tasks import send_heartbeat_to_consumer
+        from flight_blender.infrastructure.celery.tasks.surveillance import send_heartbeat_to_consumer
 
         session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
         expires = arrow.now().shift(minutes=1).isoformat()
@@ -70,7 +70,7 @@ class TaskSchedulerService:
 
     @staticmethod
     def schedule_surveillance_track(surveillance_session_id: str) -> bool:
-        from flight_blender.surveillance.tasks import send_and_generate_track_to_consumer
+        from flight_blender.infrastructure.celery.tasks.surveillance import send_and_generate_track_to_consumer
 
         session_id = surveillance_session_id if surveillance_session_id else str(uuid.uuid4())
         expires = arrow.now().shift(minutes=1).isoformat()

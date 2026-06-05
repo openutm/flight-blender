@@ -1,7 +1,7 @@
 import json
 
-from flight_blender.flight_feed.tasks import bulk_write_incoming_air_traffic_data, start_opensky_network_stream
-from flight_blender.rid.tasks import stream_rid_telemetry_data
+from flight_blender.infrastructure.celery.tasks.flight_feed import bulk_write_incoming_air_traffic_data, start_opensky_network_stream
+from flight_blender.infrastructure.celery.tasks.rid import stream_rid_telemetry_data
 
 
 class CeleryFlightFeedTaskDispatcher:

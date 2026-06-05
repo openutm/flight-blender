@@ -1,7 +1,7 @@
 from loguru import logger
 
 from flight_blender.config import settings
-from flight_blender.flight_declarations.tasks import send_operational_update_message
+from flight_blender.infrastructure.celery.tasks.flight_declarations import send_operational_update_message
 
 
 class OperationConformanceNotification:

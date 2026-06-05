@@ -9,7 +9,7 @@ import pytest
 from pika.exceptions import ChannelClosedByBroker
 
 from flight_blender.notifications.data_definitions import FlightDeclarationUpdateMessage, NotificationLevel
-from flight_blender.notifications.notification_helper import (
+from flight_blender.infrastructure.messaging.notification_helper import (
     InitialNotificationFactory,
     NotificationFactory,
     _should_recreate_mismatched_exchange,
@@ -53,7 +53,7 @@ def mock_pika():
     mock_conn = MagicMock()
     mock_channel = MagicMock()
     mock_conn.channel.return_value = mock_channel
-    with patch("flight_blender.notifications.notification_helper.pika.BlockingConnection", return_value=mock_conn) as p:
+    with patch("flight_blender.infrastructure.messaging.notification_helper.pika.BlockingConnection", return_value=mock_conn) as p:
         yield p, mock_conn, mock_channel
 
 

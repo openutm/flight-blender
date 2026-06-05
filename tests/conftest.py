@@ -298,7 +298,7 @@ def future_dates():
 def mock_scd_auth_error(monkeypatch):
     """SCDOperations.get_auth_token returns an error — triggers the auth-failure branch."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_error())
 
@@ -307,7 +307,7 @@ def mock_scd_auth_error(monkeypatch):
 def mock_scd_dss_success(monkeypatch):
     """SCDOperations succeeds: auth OK, DSS submission accepted."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -323,7 +323,7 @@ def mock_scd_dss_success(monkeypatch):
 def mock_scd_dss_conflict(monkeypatch):
     """SCDOperations: auth OK, DSS submission returns conflict."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -338,7 +338,7 @@ def mock_scd_dss_conflict(monkeypatch):
 def mock_scd_dss_failure(monkeypatch):
     """SCDOperations: auth OK, DSS submission fails (500)."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -353,7 +353,7 @@ def mock_scd_dss_failure(monkeypatch):
 def mock_scd_dss_timeout(monkeypatch):
     """SCDOperations: auth OK, DSS submission times out (408)."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -368,7 +368,7 @@ def mock_scd_dss_timeout(monkeypatch):
 def mock_scd_delete_success(monkeypatch):
     """SCDOperations.delete_operational_intent returns success (200)."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -382,7 +382,7 @@ def mock_scd_delete_success(monkeypatch):
 def mock_scd_delete_failure(monkeypatch):
     """SCDOperations.delete_operational_intent returns failure (404)."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(
@@ -396,7 +396,7 @@ def mock_scd_delete_failure(monkeypatch):
 def mock_network_opint_empty(monkeypatch):
     """SCDOperations.get_and_process_nearby_operational_intents returns empty FeatureCollection."""
     from tests import fakes
-    import flight_blender.scd.dss_scd_helper as dss_helper
+    import flight_blender.infrastructure.dss.scd as dss_helper
 
     monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
     monkeypatch.setattr(

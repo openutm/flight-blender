@@ -207,7 +207,7 @@ def _run_deconfliction_sa(
 
 
 def do_network_declarations_by_view(view: str | None) -> tuple[dict, int]:
-    from flight_blender.scd.dss_scd_helper import SCDOperations  # noqa: PLC0415
+    from flight_blender.infrastructure.dss.scd import SCDOperations  # noqa: PLC0415
 
     ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
 
@@ -490,7 +490,7 @@ class FlightDeclarationOperations:
         intersection_result: IntersectionCheckResult,
         ussp_network_enabled: int,
     ) -> FlightDeclarationCreateResponse:
-        from flight_blender.flight_declarations.tasks import send_operational_update_message, submit_flight_declaration_to_dss_async  # noqa: PLC0415
+        from flight_blender.infrastructure.celery.tasks.flight_declarations import send_operational_update_message, submit_flight_declaration_to_dss_async  # noqa: PLC0415
 
         is_approved = intersection_result.is_approved
         declaration_state = intersection_result.declaration_state
@@ -535,7 +535,7 @@ class FlightDeclarationOperations:
         )
 
     async def get_network_declarations_by_id(self, flight_declaration_id: str) -> tuple[dict, int]:
-        from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
+        from flight_blender.infrastructure.dss.scd import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
 
         ussp_network_enabled = int(env.get("USSP_NETWORK_ENABLED", "0"))
 

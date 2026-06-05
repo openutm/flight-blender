@@ -6,9 +6,9 @@ import tldextract
 from dacite import from_dict
 from loguru import logger
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.flight_declarations.utils import OperationalIntentsConverter
-from flight_blender.scd.dss_scd_helper import ConstraintsWriter, SCDOperations
+from flight_blender.infrastructure.dss.scd import ConstraintsWriter, SCDOperations
 
 from .data_definitions import FlightDeclarationOperationalIntentStorageDetails
 from .scd_data_definitions import (
@@ -30,8 +30,8 @@ class DSSOperationalIntentsCreator:
 
         self.my_scd_dss_helper = SCDOperations()
         self.my_operational_intent_reference_helper = OperationalIntentsConverter()
-        self.my_database_reader = FlightBlenderDatabaseReader()
-        self.my_database_writer = FlightBlenderDatabaseWriter()
+        self.my_database_reader = SyncDatabaseFacade()
+        self.my_database_writer = SyncDatabaseFacade()
 
     def validate_flight_declaration_start_end_time(self) -> bool:
         flight_declaration = self.my_database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)

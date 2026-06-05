@@ -47,10 +47,10 @@ class TestRIDDisplayData:
         mock_sub = MagicMock()
         mock_sub.created = True
         with patch(
-            "flight_blender.rid.dss_rid_helper.RemoteIDOperations.create_dss_subscription",
+            "flight_blender.infrastructure.dss.rid.RemoteIDOperations.create_dss_subscription",
             return_value=mock_sub,
         ):
-            with patch("flight_blender.rid.tasks.run_ussp_polling_for_rid"):
+            with patch("flight_blender.infrastructure.celery.tasks.rid.run_ussp_polling_for_rid"):
                 resp = mounted_sync_client.get(
                     "/rid/display_data?view=52.500,13.399,52.501,13.400",
                     headers=fastapi_auth_header(DSS_READ_SCOPE),
@@ -66,10 +66,10 @@ class TestRIDDisplayData:
         mock_sub = MagicMock()
         mock_sub.created = False
         with patch(
-            "flight_blender.rid.dss_rid_helper.RemoteIDOperations.create_dss_subscription",
+            "flight_blender.infrastructure.dss.rid.RemoteIDOperations.create_dss_subscription",
             return_value=mock_sub,
         ) as mock_create:
-            with patch("flight_blender.rid.tasks.run_ussp_polling_for_rid") as mock_poll:
+            with patch("flight_blender.infrastructure.celery.tasks.rid.run_ussp_polling_for_rid") as mock_poll:
                 resp = mounted_sync_client.get(
                     "/rid/display_data?view=52.500,13.399,52.501,13.400",
                     headers=fastapi_auth_header(DSS_READ_SCOPE),

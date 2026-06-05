@@ -92,7 +92,7 @@ def _do_uss_operational_intent_details(opint_id: str) -> tuple[dict, int]:
 
 def _do_uss_update_opint_details(request_data: dict) -> tuple[dict, int]:
     from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
-    from flight_blender.scd.dss_scd_helper import VolumesConverter
+    from flight_blender.infrastructure.dss.scd import VolumesConverter
     from flight_blender.scd.scd_data_definitions import CompositeOperationalIntentPayload
     from flight_blender.uss.uss_data_definitions import UpdateChangedOpIntDetailsPost
 

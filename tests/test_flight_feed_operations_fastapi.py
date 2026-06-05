@@ -149,7 +149,7 @@ class TestGetAirTrafficFastAPI:
 class TestStartOpenskyFeedFastAPI:
     @pytest.fixture(autouse=True)
     def _mock_opensky_task(self):
-        with patch("flight_blender.flight_feed.tasks.start_opensky_network_stream.delay"):
+        with patch("flight_blender.infrastructure.celery.tasks.flight_feed.start_opensky_network_stream.delay"):
             yield
 
     def test_unauthenticated(self, fastapi_client):

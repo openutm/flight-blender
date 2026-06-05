@@ -8,7 +8,7 @@ from loguru import logger
 from shapely.geometry import Point
 from shapely.geometry import Polygon as Plgn
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.conformance.data_definitions import PolygonAltitude
 from flight_blender.scd.scd_data_definitions import LatLngPoint
 
@@ -49,7 +49,7 @@ class FlightBlenderConformanceEngine:
          - C8 Check if it is near a GeoFence and / breaches one
 
         """
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
         now = arrow.now()
         USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 
@@ -193,7 +193,7 @@ class FlightBlenderConformanceEngine:
         """
         # Flight Operation and Flight Authorization exists, create a notifications helper
 
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
         now = arrow.now()
         flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
         flight_operational_intent_reference_exists = my_database_reader.get_flight_operational_intent_reference_by_flight_declaration_id(

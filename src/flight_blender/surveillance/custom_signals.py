@@ -2,7 +2,7 @@ from uuid import UUID
 
 from loguru import logger
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.common.dispatch import Signal, receiver
 
 surveillance_sensor_failure_signal = Signal()
@@ -14,7 +14,7 @@ def process_sensor_status_change(sender, **kwargs):
     previous_status = kwargs["previous_status"]
     new_status = kwargs["new_status"]
     recovery_type = kwargs.get("recovery_type")
-    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_reader = SyncDatabaseFacade()
 
     sensor = my_database_reader.get_surveillance_sensor_by_id(sensor_id=UUID(sensor_id))
     if not sensor:

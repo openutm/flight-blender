@@ -5,7 +5,7 @@ from rtree import index
 from shapely.geometry import Polygon
 
 from flight_blender.auth.common import get_redis
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.scd.scd_data_definitions import Altitude, OpInttoCheckDetails, Time
 
 
@@ -53,13 +53,13 @@ class OperationalIntentsIndexFactory:
 
     def check_op_ints_exist(self) -> bool:
         """This method generates a rTree index of currently active operational indexes"""
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
         return my_database_reader.check_active_activated_flights_exist()
 
     def generate_active_flights_operational_intents_index(self) -> None:
         """This method generates a rTree index of currently active operational intents"""
 
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
         flight_declarations = my_database_reader.get_active_activated_flight_declarations()
 
         for flight_declaration in flight_declarations:
@@ -83,7 +83,7 @@ class OperationalIntentsIndexFactory:
     def clear_rtree_index(self):
         """Method to delete all boxes from the index"""
 
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
         flight_declarations = my_database_reader.get_active_activated_flight_declarations()
 
         for flight_declaration in flight_declarations:

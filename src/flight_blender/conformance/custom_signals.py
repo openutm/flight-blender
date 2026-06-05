@@ -1,6 +1,6 @@
 from loguru import logger
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.common.dispatch import Signal, receiver
 
 from .conformance_checks_handler import FlightOperationConformanceHelper
@@ -80,10 +80,10 @@ def process_telemetry_conformance_message(sender, **kwargs):
         new_state = 3
         event = "ua_exits_coordinated_op_intent"
 
-    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
+    my_flight_blender_database_reader = SyncDatabaseFacade()
 
     fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer = SyncDatabaseFacade()
 
     my_database_writer.write_flight_conformance_record(
         flight_declaration=fd,
@@ -156,10 +156,10 @@ def process_flight_operational_intent_reference_non_conformance_message(sender, 
         my_operation_notification.send_conformance_status_notification(message=authorization_not_granted_message, level="error")
         event = "flight_blender_confirms_contingent"
 
-    my_flight_blender_database_reader = FlightBlenderDatabaseReader()
+    my_flight_blender_database_reader = SyncDatabaseFacade()
 
     fd = my_flight_blender_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_writer = SyncDatabaseFacade()
     my_database_writer.write_flight_conformance_record(
         flight_declaration=fd,
         conformance_non_conformance_state=non_conformance_state,

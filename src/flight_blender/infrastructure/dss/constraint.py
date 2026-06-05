@@ -12,10 +12,10 @@ from loguru import logger
 
 from flight_blender.auth import dss_auth_helper
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.scd.scd_data_definitions import Time, Volume4D
 
-from .data_definitions import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
+from flight_blender.constraint.data_definitions import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 
 load_dotenv(find_dotenv())
 
@@ -28,8 +28,8 @@ class ConstraintOperations:
     def __init__(self):
         self.dss_base_url = env.get("DSS_BASE_URL", "0")
 
-        self.database_reader = FlightBlenderDatabaseReader()
-        self.database_writer = FlightBlenderDatabaseWriter()
+        self.database_reader = SyncDatabaseFacade()
+        self.database_writer = SyncDatabaseFacade()
 
     def get_nearby_constraints(self, volumes: list[Volume4D]) -> list[Constraint]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data

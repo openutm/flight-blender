@@ -8,12 +8,12 @@ app = Celery(
     broker=settings.REDIS_BROKER_URL,
     broker_connection_retry_on_startup=True,
     include=[
-        "flight_blender.geo_fence.tasks",
-        "flight_blender.surveillance.tasks",
-        "flight_blender.flight_feed.tasks",
-        "flight_blender.flight_declarations.tasks",
-        "flight_blender.conformance.tasks",
-        "flight_blender.rid.tasks",
+        "flight_blender.infrastructure.celery.tasks.geo_fence",
+        "flight_blender.infrastructure.celery.tasks.surveillance",
+        "flight_blender.infrastructure.celery.tasks.flight_feed",
+        "flight_blender.infrastructure.celery.tasks.flight_declarations",
+        "flight_blender.infrastructure.celery.tasks.conformance",
+        "flight_blender.infrastructure.celery.tasks.rid",
     ],
 )
 

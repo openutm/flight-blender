@@ -6,16 +6,16 @@ from loguru import logger
 from .data_definitions import AggregateHealthMetrics, HeartbeatDeliveryProbability, HeartbeatRateMetric, SensorHealthMetrics, TrackUpdateProbability
 
 if TYPE_CHECKING:
-    from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+    from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 
 class SurveillanceMetricCalculator:
     """
     Calculates all seven ASTM F3623 SDSP surveillance metrics from database records.
-    All ORM access is delegated to FlightBlenderDatabaseReader to follow project conventions.
+    All ORM access is delegated to SyncDatabaseFacade to follow project conventions.
     """
 
-    def __init__(self, database_reader: "FlightBlenderDatabaseReader"):
+    def __init__(self, database_reader: "SyncDatabaseFacade"):
         self.db = database_reader
 
     # ------------------------------------------------------------------

@@ -19,7 +19,7 @@ BROKER_URL = _s.REDIS_BROKER_URL
 FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER = _s.FLIGHT_BLENDER_PLUGIN_TRAFFIC_DATA_FUSER
 from flight_blender.surveillance.traffic_data_fuser_protocol import TrafficDataFuser as TrafficDataFuserProtocol
 
-from .data_definitions import HeartbeatMessage
+from flight_blender.surveillance.data_definitions import HeartbeatMessage
 
 load_dotenv(find_dotenv())
 

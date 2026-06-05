@@ -2,7 +2,7 @@ from typing import Never
 
 import arrow
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.rid.data_definitions import RIDStreamErrorDetail
 
 all_rid_errors = [
@@ -18,7 +18,7 @@ class FlightTelemetryRIDEngine:
         self.session_id = session_id
 
     def check_rid_stream_ok(self) -> tuple[bool, list[Never] | list[RIDStreamErrorDetail]]:
-        my_database_reader = FlightBlenderDatabaseReader()
+        my_database_reader = SyncDatabaseFacade()
         # This method processes the stored RID stream for any errors
         # Get all telemetry observations for the session that are active since last observation
         now = arrow.now()

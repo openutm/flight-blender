@@ -2,14 +2,14 @@
 
 from loguru import logger
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 
 
 def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> None:
-    from flight_blender.scd.dss_scd_helper import SCDOperations  # noqa: PLC0415
+    from flight_blender.infrastructure.dss.scd import SCDOperations  # noqa: PLC0415
 
     my_scd_dss_helper = SCDOperations()
-    my_database_reader = FlightBlenderDatabaseReader()
+    my_database_reader = SyncDatabaseFacade()
     flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)
     if not flight_declaration:
         logger.error(f"Flight Declaration {flight_declaration_id} not found")
@@ -34,12 +34,12 @@ def operation_ended_clear_dss(flight_declaration_id: str, dry_run: int = 1) -> N
 
 def update_operational_intent_to_activated(flight_declaration_id: str, dry_run: int = 1) -> None:
     from flight_blender.common.data_definitions import OPERATION_STATES  # noqa: PLC0415
-    from flight_blender.scd.dss_scd_helper import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
+    from flight_blender.infrastructure.dss.scd import OperationalIntentReferenceHelper, SCDOperations  # noqa: PLC0415
 
     if dry_run:
         return
-    my_database_reader = FlightBlenderDatabaseReader()
-    my_database_writer = FlightBlenderDatabaseWriter()
+    my_database_reader = SyncDatabaseFacade()
+    my_database_writer = SyncDatabaseFacade()
     my_scd_dss_helper = SCDOperations()
     my_operational_intents_helper = OperationalIntentReferenceHelper()
     flight_declaration = my_database_reader.get_flight_declaration_by_id(flight_declaration_id=flight_declaration_id)

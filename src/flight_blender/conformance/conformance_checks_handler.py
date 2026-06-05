@@ -4,7 +4,7 @@ from os import environ as env
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.conformance.dss_handlers import call_command as management_call_command
 
 from .operation_state_helper import FlightOperationStateMachine, get_status
@@ -23,9 +23,9 @@ class FlightOperationConformanceHelper:
     to ensure proper conformance monitoring and state management.
     Attributes:
         flight_declaration_id (str): The unique identifier for the flight declaration.
-        database_reader (FlightBlenderDatabaseReader): Instance for reading from the database.
+        database_reader (SyncDatabaseFacade): Instance for reading from the database.
         flight_declaration: The flight declaration object retrieved from the database.
-        database_writer (FlightBlenderDatabaseWriter): Instance for writing to the database.
+        database_writer (SyncDatabaseFacade): Instance for writing to the database.
         ENABLE_CONFORMANCE_MONITORING (int): Flag to enable or disable conformance monitoring.
         USSP_NETWORK_ENABLED (int): Flag to enable or disable USSP network integration.
     Methods:
@@ -54,9 +54,9 @@ class FlightOperationConformanceHelper:
 
     def __init__(self, flight_declaration_id: str):
         self.flight_declaration_id = flight_declaration_id
-        self.database_reader = FlightBlenderDatabaseReader()
+        self.database_reader = SyncDatabaseFacade()
         self.flight_declaration = self.database_reader.get_flight_declaration_by_id(flight_declaration_id=self.flight_declaration_id)
-        self.database_writer = FlightBlenderDatabaseWriter()
+        self.database_writer = SyncDatabaseFacade()
         self.ENABLE_CONFORMANCE_MONITORING = int(os.getenv("ENABLE_CONFORMANCE_MONITORING", 0))
         self.USSP_NETWORK_ENABLED = int(env.get("USSP_NETWORK_ENABLED", 0))
 

@@ -55,7 +55,7 @@ async def create_dss_subscription(
     view: str | None = None,
     _auth: Any = Depends(require_scopes([FLIGHTBLENDER_WRITE_SCOPE])),
 ):
-    from flight_blender.rid.dss_rid_helper import RemoteIDOperations
+    from flight_blender.infrastructure.dss.rid import RemoteIDOperations
 
     try:
         view_port = [float(i) for i in (view or "").split(",")]
@@ -181,8 +181,8 @@ async def get_display_data(
 ):
     from dacite import from_dict
 
-    from flight_blender.rid import dss_rid_helper
-    from flight_blender.rid.tasks import run_ussp_polling_for_rid
+    from flight_blender.infrastructure.dss import rid as dss_rid_helper
+    from flight_blender.infrastructure.celery.tasks.rid import run_ussp_polling_for_rid
 
     try:
         view_port = [float(i) for i in (view or "").split(",")]
@@ -267,7 +267,7 @@ async def get_display_data(
 
 @router.put("/tests/{test_id}")
 async def create_test(test_id: uuid.UUID, body: CreateTestBody, _auth: Any = Depends(require_scopes(["rid.inject_test_data"]))):
-    from flight_blender.rid.tasks import stream_rid_test_data
+    from flight_blender.infrastructure.celery.tasks.rid import stream_rid_test_data
 
     redis_key = "rid-test_" + str(test_id)
     redis_client = get_redis()

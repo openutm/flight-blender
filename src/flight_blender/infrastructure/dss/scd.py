@@ -21,15 +21,15 @@ from flight_blender.auth.common import get_redis
 from flight_blender.auth.dss_auth_helper import AuthorityCredentialsGetter
 from flight_blender.common.auth_token_audience_helper import generate_audience_from_base_url
 from flight_blender.common.data_definitions import ALTITUDE_REF_LOOKUP, VALID_OPERATIONAL_INTENT_STATES
-from flight_blender.common.database_operations import FlightBlenderDatabaseReader, FlightBlenderDatabaseWriter
+from flight_blender.infrastructure.database.repositories.sync_facade import SyncDatabaseFacade
 from flight_blender.common.utils import LazyEncoder
 from flight_blender.constraint.data_definitions import CompositeConstraintPayload, Constraint
-from flight_blender.constraint.dss_constraints_helper import ConstraintOperations
+from flight_blender.infrastructure.dss.constraint import ConstraintOperations
 from flight_blender.geo_fence.data_definitions import GeofencePayload
-from flight_blender.rid import rtree_helper
+from flight_blender.infrastructure.spatial import rid as rtree_helper
 
-from .flight_planning_data_definitions import FlightPlanningInjectionData
-from .scd_data_definitions import (
+from flight_blender.scd.flight_planning_data_definitions import FlightPlanningInjectionData
+from flight_blender.scd.scd_data_definitions import (
     Altitude,
     Circle,
     CommonDSS2xxResponse,
@@ -69,7 +69,7 @@ from .scd_data_definitions import (
     Volume3D,
     Volume4D,
 )
-from .scd_data_definitions import Polygon as Plgn
+from flight_blender.scd.scd_data_definitions import Polygon as Plgn
 
 load_dotenv(find_dotenv())
 
@@ -344,8 +344,8 @@ class VolumesConverter:
 
 class ConstraintsWriter:
     def __init__(self) -> None:
-        self.my_database_reader = FlightBlenderDatabaseReader()
-        self.my_database_writer = FlightBlenderDatabaseWriter()
+        self.my_database_reader = SyncDatabaseFacade()
+        self.my_database_writer = SyncDatabaseFacade()
 
     # def parse_stored_constraint_details(self, geozone_id: str) -> ConstraintDetails | None:
     #     pass
@@ -421,7 +421,7 @@ class OperationalIntentReferenceHelper:
     """
 
     def __init__(self) -> None:
-        self.my_database_reader = FlightBlenderDatabaseReader()
+        self.my_database_reader = SyncDatabaseFacade()
 
     def parse_stored_operational_intent_details(self, operation_id: str) -> None | OperationalIntentStorage:
         """
@@ -693,8 +693,8 @@ class SCDOperations:
     def __init__(self):
         self.dss_base_url = env.get("DSS_BASE_URL", "0")
         self.r = get_redis()
-        self.database_reader = FlightBlenderDatabaseReader()
-        self.database_writer = FlightBlenderDatabaseWriter()
+        self.database_reader = SyncDatabaseFacade()
+        self.database_writer = SyncDatabaseFacade()
         self.constraints_helper = ConstraintOperations()
         self.constraints_writer = ConstraintsWriter()
 

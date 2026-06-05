@@ -14,7 +14,7 @@ Covers the pure-logic classes that do not require a live DSS:
 import arrow
 import pytest
 
-from flight_blender.scd.dss_scd_helper import (
+from flight_blender.infrastructure.dss.scd import (
     FlightPlanningDataValidator,
     OperationalIntentReferenceHelper,
     OperationalIntentValidator,
