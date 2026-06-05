@@ -14,8 +14,8 @@ from shapely.geometry import Polygon as ShpPolygon
 from flight_blender.auth.common import get_redis
 from flight_blender.core.entities.geo_fence import GEOFENCE_INDEX_BASEPATH, GeoFenceMetadata
 
-
 # ── buffer helpers (from geo_fence/buffer_helper.py) ─────────────────────────
+
 
 def toFromUTM(shp, proj, inv=False):
     geoInterface = shp.__geo_interface__
@@ -41,6 +41,7 @@ def convert_shapely_to_geojson(shp: ShpPolygon) -> str:
 
 # ── rtree index helpers (from geo_fence/rtree_geo_fence_helper.py) ────────────
 
+
 def _open_or_recover_index(base_path: str) -> index.Index:
     try:
         return index.Index(base_path)
@@ -63,6 +64,7 @@ class GeoFenceRTreeIndexFactory:
 
     def add_box_to_index(self, id: int, geo_fence_id: str, view: list[float], start_date: str, end_date: str):
         from dataclasses import asdict
+
         metadata = GeoFenceMetadata(start_date=start_date, end_date=end_date, geo_fence_id=geo_fence_id)
         self.idx.insert(id=id, coordinates=(view[0], view[1], view[2], view[3]), obj=asdict(metadata))
 
@@ -100,6 +102,7 @@ class GeoFenceRTreeIndexFactory:
 
 
 # ── spatial service ───────────────────────────────────────────────────────────
+
 
 class RTreeGeoFenceSpatialService:
     def filter_fences_by_viewport(self, fences: list, viewport: list[float]) -> list:

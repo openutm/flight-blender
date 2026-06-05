@@ -318,6 +318,12 @@ Files already moved (targets exist, old files deleted):
 | `flight_feed/pki_helper.py` | `infrastructure/auth/pki_helper.py` ✓ |
 | `notifications/notification_helper.py` | `infrastructure/messaging/notification_helper.py` ✓ |
 | `rid/tasks.py`, `geo_fence/tasks.py`, `flight_feed/tasks.py`, `surveillance/tasks.py`, `conformance/tasks.py`, `flight_declarations/tasks.py` | `infrastructure/celery/tasks/<domain>.py` ✓ |
+| `common/altitude_helper.py` | `core/operations/altitude.py` ✓ |
+| `common/auth_token_audience_helper.py` | `infrastructure/auth/auth_token_audience_helper.py` ✓ |
+| `flight_declarations/deconfliction_protocol.py` | `core/repositories/flight_declarations.py` ✓ |
+| `flight_declarations/custom_volume_generation.py` | `core/operations/flight_declarations.py` ✓ |
+| `flight_declarations/custom_utils.py`, `flight_declarations/utils.py` | `core/operations/flight_declarations.py` ✓ |
+| `flight_declarations/data_definitions.py` | `core/entities/flight_declarations.py` ✓ |
 
 **Still to move** — files in bare domain packages that must reach the target layout:
 
@@ -348,12 +354,8 @@ Files already moved (targets exist, old files deleted):
 
 | Current | Target |
 |---------|--------|
-| `flight_declarations/deconfliction_protocol.py` | `core/operations/flight_declarations.py` (Protocol definition) |
 | `flight_declarations/deconfliction_engine.py` | `core/operations/flight_declarations.py` (pure) or `infrastructure/` (if I/O) |
 | `flight_declarations/example_deconfliction_engine.py` | `plugins/examples/` |
-| `flight_declarations/custom_volume_generation.py` | `core/operations/flight_declarations.py` (pure) or `infrastructure/spatial/flight_declarations.py` (geo) |
-| `flight_declarations/custom_utils.py`, `flight_declarations/utils.py` | `core/operations/flight_declarations.py` (pure) |
-| `flight_declarations/data_definitions.py` | merge into `core/entities/flight_declarations.py` |
 
 #### RID (tier 3)
 
@@ -416,8 +418,6 @@ Files already moved (targets exist, old files deleted):
 |---------|--------|
 | `auth/dss_auth_helper.py` | `infrastructure/auth/` |
 | `auth/common.py` | `infrastructure/auth/` |
-| `common/altitude_helper.py` | `core/operations/` (pure) or `infrastructure/spatial/` (geo) |
-| `common/auth_token_audience_helper.py` | `infrastructure/auth/` |
 | `common/base_traffic_data_fuser.py` | `core/repositories/` (Protocol) or `infrastructure/` |
 | `common/data_definitions.py` | split: entities → `core/entities/`, shared types stay until callers migrated |
 | `common/dispatch.py` | `infrastructure/celery/` |
@@ -432,9 +432,6 @@ After each move: fix all imports, run `uv run pytest -x`, delete old file.
 `uss/views.py`, `surveillance/views.py`, `flight_feed/views.py`, `flight_feed/serializers.py`,
 `flight_declarations/serializers.py`, `flight_declarations/pagination.py`, `scd/views.py`, `conformance/views.py`.
 
-### 5. Django admin decision
-
-No Django in the stack — admin is gone. Choose: `fastapi-admin`, minimal custom UI, or drop.
 
 ---
 

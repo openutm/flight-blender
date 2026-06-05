@@ -12,8 +12,9 @@ from geojson import Feature, FeatureCollection, Polygon
 from loguru import logger
 from marshmallow.exceptions import ValidationError
 from pyproj import Geod, Proj
-from shapely.geometry import Point, Polygon as ShapelyPolygon, box as shapely_box
-from shapely.geometry import shape
+from shapely.geometry import Point, shape
+from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import box as shapely_box
 from shapely.ops import unary_union
 
 from flight_blender.common.data_definitions import DEFAULT_UAV_CLIMB_RATE_M_PER_S, DEFAULT_UAV_DESCENT_RATE_M_PER_S, DEFAULT_UAV_SPEED_M_PER_S
@@ -53,8 +54,7 @@ FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR = settings.FLIGHT_BLENDER_PLUGIN_VOLUM
 class DeconflictionEngine(Protocol):
     """Structural interface for flight de-confliction engines."""
 
-    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult:
-        ...
+    def check_deconfliction(self, request: DeconflictionRequest) -> DeconflictionResult: ...
 
 
 # ── OperationalIntentsConverter (from flight_declarations/utils.py) ───────────
@@ -224,7 +224,9 @@ class OperationalIntentsConverter:
                 all_v4d.append(volume_4d)
             return all_v4d
 
-    def buffer_point_to_volume4d(self, lat: float, lng: float, max_altitude: float, min_altitude: float, start_datetime: str, end_datetime: str) -> Volume4D:
+    def buffer_point_to_volume4d(
+        self, lat: float, lng: float, max_altitude: float, min_altitude: float, start_datetime: str, end_datetime: str
+    ) -> Volume4D:
         point = Point(lng, lat)
         buffered_shape = point.buffer(0.0001)
         coordinates = list(zip(*buffered_shape.exterior.coords.xy))

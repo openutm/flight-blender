@@ -8,8 +8,8 @@ from shapely.geometry import Polygon as Plgn
 
 from flight_blender.core.entities.constraint import Constraint
 
-
 # --- Geometric primitives (from scd_data_definitions) ---
+
 
 @dataclass
 class LatLngPoint:
@@ -486,6 +486,7 @@ class OpInttoCheckDetails:
 
 # --- Flight planning types (from flight_planning_data_definitions) ---
 
+
 class FlightPlanningStatusResponse(str, enum.Enum):
     Starting = "Starting"
     Ready = "Ready"
@@ -682,6 +683,7 @@ class FlightPlanningUSSDetails:
 
 
 # --- SCD-prefixed types (from scd/data_definitions.py) ---
+
 
 @dataclass
 class FlightDeclarationCreationPayload:

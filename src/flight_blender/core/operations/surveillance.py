@@ -507,7 +507,9 @@ class SurveillanceMetricCalculator:
                         operational_start = rec_time
 
         mttr: Optional[float] = round(sum(recovery_durations) / len(recovery_durations), 2) if recovery_durations else None
-        avg_auto_recovery: Optional[float] = round(sum(auto_recovery_durations) / len(auto_recovery_durations), 2) if auto_recovery_durations else None
+        avg_auto_recovery: Optional[float] = (
+            round(sum(auto_recovery_durations) / len(auto_recovery_durations), 2) if auto_recovery_durations else None
+        )
         auto_intervals = [d for d, rt in operational_intervals if rt == "automatic"]
         mtbf_auto: Optional[float] = round(sum(auto_intervals) / len(auto_intervals), 2) if auto_intervals else None
         manual_intervals = [d for d, rt in operational_intervals if rt == "manual"]

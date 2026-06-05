@@ -10,9 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
-from flight_blender.core.operations.geo_fence import GeoFenceOperations
-from flight_blender.core.operations.geo_fence import validate_geo_zone
 from flight_blender.core.entities.geo_fence import GeoFencePutSchema, GeoZoneCheckRequestBody, GeoZoneHttpsSource
+from flight_blender.core.operations.geo_fence import GeoFenceOperations, validate_geo_zone
 from flight_blender.infrastructure.celery.geo_fence_dispatcher import CeleryGeoFenceTaskDispatcher
 from flight_blender.infrastructure.database.repositories.sa_geo_fence import SQLAlchemyGeoFenceRepository
 from flight_blender.infrastructure.database.session import async_get_db

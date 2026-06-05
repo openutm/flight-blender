@@ -2,10 +2,10 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 from flight_blender.celery import app
-from flight_blender.core.operations import conformance as custom_signals
-from flight_blender.core.operations.conformance import FlightBlenderConformanceEngine
-from flight_blender.core.operations import flight_feed as flight_stream_helper
 from flight_blender.core.entities.scd import LatLngPoint
+from flight_blender.core.operations import conformance as custom_signals
+from flight_blender.core.operations import flight_feed as flight_stream_helper
+from flight_blender.core.operations.conformance import FlightBlenderConformanceEngine
 
 load_dotenv(find_dotenv())
 

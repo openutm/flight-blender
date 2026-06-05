@@ -7,6 +7,7 @@ from typing import List, Optional
 
 # --- RID spec types (from uss/rid_data_definitions.py) ---
 
+
 class RIDFormat(str, Enum):
     RFC3339 = "RFC3339"
 
@@ -396,6 +397,7 @@ class ErrorResponse:
 
 
 # --- USS operational types (from uss/uss_data_definitions.py) ---
+
 
 @dataclass
 class OperationalIntentNotFoundResponse:

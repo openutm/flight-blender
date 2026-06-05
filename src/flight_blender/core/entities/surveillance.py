@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 FLIGHT_OBSERVATION_TRAFFIC_SOURCE = (
     (0, "1090ES"),

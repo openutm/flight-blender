@@ -6,7 +6,7 @@ import requests
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
-from .common import get_redis
+from ...auth.common import get_redis
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:

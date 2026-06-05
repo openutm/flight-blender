@@ -6,9 +6,10 @@ from typing import Literal, NamedTuple, Never
 import arrow
 from geojson import Feature, FeatureCollection, Polygon
 from implicitdict import ImplicitDict, StringBasedDateTime
-from shapely.geometry import Point, box as shapely_box
+from shapely.geometry import Point
+from shapely.geometry import box as shapely_box
 
-from flight_blender.core.entities.rid import RIDStreamErrorDetail, UASID, OperatorLocation, UAClassificationEU
+from flight_blender.core.entities.rid import UASID, OperatorLocation, RIDStreamErrorDetail, UAClassificationEU
 from flight_blender.core.entities.scd import Volume4D
 
 # ── viewport helpers (from rid/view_port_ops.py) ─────────────────────────────

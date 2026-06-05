@@ -15,16 +15,13 @@ from flight_blender.api.dependencies import require_scopes
 from flight_blender.api.schemas.rid import CreateTestBody, ISACallbackBody
 from flight_blender.auth.common import get_redis
 from flight_blender.common.data_definitions import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
-from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
-from flight_blender.infrastructure.database.repositories.sa_rid import SQLAlchemyRIDRepository
-from flight_blender.infrastructure.database.session import async_get_db
-from flight_blender.core.operations import rid as view_port_ops
 from flight_blender.core.entities.uss import (
     FlightDetailsNotFoundMessage,
     GenericErrorResponseMessage,
     OperatorDetailsSuccessResponse,
     RIDFlightDetails,
 )
+from flight_blender.core.operations import rid as view_port_ops
 from flight_blender.core.operations.rid import (
     CreateTestResponse,
     IdentificationServiceArea,
@@ -37,6 +34,9 @@ from flight_blender.core.operations.rid import (
     RIDVolume4D,
     SubscriptionState,
 )
+from flight_blender.infrastructure.database.repositories.sa_flight_feed import SQLAlchemyFlightFeedRepository
+from flight_blender.infrastructure.database.repositories.sa_rid import SQLAlchemyRIDRepository
+from flight_blender.infrastructure.database.session import async_get_db
 
 router = APIRouter(prefix="/rid")
 

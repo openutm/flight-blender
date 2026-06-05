@@ -663,7 +663,6 @@ from shapely.geometry import Point as _Point  # noqa: E402
 from shapely.geometry import Polygon as _Plgn  # noqa: E402
 
 from flight_blender.core.entities.conformance import PolygonAltitude  # noqa: E402
-from flight_blender.core.entities.scd import LatLngPoint  # noqa: E402
 
 
 def is_time_between(begin_time, end_time, check_time=None):

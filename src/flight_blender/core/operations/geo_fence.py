@@ -7,10 +7,9 @@ from typing import Any
 
 import arrow
 import pyproj
+from implicitdict import ImplicitDict
 from shapely.geometry import Point, mapping, shape
 from shapely.ops import transform, unary_union
-
-from implicitdict import ImplicitDict
 
 from flight_blender.auth.common import get_async_redis
 from flight_blender.core.entities.geo_fence import (
@@ -248,6 +247,7 @@ class GeoZoneParser:
                         radius = ed_269_geometry["horizontalProjection"]["radius"]
                     except KeyError as ke:
                         from loguru import logger
+
                         logger.info("Error in parsing points provided in the ED 269 file %s" % ke)
                         parse_error = True
                     else:
@@ -259,6 +259,7 @@ class GeoZoneParser:
                             "features": [{"type": "Feature", "properties": {}, "geometry": b}],
                         }
                         from loguru import logger
+
                         logger.info("Converting point to circle")
                         ed_269_geometry["horizontalProjection"] = b
                 if not parse_error:
