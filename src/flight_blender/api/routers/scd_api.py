@@ -1,6 +1,7 @@
 from typing import Any
 from uuid import UUID
 
+import arrow
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from flight_blender.api.dependencies import require_scopes
 from flight_blender.db.session import async_get_db
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
 from flight_blender.services import scd_svc
 from flight_blender.services.scd_svc import SCDService
 
@@ -68,3 +70,44 @@ async def delete_flight_plan(
 ):
     data, status_code = await ops.delete_flight_plan(str(flight_plan_id))
     return JSONResponse(data, status_code=status_code)
+
+
+@router.get("/flight_planning/user_notifications")
+@router.get("/flight_planning/u_space/user_notifications")
+async def query_user_notifications(
+    after: str,
+    before: str | None = None,
+    _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
+    db: AsyncSession = Depends(async_get_db),
+):
+    """Return user notifications observed by the USS between `after` and `before`.
+
+    Implements the InterUSS Flight Planning automated testing interface
+    (https://github.com/interuss/automated_testing_interfaces/blob/main/flight_planning/v1/flight_planning.yaml).
+    """
+    try:
+        after_dt = arrow.get(after).datetime
+        if before:
+            before_dt = arrow.get(before).datetime
+        else:
+            before_dt = arrow.utcnow().datetime
+    except Exception:
+        return JSONResponse({"message": "Invalid date format. Use ISO 8601 format."}, status_code=400)
+
+    repo = SQLAlchemyNotificationsRepository(db)
+    notifications = await repo.get_active_notifications_between(after_dt, before_dt)
+    return JSONResponse(
+        {
+            "user_notifications": [
+                {
+                    "observed_at": {
+                        "value": n.created_at.isoformat() if n.created_at else arrow.utcnow().isoformat(),
+                        "format": "RFC3339",
+                    },
+                    "message": n.message,
+                }
+                for n in notifications
+            ]
+        },
+        status_code=200,
+    )

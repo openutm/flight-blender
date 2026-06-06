@@ -151,8 +151,15 @@ def deduplicate_observations_by_icao(observations) -> dict:
 
 def rid_flight_from_observation(observation) -> RIDFlight:
     recent_paths: list[RIDPositions] = []
+    metadata: dict = {}
     try:
-        recent_positions = json.loads(observation.raw_metadata).get("recent_positions", [])
+        metadata = json.loads(observation.raw_metadata) if observation.raw_metadata else {}
+    except Exception as exc:
+        logger.error("Error parsing metadata for {}: {}", observation.icao_address, exc)
+        metadata = {}
+
+    try:
+        recent_positions = metadata.get("recent_positions", [])
         if recent_positions:
             recent_paths.append(
                 RIDPositions(
@@ -162,9 +169,25 @@ def rid_flight_from_observation(observation) -> RIDFlight:
     except Exception as exc:
         logger.error("Error parsing recent_positions for {}: {}", observation.icao_address, exc)
         recent_paths = []
+
+    wgs84_alt: float | None = None
+    try:
+        current_state = metadata.get("current_state", {}) or {}
+        position = current_state.get("position", {}) or {}
+        if position.get("alt") is not None:
+            wgs84_alt = float(position["alt"])
+    except Exception:
+        wgs84_alt = None
+    if wgs84_alt is None:
+        wgs84_alt = (observation.altitude_mm or 0) / 1000.0
+
     return RIDFlight(
         id=observation.icao_address,
-        most_recent_position=Position(lat=observation.latitude_dd, lng=observation.longitude_dd, alt=observation.altitude_mm),
+        most_recent_position=Position(
+            lat=observation.latitude_dd,
+            lng=observation.longitude_dd,
+            alt=wgs84_alt,
+        ),
         recent_paths=recent_paths,
     )
 

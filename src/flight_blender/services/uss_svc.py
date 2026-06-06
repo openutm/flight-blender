@@ -280,18 +280,23 @@ async def get_uss_flights(view: str, repo: SQLAlchemyFlightFeedRepository) -> tu
                 logger.error("Error in metadata data in the stream %s" % ke)
 
             telemetry_data_dict = observation_data_dict["telemetry"]
-            height = RIDHeight(
-                distance=telemetry_data_dict["height"]["distance"],
-                reference=telemetry_data_dict["height"]["reference"],
-            )
+            position_dict = telemetry_data_dict.get("position", {}) or {}
+            height_dict = position_dict.get("height")
+            if isinstance(height_dict, dict):
+                height = RIDHeight(
+                    distance=height_dict.get("distance", 0),
+                    reference=height_dict.get("reference", "TakeoffLocation"),
+                )
+            else:
+                height = None
             position = RIDAircraftPosition(
-                lat=telemetry_data_dict["position"]["lat"],
-                lng=telemetry_data_dict["position"]["lng"],
-                alt=telemetry_data_dict["position"]["alt"],
-                accuracy_h=telemetry_data_dict["position"]["accuracy_h"],
-                accuracy_v=telemetry_data_dict["position"]["accuracy_v"],
-                extrapolated=telemetry_data_dict["position"]["extrapolated"],
-                pressure_altitude=telemetry_data_dict["position"]["pressure_altitude"],
+                lat=position_dict.get("lat"),
+                lng=position_dict.get("lng"),
+                alt=position_dict.get("alt"),
+                accuracy_h=position_dict.get("accuracy_h"),
+                accuracy_v=position_dict.get("accuracy_v"),
+                extrapolated=position_dict.get("extrapolated"),
+                pressure_altitude=position_dict.get("pressure_altitude"),
                 height=height,
             )
             current_state = RIDAircraftState(
