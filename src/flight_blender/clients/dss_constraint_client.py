@@ -26,8 +26,13 @@ class ConstraintOperations:
     async def get_nearby_constraints(self, volumes: list[Volume4D]) -> list[Constraint]:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
 
-        auth_token = self.get_auth_token()
-        # Query the DSS for operational intentns
+        # Get auth token with DSS audience (not self audience)
+        dss_audience = generate_audience_from_base_url(self.dss_base_url)
+        auth_token = self.get_auth_token(audience=dss_audience)
+        if not auth_token or "error" in auth_token:
+            logger.error("Failed to get auth token for DSS constraint query")
+            return []
+        # Query the DSS for constraints
         query_constraints_url = self.dss_base_url + "dss/v1/constraint_references/query"
         headers = {
             "Content-Type": "application/json",
@@ -54,10 +59,14 @@ class ConstraintOperations:
             except Exception as re:
                 logger.error("Error in getting constraint for the volume %s " % re)
             else:
-                # The DSS returned operational intent references as a list
+                # The DSS returned constraint references as a list
                 _dss_constraint_references = query_constraints_request.json()
                 logger.debug(f"DSS Response {_dss_constraint_references}")
-                constraint_references = _dss_constraint_references["constraint_references"]
+                if "constraint_references" in _dss_constraint_references:
+                    constraint_references = _dss_constraint_references["constraint_references"]
+                else:
+                    logger.error("DSS constraint query did not return constraint_references: %s" % _dss_constraint_references)
+                    constraint_references = []
             _constraint_references = []
 
             # Query the operational intent reference details

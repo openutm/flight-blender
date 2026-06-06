@@ -610,7 +610,12 @@ class SCDOperations:
         # This method checks the USS network for any other volume in the airspace and queries the individual USS for data
 
         nearby_operational_intents = []
-        auth_token = self.get_auth_token()
+        # Get auth token with DSS audience (not self audience)
+        dss_audience = generate_audience_from_base_url(self.dss_base_url)
+        auth_token = self.get_auth_token(audience=dss_audience)
+        if not auth_token or "error" in auth_token:
+            logger.error("Failed to get auth token for DSS query")
+            return []
         # Query the DSS for operational intentns
         query_op_int_url = self.dss_base_url + "dss/v1/operational_intent_references/query"
         headers = {
@@ -641,7 +646,11 @@ class SCDOperations:
                 # The DSS returned operational intent references as a list
                 dss_operational_intent_references = operational_intent_ref_response.json()
                 logger.debug(f"DSS Response {dss_operational_intent_references}")
-                operational_intent_references = dss_operational_intent_references["operational_intent_references"]
+                if "operational_intent_references" in dss_operational_intent_references:
+                    operational_intent_references = dss_operational_intent_references["operational_intent_references"]
+                else:
+                    logger.error("DSS query did not return operational_intent_references: %s" % dss_operational_intent_references)
+                    operational_intent_references = []
 
             # Query the operational intent reference details
             for operational_intent_reference_detail in operational_intent_references:
@@ -838,7 +847,18 @@ class SCDOperations:
             - Requires a valid authentication token to interact with the DSS.
         """
 
-        auth_token = self.get_auth_token()
+        # Get auth token with DSS audience (not self audience)
+        dss_audience = generate_audience_from_base_url(self.dss_base_url)
+        auth_token = self.get_auth_token(audience=dss_audience)
+        if not auth_token or "error" in auth_token:
+            logger.error("Failed to get auth token for DSS deletion")
+            return DeleteOperationalIntentResponse(
+                dss_response=DeleteOperationalIntentResponseSuccess(
+                    subscribers=[],
+                    operational_intent_reference={},
+                ),
+                status=401,
+            )
 
         dss_opint_delete_url = self.dss_base_url + "dss/v1/operational_intent_references/" + dss_operational_intent_ref_id + "/" + ovn
 
@@ -990,6 +1010,12 @@ class SCDOperations:
     ):
         """This method posts operational intent details to peer USS via a POST request to /uss/v1/operational_intents"""
         auth_token = self.get_auth_token(audience=audience)
+        if not auth_token or "error" in auth_token:
+            logger.error("Failed to get auth token for peer USS notification")
+            return USSNotificationResponse(
+                status=401,
+                message=CommonDSS4xxResponse(message="Failed to get auth token for peer USS notification"),
+            )
 
         notification_url = uss_base_url + "/uss/v1/operational_intents"
         headers = {
@@ -1326,7 +1352,18 @@ class SCDOperations:
         Returns:
             OperationalIntentSubmissionStatus: The status of the operational intent submission, including success or failure details.
         """
-        auth_token = self.get_auth_token()
+        # Get auth token with DSS audience (not self audience)
+        dss_audience = generate_audience_from_base_url(self.dss_base_url)
+        auth_token = self.get_auth_token(audience=dss_audience)
+        if not auth_token or "error" in auth_token:
+            logger.error("Failed to get auth token for DSS operational intent creation")
+            return OperationalIntentSubmissionStatus(
+                status="failure",
+                status_code=401,
+                message="Failed to get auth token for DSS",
+                dss_response=OtherError(notes="Failed to get auth token for DSS"),
+                operational_intent_id="",
+            )
 
         # A token from authority was received, we can now submit the operational intent
         logger.info("Creating new operational intent...")
@@ -1360,7 +1397,7 @@ class SCDOperations:
         # Get all operational intents in the area
         s = []
         try:
-            all_existing_operational_intent_details = self.get_latest_airspace_volumes(volumes=volumes)
+            all_existing_operational_intent_details = await self.get_latest_airspace_volumes(volumes=volumes)
         except ValueError:
             logger.info("Cannot create a new operational intent, get latest airspace volumes from DSS failed..")
             d_r = OperationalIntentSubmissionStatus(

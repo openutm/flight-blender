@@ -110,7 +110,7 @@ log "Output directory: ${OUTPUT_DIR}"
 separator "Docker network"
 if ! docker network inspect "${NETWORK}" >/dev/null 2>&1; then
   log "Creating network ${NETWORK} ..."
-  docker network create --subnet=172.27.0.0/16 "${NETWORK}"
+  docker network create "${NETWORK}"
 else
   log "Network ${NETWORK} already exists."
 fi

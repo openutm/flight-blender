@@ -90,10 +90,14 @@ class AuthorityCredentialsGetter:
 
         auth_server_url = settings.DSS_AUTH_URL + settings.DSS_AUTH_TOKEN_ENDPOINT
 
-        if auth_server_url.startswith("http://local_"):
+        # Use GET request for local/DummyOAuth servers (interUSS testing)
+        # Use POST request for standard OAuth2 servers (production)
+        use_get = auth_server_url.startswith("http://local_") or "localutm" in auth_server_url or settings.AUTH_DSS_CLIENT_ID is None
+
+        if use_get:
             payload = {
                 "grant_type": "client_credentials",
-                "intended_audience": settings.DSS_SELF_AUDIENCE,
+                "intended_audience": audience if audience else settings.DSS_SELF_AUDIENCE,
                 "scope": scopes_str,
                 "issuer": issuer,
             }

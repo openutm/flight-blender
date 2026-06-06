@@ -780,7 +780,7 @@ class SCDService:
                     return json.loads(json.dumps(failed_planning_response, cls=EnhancedJSONEncoder)), 200
 
             if flight_planning_usage_state == "Planned":
-                return json.loads(json.dumps(ready_to_fly_planning_response, cls=EnhancedJSONEncoder)), 200
+                return json.loads(json.dumps(planned_planning_response, cls=EnhancedJSONEncoder)), 200
             else:
                 return json.loads(json.dumps(planned_planning_response, cls=EnhancedJSONEncoder)), 200
 
