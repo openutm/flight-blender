@@ -1624,13 +1624,13 @@ class SCDOperations:
                 operational_intent_id=new_entity_id,
                 constraints=all_nearby_constraints,
             )
-        elif dss_request_status_code in [400, 401, 403, 409, 43, 429]:
+        elif dss_request_status_code in [400, 401, 403, 409, 413, 429]:
             logger.error("DSS operational intent reference creation error %s" % dss_request.text)
             d_r = OperationalIntentSubmissionStatus(
                 status="failure",
                 status_code=dss_request_status_code,
                 message=dss_request.text,
-                dss_response=OperationalIntentSubmissionError(result=dss_response.text, notes=dss_request.text),
+                dss_response=OperationalIntentSubmissionError(result=str(dss_response), notes=dss_request.text),
                 operational_intent_id=new_entity_id,
             )
 

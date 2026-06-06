@@ -776,7 +776,7 @@ class SCDService:
                 return json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)), 200
 
             elif flight_planning_submission.status in ["failure", "peer_uss_data_sharing_issue"]:
-                if flight_planning_submission.status_code == 408:
+                if flight_planning_submission.status_code in [408, 409]:
                     return json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)), 200
                 else:
                     return json.loads(json.dumps(failed_planning_response, cls=EnhancedJSONEncoder)), 200
