@@ -385,7 +385,7 @@ jobs:
               return
             fi
 
-            docker logs "$container" > "$raw_file" 2>&1 || true
+            docker logs "$container" 2>&1 | tail -5000 > "$raw_file" || true
 
             python3 -c '
             import json,re,sys
@@ -413,11 +413,6 @@ jobs:
           collect_logs "celery-blender-test"
           collect_logs "db-blender-test"
           collect_logs "redis-blender-test"
-
-          # InterUSS ecosystem — discover container names dynamically
-          for c in $(docker ps --format '{{.Names}}' | grep -iE '(dss|oauth|cockroach|mock_uss|scdsc|log)'); do
-            collect_logs "$c"
-          done
 
           echo ""
           echo "=== Log files ==="
