@@ -674,6 +674,8 @@ class SCDService:
                         return json.loads(json.dumps(not_planned_activated_planning_response, cls=EnhancedJSONEncoder)), 200
                 elif scd_test_data.intended_flight.astm_f3548_21.priority == 100:
                     return json.loads(json.dumps(not_planned_activated_higher_priority_planning_response, cls=EnhancedJSONEncoder)), 200
+                elif current_state_str in ("Accepted", "Activated"):
+                    return json.loads(json.dumps(not_planned_already_planned_planning_response, cls=EnhancedJSONEncoder)), 200
                 return json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)), 200
             else:
                 return json.loads(json.dumps(failed_planning_response, cls=EnhancedJSONEncoder)), 200

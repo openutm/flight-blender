@@ -11,11 +11,23 @@
 #
 # Usage:
 #   cd /path/to/flight-blender
-#   bash testing/interuss/scripts/run_interuss_tests.sh [--skip-build] [--clean]
+#   bash testing/interuss/scripts/run_interuss_tests.sh [OPTIONS]
 #
 # Options:
 #   --skip-build   Skip rebuilding the flight-blender Docker image
 #   --clean        Remove all test containers and networks before starting
+#   --suite NAME   Run only one test suite: "f3548" or "netrid" (default: both)
+#   --filter EXPR  Run only test scenarios matching the filter expression.
+#                  Passed to uss_qualifier as --filter <EXPR>.
+#                  Requires --suite to be set.
+#                  Example: --suite f3548 --filter astm.f3548.v21.SCD0020
+#
+# Examples:
+#   Run everything:                     bash testing/interuss/scripts/run_interuss_tests.sh
+#   Run only F3548:                     bash testing/interuss/scripts/run_interuss_tests.sh --suite f3548
+#   Run only NetRID:                    bash testing/interuss/scripts/run_interuss_tests.sh --suite netrid
+#   Debug a single scenario (F3548):    bash testing/interuss/scripts/run_interuss_tests.sh --suite f3548 --filter astm.f3548.v21.SCD0020
+#   Skip rebuild + single suite:        bash testing/interuss/scripts/run_interuss_tests.sh --skip-build --suite netrid
 
 set -euo pipefail
 
@@ -38,6 +50,8 @@ NETWORK="interop_ecosystem_network"
 
 SKIP_BUILD=false
 CLEAN=false
+SUITE=""
+FILTER=""
 
 for arg in "$@"; do
   case "$arg" in
@@ -46,11 +60,67 @@ for arg in "$@"; do
   esac
 done
 
+# Parse --suite and --filter which need the next argument
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-build|--clean) shift ;;
+    --suite)
+      SUITE="${2:-}"
+      if [ -z "${SUITE}" ]; then
+        echo "ERROR: --suite requires a value (f3548 or netrid)"
+        exit 1
+      fi
+      shift 2
+      ;;
+    --filter)
+      FILTER="${2:-}"
+      if [ -z "${FILTER}" ]; then
+        echo "ERROR: --filter requires a filter expression"
+        exit 1
+      fi
+      shift 2
+      ;;
+    *)
+      echo "ERROR: Unknown argument: $1"
+      echo "Usage: $0 [--skip-build] [--clean] [--suite f3548|netrid] [--filter EXPR]"
+      exit 1
+      ;;
+  esac
+done
+
+# Validate --suite value
+if [ -n "${SUITE}" ] && [ "${SUITE}" != "f3548" ] && [ "${SUITE}" != "netrid" ]; then
+  echo "ERROR: --suite must be 'f3548' or 'netrid', got '${SUITE}'"
+  exit 1
+fi
+
+# --filter requires --suite
+if [ -n "${FILTER}" ] && [ -z "${SUITE}" ]; then
+  echo "ERROR: --filter requires --suite to be set"
+  exit 1
+fi
+
+RUN_F3548=true
+RUN_NETRID=true
+if [ "${SUITE}" = "f3548" ]; then
+  RUN_NETRID=false
+elif [ "${SUITE}" = "netrid" ]; then
+  RUN_F3548=false
+fi
+
 # ============================================================
 # Helpers
 # ============================================================
 log() { echo "[$(date +%T)] $*"; }
 separator() { echo; echo "======================================================"; echo "  $*"; echo "======================================================"; echo; }
+
+separator "Configuration"
+log "Skip build:      ${SKIP_BUILD}"
+log "Clean mode:      ${CLEAN}"
+log "Suite:           ${SUITE:-both}"
+log "Filter:          ${FILTER:-all}"
+log "Will run F3548:  ${RUN_F3548}"
+log "Will run NetRID: ${RUN_NETRID}"
 
 cleanup() {
   log "Cleaning up test containers..."
@@ -188,52 +258,89 @@ sleep 10
 # ============================================================
 # Run uss_qualifier — F3548-21
 # ============================================================
-separator "uss_qualifier: F3548-21 (Strategic Conflict Detection)"
 F3548_RC=0
-docker run --rm \
-  --network "${NETWORK}" \
-  --add-host "host.docker.internal:host-gateway" \
-  -w /app/monitoring/uss_qualifier \
-  -e "AUTH_SPEC=DummyOAuth(http://oauth.authority.localutm:8085/token,uss_qualifier)" \
-  -e "AUTH_SPEC_2=DummyOAuth(http://oauth.authority.localutm:8085/token,uss_qualifier_2)" \
-  -v "${CONFIGS_DIR}:/configs:ro" \
-  -v "${OUTPUT_DIR}:/app/monitoring/uss_qualifier/output" \
-  "${INTERUSS_IMAGE}" \
-  uv run main.py \
-    --config "file:///configs/f3548_flight_blender.yaml" \
-    --output-path "output/f3548" \
-  || F3548_RC=$?
+if [ "${RUN_F3548}" = "true" ]; then
+  separator "uss_qualifier: F3548-21 (Strategic Conflict Detection)"
 
-log "F3548-21 uss_qualifier finished (exit code: ${F3548_RC})."
+  F3548_CMD=(
+    docker run --rm
+    --network "${NETWORK}"
+    --add-host "host.docker.internal:host-gateway"
+    -w /app/monitoring/uss_qualifier
+    -e "AUTH_SPEC=DummyOAuth(http://oauth.authority.localutm:8085/token,uss_qualifier)"
+    -e "AUTH_SPEC_2=DummyOAuth(http://oauth.authority.localutm:8085/token,uss_qualifier_2)"
+    -v "${CONFIGS_DIR}:/configs:ro"
+    -v "${OUTPUT_DIR}:/app/monitoring/uss_qualifier/output"
+    "${INTERUSS_IMAGE}"
+    uv run main.py
+    --config "file:///configs/f3548_flight_blender.yaml"
+    --output-path "output/f3548"
+  )
+
+  if [ -n "${FILTER}" ]; then
+    F3548_CMD+=(--filter "${FILTER}")
+    log "Filtering to: ${FILTER}"
+  fi
+
+  "${F3548_CMD[@]}" || F3548_RC=$?
+
+  log "F3548-21 uss_qualifier finished (exit code: ${F3548_RC})."
+else
+  separator "Skipping F3548-21 (--suite netrid)"
+fi
 
 # ============================================================
 # Run uss_qualifier — NetRID v22a
 # ============================================================
-separator "uss_qualifier: NetRID v22a (Remote ID F3411-22a)"
 NETRID_RC=0
-docker run --rm \
-  --network "${NETWORK}" \
-  --add-host "host.docker.internal:host-gateway" \
-  -w /app/monitoring/uss_qualifier \
-  -e "AUTH_SPEC=DummyOAuth(http://oauth.authority.localutm:8085/token,uss_qualifier)" \
-  -v "${CONFIGS_DIR}:/configs:ro" \
-  -v "${OUTPUT_DIR}:/app/monitoring/uss_qualifier/output" \
-  "${INTERUSS_IMAGE}" \
-  uv run main.py \
-    --config "file:///configs/netrid_v22a_flight_blender.yaml" \
-    --output-path "output/netrid_v22a" \
-  || NETRID_RC=$?
+if [ "${RUN_NETRID}" = "true" ]; then
+  separator "uss_qualifier: NetRID v22a (Remote ID F3411-22a)"
 
-log "NetRID v22a uss_qualifier finished (exit code: ${NETRID_RC})."
+  NETRID_CMD=(
+    docker run --rm
+    --network "${NETWORK}"
+    --add-host "host.docker.internal:host-gateway"
+    -w /app/monitoring/uss_qualifier
+    -e "AUTH_SPEC=DummyOAuth(http://oauth.authority.localutm:8085/token,uss_qualifier)"
+    -v "${CONFIGS_DIR}:/configs:ro"
+    -v "${OUTPUT_DIR}:/app/monitoring/uss_qualifier/output"
+    "${INTERUSS_IMAGE}"
+    uv run main.py
+    --config "file:///configs/netrid_v22a_flight_blender.yaml"
+    --output-path "output/netrid_v22a"
+  )
+
+  if [ -n "${FILTER}" ]; then
+    NETRID_CMD+=(--filter "${FILTER}")
+    log "Filtering to: ${FILTER}"
+  fi
+
+  "${NETRID_CMD[@]}" || NETRID_RC=$?
+
+  log "NetRID v22a uss_qualifier finished (exit code: ${NETRID_RC})."
+else
+  separator "Skipping NetRID v22a (--suite f3548)"
+fi
 
 # ============================================================
 # Generate summary
 # ============================================================
 separator "Test summary"
-python3 "${SCRIPT_DIR}/report_to_summary.py" \
-  "${OUTPUT_DIR}/f3548/report.json" \
-  "${OUTPUT_DIR}/netrid_v22a/report.json" \
-  2>/dev/null || log "WARNING: report_to_summary.py failed (reports may be incomplete)"
+
+SUMMARY_ARGS=()
+if [ "${RUN_F3548}" = "true" ] && [ -f "${OUTPUT_DIR}/f3548/report.json" ]; then
+  SUMMARY_ARGS+=("${OUTPUT_DIR}/f3548/report.json")
+fi
+if [ "${RUN_NETRID}" = "true" ] && [ -f "${OUTPUT_DIR}/netrid_v22a/report.json" ]; then
+  SUMMARY_ARGS+=("${OUTPUT_DIR}/netrid_v22a/report.json")
+fi
+
+if [ ${#SUMMARY_ARGS[@]} -gt 0 ]; then
+  python3 "${SCRIPT_DIR}/report_to_summary.py" "${SUMMARY_ARGS[@]}" \
+    2>/dev/null || log "WARNING: report_to_summary.py failed (reports may be incomplete)"
+else
+  log "No report files found — skipping summary."
+fi
 
 echo
 log "Reports written to: ${OUTPUT_DIR}/"
@@ -248,11 +355,17 @@ cleanup
 # ============================================================
 # Exit
 # ============================================================
-if [ "${F3548_RC}" -ne 0 ] || [ "${NETRID_RC}" -ne 0 ]; then
-  log "One or more test runs had failures (f3548=${F3548_RC}, netrid=${NETRID_RC})."
+if [ "${RUN_F3548}" = "true" ] && [ "${F3548_RC}" -ne 0 ]; then
+  log "F3548-21 run had failures (exit code: ${F3548_RC}). Review ${OUTPUT_DIR}/f3548/ for details."
+fi
+if [ "${RUN_NETRID}" = "true" ] && [ "${NETRID_RC}" -ne 0 ]; then
+  log "NetRID v22a run had failures (exit code: ${NETRID_RC}). Review ${OUTPUT_DIR}/netrid_v22a/ for details."
+fi
+
+if [ "${RUN_F3548}" = "true" ] && [ "${F3548_RC}" -ne 0 ] || \
+   [ "${RUN_NETRID}" = "true" ] && [ "${NETRID_RC}" -ne 0 ]; then
   log "This is expected until Flight Blender fully implements all requirements."
-  log "Review the reports in ${OUTPUT_DIR}/ for details."
-  exit 0  # Always exit 0 from this script — failures are captured in the reports
+  exit 0  # Always exit 0 — failures are captured in the reports
 fi
 
 log "All uss_qualifier runs completed successfully."
