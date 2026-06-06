@@ -147,6 +147,7 @@ class ConstraintOperations:
                     if parsed_url.path:
                         current_uss_base_url = parsed_url.scheme + "://" + parsed_url.netloc
 
+                    # ASTM path is /uss/v1/constraints/{entityid}
                     constraints_detail_url = current_uss_base_url + "/uss/v1/constraints/" + str(_constraint_reference.id)
 
                     logger.info(f"Querying USS for constraints: {constraints_detail_url}")

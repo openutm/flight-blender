@@ -569,7 +569,7 @@ class SCDService:
         flight_planning_notification_payload = flight_planning_data
         generated_operational_intent_state = my_flight_plan_op_intent_bridge.generate_operational_intent_state_from_planning_information()
 
-        if flight_plan_exists_in_flight_blender and generated_operational_intent_state in ["Activated", "Nonconforming"]:
+        if flight_plan_exists_in_flight_blender:
             existing_op_int_details = await my_operational_intent_parser.parse_stored_operational_intent_details(operation_id=operation_id_str)
             fd_repo = self.fd_repo
             flight_declaration = await fd_repo.get_by_id(uuid.UUID(operation_id_str))

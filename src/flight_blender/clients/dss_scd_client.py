@@ -260,6 +260,9 @@ class VolumesConverter:
             geo_json_features = self._convert_volume_to_geojson_feature(volume)
             self.geo_json["features"] += geo_json_features
 
+        if not volumes:
+            return
+
         self.time_start = min(volume_time_starts).isoformat()
         self.time_end = max(volume_time_ends).isoformat()
         self.upper_altitude = max(all_upper_altitudes)
@@ -686,7 +689,7 @@ class SCDOperations:
                 current_uss_base_url = current_uss_operational_intent_detail.uss_base_url
                 op_int_det = {}
                 op_int_ref = {}
-                if current_uss_base_url == flight_blender_base_url:
+                if current_uss_base_url == flight_blender_base_url or current_uss_base_url.startswith(flight_blender_base_url + "/"):
                     # The opint is from Flight Blender itself
                     # No need to query peer USS, just update the ovn and process the volume locally
 
@@ -734,6 +737,22 @@ class SCDOperations:
                                     uss_op_int_id=current_uss_operational_intent_detail.id
                                 )
                             )
+                            # Construct a minimal reference from the DSS data so the OVN
+                            # is included in airspace keys (prevents DSS 409 errors)
+                            _op_int_ref = OperationalIntentReferenceDSSResponse(
+                                subscription_id=current_uss_operational_intent_detail.subscription_id,
+                                id=current_uss_operational_intent_detail.id,
+                                uss_base_url=current_uss_base_url,
+                                manager=current_uss_operational_intent_detail.manager,
+                                uss_availability=current_uss_operational_intent_detail.uss_availability,
+                                version=current_uss_operational_intent_detail.version,
+                                state=current_uss_operational_intent_detail.state,
+                                ovn=current_uss_operational_intent_detail.ovn,
+                                time_start=current_uss_operational_intent_detail.time_start,
+                                time_end=current_uss_operational_intent_detail.time_end,
+                            )
+                            op_int_ref = asdict(_op_int_ref)
+                            op_int_det = {"volumes": [], "off_nominal_volumes": [], "priority": 0}
                     op_int_details_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
@@ -745,14 +764,19 @@ class SCDOperations:
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + uss_auth_token["access_token"],
                     }
+                    # ASTM path is /uss/v1/operational_intents/{entityid}
                     uss_operational_intent_url = current_uss_base_url + "/uss/v1/operational_intents/" + current_uss_operational_intent_detail.id
 
                     logger.debug(f"Querying USS: {current_uss_base_url}")
                     try:
                         uss_operational_intent_request = requests.get(uss_operational_intent_url, headers=uss_headers, timeout=30)
                     except urllib3.exceptions.NameResolutionError:
-                        logger.info("URLLIB error")
-                        raise ConnectionError("Could not reach peer USS.. ")
+                        logger.warning(
+                            "Could not resolve peer USS host at {uss_base_url}, skipping".format(
+                                uss_base_url=current_uss_base_url,
+                            )
+                        )
+                        continue
 
                     except (
                         requests.exceptions.ConnectTimeout,
@@ -770,8 +794,13 @@ class SCDOperations:
                             )
                         )
                         op_int_details_retrieved = False
-                        logger.info("Raising connection Error 1")
-                        raise ConnectionError("Could not reach peer USS..")
+                        logger.warning(
+                            "Could not reach peer USS at {uss_base_url}, skipping its operational intent {uss_op_int_id}".format(
+                                uss_op_int_id=current_uss_operational_intent_detail.id,
+                                uss_base_url=current_uss_base_url,
+                            )
+                        )
+                        continue
 
                     else:
                         # Verify status of the response from the USS
@@ -987,6 +1016,18 @@ class SCDOperations:
             else:
                 operational_intent_volumes = uss_op_int_detail.details.volumes
             my_volume_converter = VolumesConverter()
+            if operational_intent_volumes:
+                my_volume_converter.convert_volumes_to_geojson(volumes=operational_intent_volumes)
+                time_start = my_volume_converter.get_earliest_time_from_volumes()
+                time_end = my_volume_converter.get_latest_time_from_volumes()
+                minimum_rotated_rect = my_volume_converter.get_minimum_rotated_rectangle()
+            else:
+                # Empty volumes — use a tiny degenerate shape so the OVN is still
+                # included in airspace keys (prevents DSS "OVNs not provided" 409)
+                # but the shape won't intersect any real flight volumes
+                minimum_rotated_rect = Point(0, 0).buffer(0.00001)
+                time_start = uss_op_int_detail.reference.time_start.value
+                time_end = uss_op_int_detail.reference.time_end.value
             my_volume_converter.convert_volumes_to_geojson(volumes=operational_intent_volumes)
             time_start = my_volume_converter.get_earliest_time_from_volumes()
             time_end = my_volume_converter.get_latest_time_from_volumes()
@@ -1017,18 +1058,31 @@ class SCDOperations:
                 message=CommonDSS4xxResponse(message="Failed to get auth token for peer USS notification"),
             )
 
+        # ASTM path is /uss/v1/operational_intents (POST)
         notification_url = uss_base_url + "/uss/v1/operational_intents"
         headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        uss_r = requests.post(
-            notification_url,
-            json=json.loads(json.dumps(asdict(notification_payload))),
-            headers=headers,
-            timeout=30,
-        )
+        try:
+            uss_r = requests.post(
+                notification_url,
+                json=json.loads(json.dumps(asdict(notification_payload))),
+                headers=headers,
+                timeout=30,
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, urllib3.exceptions.NameResolutionError) as e:
+            logger.warning(
+                "Could not reach peer USS at {endpoint} for notification: {error}".format(
+                    endpoint=notification_url,
+                    error=e,
+                )
+            )
+            return USSNotificationResponse(
+                status=408,
+                message=CommonDSS4xxResponse(message="Peer USS unreachable"),
+            )
 
         uss_r_status_code = uss_r.status_code
 
@@ -1070,7 +1124,11 @@ class SCDOperations:
                 )
                 audience = generate_audience_from_base_url(base_url=subscriber.uss_base_url)
 
-                if audience not in ["host.docker.internal", "flight-blender"]:
+                # Skip self-notifications (Flight Blender notifying itself)
+                flight_blender_url = settings.FLIGHTBLENDER_FQDN
+                if subscriber.uss_base_url == flight_blender_url or subscriber.uss_base_url.startswith(flight_blender_url + "/"):
+                    continue
+                if audience not in ["host.docker.internal", "flight-blender", "flight-blender.localutm"]:
                     self.notify_peer_uss_of_created_updated_operational_intent(
                         uss_base_url=subscriber.uss_base_url,
                         notification_payload=notification_payload,
@@ -1207,7 +1265,16 @@ class SCDOperations:
         Returns:
             Optional[OperationalIntentUpdateResponse]: The response of the update operation, or None if the update is not submitted.
         """
-        auth_token = self.get_auth_token()
+        # Get auth token with DSS audience (not self audience)
+        dss_audience = generate_audience_from_base_url(self.dss_base_url)
+        auth_token = self.get_auth_token(audience=dss_audience)
+        if not auth_token or "error" in auth_token:
+            logger.error("Failed to get auth token for DSS update")
+            return OperationalIntentUpdateResponse(
+                dss_response=None,
+                status=401,
+                message="Failed to get auth token for DSS update",
+            )
         logger.info(f"Updating operational intent reference: {operational_intent_ref_id}")
         flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
 
@@ -1302,7 +1369,7 @@ class SCDOperations:
             for subscriber in subscribers:
                 subscriptions = subscriber["subscriptions"]
                 uss_base_url = subscriber["uss_base_url"]
-                if uss_base_url != flight_blender_base_url:
+                if uss_base_url != flight_blender_base_url and not uss_base_url.startswith(flight_blender_base_url + "/"):
                     all_subscription_states: list[SubscriptionState] = []
                     for subscription in subscriptions:
                         s_state = SubscriptionState(
@@ -1376,6 +1443,8 @@ class SCDOperations:
         }
         airspace_keys = []
         flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
+        # The ASTM path for GetOperationalIntentDetails is /uss/v1/operational_intents/{entityid}.
+        # The interUSS qualifier constructs: {uss_base_url}{path}, so uss_base_url must NOT include /uss.
         implicit_subscription_parameters = ImplicitSubscriptionParameters(uss_base_url=flight_blender_base_url, notify_for_constraints=True)
         operational_intent_reference = OperationalIntentReference(
             extents=volumes,

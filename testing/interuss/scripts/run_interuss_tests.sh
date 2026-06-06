@@ -54,7 +54,7 @@ separator() { echo; echo "======================================================
 
 cleanup() {
   log "Cleaning up test containers..."
-  docker compose -f "${TESTING_DIR}/docker-compose.yml" down --remove-orphans 2>/dev/null || true
+  docker compose -f "${TESTING_DIR}/docker-compose.yml" down -v --remove-orphans 2>/dev/null || true
   if [ -d "${INTERUSS_MONITORING_DIR}" ]; then
     (cd "${INTERUSS_MONITORING_DIR}" && \
       docker compose -f monitoring/mock_uss/docker-compose.yaml down --remove-orphans 2>/dev/null || true) || true
