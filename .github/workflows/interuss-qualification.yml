@@ -267,16 +267,6 @@ jobs:
           retention-days: 30
 
       # -------------------------------------------------------
-      - name: Upload container logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: interuss-container-logs-${{ github.run_number }}
-          path: testing/interuss/output/logs/
-          if-no-files-found: warn
-          retention-days: 30
-
-      # -------------------------------------------------------
       - name: Post PR comment with qualification report
         if: always()
         uses: actions/github-script@v7
@@ -397,12 +387,19 @@ jobs:
 
             docker logs "$container" > "$raw_file" 2>&1 || true
 
-            python3 - "$container" < "$raw_file" > "$jsonl_file" \
-              -c 'import json,re,sys;from datetime import datetime,timezone;
-              svc=sys.argv[1];pat=re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+(.*)");
-              [print(json.dumps({"ts":((m:=pat.match(l)).group(1) if m else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")),
-              "service":svc,"msg":(m.group(2) if m else l)})) for l in map(str.rstrip,sys.stdin) if l]' \
-              || true
+            python3 -c '
+            import json,re,sys
+            from datetime import datetime,timezone
+            svc=sys.argv[1]
+            pat=re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+(.*)")
+            for raw in sys.stdin:
+              l=raw.rstrip("\n")
+              if not l: continue
+              m=pat.match(l)
+              ts=m.group(1) if m else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+              msg=m.group(2) if m else l
+              print(json.dumps({"ts":ts,"service":svc,"msg":msg}))
+            ' "$container" < "$raw_file" > "$jsonl_file" || true
 
             local count
             count=$(wc -l < "$jsonl_file" 2>/dev/null || echo 0)
@@ -425,6 +422,16 @@ jobs:
           echo ""
           echo "=== Log files ==="
           ls -lh "$LOG_DIR/"
+
+      # -------------------------------------------------------
+      - name: Upload container logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interuss-container-logs-${{ github.run_number }}
+          path: testing/interuss/output/logs/
+          if-no-files-found: warn
+          retention-days: 30
 
       # -------------------------------------------------------
       - name: Tear down test containers
