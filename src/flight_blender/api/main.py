@@ -13,6 +13,7 @@ from flight_blender.api.routers import (
     scd_api,
     surveillance_api,
     uss_api,
+    versioning_api,
     weather_api,
 )
 
@@ -32,4 +33,5 @@ def create_fastapi_app() -> FastAPI:
     app.include_router(flight_declarations_api.router)
     app.include_router(scd_api.router)
     app.include_router(uss_api.router)
+    app.include_router(versioning_api.router)
     return app
