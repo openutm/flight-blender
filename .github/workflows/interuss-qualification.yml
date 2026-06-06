@@ -267,6 +267,16 @@ jobs:
           retention-days: 30
 
       # -------------------------------------------------------
+      - name: Upload container logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interuss-container-logs-${{ github.run_number }}
+          path: testing/interuss/output/logs/
+          if-no-files-found: warn
+          retention-days: 30
+
+      # -------------------------------------------------------
       - name: Post PR comment with qualification report
         if: always()
         uses: actions/github-script@v7
@@ -368,15 +378,53 @@ jobs:
             }
 
       # -------------------------------------------------------
-      - name: Collect container logs on failure
-        if: failure()
+      - name: Collect container logs (JSONL per service)
+        if: always()
         run: |
-          echo "=== Flight Blender logs ==="
-          docker logs flight-blender-test 2>&1 | tail -100 || true
-          echo "=== Celery logs ==="
-          docker logs celery-blender-test 2>&1 | tail -50 || true
-          echo "=== DB logs ==="
-          docker logs db-blender-test 2>&1 | tail -30 || true
+          LOG_DIR="testing/interuss/output/logs"
+          mkdir -p "$LOG_DIR"
+
+          collect_logs() {
+            local container="$1"
+            local raw_file="$LOG_DIR/${container}.log"
+            local jsonl_file="$LOG_DIR/${container}.jsonl"
+
+            if ! docker inspect "$container" >/dev/null 2>&1; then
+              printf '{"ts":"%s","service":"%s","msg":"container not found"}\n' \
+                "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)" "$container" > "$jsonl_file"
+              return
+            fi
+
+            docker logs "$container" > "$raw_file" 2>&1 || true
+
+            python3 - "$container" < "$raw_file" > "$jsonl_file" \
+              -c 'import json,re,sys;from datetime import datetime,timezone;
+              svc=sys.argv[1];pat=re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+(.*)");
+              [print(json.dumps({"ts":((m:=pat.match(l)).group(1) if m else datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")),
+              "service":svc,"msg":(m.group(2) if m else l)})) for l in map(str.rstrip,sys.stdin) if l]' \
+              || true
+
+            local count
+            count=$(wc -l < "$jsonl_file" 2>/dev/null || echo 0)
+            echo "  ${container}: ${count} lines"
+          }
+
+          echo "=== Collecting container logs ==="
+
+          # Flight Blender stack
+          collect_logs "flight-blender-test"
+          collect_logs "celery-blender-test"
+          collect_logs "db-blender-test"
+          collect_logs "redis-blender-test"
+
+          # InterUSS ecosystem — discover container names dynamically
+          for c in $(docker ps --format '{{.Names}}' | grep -iE '(dss|oauth|cockroach|mock_uss|scdsc|log)'); do
+            collect_logs "$c"
+          done
+
+          echo ""
+          echo "=== Log files ==="
+          ls -lh "$LOG_DIR/"
 
       # -------------------------------------------------------
       - name: Tear down test containers
