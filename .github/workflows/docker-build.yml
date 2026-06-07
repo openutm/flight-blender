@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   security-events: write
   pull-requests: write
 
@@ -62,6 +63,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':whale: Trivy Container Scan';
             const outcome = '${{ steps.trivy.outcome }}';
             let body = '## :whale: Trivy Container Scan\n\n';
             if (outcome === 'success') {
@@ -75,27 +78,7 @@ jobs:
               body += '```\n' + report + '\n```\n';
               body += '</details>';
             }
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':whale: Trivy Container Scan'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });
       - name: Generate SBOM
         if: always()
         uses: anchore/sbom-action@v0.24.0

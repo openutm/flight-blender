@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -52,50 +53,21 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':mag: Ruff lint results';
             const output = fs.readFileSync('ruff-output.txt', 'utf8').trim();
             let body = '## :mag: Ruff lint results\n\n';
             body += '<details><summary>Show details</summary>\n\n';
             body += '```\n' + output + '\n```\n';
             body += '</details>';
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':mag: Ruff lint results'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });
       - name: Remove PR comment if passing
         if: always() && github.event_name == 'pull_request' && steps.ruff.outputs.exit_code == '0'
         uses: actions/github-script@v8
         with:
           script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':mag: Ruff lint results'));
-            if (existing) {
-              await github.rest.issues.deleteComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-              });
-            }
+            const { deletePrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            await deletePrComment({ github, context, marker: ':mag: Ruff lint results' });
       - name: Fail if errors found
         if: steps.ruff.outputs.exit_code != '0'
         run: exit 1
@@ -135,50 +107,21 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':abc: Codespell results';
             const output = fs.readFileSync('codespell-output.txt', 'utf8').trim();
             let body = '## :abc: Codespell results\n\n';
             body += '<details><summary>Show details</summary>\n\n';
             body += '```\n' + output + '\n```\n';
             body += '</details>';
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':abc: Codespell results'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });
       - name: Remove PR comment if passing
         if: always() && github.event_name == 'pull_request' && steps.codespell.outputs.exit_code == '0'
         uses: actions/github-script@v8
         with:
           script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':abc: Codespell results'));
-            if (existing) {
-              await github.rest.issues.deleteComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-              });
-            }
+            const { deletePrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            await deletePrComment({ github, context, marker: ':abc: Codespell results' });
       - name: Fail if errors found
         if: steps.codespell.outputs.exit_code != '0'
         run: exit 1
@@ -221,51 +164,22 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':test_tube: Pytest results';
             const lines = fs.readFileSync('pytest-output.txt', 'utf8').trim().split('\n');
             const output = lines.slice(-50).join('\n');
             let body = '## :test_tube: Pytest results\n\n';
             body += '<details><summary>Show details</summary>\n\n';
             body += '```\n' + output + '\n```\n';
             body += '</details>';
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':test_tube: Pytest results'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });
       - name: Remove PR comment if passing
         if: always() && github.event_name == 'pull_request' && steps.pytest.outputs.exit_code == '0'
         uses: actions/github-script@v8
         with:
           script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':test_tube: Pytest results'));
-            if (existing) {
-              await github.rest.issues.deleteComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-              });
-            }
+            const { deletePrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            await deletePrComment({ github, context, marker: ':test_tube: Pytest results' });
       - name: Fail if tests failed
         if: steps.pytest.outputs.exit_code != '0'
         run: exit 1

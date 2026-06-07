@@ -244,6 +244,10 @@ SUMMARY_ARGS=()
 
 if [[ ${#SUMMARY_ARGS[@]} -gt 0 ]]; then
   python3 "${SCRIPT_DIR}/report_to_summary.py" "${SUMMARY_ARGS[@]}" || warn "report_to_summary.py failed."
+  if [[ -n "${INTERUSS_SUMMARY_FILE:-}" ]]; then
+    mkdir -p "$(dirname "${INTERUSS_SUMMARY_FILE}")"
+    python3 "${SCRIPT_DIR}/report_to_summary.py" "${SUMMARY_ARGS[@]}" > "${INTERUSS_SUMMARY_FILE}" || warn "Could not write ${INTERUSS_SUMMARY_FILE}."
+  fi
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     {
       echo "# InterUSS Qualification Report"
