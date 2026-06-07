@@ -88,11 +88,11 @@ class SQLAlchemyFlightFeedRepository:
         return list(result.scalars().all())
 
     async def get_closest_flight_observation_for_now(self, now: arrow.Arrow) -> list[FlightObservationORM]:
-        one_second_before = now.shift(seconds=-1)
+        one_minute_before = now.shift(minutes=-1)
         result = await self.db.execute(
             select(FlightObservationORM).where(
                 and_(
-                    FlightObservationORM.created_at >= one_second_before.datetime,
+                    FlightObservationORM.created_at >= one_minute_before.datetime,
                     FlightObservationORM.created_at <= now.datetime,
                 )
             )

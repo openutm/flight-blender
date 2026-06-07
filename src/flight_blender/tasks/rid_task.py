@@ -19,6 +19,7 @@ from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.flight_feed import SingleRIDObservation
 from flight_blender.domain_types.rid import UASID, LatLngPoint, SignedUnsignedTelemetryObservation, UAClassificationEU
+from flight_blender.domain_types.rid_operations import RIDLatLngPoint
 from flight_blender.domain_types.rid import RIDAircraftState as LocalRIDAircraftState
 from flight_blender.domain_types.rid import RIDFlightDetails as LocalRIDFlightDetails
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
@@ -52,16 +53,39 @@ def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:
         logger.warning("Missing RID timestamp for {}. Defaulting sensor timestamp to 0", context)
         return 0
 
+    parsed = _parse_rid_timestamp(rid_ts_value)
     try:
-        return int(arrow.get(rid_ts_value).float_timestamp * 1_000_000)
-    except (ParserError, TypeError, ValueError) as exc:
+        return int(parsed.float_timestamp * 1_000_000)
+    except (TypeError, ValueError) as exc:
         logger.warning(
-            "Failed to parse RID timestamp {!r} for {}. Defaulting sensor timestamp to 0. Error: {}",
+            "Failed to convert RID timestamp {!r} for {}. Defaulting sensor timestamp to 0. Error: {}",
             rid_ts_value,
             context,
             exc,
         )
         return 0
+
+
+def _parse_rid_timestamp(rid_ts_value) -> arrow.Arrow:
+    """Parse an RID timestamp (RFC3339 or epoch-seconds) into an Arrow."""
+    if rid_ts_value is None:
+        return arrow.now()
+    if isinstance(rid_ts_value, (int, float)):
+        return arrow.get(rid_ts_value)
+    s = str(rid_ts_value)
+    if s.endswith("Z") and "." in s:
+        s = s[:-1]
+        try:
+            return arrow.get(float(s))
+        except (ValueError, TypeError):
+            return arrow.now()
+    try:
+        return arrow.get(s)
+    except (ParserError, TypeError, ValueError):
+        try:
+            return arrow.get(float(s))
+        except (ValueError, TypeError):
+            return arrow.now()
 
 
 @app.task(name="write_operator_rid_notification")
@@ -115,10 +139,14 @@ async def _async_process_requested_flight(
         uas_id = None
         eu_classification = None
         auth_data = None
-        if "operator_location" in fd.keys():
-            position = from_dict(data_class=LatLngPoint, data=fd["operator_location"])
+        if "operator_location" in fd.keys() and fd["operator_location"]:
+            operator_location_dict = fd["operator_location"]
+            if "position" in operator_location_dict and operator_location_dict["position"]:
+                position = from_dict(data_class=LatLngPoint, data=operator_location_dict["position"])
+            else:
+                position = from_dict(data_class=LatLngPoint, data=operator_location_dict)
             operator_location = OperatorLocation(position=position)
-        if "auth_data" in fd.keys():
+        if "auth_data" in fd.keys() and fd["auth_data"]:
             auth_data = RIDAuthData(format=fd["auth_data"]["format"], data=fd["auth_data"]["data"])
         if "uas_id" in fd.keys():
             specific_session_id = fd["uas_id"].get("specific_session_id", None)
@@ -212,18 +240,25 @@ async def _async_process_requested_flight(
         )
 
         try:
-            formatted_timestamp = arrow.get(provided_telemetry["timestamp"])
-        except (ParserError, TypeError):
+            formatted_timestamp = _parse_rid_timestamp(provided_telemetry["timestamp"])
+        except Exception:
             logger.info("Error in parsing telemetry timestamp")
             write_operator_rid_notification.delay(
                 session_id=test_id,
                 message="The mandatory timestamp provided in the telemetry is not in the correct format",
             )
+            continue
 
-        formatted_timestamp = arrow.now()
+        raw_ts = provided_telemetry["timestamp"]
+        if isinstance(raw_ts, dict):
+            ts_value = raw_ts.get("value", "")
+            ts_format = raw_ts.get("format", "RFC3339")
+        else:
+            ts_value = str(raw_ts)
+            ts_format = "RFC3339"
         try:
             telemetry_observation = RIDAircraftState(
-                timestamp=RIDTime(value=provided_telemetry["timestamp"], format="RFC3339"),
+                timestamp=RIDTime(value=ts_value, format=ts_format),
                 timestamp_accuracy=provided_telemetry["timestamp_accuracy"],
                 operational_status=provided_telemetry["operational_status"],
                 position=position,
@@ -244,7 +279,7 @@ async def _async_process_requested_flight(
 
         closest_details_response = min(
             all_flight_details,
-            key=lambda d: abs(arrow.get(d.effective_after) - formatted_timestamp),
+            key=lambda d: abs(_parse_rid_timestamp(d.effective_after) - formatted_timestamp),
         )
         flight_state_storage = RIDTestDataStorage(
             flight_state=telemetry_observation,
@@ -441,17 +476,25 @@ async def _async_stream_rid_test_data(requested_flights, test_id) -> None:
     for position in all_positions:
         position_list.append(Point(position.lng, position.lat))
 
-    multi_points = MultiPoint(position_list)
-    bounds = multi_points.minimum_rotated_rectangle.bounds
-
-    b = box(bounds[1], bounds[0], bounds[3], bounds[2])
-    co_ordinates = list(zip(*b.exterior.coords.xy))
-
-    polygon_verticies: list[LatLngPoint] = []
-    for co_ordinate in co_ordinates:
-        ll = LatLngPoint(lat=co_ordinate[0], lng=co_ordinate[1])
-        polygon_verticies.append(ll)
-    polygon_verticies.pop()
+    if len(position_list) == 1:
+        p = position_list[0]
+        padding = 0.0001
+        polygon_verticies = [
+            RIDLatLngPoint(lat=p.y - padding, lng=p.x - padding),
+            RIDLatLngPoint(lat=p.y - padding, lng=p.x + padding),
+            RIDLatLngPoint(lat=p.y + padding, lng=p.x + padding),
+            RIDLatLngPoint(lat=p.y + padding, lng=p.x - padding),
+        ]
+    else:
+        multi_points = MultiPoint(position_list)
+        bounds = multi_points.minimum_rotated_rectangle.bounds
+        b = box(bounds[1], bounds[0], bounds[3], bounds[2])
+        co_ordinates = list(zip(*b.exterior.coords.xy))
+        polygon_verticies = []
+        for co_ordinate in co_ordinates:
+            ll = LatLngPoint(lat=co_ordinate[0], lng=co_ordinate[1])
+            polygon_verticies.append(ll)
+        polygon_verticies.pop()
     outline_polygon = RIDPolygon(vertices=polygon_verticies)
     altitude_lower = RIDAltitude(value=min(all_altitudes) - 5, reference="W84", units="M")
     altitude_upper = RIDAltitude(value=min(all_altitudes) + 5, reference="W84", units="M")

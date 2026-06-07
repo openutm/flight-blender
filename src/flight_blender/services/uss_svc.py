@@ -261,7 +261,7 @@ async def get_uss_flights(view: str, repo: SQLAlchemyFlightFeedRepository) -> tu
 
     view_box = view_port_ops.build_view_port_box(view_port_coords=view_port)
     view_port_diagonal = view_port_ops.get_view_port_diagonal_length_kms(view_port_coords=view_port)
-    if view_port_diagonal > 7:
+    if view_port_diagonal > 7.1:
         return asdict(GenericErrorResponseMessage(message="The requested view %s rectangle is too large" % view)), 413
 
     await asyncio.sleep(0.5)
@@ -271,15 +271,28 @@ async def get_uss_flights(view: str, repo: SQLAlchemyFlightFeedRepository) -> tu
 
     now = arrow.now().isoformat()
     if all_flights_telemetry_data:
-        rid_flights = []
+        latest_by_flight_id: dict[str, object] = {}
         for observation_data in all_flights_telemetry_data:
             observation_data_dict = {}
             try:
                 observation_data_dict = observation_data.metadata
             except KeyError as ke:
                 logger.error("Error in metadata data in the stream %s" % ke)
+                continue
 
-            telemetry_data_dict = observation_data_dict["telemetry"]
+            injection_id = observation_data_dict.get("injection_id")
+            if not injection_id:
+                continue
+
+            existing = latest_by_flight_id.get(injection_id)
+            if existing is None or getattr(observation_data, "created_at", "") > getattr(existing, "created_at", ""):
+                latest_by_flight_id[injection_id] = observation_data
+
+        rid_flights = []
+        for observation_data in latest_by_flight_id.values():
+            observation_data_dict = observation_data.metadata
+
+            telemetry_data_dict = observation_data_dict.get("telemetry", {})
             position_dict = telemetry_data_dict.get("position", {}) or {}
             height_dict = position_dict.get("height")
             if isinstance(height_dict, dict):
@@ -299,18 +312,25 @@ async def get_uss_flights(view: str, repo: SQLAlchemyFlightFeedRepository) -> tu
                 pressure_altitude=position_dict.get("pressure_altitude"),
                 height=height,
             )
+            raw_timestamp = telemetry_data_dict.get("timestamp")
+            if isinstance(raw_timestamp, dict):
+                timestamp_value = raw_timestamp.get("value", "")
+                timestamp_format = raw_timestamp.get("format", RIDFormat.RFC3339)
+            else:
+                timestamp_value = str(raw_timestamp) if raw_timestamp is not None else ""
+                timestamp_format = RIDFormat.RFC3339
             current_state = RIDAircraftState(
                 timestamp=RIDTime(
-                    value=telemetry_data_dict["timestamp"]["value"],
-                    format=telemetry_data_dict["timestamp"]["format"],
+                    value=timestamp_value,
+                    format=timestamp_format,
                 ),
-                timestamp_accuracy=telemetry_data_dict["timestamp_accuracy"],
-                operational_status=telemetry_data_dict["operational_status"],
+                timestamp_accuracy=telemetry_data_dict.get("timestamp_accuracy", 0.0),
+                operational_status=telemetry_data_dict.get("operational_status"),
                 position=position,
-                track=telemetry_data_dict["track"],
-                speed=telemetry_data_dict["speed"],
-                speed_accuracy=telemetry_data_dict["speed_accuracy"],
-                vertical_speed=telemetry_data_dict["vertical_speed"],
+                track=telemetry_data_dict.get("track"),
+                speed=telemetry_data_dict.get("speed"),
+                speed_accuracy=telemetry_data_dict.get("speed_accuracy", "SAUnknown"),
+                vertical_speed=telemetry_data_dict.get("vertical_speed"),
             )
             current_flight = RIDFlight(
                 id=observation_data_dict["injection_id"],
