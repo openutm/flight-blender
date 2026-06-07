@@ -19,9 +19,9 @@ from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.flight_feed import SingleRIDObservation
 from flight_blender.domain_types.rid import UASID, LatLngPoint, SignedUnsignedTelemetryObservation, UAClassificationEU
-from flight_blender.domain_types.rid_operations import RIDLatLngPoint
 from flight_blender.domain_types.rid import RIDAircraftState as LocalRIDAircraftState
 from flight_blender.domain_types.rid import RIDFlightDetails as LocalRIDFlightDetails
+from flight_blender.domain_types.rid_operations import RIDLatLngPoint
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
@@ -53,7 +53,11 @@ def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:
         logger.warning("Missing RID timestamp for {}. Defaulting sensor timestamp to 0", context)
         return 0
 
-    parsed = _parse_rid_timestamp(rid_ts_value)
+    parsed = _parse_rid_timestamp_value(rid_ts_value)
+    if parsed is None:
+        logger.warning("Invalid RID timestamp {!r} for {}. Defaulting sensor timestamp to 0", rid_ts_value, context)
+        return 0
+
     try:
         return int(parsed.float_timestamp * 1_000_000)
     except (TypeError, ValueError) as exc:
@@ -66,26 +70,27 @@ def _parse_rid_timestamp_us(rid_ts_value, context: str) -> int:
         return 0
 
 
-def _parse_rid_timestamp(rid_ts_value) -> arrow.Arrow:
+def _parse_rid_timestamp_value(rid_ts_value) -> arrow.Arrow | None:
     """Parse an RID timestamp (RFC3339 or epoch-seconds) into an Arrow."""
     if rid_ts_value is None:
-        return arrow.now()
+        return None
     if isinstance(rid_ts_value, (int, float)):
         return arrow.get(rid_ts_value)
     s = str(rid_ts_value)
     if s.endswith("Z") and "." in s:
-        s = s[:-1]
-        try:
-            return arrow.get(float(s))
-        except (ValueError, TypeError):
-            return arrow.now()
+        s = s[:-1] + "+00:00"
     try:
         return arrow.get(s)
     except (ParserError, TypeError, ValueError):
         try:
             return arrow.get(float(s))
         except (ValueError, TypeError):
-            return arrow.now()
+            return None
+
+
+def _parse_rid_timestamp(rid_ts_value) -> arrow.Arrow:
+    """Parse an RID timestamp, defaulting invalid values to the current time."""
+    return _parse_rid_timestamp_value(rid_ts_value) or arrow.now()
 
 
 @app.task(name="write_operator_rid_notification")
@@ -469,8 +474,10 @@ async def _async_stream_rid_test_data(requested_flights, test_id) -> None:
 
     provided_telemetry_duration_seconds = (end_time_of_injections - start_time_of_injections).total_seconds()
     logger.info("Provided Telemetry Duration in seconds: %s" % provided_telemetry_duration_seconds)
-    ASTM_TIME_SHIFT_SECS = 65
+    ASTM_TIME_SHIFT_SECS = 600
+    RID_STREAM_END_GRACE_SECS = 1
     astm_rid_standard_end_time = end_time_of_injections.shift(seconds=ASTM_TIME_SHIFT_SECS)
+    rid_stream_end_time = end_time_of_injections.shift(seconds=RID_STREAM_END_GRACE_SECS)
 
     position_list: list[Point] = []
     for position in all_positions:
@@ -595,7 +602,7 @@ async def _async_stream_rid_test_data(requested_flights, test_id) -> None:
         _should_stop_streaming = r.get("stop_streaming_" + test_id)
         should_stop_streaming = int(_should_stop_streaming) if _should_stop_streaming else 0
 
-        if should_stop_streaming or now > astm_rid_standard_end_time:
+        if should_stop_streaming or now > rid_stream_end_time:
             should_continue = False
             logger.info("End flight streaming ... %s", arrow.now().isoformat())
             continue
