@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -135,6 +136,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':bar_chart: Test Coverage Report';
             const total = '${{ steps.metrics.outputs.total_coverage }}';
             const exitCode = '${{ steps.coverage.outputs.exit_code }}';
 
@@ -172,27 +175,7 @@ jobs:
               }
             }
 
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':bar_chart: Test Coverage Report'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });
       - name: Fail if tests failed
         if: steps.coverage.outputs.exit_code != '0'
         run: exit 1
@@ -267,6 +250,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':brain: Code Complexity Report';
             const avg = '${{ steps.cc.outputs.average }}';
             const highCount = parseInt('${{ steps.cc.outputs.high_count }}' || '0');
             const lowMI = parseInt('${{ steps.mi.outputs.low_mi_count }}' || '0');
@@ -290,24 +275,4 @@ jobs:
               body += '</details>\n';
             }
 
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':brain: Code Complexity Report'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });

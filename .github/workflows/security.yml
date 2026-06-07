@@ -7,6 +7,7 @@ on:
 permissions:
   security-events: write
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -56,6 +57,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':rotating_light: Bandit results';
             let body = '## :rotating_light: Bandit results\n\n';
             const reportExists = fs.existsSync('bandit-report.txt') && fs.readFileSync('bandit-report.txt', 'utf8').trim();
             if (reportExists) {
@@ -85,27 +88,7 @@ jobs:
             } else {
               body += ':white_check_mark: No issues found.';
             }
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':rotating_light: Bandit results'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });
       - name: Fail if issues found
         if: steps.bandit.outputs.exit_code != '0'
         run: exit 1
@@ -143,33 +126,15 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':shield: pip-audit results';
             let body = '## :shield: pip-audit results\n\n';
             if (fs.existsSync('pip-audit-report.md') && fs.readFileSync('pip-audit-report.md', 'utf8').trim()) {
               body += fs.readFileSync('pip-audit-report.md', 'utf8');
             } else {
               body += ':white_check_mark: No vulnerabilities found.';
             }
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':shield: pip-audit results'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });
       - name: Fail if vulnerabilities found
         if: steps.audit.outputs.exit_code != '0'
         run: exit 1
@@ -266,6 +231,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const { upsertPrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
+            const marker = ':scroll: License Compliance';
             const copyleftCount = parseInt('${{ steps.licenses.outputs.copyleft_count }}' || '0');
             let body = '## :scroll: License Compliance\n\n';
             if (copyleftCount === 0) {
@@ -281,24 +248,4 @@ jobs:
               body += fs.readFileSync('licenses-report.md', 'utf8') + '\n';
               body += '</details>';
             }
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body.includes(':scroll: License Compliance'));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+            await upsertPrComment({ github, context, marker, body });

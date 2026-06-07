@@ -569,7 +569,7 @@ class SCDService:
         flight_planning_notification_payload = flight_planning_data
         generated_operational_intent_state = my_flight_plan_op_intent_bridge.generate_operational_intent_state_from_planning_information()
 
-        if flight_plan_exists_in_flight_blender and generated_operational_intent_state in ["Activated", "Nonconforming"]:
+        if flight_plan_exists_in_flight_blender:
             existing_op_int_details = await my_operational_intent_parser.parse_stored_operational_intent_details(operation_id=operation_id_str)
             fd_repo = self.fd_repo
             flight_declaration = await fd_repo.get_by_id(uuid.UUID(operation_id_str))
@@ -674,6 +674,8 @@ class SCDService:
                         return json.loads(json.dumps(not_planned_activated_planning_response, cls=EnhancedJSONEncoder)), 200
                 elif scd_test_data.intended_flight.astm_f3548_21.priority == 100:
                     return json.loads(json.dumps(not_planned_activated_higher_priority_planning_response, cls=EnhancedJSONEncoder)), 200
+                elif current_state_str in ("Accepted", "Activated"):
+                    return json.loads(json.dumps(not_planned_already_planned_planning_response, cls=EnhancedJSONEncoder)), 200
                 return json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)), 200
             else:
                 return json.loads(json.dumps(failed_planning_response, cls=EnhancedJSONEncoder)), 200
@@ -774,13 +776,13 @@ class SCDService:
                 return json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)), 200
 
             elif flight_planning_submission.status in ["failure", "peer_uss_data_sharing_issue"]:
-                if flight_planning_submission.status_code == 408:
+                if flight_planning_submission.status_code in [408, 409]:
                     return json.loads(json.dumps(not_planned_planning_response, cls=EnhancedJSONEncoder)), 200
                 else:
                     return json.loads(json.dumps(failed_planning_response, cls=EnhancedJSONEncoder)), 200
 
             if flight_planning_usage_state == "Planned":
-                return json.loads(json.dumps(ready_to_fly_planning_response, cls=EnhancedJSONEncoder)), 200
+                return json.loads(json.dumps(planned_planning_response, cls=EnhancedJSONEncoder)), 200
             else:
                 return json.loads(json.dumps(planned_planning_response, cls=EnhancedJSONEncoder)), 200
 

@@ -20,7 +20,9 @@ class DeconflictionEngineProtocol(Protocol):
 class TrafficDataFuserProtocol(Protocol):
     """Structural interface for traffic data fusion implementations."""
 
-    def __init__(self, *,
+    def __init__(
+        self,
+        *,
         session_id: str,
         raw_observations: list[SingleAirtrafficObservation],
         track_store: RedisStreamOperations,
@@ -35,7 +37,8 @@ class TrafficDataFuserProtocol(Protocol):
 class Volume4DGeneratorProtocol(Protocol):
     """Structural interface for custom Volume4D generation plugins."""
 
-    def __init__(self,
+    def __init__(
+        self,
         *,
         default_uav_speed_m_per_s: float,
         default_uav_climb_rate_m_per_s: float,
