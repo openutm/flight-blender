@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout flight-blender
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # Build from the current branch so the test environment exercises this
       # exact code, not the published Docker Hub image.
@@ -41,7 +41,7 @@ jobs:
 
       # Check out the verification toolkit next to our repo.
       - name: Checkout openutm/verification
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: openutm/verification
           path: verification
