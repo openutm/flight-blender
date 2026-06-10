@@ -7,11 +7,30 @@ than being split across per-domain entity files. Per-domain constants
 remain in their respective ``core/entities/<domain>.py`` files.
 """
 
+from enum import IntEnum
+
 from flight_blender.config import settings
 
 
 def _(s):
     return s
+
+
+class OperationStateCode(IntEnum):
+    """Numeric flight-declaration state codes persisted in the DB.
+
+    Mirrors :data:`OPERATION_STATES`; use these members instead of bare ints.
+    """
+
+    NotSubmitted = 0
+    Accepted = 1
+    Activated = 2
+    Nonconforming = 3
+    Contingent = 4
+    Ended = 5
+    Withdrawn = 6
+    Cancelled = 7
+    Rejected = 8
 
 
 FLIGHTBLENDER_READ_SCOPE = settings.FLIGHTBLENDER_READ_SCOPE

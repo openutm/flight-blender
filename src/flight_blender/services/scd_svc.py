@@ -1,9 +1,8 @@
 """SCD/UTMRSS business logic."""
 
-import inspect
 import json
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import Enum
 from itertools import cycle
@@ -15,11 +14,13 @@ from fastapi import HTTPException
 from loguru import logger
 
 from flight_blender.clients import dss_scd_client as dss_scd_helper
-from flight_blender.clients.dss_scd_client import DSSAreaClearHandler, SCDTestHarnessHelper, VolumesConverter, VolumesValidator
-from flight_blender.domain_types.common import ALTITUDE_REF_LOOKUP, OPERATION_STATES, OPERATION_STATES_LOOKUP
+from flight_blender.clients.dss_scd_client import DSSAreaClearHandler, SCDTestHarnessHelper
+from flight_blender.domain_types.common import ALTITUDE_REF_LOOKUP, OPERATION_STATES, OPERATION_STATES_LOOKUP, OperationStateCode
 from flight_blender.domain_types.constraint import CompositeConstraintPayload, Constraint
 from flight_blender.domain_types.geo_fence import GeofencePayload
 from flight_blender.domain_types.scd import (
+    HIGH_PRIORITY_OP_INTENT,
+    OPINT_UPDATE_NOT_SUBMITTED_STATUS,
     AdvisoryInclusion,
     ASTMF354821OpIntentInformation,
     BasicFlightPlanInformation,
@@ -33,32 +34,46 @@ from flight_blender.domain_types.scd import (
     FlightPlanningRequest,
     FlightPlanningStatusResponse,
     FlightPlanningTestStatus,
+    OperationalIntentDetailsUSSResponse,
     OperationalIntentState,
+    OperationalIntentStorage,
     OperationalIntentSubmissionStatus,
+    OperationalIntentSubmissionSuccess,
+    OperationalIntentUpdateResponse,
+    OperationalIntentUpdateSuccessResponse,
     OperationalIntentUSSDetails,
+    OpIntUpdateCheckResultCodes,
     PlanningActivityResult,
-    RPAS26FlightDetails,
     SCDTestStatusResponse,
     StatusResponseEnum,
-    TestInjectionResult,
-    TestInjectionResultState,
+    SubmissionResultStatus,
+    UasState,
     UpsertFlightPlanResponse,
+    UsageState,
     USSCapabilitiesResponseEnum,
+    Volume4D,
 )
+from flight_blender.models.flight_declarations_orm import FlightDeclarationORM, FlightOperationalIntentDetailORM, FlightOperationalIntentReferenceORM
 from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
 from flight_blender.schemas.scd import (
+    ClearAreaRequestSchema,
     ClearAreaResponseSchema,
     CloseFlightPlanResponseSchema,
     FlightPlanningStatusSchema,
     NotificationObservedAtSchema,
     SCDCapabilitiesSchema,
     SCDTestStatusSchema,
+    UpsertFlightPlanRequestSchema,
     UpsertFlightPlanResponseSchema,
     UserNotificationSchema,
     UserNotificationsResponseSchema,
 )
+from flight_blender.utils.scd_helpers import FlightPlanningDataValidator, VolumesConverter, VolumesValidator
+
+# Placeholder aircraft identifier stored for test-harness flight declarations (no real aircraft bound yet).
+_DEFAULT_AIRCRAFT_ID = "0000"
 
 
 def _upsert_response(response: UpsertFlightPlanResponse) -> UpsertFlightPlanResponseSchema:
@@ -74,8 +89,8 @@ class FlightPlanningContext:
     operation_id: str
     request: FlightPlanningRequest
     data: FlightPlanningInjectionData
-    volumes: list[Any]
-    off_nominal_volumes: list[Any]
+    volumes: list[Volume4D]
+    off_nominal_volumes: list[Volume4D]
     priority: int
     uas_state: str
     usage_state: str
@@ -84,33 +99,9 @@ class FlightPlanningContext:
     raw_geojson: dict[str, Any]
 
 
-# ── Test harness response constants ──────────────────────────────────────────
-
-failed_test_injection_response = TestInjectionResult(
-    result=TestInjectionResultState.Failed,
-    notes="Processing of operational intent has failed",
-    operational_intent_id="",
-)
-rejected_test_injection_response = TestInjectionResult(
-    result=TestInjectionResultState.Rejected,
-    notes="An existing operational intent already exists and conflicts in space and time",
-    operational_intent_id="",
-)
-planned_test_injection_response = TestInjectionResult(
-    result=TestInjectionResultState.Planned,
-    notes="Successfully created operational intent in the DSS",
-    operational_intent_id="",
-)
-conflict_with_flight_test_injection_response = TestInjectionResult(
-    result=TestInjectionResultState.ConflictWithFlight,
-    notes="Processing of operational intent has failed, flight not deconflicted",
-    operational_intent_id="",
-)
-ready_to_fly_injection_response = TestInjectionResult(
-    result=TestInjectionResultState.ReadyToFly,
-    notes="Processing of operational intent succeeded, flight is activated",
-    operational_intent_id="",
-)
+# ── Flight-planning response templates ───────────────────────────────────────
+# NOTE: these are shared, immutable templates. Never mutate them in place (that races
+# across concurrent requests) — derive a per-request copy with ``dataclasses.replace``.
 
 not_supported_planning_response = UpsertFlightPlanResponse(
     flight_plan_status=FlightPlanCurrentStatus.NotPlanned,
@@ -193,73 +184,63 @@ class FlightPlantoOperationalIntentProcessor:
     def __init__(self, flight_planning_request: FlightPlanningRequest):
         self.flight_planning_request = flight_planning_request
 
-    def generate_operational_intent_state_from_planning_information(self):
-        logger.debug("********************************")
-        logger.debug(f"UAS State: {self.flight_planning_request.intended_flight.basic_information.uas_state.value}")
-        logger.debug(f"Usage State: {self.flight_planning_request.intended_flight.basic_information.usage_state.value}")
-        logger.debug("********************************")
-        if (
-            self.flight_planning_request.intended_flight.basic_information.uas_state.value == "Nominal"
-            and self.flight_planning_request.intended_flight.basic_information.usage_state.value == "Planned"
-        ):
-            operational_intent_state = "Accepted"
-        elif (
-            self.flight_planning_request.intended_flight.basic_information.uas_state.value == "Nominal"
-            and self.flight_planning_request.intended_flight.basic_information.usage_state.value == "InUse"
-        ):
-            operational_intent_state = "Activated"
-        elif (
-            self.flight_planning_request.intended_flight.basic_information.uas_state.value == "OffNominal"
-            and self.flight_planning_request.intended_flight.basic_information.usage_state.value == "InUse"
-        ):
-            operational_intent_state = "Nonconforming"
-        return operational_intent_state
+    # (uas_state, usage_state) → resulting operational intent state.
+    _STATE_BY_PLANNING_COMBINATION: dict[tuple[UasState, UsageState], OperationalIntentState] = {
+        (UasState.Nominal, UsageState.Planned): OperationalIntentState.Accepted,
+        (UasState.Nominal, UsageState.InUse): OperationalIntentState.Activated,
+        (UasState.OffNominal, UsageState.InUse): OperationalIntentState.Nonconforming,
+    }
+
+    def generate_operational_intent_state_from_planning_information(self) -> str:
+        basic_information = self.flight_planning_request.intended_flight.basic_information
+        uas_state = basic_information.uas_state
+        usage_state = basic_information.usage_state
+        logger.debug(f"Resolving operational intent state for uas_state={uas_state.value}, usage_state={usage_state.value}")
+
+        resolved_state = self._STATE_BY_PLANNING_COMBINATION.get((uas_state, usage_state))
+        if resolved_state is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"message": f"Unsupported flight state combination: uas_state={uas_state.value}, usage_state={usage_state.value}"},
+            )
+        return resolved_state.value
 
 
 class FlightPlanningDataProcessor:
-    def __init__(self, incoming_flight_information: dict):
-        self.incoming_flight_information = incoming_flight_information
-        if not self.incoming_flight_information.keys() & {"intended_flight", "request_id"}:
-            raise KeyError("Some requested_flight and request_id must be present in the incoming data")
-        self.intended_flight_information = self.incoming_flight_information["flight_plan"]
-        self.request_id = self.incoming_flight_information["request_id"]
-        if not self.intended_flight_information.keys() & {
-            "basic_information",
-            "astm_f3548_21",
-            "uspace_flight_authorisation",
-            "rpas_operating_rules_2_6",
-            "additional_information",
-        }:
-            raise KeyError("Some keys are missing")
+    """Maps a (pydantic-validated) upsert request payload into domain dataclasses.
 
-    def process_basic_flight_plan(self, basic_information_dict) -> BasicFlightPlanInformation:
-        return from_dict(data_class=BasicFlightPlanInformation, data=basic_information_dict, config=dacite.Config(cast=[Enum]))
+    The HTTP layer has already validated the payload shape with
+    :class:`UpsertFlightPlanRequestSchema`; this mapper only guards against the
+    optional nested objects that the domain layer requires being absent.
+    """
 
-    def process_f3548_21_flight_plan_information(self, astm_f3548_op_int_information_dict) -> ASTMF354821OpIntentInformation:
-        return from_dict(data_class=ASTMF354821OpIntentInformation, data=astm_f3548_op_int_information_dict, config=dacite.Config(cast=[Enum]))
+    _REQUIRED_FLIGHT_PLAN_KEYS = ("basic_information", "astm_f3548_21", "uspace_flight_authorisation")
+    _DACITE_CONFIG = dacite.Config(cast=[Enum])
 
-    def process_uspace_flight_authorisation_information(self, uspace_flight_authorisation_information_dict) -> FlightAuthorisationData:
-        return from_dict(data_class=FlightAuthorisationData, data=uspace_flight_authorisation_information_dict, config=dacite.Config(cast=[Enum]))
-
-    def process_rpas_operating_rules_2_6_information(self, rpas_operating_rules_2_6_information_dict) -> RPAS26FlightDetails:
-        return from_dict(data_class=RPAS26FlightDetails, data=rpas_operating_rules_2_6_information_dict, config=dacite.Config(cast=[Enum]))
-
-    def process_additional_information(self) -> dict:
-        return {}
+    def __init__(self, incoming_flight_information: dict[str, Any]) -> None:
+        if "flight_plan" not in incoming_flight_information or "request_id" not in incoming_flight_information:
+            raise HTTPException(status_code=400, detail={"result": "Payload must contain 'flight_plan' and 'request_id'"})
+        self.intended_flight_information: dict[str, Any] = incoming_flight_information["flight_plan"]
+        self.request_id: str = incoming_flight_information["request_id"]
+        missing_keys = [key for key in self._REQUIRED_FLIGHT_PLAN_KEYS if key not in self.intended_flight_information]
+        if missing_keys:
+            raise HTTPException(status_code=400, detail={"result": f"Flight plan is missing required keys: {', '.join(missing_keys)}"})
 
     def process_intended_flight_data(self) -> FlightPlan:
-        basic_information = self.process_basic_flight_plan(basic_information_dict=self.intended_flight_information["basic_information"])
-        astm_f3548_21 = self.process_f3548_21_flight_plan_information(
-            astm_f3548_op_int_information_dict=self.intended_flight_information["astm_f3548_21"]
+        return FlightPlan(
+            basic_information=from_dict(
+                data_class=BasicFlightPlanInformation, data=self.intended_flight_information["basic_information"], config=self._DACITE_CONFIG
+            ),
+            astm_f3548_21=from_dict(
+                data_class=ASTMF354821OpIntentInformation, data=self.intended_flight_information["astm_f3548_21"], config=self._DACITE_CONFIG
+            ),
+            uspace_flight_authorisation=from_dict(
+                data_class=FlightAuthorisationData, data=self.intended_flight_information["uspace_flight_authorisation"], config=self._DACITE_CONFIG
+            ),
         )
-        uspace_flight_authorisation = self.process_uspace_flight_authorisation_information(
-            self.intended_flight_information["uspace_flight_authorisation"]
-        )
-        return FlightPlan(basic_information=basic_information, astm_f3548_21=astm_f3548_21, uspace_flight_authorisation=uspace_flight_authorisation)
 
     def process_incoming_flight_plan_data(self) -> FlightPlanningRequest:
-        intended_flight = self.process_intended_flight_data()
-        return FlightPlanningRequest(intended_flight=intended_flight, request_id=self.request_id)
+        return FlightPlanningRequest(intended_flight=self.process_intended_flight_data(), request_id=self.request_id)
 
 
 class UAVSerialNumberValidator:
@@ -453,13 +434,11 @@ def get_flight_planning_status() -> FlightPlanningStatusSchema:
     return FlightPlanningStatusSchema.model_validate(status)
 
 
-async def clear_area(request_data: dict) -> ClearAreaResponseSchema:
-    try:
-        request_id = request_data["request_id"]
-        extent_raw = request_data["extent"]
-    except KeyError as ke:
-        raise HTTPException(status_code=400, detail={"result": "Could not parse clear area payload, expected key %s not found " % ke})
-    handler = DSSAreaClearHandler(request_id=request_id)
+async def clear_area(request: ClearAreaRequestSchema) -> ClearAreaResponseSchema:
+    if request.request_id is None or request.extent is None:
+        raise HTTPException(status_code=400, detail={"result": "Clear area payload must contain 'request_id' and 'extent'"})
+    extent_raw = request.extent.model_dump(mode="json", exclude_none=True)
+    handler = DSSAreaClearHandler(request_id=request.request_id)
     clear_area_response = await handler.clear_area_request(extent_raw=extent_raw)
     return ClearAreaResponseSchema.model_validate(clear_area_response)
 
@@ -468,7 +447,7 @@ class ConstraintsWriter:
     def __init__(self, constraint_repo: SQLAlchemyConstraintRepository):
         self.constraint_repo = constraint_repo
 
-    async def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: Any):
+    async def write_nearby_constraints(self, constraints: list[Constraint], flight_declaration: FlightDeclarationORM) -> None:
         my_volumes_converter = VolumesConverter()
         for constraint in constraints:
             constraint_reference = constraint.reference
@@ -483,7 +462,7 @@ class ConstraintsWriter:
                 geofence_id = str(uuid.uuid4())
 
             my_volumes_converter.convert_volumes_to_geojson(volumes=constraint_details.volumes)
-            altitude_ref_int = ALTITUDE_REF_LOOKUP.get(my_volumes_converter.altitude_ref, 4)
+            altitude_ref_int = ALTITUDE_REF_LOOKUP.get(my_volumes_converter.altitude_ref, ALTITUDE_REF_LOOKUP["W84"])
             bounds = my_volumes_converter.get_bounds()
             bounds_str = ",".join(map(str, bounds))
             geofence_payload = GeofencePayload(
@@ -534,16 +513,17 @@ class SCDService:
         self.fd_repo = fd_repo
         self.notifications_repo = notifications_repo
 
-    async def upsert_flight_plan(self, flight_plan_id: str, request_data: dict) -> UpsertFlightPlanResponseSchema:
+    async def upsert_flight_plan(self, flight_plan_id: str, request: UpsertFlightPlanRequestSchema) -> UpsertFlightPlanResponseSchema:
         scd_helper = dss_scd_helper.SCDOperations()
         volumes_validator = VolumesValidator()
+        request_data = request.model_dump(mode="json", exclude_none=True)
         ctx = self._build_flight_planning_context(str(flight_plan_id), request_data)
 
         validation_response = self._validate_flight_plan(ctx, volumes_validator)
         if validation_response is not None:
             return validation_response
 
-        auth_token = await scd_helper.get_auth_token()
+        auth_token = await scd_helper.async_get_auth_token()
         if not auth_token or "error" in auth_token:
             return _upsert_response(failed_planning_response)
 
@@ -554,24 +534,20 @@ class SCDService:
             return await self._update_existing_flight_plan(ctx, scd_helper)
         return await self._create_new_flight_plan(ctx, scd_helper, volumes_validator)
 
-    def _build_flight_planning_context(self, operation_id: str, request_data: dict) -> FlightPlanningContext:
-        try:
-            processor = FlightPlanningDataProcessor(incoming_flight_information=request_data)
-        except KeyError as ke:
-            raise HTTPException(status_code=500, detail={"result": "Could not parse flight plan payload: %s" % ke})
-
+    def _build_flight_planning_context(self, operation_id: str, request_data: dict[str, Any]) -> FlightPlanningContext:
+        processor = FlightPlanningDataProcessor(incoming_flight_information=request_data)
         scd_test_data = processor.process_incoming_flight_plan_data()
         op_int_bridge = FlightPlantoOperationalIntentProcessor(flight_planning_request=scd_test_data)
-        volumes = scd_test_data.intended_flight.basic_information.area
+        volumes = scd_test_data.intended_flight.basic_information.area or []
         priority = scd_test_data.intended_flight.astm_f3548_21.priority or 0
-        off_nominal_volumes: list[Any] = []
+        off_nominal_volumes: list[Volume4D] = []
         planning_data = FlightPlanningInjectionData(
             volumes=volumes,
             priority=priority,
             off_nominal_volumes=off_nominal_volumes,
             uas_state=scd_test_data.intended_flight.basic_information.uas_state.value,
             usage_state=scd_test_data.intended_flight.basic_information.usage_state.value,
-            state="Accepted",
+            state=OperationalIntentState.Accepted.value,
         )
         volume_converter = VolumesConverter()
         volume_converter.convert_volumes_to_geojson(volumes=volumes)
@@ -593,7 +569,7 @@ class SCDService:
     def _validate_flight_plan(
         self, ctx: FlightPlanningContext, volumes_validator: VolumesValidator
     ) -> UpsertFlightPlanResponseSchema | None:
-        data_validator = dss_scd_helper.FlightPlanningDataValidator(incoming_flight_planning_data=ctx.data)
+        data_validator = FlightPlanningDataValidator(incoming_flight_planning_data=ctx.data)
         if not data_validator.validate_flight_planning_test_data():
             return _upsert_response(not_planned_planning_response)
         if not volumes_validator.validate_volumes(volumes=ctx.volumes):
@@ -612,8 +588,9 @@ class SCDService:
         existing_op_int_details = await opint_parser.parse_stored_operational_intent_details(operation_id=ctx.operation_id)
         flight_declaration = await self.fd_repo.get_by_id(uuid.UUID(ctx.operation_id))
         if not flight_declaration:
-            failed_planning_response.notes = "Flight Declaration with ID %s not found in Flight Blender" % ctx.operation_id
-            return _upsert_response(failed_planning_response)
+            return _upsert_response(
+                replace(failed_planning_response, notes="Flight Declaration with ID %s not found in Flight Blender" % ctx.operation_id)
+            )
 
         current_state_str = OPERATION_STATES[flight_declaration.state][1]
         stored_details = await opint_parser.parse_and_load_stored_flight_operational_intent_reference(operation_id=ctx.operation_id)
@@ -629,17 +606,25 @@ class SCDService:
         )
         if update_job.status == 200:
             return await self._handle_successful_update(ctx, update_job, stored_details, existing_op_int_details)
-        if update_job.status == 999:
+        if update_job.status == OPINT_UPDATE_NOT_SUBMITTED_STATUS:
             return self._handle_update_rejection(ctx, update_job, current_state_str)
         return _upsert_response(failed_planning_response)
 
     def _should_deconflict(self, current_state: str, generated_state: str) -> bool:
-        return not (current_state in ["Accepted", "Activated"] and generated_state == "Nonconforming")
+        active_states = (OperationalIntentState.Accepted.value, OperationalIntentState.Activated.value)
+        return not (current_state in active_states and generated_state == OperationalIntentState.Nonconforming.value)
 
     async def _handle_successful_update(
-        self, ctx: FlightPlanningContext, update_job: Any, stored_details: Any, existing_op_int_details: Any
+        self,
+        ctx: FlightPlanningContext,
+        update_job: OperationalIntentUpdateResponse,
+        stored_details: OperationalIntentDetailsUSSResponse,
+        existing_op_int_details: OperationalIntentStorage | None,
     ) -> UpsertFlightPlanResponseSchema:
         fd_repo = self.fd_repo
+        dss_response = update_job.dss_response
+        if not isinstance(dss_response, OperationalIntentUpdateSuccessResponse):
+            raise HTTPException(status_code=502, detail={"message": "DSS returned an unexpected response for a successful update"})
         opint_reference = await fd_repo.get_opint_reference_by_id(uuid.UUID(str(stored_details.reference.id)))
         if opint_reference is None:
             raise HTTPException(status_code=404, detail={"message": "Flight operational intent reference not found"})
@@ -649,7 +634,7 @@ class SCDService:
         opint_details = await fd_repo.get_opint_detail_by_declaration_id(flight_declaration.id)
         if opint_details is None:
             raise HTTPException(status_code=404, detail={"message": "Flight operational intent details not found"})
-        await fd_repo.update_opint_reference(ref_id=opint_reference.id, payload=update_job.dss_response.operational_intent_reference)
+        await fd_repo.update_opint_reference(ref_id=opint_reference.id, payload=dss_response.operational_intent_reference)
         notification_details = OperationalIntentUSSDetails(
             volumes=ctx.volumes or [],
             off_nominal_volumes=ctx.off_nominal_volumes,
@@ -661,51 +646,90 @@ class SCDService:
         )
         scd_helper = dss_scd_helper.SCDOperations()
         await scd_helper.process_peer_uss_notifications(
-            all_subscribers=update_job.dss_response.subscribers,
+            all_subscribers=dss_response.subscribers,
             operational_intent_details=notification_details,
-            operational_intent_reference=update_job.dss_response.operational_intent_reference,
+            operational_intent_reference=dss_response.operational_intent_reference,
             operational_intent_id=str(opint_reference.id),
         )
-        if ctx.generated_state == "Activated":
-            return await self._finish_activated_update(ctx, update_job, flight_declaration, opint_reference, opint_details)
-        if ctx.generated_state == "Nonconforming":
+        if ctx.generated_state == OperationalIntentState.Activated.value:
+            return await self._finish_activated_update(ctx, dss_response, flight_declaration, opint_reference, opint_details)
+        if ctx.generated_state == OperationalIntentState.Nonconforming.value:
             return await self._finish_nonconforming_update(ctx, existing_op_int_details, flight_declaration)
+        if ctx.generated_state == OperationalIntentState.Accepted.value:
+            return await self._finish_accepted_update(ctx, dss_response, flight_declaration, opint_reference, opint_details)
         return _upsert_response(failed_planning_response)
 
-    async def _finish_activated_update(
-        self, ctx: FlightPlanningContext, update_job: Any, flight_declaration: Any, opint_reference: Any, opint_details: Any
-    ) -> UpsertFlightPlanResponseSchema:
-        ready_to_fly_planning_response.notes = f"Created Operational Intent ID {opint_reference.id}"
-        await self.fd_repo.update(uuid.UUID(ctx.operation_id), state=2)
+    async def _persist_update_subscribers_and_composite(
+        self,
+        ctx: FlightPlanningContext,
+        dss_response: OperationalIntentUpdateSuccessResponse,
+        flight_declaration: FlightDeclarationORM,
+        opint_reference: FlightOperationalIntentReferenceORM,
+        opint_details: FlightOperationalIntentDetailORM,
+        state: OperationStateCode,
+    ) -> None:
+        await self.fd_repo.update(uuid.UUID(ctx.operation_id), state=state)
         await self.fd_repo.create_opint_reference_subscribers(
             declaration_id=flight_declaration.id,
-            subscribers=update_job.dss_response.subscribers,
+            subscribers=dss_response.subscribers,
         )
         await self.fd_repo.create_or_update_composite_opint(
             declaration_id=flight_declaration.id,
             payload=self._composite_opint_payload(ctx, str(opint_reference.id), str(opint_details.id)),
         )
-        return _upsert_response(ready_to_fly_planning_response)
+
+    async def _finish_activated_update(
+        self,
+        ctx: FlightPlanningContext,
+        dss_response: OperationalIntentUpdateSuccessResponse,
+        flight_declaration: FlightDeclarationORM,
+        opint_reference: FlightOperationalIntentReferenceORM,
+        opint_details: FlightOperationalIntentDetailORM,
+    ) -> UpsertFlightPlanResponseSchema:
+        await self._persist_update_subscribers_and_composite(
+            ctx, dss_response, flight_declaration, opint_reference, opint_details, OperationStateCode.Activated
+        )
+        return _upsert_response(replace(ready_to_fly_planning_response, notes=f"Created Operational Intent ID {opint_reference.id}"))
+
+    async def _finish_accepted_update(
+        self,
+        ctx: FlightPlanningContext,
+        dss_response: OperationalIntentUpdateSuccessResponse,
+        flight_declaration: FlightDeclarationORM,
+        opint_reference: FlightOperationalIntentReferenceORM,
+        opint_details: FlightOperationalIntentDetailORM,
+    ) -> UpsertFlightPlanResponseSchema:
+        # Re-plan of an already-accepted flight that the DSS accepted: keep it Accepted and report success.
+        await self._persist_update_subscribers_and_composite(
+            ctx, dss_response, flight_declaration, opint_reference, opint_details, OperationStateCode.Accepted
+        )
+        return _upsert_response(planned_planning_response)
 
     async def _finish_nonconforming_update(
-        self, ctx: FlightPlanningContext, existing_op_int_details: Any, flight_declaration: Any
+        self, ctx: FlightPlanningContext, existing_op_int_details: OperationalIntentStorage | None, flight_declaration: FlightDeclarationORM
     ) -> UpsertFlightPlanResponseSchema:
-        await self.fd_repo.update(uuid.UUID(ctx.operation_id), state=3)
+        if existing_op_int_details is None:
+            raise HTTPException(status_code=404, detail={"message": "Stored operational intent details not found for nonconforming update"})
+        await self.fd_repo.update(uuid.UUID(ctx.operation_id), state=OperationStateCode.Nonconforming)
         existing_op_int_details.operational_intent_details.off_nominal_volumes = ctx.volumes
         existing_op_int_details.success_response.operational_intent_reference.state = OperationalIntentState.Nonconforming
         existing_op_int_details.operational_intent_details.state = OperationalIntentState.Nonconforming
         await self.fd_repo.create_or_update_composite_opint(declaration_id=flight_declaration.id, payload=existing_op_int_details)
         return _upsert_response(planned_off_nominal_planning_response)
 
-    def _handle_update_rejection(self, ctx: FlightPlanningContext, update_job: Any, current_state: str) -> UpsertFlightPlanResponseSchema:
+    def _handle_update_rejection(
+        self, ctx: FlightPlanningContext, update_job: OperationalIntentUpdateResponse, current_state: str
+    ) -> UpsertFlightPlanResponseSchema:
         additional = update_job.additional_information
-        if additional.check_id.value == "B":
-            if additional.tentative_flight_plan_processing_response.value == "OkToFly":
+        if additional is None:
+            return _upsert_response(not_planned_planning_response)
+        if additional.check_id == OpIntUpdateCheckResultCodes.B:
+            if additional.tentative_flight_plan_processing_response == FlightPlanCurrentStatus.OkToFly:
                 return _upsert_response(not_planned_activated_higher_priority_planning_response)
             return _upsert_response(not_planned_activated_planning_response)
-        if ctx.priority == 100:
+        if ctx.priority == HIGH_PRIORITY_OP_INTENT:
             return _upsert_response(not_planned_activated_higher_priority_planning_response)
-        if current_state in ("Accepted", "Activated"):
+        if current_state in (OperationalIntentState.Accepted.value, OperationalIntentState.Activated.value):
             return _upsert_response(not_planned_already_planned_planning_response)
         return _upsert_response(not_planned_planning_response)
 
@@ -719,36 +743,47 @@ class SCDService:
         submission = await scd_helper.create_and_submit_operational_intent_reference(
             state=ctx.generated_state,
             volumes=ctx.volumes,
-            off_nominal_volumes=ctx.volumes if ctx.uas_state in ["OffNominal", "Contingent"] else [],
+            off_nominal_volumes=ctx.volumes if ctx.uas_state in (UasState.OffNominal.value, UasState.Contingent.value) else [],
             priority=ctx.priority,
         )
         return await self._handle_new_flight_submission(ctx, scd_helper, flight_declaration, submission)
 
-    async def _create_flight_declaration(self, ctx: FlightPlanningContext):
+    async def _create_flight_declaration(self, ctx: FlightPlanningContext) -> FlightDeclarationORM:
         return await self.fd_repo.create(
             id=uuid.UUID(ctx.operation_id),
             operational_intent=json.dumps(asdict(ctx.data)),
             flight_declaration_raw_geojson=json.dumps(ctx.raw_geojson) if ctx.raw_geojson else "",
             bounds=ctx.view_rect_bounds_storage,
-            aircraft_id="0000",
+            aircraft_id=_DEFAULT_AIRCRAFT_ID,
             state=OPERATION_STATES_LOOKUP[ctx.generated_state],
         )
 
     async def _handle_new_flight_submission(
-        self, ctx: FlightPlanningContext, scd_helper: dss_scd_helper.SCDOperations, flight_declaration: Any, submission: OperationalIntentSubmissionStatus
+        self,
+        ctx: FlightPlanningContext,
+        scd_helper: dss_scd_helper.SCDOperations,
+        flight_declaration: FlightDeclarationORM,
+        submission: OperationalIntentSubmissionStatus,
     ) -> UpsertFlightPlanResponseSchema:
-        if submission.status == "success":
+        if submission.status == SubmissionResultStatus.Success.value:
             await self._store_successful_new_submission(ctx, scd_helper, flight_declaration, submission)
             return _upsert_response(planned_planning_response)
-        if submission.status == "conflict_with_flight":
+        if submission.status == SubmissionResultStatus.ConflictWithFlight.value:
             return _upsert_response(not_planned_planning_response)
-        if submission.status in ["failure", "peer_uss_data_sharing_issue"]:
+        if submission.status in (SubmissionResultStatus.Failure.value, SubmissionResultStatus.PeerUSSDataSharingIssue.value):
             return self._new_submission_failure_response(submission)
         return _upsert_response(planned_planning_response)
 
     async def _store_successful_new_submission(
-        self, ctx: FlightPlanningContext, scd_helper: dss_scd_helper.SCDOperations, flight_declaration: Any, submission: OperationalIntentSubmissionStatus
+        self,
+        ctx: FlightPlanningContext,
+        scd_helper: dss_scd_helper.SCDOperations,
+        flight_declaration: FlightDeclarationORM,
+        submission: OperationalIntentSubmissionStatus,
     ) -> None:
+        dss_response = submission.dss_response
+        if not isinstance(dss_response, OperationalIntentSubmissionSuccess):
+            raise HTTPException(status_code=502, detail={"message": "DSS returned an unexpected response for a successful submission"})
         ctx.data.state = ctx.generated_state
         opint_details = OperationalIntentUSSDetails(
             volumes=ctx.data.volumes,
@@ -758,15 +793,15 @@ class SCDService:
         opint_detail = await self.fd_repo.create_opint_detail(declaration_id=flight_declaration.id, payload=opint_details)
         opint_reference = await self.fd_repo.create_opint_reference(
             declaration_id=flight_declaration.id,
-            payload=submission.dss_response.operational_intent_reference,
+            payload=dss_response.operational_intent_reference,
         )
         await self.fd_repo.create_opint_reference_subscribers(
             declaration_id=flight_declaration.id,
-            subscribers=submission.dss_response.subscribers,
+            subscribers=dss_response.subscribers,
         )
         await self.fd_repo.create_or_update_composite_opint(
             declaration_id=flight_declaration.id,
-            payload=self._composite_opint_payload(ctx, str(opint_reference.id), str(opint_detail.id), alt_max=50, alt_min=25),
+            payload=self._composite_opint_payload(ctx, str(opint_reference.id), str(opint_detail.id)),
         )
         if submission.constraints:
             await ConstraintsWriter(SQLAlchemyConstraintRepository(self.fd_repo.db)).write_nearby_constraints(
@@ -774,12 +809,11 @@ class SCDService:
                 constraints=submission.constraints,
             )
         await scd_helper.process_peer_uss_notifications(
-            all_subscribers=submission.dss_response.subscribers,
+            all_subscribers=dss_response.subscribers,
             operational_intent_details=ctx.data,
-            operational_intent_reference=submission.dss_response.operational_intent_reference,
+            operational_intent_reference=dss_response.operational_intent_reference,
             operational_intent_id=submission.operational_intent_id,
         )
-        planned_test_injection_response.operational_intent_id = submission.operational_intent_id
 
     def _new_submission_failure_response(self, submission: OperationalIntentSubmissionStatus) -> UpsertFlightPlanResponseSchema:
         if submission.status_code in [408, 409]:

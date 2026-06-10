@@ -63,7 +63,7 @@ async def flight_planning_clear_area_request(
     body: ClearAreaRequestSchema,
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.direct_automated_test"])),
 ):
-    return await scd_svc.clear_area(body.model_dump(mode="json", exclude_none=True))
+    return await scd_svc.clear_area(body)
 
 
 @router.put("/flight_planning/flight_plans/{flight_plan_id}", response_model=UpsertFlightPlanResponseSchema)
@@ -74,7 +74,7 @@ async def upsert_flight_plan(
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
     ops: SCDService = Depends(_ops),
 ):
-    return await ops.upsert_flight_plan(str(flight_plan_id), body.model_dump(mode="json", exclude_none=True))
+    return await ops.upsert_flight_plan(str(flight_plan_id), body)
 
 
 @router.delete("/flight_planning/flight_plans/{flight_plan_id}", response_model=CloseFlightPlanResponseSchema)

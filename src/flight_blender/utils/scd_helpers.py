@@ -20,9 +20,25 @@ from flight_blender.domain_types.scd import (
     FlightPlanningInjectionData,
     LatLng,
     OperationalIntentDetailsUSSResponse,
+    OperationalIntentState,
     OperationalIntentTestInjection,
+    UasState,
+    UsageState,
     Volume4D,
 )
+
+# Valid uas_state values for an incoming flight-planning test injection.
+_VALID_PLANNING_UAS_STATES = frozenset(
+    {UasState.Nominal.value, UasState.OffNominal.value, UasState.Contingent.value, UasState.NotSpecified.value}
+)
+# usage_state values for which off-nominal volumes are not permitted.
+_NO_OFF_NOMINAL_USAGE_STATES = frozenset({UsageState.Planned.value, UsageState.InUse.value})
+# Operational-intent states accepted by the test injection (Contingent intentionally excluded).
+_VALID_OPERATIONAL_INTENT_INJECTION_STATES = frozenset(
+    {OperationalIntentState.Accepted.value, OperationalIntentState.Activated.value, OperationalIntentState.Nonconforming.value}
+)
+# Operational-intent states for which off-nominal volumes are not permitted.
+_NO_OFF_NOMINAL_OPERATIONAL_INTENT_STATES = frozenset({OperationalIntentState.Accepted.value, OperationalIntentState.Activated.value})
 
 
 class FlightPlanningDataValidator:
@@ -30,30 +46,16 @@ class FlightPlanningDataValidator:
         self.flight_planning_data = incoming_flight_planning_data
 
     def validate_flight_planning_state(self) -> bool:
-        if self.flight_planning_data.uas_state not in [
-            "Nominal",
-            "OffNominal",
-            "Contingent",
-            "NotSpecified",
-        ]:
+        if self.flight_planning_data.uas_state not in _VALID_PLANNING_UAS_STATES:
             logger.error("Invalid uas_state: %s" % self.flight_planning_data.uas_state)
             return False
         return True
 
     def validate_flight_planning_off_nominals(self) -> bool:
-        if self.flight_planning_data.usage_state in ["Planned", "InUse"] and bool(self.flight_planning_data.off_nominal_volumes):
-            return False
-        else:
-            return True
+        return not (self.flight_planning_data.usage_state in _NO_OFF_NOMINAL_USAGE_STATES and bool(self.flight_planning_data.off_nominal_volumes))
 
     def validate_flight_planning_test_data(self) -> bool:
-        flight_planning_test_data_ok = []
-        flight_planning_state_ok = self.validate_flight_planning_state()
-        flight_planning_off_nominals_ok = self.validate_flight_planning_off_nominals()
-        flight_planning_test_data_ok.append(flight_planning_state_ok)
-        flight_planning_test_data_ok.append(flight_planning_off_nominals_ok)
-
-        return all(flight_planning_test_data_ok)
+        return all([self.validate_flight_planning_state(), self.validate_flight_planning_off_nominals()])
 
 
 class OperationalIntentValidator:
@@ -61,28 +63,19 @@ class OperationalIntentValidator:
         self.operational_intent_data = operational_intent_data
 
     def validate_operational_intent_state(self) -> bool:
-        if self.operational_intent_data.state not in [
-            "Accepted",
-            "Activated",
-            "Nonconforming",
-        ]:
+        if self.operational_intent_data.state not in _VALID_OPERATIONAL_INTENT_INJECTION_STATES:
             logger.error("Invalid operational intent state: %s" % self.operational_intent_data.state)
             return False
         return True
 
     def validate_operational_intent_state_off_nominals(self) -> bool:
-        if self.operational_intent_data.state in ["Accepted", "Activated"] and bool(self.operational_intent_data.off_nominal_volumes):
-            return False
-        else:
-            return True
+        return not (
+            self.operational_intent_data.state in _NO_OFF_NOMINAL_OPERATIONAL_INTENT_STATES
+            and bool(self.operational_intent_data.off_nominal_volumes)
+        )
 
     def validate_operational_intent_test_data(self) -> bool:
-        operational_intent_test_data_ok = []
-        operational_intent_state_ok = self.validate_operational_intent_state()
-        state_off_nominals_ok = self.validate_operational_intent_state_off_nominals()
-        operational_intent_test_data_ok.append(operational_intent_state_ok)
-        operational_intent_test_data_ok.append(state_off_nominals_ok)
-        return all(operational_intent_test_data_ok)
+        return all([self.validate_operational_intent_state(), self.validate_operational_intent_state_off_nominals()])
 
 
 class PeerOperationalIntentValidator:
@@ -209,6 +202,9 @@ class VolumesConverter:
 
             geo_json_features = self._convert_volume_to_geojson_feature(volume)
             self.geo_json["features"] += geo_json_features
+
+        if not volumes:
+            return
 
         self.time_start = min(volume_time_starts).isoformat()
         self.time_end = max(volume_time_ends).isoformat()

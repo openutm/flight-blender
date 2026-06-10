@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any, Literal, Optional
 
 from implicitdict import StringBasedDateTime
-from shapely.geometry import Polygon as Plgn
+from shapely.geometry.base import BaseGeometry
 
 from flight_blender.domain_types.airspace import Altitude as Altitude
 from flight_blender.domain_types.airspace import Circle as Circle
@@ -25,6 +25,27 @@ class OperationalIntentState(str, enum.Enum):
     Activated = "Activated"
     Nonconforming = "Nonconforming"
     Contingent = "Contingent"
+
+
+class SubmissionResultStatus(str, enum.Enum):
+    """Outcome status returned by ``SCDOperations.create_and_submit_operational_intent_reference``."""
+
+    Success = "success"
+    ConflictWithFlight = "conflict_with_flight"
+    Failure = "failure"
+    PeerUSSDataSharingIssue = "peer_uss_data_sharing_issue"
+
+
+# ASTM F3548-21 priority value reserved for high-priority (emergency) operations.
+HIGH_PRIORITY_OP_INTENT = 100
+
+# Synthetic status on OperationalIntentUpdateResponse meaning "Flight Blender decided not to submit
+# the update to the DSS" (a domain rejection, not a transport error). The flight-planning layer
+# translates this into an HTTP 200 planning rejection per the InterUSS flight-planning interface.
+OPINT_UPDATE_NOT_SUBMITTED_STATUS = 999
+
+# Audiences that identify Flight Blender itself; peer-USS notifications to these are skipped.
+SELF_NOTIFICATION_AUDIENCES = ("host.docker.internal", "flight-blender", "flight-blender.localutm")
 
 
 @dataclass
@@ -427,7 +448,7 @@ class OperationalIntentReferenceDSSDetails:
 @dataclass
 class OpInttoCheckDetails:
     ovn: str
-    shape: Plgn
+    shape: BaseGeometry
     id: str
     time_start: Optional[str] = None
     time_end: Optional[str] = None

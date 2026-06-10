@@ -2,19 +2,15 @@ import asyncio
 import json
 import uuid
 from dataclasses import asdict
-from datetime import datetime
 from typing import Any
 
 import arrow
 import httpx
-import shapely.geometry
 import tldextract
+from dacite import from_dict
 from fastapi import HTTPException
 from loguru import logger
-from pyproj import Proj
-from shapely.geometry import Point, Polygon
-from shapely.geometry.base import BaseGeometry
-from shapely.ops import unary_union
+from shapely.geometry import Point
 
 from flight_blender.auth.dss_auth import get_dss_auth_token
 from flight_blender.auth.token_audience import generate_audience_from_base_url
@@ -22,24 +18,31 @@ from flight_blender.auth.token_cache import get_redis
 from flight_blender.clients.dss_constraint_client import ConstraintOperations
 from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
-from flight_blender.domain_types.common import VALID_OPERATIONAL_INTENT_STATES
+from flight_blender.domain_types.common import OPINT_INDEX_BASEPATH, OperationStateCode
 from flight_blender.domain_types.scd import (
+    HIGH_PRIORITY_OP_INTENT,
+    OPINT_UPDATE_NOT_SUBMITTED_STATUS,
+    SELF_NOTIFICATION_AUDIENCES,
     Altitude,
     Circle,
+    ClearAreaResponse,
+    ClearAreaResponseOutcome,
     CommonDSS2xxResponse,
     CommonDSS4xxResponse,
+    CommonPeer9xxResponse,
+    CompositeOperationalIntentPayload,
     DeleteOperationalIntentConstuctor,
     DeleteOperationalIntentResponse,
     DeleteOperationalIntentResponseSuccess,
+    FlightDeclarationOperationalIntentStorageDetails,
     FlightPlanCurrentStatus,
-    FlightPlanningInjectionData,
     ImplicitSubscriptionParameters,
-    LatLng,
     LatLngPoint,
     NotifyPeerUSSPostPayload,
     OperationalIntentDetailsUSSResponse,
     OperationalIntentReference,
     OperationalIntentReferenceDSSResponse,
+    OperationalIntentState,
     OperationalIntentStorage,
     OperationalIntentSubmissionStatus,
     OperationalIntentSubmissionSuccess,
@@ -50,9 +53,11 @@ from flight_blender.domain_types.scd import (
     OperationalIntentUSSDetails,
     OpInttoCheckDetails,
     OpIntUpdateCheckResultCodes,
+    OtherError,
     QueryOperationalIntentPayload,
     Radius,
     ShouldSendtoDSSProcessingResponse,
+    SubmissionResultStatus,
     SubscriberToNotify,
     SubscriptionState,
     Time,
@@ -65,8 +70,20 @@ from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepo
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.utils import spatial_rid as rtree_helper
 from flight_blender.utils.json_codecs import LazyEncoder
+from flight_blender.utils.scd_helpers import PeerOperationalIntentValidator, VolumesConverter
 
 HTTP_TIMEOUT_SECONDS = 30.0
+
+# DSS operational-intent submission rejection codes → human-readable notes stored on the flight declaration.
+_DSS_SUBMISSION_REJECTION_NOTES: dict[int, str] = {
+    400: "Error during submission of operational intent, the DSS rejected because one or more parameters was missing",
+    409: "Error during submission of operational intent, the DSS rejected it with because the latest airspace keys was not present",
+    401: "There was a error in submitting the operational intent to the DSS, the token was invalid",
+    403: "There was a error in submitting the operational intent to the DSS, the appropriate scope was not present",
+    413: "There was a error in submitting the operational intent to the DSS, the operational intent was too large",
+    429: "There was a error in submitting the operational intent to the DSS, too many requests were submitted to the DSS",
+}
+_DSS_SUBMISSION_REJECTION_CODES = (400, 409, 401, 403, 412, 413, 429)
 
 
 def _json_from_response(response: httpx.Response, endpoint: str) -> dict:
@@ -88,273 +105,6 @@ async def _async_request(method: str, endpoint: str, **kwargs: Any) -> httpx.Res
             return await client.request(method, endpoint, **kwargs)
     except httpx.RequestError as exc:
         raise _http_exception_from_request_error(exc, endpoint) from exc
-
-
-def is_time_within_time_period(start_time: datetime, end_time: datetime, time_to_check: datetime):
-    return time_to_check >= start_time or time_to_check <= end_time
-
-
-class FlightPlanningDataValidator:
-    def __init__(self, incoming_flight_planning_data: FlightPlanningInjectionData):
-        self.flight_planning_data = incoming_flight_planning_data
-
-    def validate_flight_planning_state(self) -> bool:
-        if self.flight_planning_data.uas_state not in [
-            "Nominal",
-            "OffNominal",
-            "Contingent",
-            "NotSpecified",
-        ]:
-            logger.error("Invalid uas_state: %s" % self.flight_planning_data.uas_state)
-            return False
-        return True
-
-    def validate_flight_planning_off_nominals(self) -> bool:
-        if self.flight_planning_data.usage_state in ["Planned", "InUse"] and bool(self.flight_planning_data.off_nominal_volumes):
-            return False
-        else:
-            return True
-
-    def validate_flight_planning_test_data(self) -> bool:
-        flight_planning_test_data_ok = []
-        flight_planning_state_ok = self.validate_flight_planning_state()
-        flight_planning_off_nominals_ok = self.validate_flight_planning_off_nominals()
-        flight_planning_test_data_ok.append(flight_planning_state_ok)
-        flight_planning_test_data_ok.append(flight_planning_off_nominals_ok)
-
-        return all(flight_planning_test_data_ok)
-
-
-class OperationalIntentValidator:
-    def __init__(self, operational_intent_data: OperationalIntentTestInjection):
-        self.operational_intent_data = operational_intent_data
-
-    def validate_operational_intent_state(self) -> bool:
-        if self.operational_intent_data.state not in [
-            "Accepted",
-            "Activated",
-            "Nonconforming",
-        ]:
-            logger.error("Invalid operational intent state: %s" % self.operational_intent_data.state)
-            return False
-        return True
-
-    def validate_operational_intent_state_off_nominals(self) -> bool:
-        if self.operational_intent_data.state in ["Accepted", "Activated"] and bool(self.operational_intent_data.off_nominal_volumes):
-            return False
-        else:
-            return True
-
-    def validate_operational_intent_test_data(self) -> bool:
-        operational_intent_test_data_ok = []
-        operational_intent_state_ok = self.validate_operational_intent_state()
-        state_off_nominals_ok = self.validate_operational_intent_state_off_nominals()
-        operational_intent_test_data_ok.append(operational_intent_state_ok)
-        operational_intent_test_data_ok.append(state_off_nominals_ok)
-        return all(operational_intent_test_data_ok)
-
-
-class PeerOperationalIntentValidator:
-    """This class validates operational intent data received from a peer USS"""
-
-    def validate_individual_operational_intent(self, operational_intent: OperationalIntentDetailsUSSResponse) -> bool:
-        all_checks_passed: list[bool] = []
-        if operational_intent.reference.state not in VALID_OPERATIONAL_INTENT_STATES:
-            logger.debug(f"Error in received operational intent state, it is not valid {operational_intent.reference.state}")
-            all_checks_passed.append(False)
-        else:
-            all_checks_passed.append(True)
-
-        if not isinstance(operational_intent.details.priority, int):
-            logger.debug(f"Error in received operational intent priority, it is not one an integer {operational_intent.details.priority}")
-            all_checks_passed.append(False)
-        else:
-            all_checks_passed.append(True)
-
-        return all(all_checks_passed)
-
-    def validate_nearby_operational_intents(self, nearby_operational_intents: list[OperationalIntentDetailsUSSResponse]) -> bool:
-        all_nearby_operational_intents_valid: list[bool] = []
-
-        for nearby_operational_intent in nearby_operational_intents:
-            operational_intent_valid = self.validate_individual_operational_intent(operational_intent=nearby_operational_intent)
-            all_nearby_operational_intents_valid.append(operational_intent_valid)
-        return all(all_nearby_operational_intents_valid)
-
-
-class VolumesValidator:
-    def validate_volume_start_end_date(self, volume: Volume4D) -> bool:
-        now = arrow.now()
-        thirty_days_from_now = now.shift(days=30)
-        volume_start_datetime = arrow.get(volume.time_start.value)
-        # volume_end_datetime = arrow.get(volume.time_end)
-
-        if volume_start_datetime > thirty_days_from_now:
-            return False
-        else:
-            return True
-
-    def validate_volume_times_within_limits_for_creation(self, volume: Volume4D) -> bool:
-        """This method validates that the operational intent is not in the past"""
-        now = arrow.now()
-        volume_start_datetime = arrow.get(volume.time_start.value)
-        start_time_valid = True
-        delta = now - volume_start_datetime
-        time_delta_seconds = delta.total_seconds()
-        if time_delta_seconds > 5:
-            start_time_valid = False
-
-        return start_time_valid
-
-    def validate_polygon_vertices(self, volume: Volume4D) -> bool:
-        v = asdict(volume)
-        cur_volume = v["volume"]
-        if "outline_polygon" in cur_volume.keys():
-            outline_polygon = cur_volume["outline_polygon"]
-            if outline_polygon:
-                total_vertices = len(outline_polygon["vertices"])
-                # Check the vertices is at least 3
-                if total_vertices < 3:
-                    return False
-        return True
-
-    def pre_operational_intent_creation_checks(self, volumes: list[Volume4D]) -> bool:
-        all_volume_start_time_ok = []
-        for volume in volumes:
-            start_time_validated = self.validate_volume_times_within_limits_for_creation(volume)
-            all_volume_start_time_ok.append(start_time_validated)
-
-        return all(all_volume_start_time_ok)
-
-    def validate_volumes(self, volumes: list[Volume4D]) -> bool:
-        all_volumes_ok = []
-        for volume in volumes:
-            volume_validated = self.validate_polygon_vertices(volume)
-            volume_start_end_time_validated = self.validate_volume_start_end_date(volume)
-            all_volumes_ok.append(volume_validated)
-            all_volumes_ok.append(volume_start_end_time_validated)
-        return all(all_volumes_ok)
-
-
-class VolumesConverter:
-    """A class to convert a Volume4D in to GeoJSON"""
-
-    def __init__(self):
-        self.geo_json = {"type": "FeatureCollection", "features": []}
-        self.utm_zone = settings.UTM_ZONE
-        self.all_volume_features = []
-        self.upper_altitude = 0
-        self.lower_altitude = 0
-        self.altitude_ref = "W84"
-        self.time_start = arrow.now().isoformat()
-        self.time_end = arrow.now().isoformat()
-
-    def utm_converter(self, shapely_shape: shapely.geometry, inverse: bool = False) -> shapely.geometry.shape:
-        """A helper function to convert from lat / lon to UTM coordinates for buffering. tracks. This is the UTM projection (https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system), we use Zone 54N which encompasses Japan, this zone has to be set for each locale / city. Adapted from https://gis.stackexchange.com/questions/325926/buffering-geometry-with-points-in-wgs84-using-shapely"""
-
-        proj = Proj(proj="utm", zone=self.utm_zone, ellps="WGS84", datum="WGS84")
-
-        geo_interface = shapely_shape.__geo_interface__
-        point_or_polygon = geo_interface["type"]
-        coordinates = geo_interface["coordinates"]
-        if point_or_polygon == "Polygon":
-            new_coordinates = [[proj(*point, inverse=inverse) for point in linring] for linring in coordinates]
-        elif point_or_polygon == "Point":
-            new_coordinates = proj(*coordinates, inverse=inverse)
-        else:
-            raise RuntimeError(f"Unexpected geo_interface type: {point_or_polygon}")
-
-        return shapely.geometry.shape({"type": point_or_polygon, "coordinates": tuple(new_coordinates)})
-
-    def convert_volumes_to_geojson(self, volumes: list[Volume4D]) -> None:
-        all_upper_altitudes = []
-        all_lower_altitudes = []
-        volume_time_starts = []
-        volume_time_ends = []
-        for volume in volumes:
-            all_upper_altitudes.append(volume.volume.altitude_upper.value)
-            all_lower_altitudes.append(volume.volume.altitude_lower.value)
-
-            volume_time_starts.append(arrow.get(volume.time_start.value))
-            volume_time_ends.append(arrow.get(volume.time_end.value))
-
-            geo_json_features = self._convert_volume_to_geojson_feature(volume)
-            self.geo_json["features"] += geo_json_features
-
-        if not volumes:
-            return
-
-        self.time_start = min(volume_time_starts).isoformat()
-        self.time_end = max(volume_time_ends).isoformat()
-        self.upper_altitude = max(all_upper_altitudes)
-        self.lower_altitude = min(all_lower_altitudes)
-
-    def get_volume_bounds(self) -> list[LatLng]:
-        union = unary_union(self.all_volume_features)
-        rect_bounds = union.minimum_rotated_rectangle
-        g_c = []
-        for coord in list(rect_bounds.exterior.coords):
-            ll = LatLng(lat=float(coord[1]), lng=float(coord[0]))
-            g_c.append(asdict(ll))
-        return g_c
-
-    def get_minimum_rotated_rectangle(self) -> BaseGeometry:
-        union = unary_union(self.all_volume_features)
-        return union
-
-    def get_earliest_time_from_volumes(self) -> str:
-        return self.time_start
-
-    def get_latest_time_from_volumes(self) -> str:
-        return self.time_end
-
-    def get_bounds(self) -> list[float]:
-        union = unary_union(self.all_volume_features)
-        rect_bounds = union.bounds
-        return rect_bounds
-
-    def _convert_volume_to_geojson_feature(self, volume: Volume4D):
-        v = asdict(volume)
-        cur_volume = v["volume"]
-        geo_json_features = []
-        if "outline_polygon" in cur_volume.keys():
-            outline_polygon = cur_volume["outline_polygon"]
-            if outline_polygon:
-                point_list = []
-                for vertex in outline_polygon["vertices"]:
-                    p = Point(vertex["lng"], vertex["lat"])
-                    point_list.append(p)
-                outline_polygon = Polygon([[p.x, p.y] for p in point_list])
-                self.all_volume_features.append(outline_polygon)
-                outline_p = shapely.geometry.mapping(outline_polygon)
-
-                polygon_feature = {
-                    "type": "Feature",
-                    "properties": {"max_altitude": volume.volume.altitude_upper.value, "min_altitude": volume.volume.altitude_lower.value},
-                    "geometry": outline_p,
-                }
-                geo_json_features.append(polygon_feature)
-
-        if "outline_circle" in cur_volume.keys():
-            outline_circle = cur_volume["outline_circle"]
-            if outline_circle:
-                circle_radius = outline_circle["radius"]["value"]
-                center_point = Point(outline_circle["center"]["lng"], outline_circle["center"]["lat"])
-                utm_center = self.utm_converter(shapely_shape=center_point)
-                buffered_cicle = utm_center.buffer(circle_radius)
-                converted_circle = self.utm_converter(buffered_cicle, inverse=True)
-                self.all_volume_features.append(converted_circle)
-                outline_c = shapely.geometry.mapping(converted_circle)
-
-                circle_feature = {
-                    "type": "Feature",
-                    "properties": {"max_altitude": volume.volume.altitude_upper.value, "min_altitude": volume.volume.altitude_lower.value},
-                    "geometry": outline_c,
-                }
-
-                geo_json_features.append(circle_feature)
-
-        return geo_json_features
 
 
 class OperationalIntentReferenceHelper:
@@ -398,17 +148,16 @@ class OperationalIntentReferenceHelper:
             flight_operational_intent_details = await fd_repo.get_opint_detail_by_declaration_id(uuid.UUID(operation_id))
             operational_intent_subscribers = await fd_repo.get_subscribers_of_opint_reference(ref_id=flight_operational_intent_reference.id)
 
-        subscribers = []
+        subscribers: list[SubscriberToNotify] = []
         for s in operational_intent_subscribers:
-            all_s = json.loads(s.subscriptions)
-            for cur_s in all_s:
-                sub = SubscriptionState(
+            subscription_states = [
+                SubscriptionState(
                     subscription_id=cur_s["subscription_id"],
                     notification_index=cur_s["notification_index"],
                 )
-                subscribers.append(sub)
-            s_n = SubscriberToNotify(subscriptions=all_s, uss_base_url=s.uss_base_url)
-            subscribers.append(s_n)
+                for cur_s in json.loads(s.subscriptions)
+            ]
+            subscribers.append(SubscriberToNotify(subscriptions=subscription_states, uss_base_url=s.uss_base_url))
 
         volumes = json.loads(flight_operational_intent_details.volumes)
         off_nominal_volumes = json.loads(flight_operational_intent_details.off_nominal_volumes)
@@ -636,7 +385,7 @@ class SCDOperations:
         nearby_operational_intents = []
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = await self.get_auth_token(audience=dss_audience)
+        auth_token = await self.async_get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS query")
             return []
@@ -770,7 +519,7 @@ class SCDOperations:
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
                     uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
-                    uss_auth_token = await self.get_auth_token(audience=uss_audience)
+                    uss_auth_token = await self.async_get_auth_token(audience=uss_audience)
                     logger.info(f"Auth Token {uss_auth_token}")
 
                     uss_headers = {
@@ -835,8 +584,17 @@ class SCDOperations:
 
         return nearby_operational_intents
 
-    async def get_auth_token(self, audience: str = ""):
-        return await asyncio.to_thread(get_dss_auth_token, audience=audience, token_type="scd")  # nosec B106
+    def get_auth_token(self, audience: str = "") -> dict:
+        """Fetch a DSS/peer-USS auth token synchronously.
+
+        This is the patchable seam used by tests; the blocking network call is
+        offloaded to a thread by :meth:`async_get_auth_token` on the async path.
+        """
+        return get_dss_auth_token(audience=audience, token_type="scd")  # nosec B106
+
+    async def async_get_auth_token(self, audience: str = "") -> dict:
+        """Async wrapper around :meth:`get_auth_token` that offloads the blocking call."""
+        return await asyncio.to_thread(self.get_auth_token, audience=audience)
 
     async def delete_operational_intent(self, dss_operational_intent_ref_id: str, ovn: str) -> DeleteOperationalIntentResponse:
         """
@@ -857,7 +615,7 @@ class SCDOperations:
 
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = await self.get_auth_token(audience=dss_audience)
+        auth_token = await self.async_get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS deletion")
             raise HTTPException(
@@ -997,10 +755,6 @@ class SCDOperations:
                 minimum_rotated_rect = Point(0, 0).buffer(0.00001)
                 time_start = uss_op_int_detail.reference.time_start.value
                 time_end = uss_op_int_detail.reference.time_end.value
-            my_volume_converter.convert_volumes_to_geojson(volumes=operational_intent_volumes)
-            time_start = my_volume_converter.get_earliest_time_from_volumes()
-            time_end = my_volume_converter.get_latest_time_from_volumes()
-            minimum_rotated_rect = my_volume_converter.get_minimum_rotated_rectangle()
             cur_op_int_details = OpInttoCheckDetails(
                 shape=minimum_rotated_rect,
                 ovn=uss_op_int_detail.reference.ovn,
@@ -1019,7 +773,7 @@ class SCDOperations:
         audience: str,
     ):
         """This method posts operational intent details to peer USS via a POST request to /uss/v1/operational_intents"""
-        auth_token = await self.get_auth_token(audience=audience)
+        auth_token = await self.async_get_auth_token(audience=audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for peer USS notification")
             raise HTTPException(
@@ -1088,7 +842,7 @@ class SCDOperations:
                 flight_blender_url = settings.FLIGHTBLENDER_FQDN
                 if subscriber.uss_base_url == flight_blender_url or subscriber.uss_base_url.startswith(flight_blender_url + "/"):
                     continue
-                if audience not in ["host.docker.internal", "flight-blender", "flight-blender.localutm"]:
+                if audience not in SELF_NOTIFICATION_AUDIENCES:
                     await self.notify_peer_uss_of_created_updated_operational_intent(
                         uss_base_url=subscriber.uss_base_url,
                         notification_payload=notification_payload,
@@ -1163,33 +917,28 @@ class SCDOperations:
             tentative_flight_plan_processing_response=FlightPlanCurrentStatus.Processing,
         )
 
-        if current_state == "Activated" and new_state == "Activated" and extents_conflict_with_dss_volumes:
+        activated = OperationalIntentState.Activated.value
+        off_nominal_states = (OperationalIntentState.Nonconforming.value, OperationalIntentState.Contingent.value)
+
+        if current_state == activated and new_state == activated and extents_conflict_with_dss_volumes:
             logger.debug("Case B")
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 0
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.B
             should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OkToFly
-
-        elif current_state == "Activated" or new_state in [
-            "Nonconforming",
-            "Contingent",
-        ]:
+        elif current_state == activated or new_state in off_nominal_states:
+            # NOTE: this branch subsumes the former (unreachable) "Case C" for Activated→Activated.
             logger.debug("Case A")
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.A
             should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OffNominal
-        elif current_state == "Activated" and new_state == "Activated":
-            logger.debug("Case C")
-            should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
-            should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.C
-            should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OkToFly
-        elif priority == 100:
+        elif priority == HIGH_PRIORITY_OP_INTENT:
             logger.debug("Case D")
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.D
         else:
             submit_update_payload_to_dss = 0 if extents_conflict_with_dss_volumes else 1
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = submit_update_payload_to_dss
-            if should_opint_be_sent_to_dss:
+            if submit_update_payload_to_dss:
                 should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.E
                 should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.Planned
             else:
@@ -1227,7 +976,7 @@ class SCDOperations:
         """
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = await self.get_auth_token(audience=dss_audience)
+        auth_token = await self.async_get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS update")
             raise HTTPException(
@@ -1292,9 +1041,15 @@ class SCDOperations:
         )
 
         if not pre_submission_checks.should_submit_update_payload_to_dss:
-            raise HTTPException(
-                status_code=409,
-                detail={"message": "Update to flight will not be processed, will not be submitting to DSS"},
+            # Domain decision (not a transport error): Flight Blender will not submit this update to the
+            # DSS. Return a rejection result so the flight-planning layer can answer HTTP 200 with the
+            # appropriate planning_result, per the InterUSS flight-planning interface.
+            logger.info("Update to flight will not be processed, not submitting to DSS")
+            return OperationalIntentUpdateResponse(
+                dss_response=CommonPeer9xxResponse(message="Update not submitted to DSS"),
+                status=OPINT_UPDATE_NOT_SUBMITTED_STATUS,
+                message="Update to flight will not be processed, will not be submitting to DSS",
+                additional_information=pre_submission_checks,
             )
 
         dss_opint_update_url = self.dss_base_url + "dss/v1/operational_intent_references/" + operational_intent_ref_id + "/" + updated_ovn
@@ -1368,7 +1123,7 @@ class SCDOperations:
         """
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = await self.get_auth_token(audience=dss_audience)
+        auth_token = await self.async_get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS operational intent creation")
             raise HTTPException(
@@ -1456,7 +1211,7 @@ class SCDOperations:
 
             is_conflicted_in_time = False
             is_conflicted_in_space = False
-            if priority == 100:
+            if priority == HIGH_PRIORITY_OP_INTENT:
                 deconflicted = True
             else:
                 airspace_keys.append(management_key)
@@ -1478,11 +1233,16 @@ class SCDOperations:
             logger.info("No existing operational intent references in the DSS, deconfliction status: %s" % deconflicted)
 
         if not deconflicted:
-            # When flight is not deconflicted, Flight Blender assigns a error code of 500
+            # Domain rejection (not a transport error): the flight conflicts with existing intents.
+            # Return a conflict result so the flight-planning layer answers HTTP 200 with a Rejected
+            # planning_result, per the InterUSS flight-planning interface.
             logger.info("Flight not deconflicted, there are other flights in the area..")
-            raise HTTPException(
+            return OperationalIntentSubmissionStatus(
+                dss_response=OtherError(notes="Flight not deconflicted, there are other flights in the area"),
+                status=SubmissionResultStatus.ConflictWithFlight.value,
                 status_code=409,
-                detail={"message": "Flight not deconflicted, there are other flights in the area"},
+                message="Flight not deconflicted, there are other flights in the area",
+                operational_intent_id="",
             )
 
         airspace_keys.extend(all_constraint_ovns)
@@ -1527,7 +1287,7 @@ class SCDOperations:
             logger.info("Successfully created operational intent in the DSS")
             logger.debug(f"Response details from the DSS {dss_response}")
             d_r = OperationalIntentSubmissionStatus(
-                status="success",
+                status=SubmissionResultStatus.Success.value,
                 status_code=201,
                 message="Successfully created operational intent in the DSS",
                 dss_response=dss_creation_response,
@@ -1559,12 +1319,6 @@ class DSSAreaClearHandler:
         self.request_id = request_id
 
     async def clear_area_request(self, extent_raw):
-        import arrow  # noqa: PLC0415
-
-        from flight_blender.domain_types.common import OPINT_INDEX_BASEPATH  # noqa: PLC0415
-        from flight_blender.domain_types.scd import ClearAreaResponse, ClearAreaResponseOutcome  # noqa: PLC0415
-        from flight_blender.utils import spatial_rid as rtree_helper  # noqa: PLC0415
-
         my_scd_dss_helper = SCDOperations()
         my_operational_intent_parser = OperationalIntentReferenceHelper()
         volume4D = my_operational_intent_parser.parse_volume_to_volume4D(volume=extent_raw)
@@ -1637,6 +1391,7 @@ class DSSOperationalIntentsCreator:
     """Helper to submit an operational intent to the DSS based on an operation ID."""
 
     def __init__(self, flight_declaration_id: str):
+        # Inline import: flight_declarations_svc imports this module, so a top-level import would be circular.
         from flight_blender.services.flight_declarations_svc import OperationalIntentsConverter  # noqa: PLC0415
 
         self.flight_declaration_id = flight_declaration_id
@@ -1644,7 +1399,6 @@ class DSSOperationalIntentsCreator:
         self.my_operational_intent_reference_helper = OperationalIntentsConverter()
 
     async def validate_flight_declaration_start_end_time(self) -> bool:
-        import arrow  # noqa: PLC0415
 
         async with async_task_session() as db:
             fd_repo = SQLAlchemyFlightDeclarationRepository(db)
@@ -1660,16 +1414,6 @@ class DSSOperationalIntentsCreator:
         return False not in [start_time_ok, end_time_ok]
 
     async def submit_flight_declaration_to_dss(self):
-        import json as _json  # noqa: PLC0415
-
-        from dacite import from_dict  # noqa: PLC0415
-
-        from flight_blender.domain_types.scd import (  # noqa: PLC0415
-            CompositeOperationalIntentPayload,
-            FlightDeclarationOperationalIntentStorageDetails,
-            OperationalIntentUSSDetails,
-        )
-
         fd_id = uuid.UUID(self.flight_declaration_id)
 
         async with async_task_session() as db:
@@ -1683,13 +1427,13 @@ class DSSOperationalIntentsCreator:
             )
 
         current_state = flight_declaration.state
-        operational_intent = _json.loads(flight_declaration.operational_intent)
+        operational_intent = json.loads(flight_declaration.operational_intent)
         operational_intent_data = from_dict(
             data_class=FlightDeclarationOperationalIntentStorageDetails,
             data=operational_intent,
         )
 
-        auth_token = await self.my_scd_dss_helper.get_auth_token()
+        auth_token = await self.my_scd_dss_helper.async_get_auth_token()
 
         if "error" in auth_token:
             logger.error("Error in retrieving auth_token, check if the auth server is running properly, error details displayed above")
@@ -1744,14 +1488,15 @@ class DSSOperationalIntentsCreator:
                             payload=composite_operational_intent_data,
                         )
                     logger.info("Updating state from Processing to Accepted...")
-                    await fd_repo.update(fd_id, state=1)
+                    await fd_repo.update(fd_id, state=OperationStateCode.Accepted)
                     await fd_repo.add_state_history_entry(
                         flight_declaration_id=fd_id,
                         original_state=current_state,
-                        new_state=1,
+                        new_state=OperationStateCode.Accepted,
                         notes="Operational Intent successfully submitted to DSS and is Accepted",
                     )
                 if op_int_submission_result.constraints:
+                    # Inline import: scd_svc imports this module, so a top-level import would be circular.
                     from flight_blender.services.scd_svc import ConstraintsWriter  # noqa: PLC0415
 
                     async with async_task_session() as db:
@@ -1761,21 +1506,8 @@ class DSSOperationalIntentsCreator:
                             flight_declaration=flight_declaration,
                             constraints=op_int_submission_result.constraints,
                         )
-            elif op_int_submission_result.status_code in [400, 409, 401, 403, 412, 413, 429]:
-                if op_int_submission_result.status_code == 400:
-                    notes = "Error during submission of operational intent, the DSS rejected because one or more parameters was missing"
-                elif op_int_submission_result.status_code == 409:
-                    notes = "Error during submission of operational intent, the DSS rejected it with because the latest airspace keys was not present"
-                elif op_int_submission_result.status_code == 401:
-                    notes = "There was a error in submitting the operational intent to the DSS, the token was invalid"
-                elif op_int_submission_result.status_code == 403:
-                    notes = "There was a error in submitting the operational intent to the DSS, the appropriate scope was not present"
-                elif op_int_submission_result.status_code == 413:
-                    notes = "There was a error in submitting the operational intent to the DSS, the operational intent was too large"
-                elif op_int_submission_result.status_code == 429:
-                    notes = "There was a error in submitting the operational intent to the DSS, too many requests were submitted to the DSS"
-                else:
-                    notes = "Unknown error during submission"
+            elif op_int_submission_result.status_code in _DSS_SUBMISSION_REJECTION_CODES:
+                notes = _DSS_SUBMISSION_REJECTION_NOTES.get(op_int_submission_result.status_code, "Unknown error during submission")
                 logger.info(
                     "There was a error in submitting the operational intent to the DSS, the DSS rejected our submission with a {status_code} response code".format(
                         status_code=op_int_submission_result.status_code
@@ -1783,30 +1515,28 @@ class DSSOperationalIntentsCreator:
                 )
                 async with async_task_session() as db:
                     fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-                    await fd_repo.update(fd_id, state=8)
+                    await fd_repo.update(fd_id, state=OperationStateCode.Rejected)
                     await fd_repo.add_state_history_entry(
                         flight_declaration_id=fd_id,
                         original_state=current_state,
-                        new_state=8,
+                        new_state=OperationStateCode.Rejected,
                         notes=notes,
                     )
-            elif op_int_submission_result.status_code == 500 and op_int_submission_result.message == "conflict_with_flight":
+            elif op_int_submission_result.status_code == 500 and op_int_submission_result.message == SubmissionResultStatus.ConflictWithFlight.value:
                 logger.info("Flight is not deconflicted, updating state from Processing to Rejected ..")
                 async with async_task_session() as db:
                     fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-                    await fd_repo.update(fd_id, state=8)
+                    await fd_repo.update(fd_id, state=OperationStateCode.Rejected)
                     await fd_repo.add_state_history_entry(
                         flight_declaration_id=fd_id,
                         original_state=current_state,
-                        new_state=8,
+                        new_state=OperationStateCode.Rejected,
                         notes="Flight was not deconflicted correctly",
                     )
 
         return op_int_submission_result
 
     def notify_peer_uss(self, uss_base_url: str, notification_payload):
-        import tldextract  # noqa: PLC0415
-
         my_scd_dss_helper = SCDOperations()
         try:
             ext = tldextract.extract(uss_base_url)
@@ -1835,9 +1565,6 @@ class SCDTestHarnessHelper:
     """Used in the SCD Test harness to include transformations."""
 
     def __init__(self, fd_repo: SQLAlchemyFlightDeclarationRepository):
-        from flight_blender.auth.token_cache import get_redis  # noqa: PLC0415
-        from flight_blender.utils import spatial_rid as rtree_helper  # noqa: PLC0415
-
         self.my_operational_intent_helper = OperationalIntentReferenceHelper()
         self.r = get_redis()
         self.my_volumes_converter = VolumesConverter()

@@ -17,9 +17,9 @@ import pytest
 from fastapi import HTTPException
 
 import flight_blender.clients.dss_scd_client as dss_helper
-from flight_blender.clients.dss_scd_client import (
+from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper
+from flight_blender.utils.scd_helpers import (
     FlightPlanningDataValidator,
-    OperationalIntentReferenceHelper,
     OperationalIntentValidator,
     PeerOperationalIntentValidator,
     VolumesConverter,

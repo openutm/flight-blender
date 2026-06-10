@@ -148,8 +148,8 @@ class TestFlightPlanUpsert:
             json={},
             headers=fastapi_auth_header(SCD_PLAN_SCOPE),
         )
-        # Missing required fields — view raises KeyError → 500
-        assert resp.status_code == 500
+        # Missing required nested fields — client payload error → 400
+        assert resp.status_code == 400
         assert "result" in resp.json()
 
     def test_upsert_flight_plan_invalid_serial_number(self, mounted_sync_client):
@@ -254,7 +254,7 @@ class TestFlightPlanUpsertDSSPaths:
         def raise_dss_timeout(self, **kwargs):
             raise HTTPException(status_code=504, detail={"message": "DSS request timed out"})
 
-        monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+        monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
         monkeypatch.setattr(dss_helper.SCDOperations, "create_and_submit_operational_intent_reference", raise_dss_timeout)
         monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
 
