@@ -1,14 +1,12 @@
-import json
 import uuid
 
 import arrow
-from tests.conftest import (
-    fastapi_auth_header,
-    SCD_INJECT_SCOPE,
-    SCD_PLAN_SCOPE,
-    SCD_TEST_SCOPE,
-)
-from tests.fakes import VALID_UAS_SERIAL_NUMBER, VALID_OPERATOR_ID
+from fastapi import HTTPException
+
+import flight_blender.clients.dss_scd_client as dss_helper
+from tests import fakes
+from tests.conftest import SCD_INJECT_SCOPE, SCD_PLAN_SCOPE, SCD_TEST_SCOPE, fastapi_auth_header
+from tests.fakes import VALID_OPERATOR_ID, VALID_UAS_SERIAL_NUMBER
 
 
 def _scd_flight_plan_payload(uas_serial_number="ABCD5EFGHJ", operator_id="INVALID-OP"):
@@ -99,6 +97,7 @@ class TestFlightPlanningClearArea:
             headers=fastapi_auth_header(SCD_TEST_SCOPE),
         )
         assert resp.status_code == 400
+        assert "result" in resp.json()
 
     def test_clear_area_valid_payload(self, mounted_sync_client):
         now = arrow.now()
@@ -151,6 +150,7 @@ class TestFlightPlanUpsert:
         )
         # Missing required fields — view raises KeyError → 500
         assert resp.status_code == 500
+        assert "result" in resp.json()
 
     def test_upsert_flight_plan_invalid_serial_number(self, mounted_sync_client):
         """Valid payload structure but short/invalid serial → not_planned (200)."""
@@ -249,3 +249,47 @@ class TestFlightPlanUpsertDSSPaths:
         data = resp.json()
         assert data["planning_result"] in ("NotPlanned", "Failed", "Rejected")
 
+    def test_upsert_dss_http_exception_uses_handler(self, mounted_sync_client, monkeypatch):
+        """Fatal DSS transport errors propagate through the FastAPI exception handler."""
+        def raise_dss_timeout(self, **kwargs):
+            raise HTTPException(status_code=504, detail={"message": "DSS request timed out"})
+
+        monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+        monkeypatch.setattr(dss_helper.SCDOperations, "create_and_submit_operational_intent_reference", raise_dss_timeout)
+        monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+
+        plan_id = str(uuid.uuid4())
+        resp = mounted_sync_client.put(
+            f"/scd/flight_planning/flight_plans/{plan_id}",
+            json=self._valid_payload(),
+            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
+        )
+
+        assert resp.status_code == 504
+        assert resp.json() == {"message": "DSS request timed out"}
+
+
+class TestFlightPlanningUserNotifications:
+    def test_user_notifications_missing_after_is_validation_error(self, mounted_sync_client):
+        resp = mounted_sync_client.get(
+            "/scd/flight_planning/user_notifications",
+            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
+        )
+        assert resp.status_code == 422
+
+    def test_user_notifications_invalid_after_is_validation_error(self, mounted_sync_client):
+        resp = mounted_sync_client.get(
+            "/scd/flight_planning/user_notifications?after=not-a-date",
+            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
+        )
+        assert resp.status_code == 422
+
+    def test_user_notifications_valid_after_returns_list(self, mounted_sync_client):
+        resp = mounted_sync_client.get(
+            "/scd/flight_planning/user_notifications?after=2025-01-01T00:00:00Z",
+            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "user_notifications" in data
+        assert isinstance(data["user_notifications"], list)

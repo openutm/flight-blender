@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import arrow
 import pytest
+from fastapi import HTTPException
 
 from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator
 from flight_blender.domain_types.scd import OperationalIntentSubmissionStatus, OtherError
@@ -126,9 +127,10 @@ class TestDSSOperationalIntentsCreatorSubmit:
     async def test_not_found_returns_declaration_not_found(self):
         creator = DSSOperationalIntentsCreator(flight_declaration_id=str(uuid.uuid4()))
         with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=None):
-            result = await creator.submit_flight_declaration_to_dss()
-        assert result.status == "declaration_not_found"
-        assert result.status_code == 404
+            with pytest.raises(HTTPException) as exc_info:
+                await creator.submit_flight_declaration_to_dss()
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == {"message": "Flight Declaration with ID %s not found in the database" % creator.flight_declaration_id}
 
     @pytest.mark.asyncio
     async def test_auth_error_returns_auth_server_error(self):
@@ -138,9 +140,10 @@ class TestDSSOperationalIntentsCreatorSubmit:
             with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"error": "conn_error"}):
                 with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.update", new_callable=AsyncMock):
                     with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.add_state_history_entry", new_callable=AsyncMock):
-                        result = await creator.submit_flight_declaration_to_dss()
-        assert result.status == "auth_server_error"
-        assert result.status_code == 500
+                        with pytest.raises(HTTPException) as exc_info:
+                            await creator.submit_flight_declaration_to_dss()
+        assert exc_info.value.status_code == 500
+        assert exc_info.value.detail == {"message": "Error in getting a token from the Auth server"}
 
     @pytest.mark.asyncio
     async def test_successful_submission_updates_state(self):

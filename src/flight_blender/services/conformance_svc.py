@@ -366,7 +366,7 @@ class FlightOperationConformanceHelper:
         dss_operational_intent_ref_id = str(flight_operational_intent_reference.id)
         stored_ovn = flight_operational_intent_reference.ovn
         if not dry_run:
-            operation_removal_status = my_scd_dss_helper.delete_operational_intent(
+            operation_removal_status = await my_scd_dss_helper.delete_operational_intent(
                 dss_operational_intent_ref_id=dss_operational_intent_ref_id,
                 ovn=stored_ovn,
             )

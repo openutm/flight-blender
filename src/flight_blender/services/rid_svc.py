@@ -269,12 +269,6 @@ class RIDAircraftPosition:
 
 
 @dataclass
-class AuthData:
-    format: int
-    data: str | None = ""
-
-
-@dataclass
 class OperatorAltitude:
     altitude: int
     altitude_type: str

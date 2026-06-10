@@ -1,13 +1,15 @@
+import asyncio
 import json
 import uuid
 from dataclasses import asdict
 from datetime import datetime
+from typing import Any
 
 import arrow
-import requests
+import httpx
 import shapely.geometry
 import tldextract
-import urllib3
+from fastapi import HTTPException
 from loguru import logger
 from pyproj import Proj
 from shapely.geometry import Point, Polygon
@@ -26,7 +28,6 @@ from flight_blender.domain_types.scd import (
     Circle,
     CommonDSS2xxResponse,
     CommonDSS4xxResponse,
-    CommonPeer9xxResponse,
     DeleteOperationalIntentConstuctor,
     DeleteOperationalIntentResponse,
     DeleteOperationalIntentResponseSuccess,
@@ -40,18 +41,15 @@ from flight_blender.domain_types.scd import (
     OperationalIntentReference,
     OperationalIntentReferenceDSSResponse,
     OperationalIntentStorage,
-    OperationalIntentSubmissionError,
     OperationalIntentSubmissionStatus,
     OperationalIntentSubmissionSuccess,
     OperationalIntentTestInjection,
-    OperationalIntentUpdateErrorResponse,
     OperationalIntentUpdateRequest,
     OperationalIntentUpdateResponse,
     OperationalIntentUpdateSuccessResponse,
     OperationalIntentUSSDetails,
     OpInttoCheckDetails,
     OpIntUpdateCheckResultCodes,
-    OtherError,
     QueryOperationalIntentPayload,
     Radius,
     ShouldSendtoDSSProcessingResponse,
@@ -67,6 +65,29 @@ from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepo
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.utils import spatial_rid as rtree_helper
 from flight_blender.utils.json_codecs import LazyEncoder
+
+HTTP_TIMEOUT_SECONDS = 30.0
+
+
+def _json_from_response(response: httpx.Response, endpoint: str) -> dict:
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail={"message": f"Invalid JSON response from {endpoint}"}) from exc
+
+
+def _http_exception_from_request_error(exc: httpx.RequestError, endpoint: str) -> HTTPException:
+    if isinstance(exc, httpx.TimeoutException):
+        return HTTPException(status_code=504, detail={"message": f"Request to {endpoint} timed out"})
+    return HTTPException(status_code=502, detail={"message": f"Request to {endpoint} failed: {exc}"})
+
+
+async def _async_request(method: str, endpoint: str, **kwargs: Any) -> httpx.Response:
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+            return await client.request(method, endpoint, **kwargs)
+    except httpx.RequestError as exc:
+        raise _http_exception_from_request_error(exc, endpoint) from exc
 
 
 def is_time_within_time_period(start_time: datetime, end_time: datetime, time_to_check: datetime):
@@ -450,7 +471,7 @@ class OperationalIntentReferenceHelper:
         )
         return stored
 
-    async def parse_and_load_stored_flight_operational_intent_reference(self, operation_id: str) -> OperationalIntentDetailsUSSResponse | None:
+    async def parse_and_load_stored_flight_operational_intent_reference(self, operation_id: str) -> OperationalIntentDetailsUSSResponse:
         """
         Given a stored flight operational intent, get the details of the operational intent
         """
@@ -615,7 +636,7 @@ class SCDOperations:
         nearby_operational_intents = []
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = self.get_auth_token(audience=dss_audience)
+        auth_token = await self.get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS query")
             return []
@@ -636,51 +657,43 @@ class SCDOperations:
             area_of_interest = QueryOperationalIntentPayload(area_of_interest=volume)
             logger.info("Querying DSS for operational intents in the area..")
             logger.debug(f"Area of interest {json.dumps(asdict(area_of_interest))}")
-            try:
-                operational_intent_ref_response = requests.post(
-                    query_op_int_url,
-                    json=json.loads(json.dumps(asdict(area_of_interest))),
-                    headers=headers,
-                    timeout=30,
-                )
-            except Exception as re:
-                logger.error("Error in getting operational intent for the volume %s " % re)
+            operational_intent_ref_response = await _async_request(
+                "POST",
+                query_op_int_url,
+                json=json.loads(json.dumps(asdict(area_of_interest))),
+                headers=headers,
+            )
+            # The DSS returned operational intent references as a list
+            dss_operational_intent_references = _json_from_response(operational_intent_ref_response, query_op_int_url)
+            logger.debug(f"DSS Response {dss_operational_intent_references}")
+            if "operational_intent_references" in dss_operational_intent_references:
+                operational_intent_references = dss_operational_intent_references["operational_intent_references"]
             else:
-                # The DSS returned operational intent references as a list
-                dss_operational_intent_references = operational_intent_ref_response.json()
-                logger.debug(f"DSS Response {dss_operational_intent_references}")
-                if "operational_intent_references" in dss_operational_intent_references:
-                    operational_intent_references = dss_operational_intent_references["operational_intent_references"]
-                else:
-                    logger.error("DSS query did not return operational_intent_references: %s" % dss_operational_intent_references)
-                    operational_intent_references = []
+                logger.error("DSS query did not return operational_intent_references: %s" % dss_operational_intent_references)
+                operational_intent_references = []
 
             # Query the operational intent reference details
             for operational_intent_reference_detail in operational_intent_references:
                 # Get the USS URL endpoint
                 dss_op_int_details_url = self.dss_base_url + "dss/v1/operational_intent_references/" + operational_intent_reference_detail["id"]
                 # get new auth token for USS
-                try:
-                    op_int_uss_details = requests.get(dss_op_int_details_url, headers=headers, timeout=30)
-                except Exception as e:
-                    logger.error("Error in getting operational intent details %s" % e)
-                else:
-                    operational_intent_reference = op_int_uss_details.json()
-                    o_i_r = operational_intent_reference["operational_intent_reference"]
-                    o_i_r_formatted = OperationalIntentReferenceDSSResponse(
-                        id=o_i_r["id"],
-                        manager=o_i_r["manager"],
-                        uss_availability=o_i_r["uss_availability"],
-                        version=o_i_r["version"],
-                        state=o_i_r["state"],
-                        ovn=o_i_r["ovn"],
-                        time_start=o_i_r["time_start"],
-                        time_end=o_i_r["time_end"],
-                        uss_base_url=o_i_r["uss_base_url"],
-                        subscription_id=o_i_r["subscription_id"],
-                    )
-                    # if o_i_r_formatted.uss_base_url != flight_blender_base_url:
-                    all_uss_operational_intent_details.append(o_i_r_formatted)
+                op_int_uss_details = await _async_request("GET", dss_op_int_details_url, headers=headers)
+                operational_intent_reference = _json_from_response(op_int_uss_details, dss_op_int_details_url)
+                o_i_r = operational_intent_reference["operational_intent_reference"]
+                o_i_r_formatted = OperationalIntentReferenceDSSResponse(
+                    id=o_i_r["id"],
+                    manager=o_i_r["manager"],
+                    uss_availability=o_i_r["uss_availability"],
+                    version=o_i_r["version"],
+                    state=o_i_r["state"],
+                    ovn=o_i_r["ovn"],
+                    time_start=o_i_r["time_start"],
+                    time_end=o_i_r["time_end"],
+                    uss_base_url=o_i_r["uss_base_url"],
+                    subscription_id=o_i_r["subscription_id"],
+                )
+                # if o_i_r_formatted.uss_base_url != flight_blender_base_url:
+                all_uss_operational_intent_details.append(o_i_r_formatted)
 
             for current_uss_operational_intent_detail in all_uss_operational_intent_details:
                 logger.info("All Operational intents in the area..")
@@ -757,7 +770,7 @@ class SCDOperations:
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
                     uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
-                    uss_auth_token = self.get_auth_token(audience=uss_audience)
+                    uss_auth_token = await self.get_auth_token(audience=uss_audience)
                     logger.info(f"Auth Token {uss_auth_token}")
 
                     uss_headers = {
@@ -768,65 +781,31 @@ class SCDOperations:
                     uss_operational_intent_url = current_uss_base_url + "/uss/v1/operational_intents/" + current_uss_operational_intent_detail.id
 
                     logger.debug(f"Querying USS: {current_uss_base_url}")
-                    try:
-                        uss_operational_intent_request = requests.get(uss_operational_intent_url, headers=uss_headers, timeout=30)
-                    except urllib3.exceptions.NameResolutionError:
-                        logger.warning(
-                            "Could not resolve peer USS host at {uss_base_url}, skipping".format(
-                                uss_base_url=current_uss_base_url,
-                            )
-                        )
-                        continue
+                    uss_operational_intent_request = await _async_request("GET", uss_operational_intent_url, headers=uss_headers)
 
-                    except (
-                        requests.exceptions.ConnectTimeout,
-                        requests.exceptions.HTTPError,
-                        requests.exceptions.ReadTimeout,
-                        requests.exceptions.Timeout,
-                        requests.exceptions.ConnectionError,
-                    ) as e:
-                        logger.error("Connection error details..")
-                        logger.error(e)
-                        logger.error(
-                            "Error in getting operational intent id {uss_op_int_id} details from uss with base url {uss_base_url}".format(
-                                uss_op_int_id=current_uss_operational_intent_detail.id,
-                                uss_base_url=current_uss_base_url,
-                            )
-                        )
-                        op_int_details_retrieved = False
-                        logger.warning(
-                            "Could not reach peer USS at {uss_base_url}, skipping its operational intent {uss_op_int_id}".format(
-                                uss_op_int_id=current_uss_operational_intent_detail.id,
-                                uss_base_url=current_uss_base_url,
-                            )
-                        )
-                        continue
+                    # Verify status of the response from the USS
+                    if uss_operational_intent_request.status_code == 200:
+                        # Request was successful
+                        operational_intent_details_json = _json_from_response(uss_operational_intent_request, uss_operational_intent_url)
+                        op_int_details_retrieved = True
+                        # outline_polygon = None
+                        # outline_circle = None
 
+                        op_int_det = operational_intent_details_json["operational_intent"]["details"]
+                        op_int_ref = operational_intent_details_json["operational_intent"]["reference"]
+                    # The attempt to get data from the USS in the network failed
                     else:
-                        # Verify status of the response from the USS
-                        if uss_operational_intent_request.status_code == 200:
-                            # Request was successful
-                            operational_intent_details_json = uss_operational_intent_request.json()
-                            op_int_details_retrieved = True
-                            # outline_polygon = None
-                            # outline_circle = None
-
-                            op_int_det = operational_intent_details_json["operational_intent"]["details"]
-                            op_int_ref = operational_intent_details_json["operational_intent"]["reference"]
-                        # The attempt to get data from the USS in the network failed
-                        elif uss_operational_intent_request.status_code in [
-                            401,
-                            400,
-                            404,
-                            500,
-                        ]:
-                            logger.debug(f"Response: {uss_operational_intent_request.json()}")
-                            logger.error(
-                                "Error in querying peer USS about operational intent (ID: {uss_op_int_id}) details from uss with base url {uss_base_url}".format(
-                                    uss_op_int_id=current_uss_operational_intent_detail.id,
-                                    uss_base_url=current_uss_base_url,
-                                )
+                        logger.debug(f"Response: {_json_from_response(uss_operational_intent_request, uss_operational_intent_url)}")
+                        logger.error(
+                            "Error in querying peer USS about operational intent (ID: {uss_op_int_id}) details from uss with base url {uss_base_url}".format(
+                                uss_op_int_id=current_uss_operational_intent_detail.id,
+                                uss_base_url=current_uss_base_url,
                             )
+                        )
+                        raise HTTPException(
+                            status_code=uss_operational_intent_request.status_code,
+                            detail={"message": "Error in querying peer USS operational intent details"},
+                        )
 
                 if op_int_details_retrieved:
                     op_int_reference: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
@@ -856,10 +835,10 @@ class SCDOperations:
 
         return nearby_operational_intents
 
-    def get_auth_token(self, audience: str = ""):
-        return get_dss_auth_token(audience=audience, token_type="scd")  # nosec B106
+    async def get_auth_token(self, audience: str = ""):
+        return await asyncio.to_thread(get_dss_auth_token, audience=audience, token_type="scd")  # nosec B106
 
-    def delete_operational_intent(self, dss_operational_intent_ref_id: str, ovn: str) -> DeleteOperationalIntentResponse:
+    async def delete_operational_intent(self, dss_operational_intent_ref_id: str, ovn: str) -> DeleteOperationalIntentResponse:
         """
         Deletes an operational intent from the DSS (Discovery and Synchronization Service).
         Args:
@@ -878,15 +857,12 @@ class SCDOperations:
 
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = self.get_auth_token(audience=dss_audience)
+        auth_token = await self.get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS deletion")
-            return DeleteOperationalIntentResponse(
-                dss_response=DeleteOperationalIntentResponseSuccess(
-                    subscribers=[],
-                    operational_intent_reference={},
-                ),
-                status=401,
+            raise HTTPException(
+                status_code=401,
+                detail={"message": "Failed to get auth token for DSS deletion"},
             )
 
         dss_opint_delete_url = self.dss_base_url + "dss/v1/operational_intent_references/" + dss_operational_intent_ref_id + "/" + ovn
@@ -898,14 +874,14 @@ class SCDOperations:
         # Send the entity ID and OVN
         delete_payload = DeleteOperationalIntentConstuctor(entity_id=dss_operational_intent_ref_id, ovn=ovn)
 
-        dss_r = requests.delete(
+        dss_r = await _async_request(
+            "DELETE",
             dss_opint_delete_url,
             json=json.loads(json.dumps(asdict(delete_payload))),
             headers=headers,
-            timeout=30,
         )
 
-        dss_response = dss_r.json()
+        dss_response = _json_from_response(dss_r, dss_opint_delete_url)
         dss_request_status_code = dss_r.status_code
 
         if dss_request_status_code == 200:
@@ -914,28 +890,21 @@ class SCDOperations:
                 subscribers=dss_response["subscribers"],
                 operational_intent_reference=dss_response["operational_intent_reference"],
             )
-            delete_op_int_status = DeleteOperationalIntentResponse(
+            return DeleteOperationalIntentResponse(
                 dss_response=dss_response_formatted,
                 status=200,
                 message=common_200_response,
             )
-        elif dss_request_status_code == 404:
-            common_400_response = CommonDSS4xxResponse(message="URL endpoint not found")
-            delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=404, message=common_400_response)
 
-        elif dss_request_status_code == 409:
-            common_400_response = CommonDSS4xxResponse(message="The provided ovn does not match the current version of existing operational intent")
-            delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=409, message=common_400_response)
-
-        elif dss_request_status_code == 412:
-            common_400_response = CommonDSS4xxResponse(
-                message="The client attempted to delete the operational intent while marked as Down in the DSS"
-            )
-            delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=412, message=common_400_response)
-        else:
-            common_400_response = CommonDSS4xxResponse(message="A error occurred while deleting the operational intent")
-            delete_op_int_status = DeleteOperationalIntentResponse(dss_response=dss_response, status=500, message=common_400_response)
-        return delete_op_int_status
+        messages = {
+            404: "URL endpoint not found",
+            409: "The provided ovn does not match the current version of existing operational intent",
+            412: "The client attempted to delete the operational intent while marked as Down in the DSS",
+        }
+        raise HTTPException(
+            status_code=dss_request_status_code,
+            detail={"message": messages.get(dss_request_status_code, "A error occurred while deleting the operational intent")},
+        )
 
     async def get_and_process_nearby_operational_intents(self, volumes: list[Volume4D]) -> dict | bool:
         """This method processes the downloaded operational intents in to a GeoJSON object"""
@@ -1043,19 +1012,19 @@ class SCDOperations:
 
         return all_opints_to_check
 
-    def notify_peer_uss_of_created_updated_operational_intent(
+    async def notify_peer_uss_of_created_updated_operational_intent(
         self,
         uss_base_url: str,
         notification_payload: NotifyPeerUSSPostPayload,
         audience: str,
     ):
         """This method posts operational intent details to peer USS via a POST request to /uss/v1/operational_intents"""
-        auth_token = self.get_auth_token(audience=audience)
+        auth_token = await self.get_auth_token(audience=audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for peer USS notification")
-            return USSNotificationResponse(
-                status=401,
-                message=CommonDSS4xxResponse(message="Failed to get auth token for peer USS notification"),
+            raise HTTPException(
+                status_code=401,
+                detail={"message": "Failed to get auth token for peer USS notification"},
             )
 
         # ASTM path is /uss/v1/operational_intents (POST)
@@ -1065,24 +1034,12 @@ class SCDOperations:
             "Authorization": "Bearer " + auth_token["access_token"],
         }
 
-        try:
-            uss_r = requests.post(
-                notification_url,
-                json=json.loads(json.dumps(asdict(notification_payload))),
-                headers=headers,
-                timeout=30,
-            )
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, urllib3.exceptions.NameResolutionError) as e:
-            logger.warning(
-                "Could not reach peer USS at {endpoint} for notification: {error}".format(
-                    endpoint=notification_url,
-                    error=e,
-                )
-            )
-            return USSNotificationResponse(
-                status=408,
-                message=CommonDSS4xxResponse(message="Peer USS unreachable"),
-            )
+        uss_r = await _async_request(
+            "POST",
+            notification_url,
+            json=json.loads(json.dumps(asdict(notification_payload))),
+            headers=headers,
+        )
 
         uss_r_status_code = uss_r.status_code
 
@@ -1090,18 +1047,21 @@ class SCDOperations:
             result_message = CommonDSS2xxResponse(message="Notified successfully")
             logger.info("Peer USS notified successfully")
         else:
-            result_message = CommonDSS4xxResponse(message="Error in notification")
             logger.info(
                 "Error in notifying peer USS at {endpoint}, the request resulted in a {uss_r_status_code} response from the peer".format(
                     endpoint=notification_url, uss_r_status_code=uss_r_status_code
                 )
+            )
+            raise HTTPException(
+                status_code=uss_r_status_code,
+                detail={"message": "Error in notification"},
             )
 
         notification_result = USSNotificationResponse(status=uss_r_status_code, message=result_message)
 
         return notification_result
 
-    def process_peer_uss_notifications(
+    async def process_peer_uss_notifications(
         self,
         all_subscribers: list[SubscriberToNotify],
         operational_intent_details: OperationalIntentUSSDetails,
@@ -1129,7 +1089,7 @@ class SCDOperations:
                 if subscriber.uss_base_url == flight_blender_url or subscriber.uss_base_url.startswith(flight_blender_url + "/"):
                     continue
                 if audience not in ["host.docker.internal", "flight-blender", "flight-blender.localutm"]:
-                    self.notify_peer_uss_of_created_updated_operational_intent(
+                    await self.notify_peer_uss_of_created_updated_operational_intent(
                         uss_base_url=subscriber.uss_base_url,
                         notification_payload=notification_payload,
                         audience=audience,
@@ -1250,7 +1210,7 @@ class SCDOperations:
         ovn: str,
         deconfliction_check=False,
         priority: int = 0,
-    ) -> OperationalIntentUpdateResponse | None:
+    ) -> OperationalIntentUpdateResponse:
         """
         Update a specified operational intent reference in the DSS.
         Args:
@@ -1263,17 +1223,16 @@ class SCDOperations:
             deconfliction_check (bool, optional): Flag to indicate if deconfliction check is required. Defaults to False.
             priority (int, optional): The priority of the update. Defaults to 0.
         Returns:
-            Optional[OperationalIntentUpdateResponse]: The response of the update operation, or None if the update is not submitted.
+            OperationalIntentUpdateResponse: The response of the update operation, or None if the update is not submitted.
         """
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = self.get_auth_token(audience=dss_audience)
+        auth_token = await self.get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS update")
-            return OperationalIntentUpdateResponse(
-                dss_response=None,
-                status=401,
-                message="Failed to get auth token for DSS update",
+            raise HTTPException(
+                status_code=401,
+                detail={"message": "Failed to get auth token for DSS update"},
             )
         logger.info(f"Updating operational intent reference: {operational_intent_ref_id}")
         flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
@@ -1289,20 +1248,18 @@ class SCDOperations:
         # Get the latest airspace volumes
         try:
             current_network_opint_details_full = await self.get_latest_airspace_volumes(volumes=extents)
-        except ValueError:
-            # Update unsuccessful, problems with processing peer USS volumes
-            d_r = CommonPeer9xxResponse(message="Error in validating received operational intents from peer USS")
-            message = "Error in updating operational intent in the DSS, peer USS shared invalid data"
-            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=999, message=message)
-            return opint_update_result
-        except ConnectionError:
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"message": "Error in updating operational intent in the DSS, peer USS shared invalid data"},
+            ) from exc
+        except ConnectionError as exc:
             logger.info("Raising Connection Error 3")
             logger.info("Connection error with peer USS, cannot update volume...")
-            # Update unsuccessful, problems with processing peer USS volumes
-            d_r = CommonPeer9xxResponse(message="Error in validating received operational intents from peer USS")
-            message = "Error in updating operational intent in the DSS, peer USS shared invalid data"
-            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=408, message=message)
-            return opint_update_result
+            raise HTTPException(
+                status_code=504,
+                detail={"message": "Error in updating operational intent in the DSS, peer USS unavailable"},
+            ) from exc
         all_existing_operational_intent_details = self.process_retrieved_airspace_volumes(
             current_network_opint_details_full=current_network_opint_details_full,
             operational_intent_ref_id=operational_intent_ref_id,
@@ -1335,16 +1292,10 @@ class SCDOperations:
         )
 
         if not pre_submission_checks.should_submit_update_payload_to_dss:
-            d_r = None
-            dss_request_status_code = 999
-            message = "Update to flight will not be processed, will not be submitting to DSS"
-            opint_update_result = OperationalIntentUpdateResponse(
-                dss_response=d_r,
-                status=dss_request_status_code,
-                message=message,
-                additional_information=pre_submission_checks,
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "Update to flight will not be processed, will not be submitting to DSS"},
             )
-            return opint_update_result
 
         dss_opint_update_url = self.dss_base_url + "dss/v1/operational_intent_references/" + operational_intent_ref_id + "/" + updated_ovn
         headers = {
@@ -1353,52 +1304,48 @@ class SCDOperations:
         }
 
         flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
-        dss_r = requests.put(
+        dss_r = await _async_request(
+            "PUT",
             dss_opint_update_url,
             json=json.loads(json.dumps(asdict(operational_intent_update_payload), cls=LazyEncoder)),
             headers=headers,
-            timeout=30,
         )
-        dss_response = dss_r.json()
+        dss_response = _json_from_response(dss_r, dss_opint_update_url)
         dss_request_status_code = dss_r.status_code
-
-        if dss_request_status_code == 200:
-            # Update request was successful, notify the subscribers
-            subscribers = dss_response["subscribers"]
-            all_subscribers: list[SubscriberToNotify] = []
-            for subscriber in subscribers:
-                subscriptions = subscriber["subscriptions"]
-                uss_base_url = subscriber["uss_base_url"]
-                if uss_base_url != flight_blender_base_url and not uss_base_url.startswith(flight_blender_base_url + "/"):
-                    all_subscription_states: list[SubscriptionState] = []
-                    for subscription in subscriptions:
-                        s_state = SubscriptionState(
-                            subscription_id=subscription["subscription_id"],
-                            notification_index=subscription["notification_index"],
-                        )
-                        all_subscription_states.append(s_state)
-                    subscriber_obj = SubscriberToNotify(subscriptions=all_subscription_states, uss_base_url=uss_base_url)
-                    all_subscribers.append(subscriber_obj)
-            my_op_int_ref_helper = OperationalIntentReferenceHelper()
-            operational_intent_reference: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
-                operational_intent_reference=dss_response["operational_intent_reference"]
+        if dss_r.status_code != 200:
+            raise HTTPException(
+                status_code=dss_request_status_code,
+                detail={"message": dss_response.get("message", "Error in updating operational intent in the DSS")},
             )
-            d_r = OperationalIntentUpdateSuccessResponse(
-                subscribers=all_subscribers,
-                operational_intent_reference=operational_intent_reference,
-            )
-            logger.info("Updated Operational Intent in the DSS successfully...")
+        # Update request was successful, notify the subscribers
+        subscribers = dss_response["subscribers"]
+        all_subscribers: list[SubscriberToNotify] = []
+        for subscriber in subscribers:
+            subscriptions = subscriber["subscriptions"]
+            uss_base_url = subscriber["uss_base_url"]
+            if uss_base_url != flight_blender_base_url and not uss_base_url.startswith(flight_blender_base_url + "/"):
+                all_subscription_states: list[SubscriptionState] = []
+                for subscription in subscriptions:
+                    s_state = SubscriptionState(
+                        subscription_id=subscription["subscription_id"],
+                        notification_index=subscription["notification_index"],
+                    )
+                    all_subscription_states.append(s_state)
+                subscriber_obj = SubscriberToNotify(subscriptions=all_subscription_states, uss_base_url=uss_base_url)
+                all_subscribers.append(subscriber_obj)
+        my_op_int_ref_helper = OperationalIntentReferenceHelper()
+        operational_intent_reference: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
+            operational_intent_reference=dss_response["operational_intent_reference"]
+        )
+        d_r = OperationalIntentUpdateSuccessResponse(
+            subscribers=all_subscribers,
+            operational_intent_reference=operational_intent_reference,
+        )
+        logger.info("Updated Operational Intent in the DSS successfully...")
 
-            message = CommonDSS4xxResponse(message="Successfully updated operational intent")
-            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_request_status_code, message=message)
-            return opint_update_result
-
-        elif dss_request_status_code in [400, 401, 403, 409, 412, 413, 429]:
-            # Update unsuccessful
-            d_r = OperationalIntentUpdateErrorResponse(message=dss_response["message"])
-            message = CommonDSS4xxResponse(message="Error in updating operational intent in the DSS")
-            opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_request_status_code, message=message)
-            return opint_update_result
+        message = CommonDSS4xxResponse(message="Successfully updated operational intent")
+        opint_update_result = OperationalIntentUpdateResponse(dss_response=d_r, status=dss_request_status_code, message=message)
+        return opint_update_result
 
     async def create_and_submit_operational_intent_reference(
         self,
@@ -1421,15 +1368,12 @@ class SCDOperations:
         """
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = self.get_auth_token(audience=dss_audience)
+        auth_token = await self.get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS operational intent creation")
-            return OperationalIntentSubmissionStatus(
-                status="failure",
+            raise HTTPException(
                 status_code=401,
-                message="Failed to get auth token for DSS",
-                dss_response=OtherError(notes="Failed to get auth token for DSS"),
-                operational_intent_id="",
+                detail={"message": "Failed to get auth token for DSS"},
             )
 
         # A token from authority was received, we can now submit the operational intent
@@ -1453,13 +1397,6 @@ class SCDOperations:
             uss_base_url=flight_blender_base_url,
             new_subscription=implicit_subscription_parameters,
         )
-        d_r = OperationalIntentSubmissionStatus(
-            status="not started",
-            status_code=503,
-            message="Service is not available / connection not established",
-            dss_response=OtherError(notes="Service is not available / connection not established"),
-            operational_intent_id=new_entity_id,
-        )
         # Query other USSes for operational intent
         # Check if there are conflicts (or not)
         logger.info("Checking flight de-confliction status...")
@@ -1467,30 +1404,20 @@ class SCDOperations:
         s = []
         try:
             all_existing_operational_intent_details = await self.get_latest_airspace_volumes(volumes=volumes)
-        except ValueError:
+        except ValueError as exc:
             logger.info("Cannot create a new operational intent, get latest airspace volumes from DSS failed..")
-            d_r = OperationalIntentSubmissionStatus(
-                status="peer_uss_data_sharing_issue",
-                status_code=900,
-                message="Cannot create a new operational intent, get latest airspace volumes from DSS failed, peer querying failed",
-                dss_response=OtherError(
-                    notes="Cannot create a new operational intent, get latest airspace volumes from DSS failed, peer querying failed"
-                ),
-                operational_intent_id="",
-            )
-            return d_r
+            raise HTTPException(
+                status_code=502,
+                detail={"message": "Cannot create a new operational intent, get latest airspace volumes from DSS failed, peer querying failed"},
+            ) from exc
 
-        except ConnectionError:
+        except ConnectionError as exc:
             logger.info("Raising Connection Error 4")
             logger.info("Error in processing peer USS data, cannot create a new operational intent..")
-            d_r = OperationalIntentSubmissionStatus(
-                status="peer_uss_data_sharing_issue",
-                status_code=408,
-                message="Error in processing peer USS data, cannot create a new operational intent",
-                dss_response=OtherError(notes="Error in processing peer USS data, cannot create a new operational intent"),
-                operational_intent_id="",
-            )
-            return d_r
+            raise HTTPException(
+                status_code=504,
+                detail={"message": "Error in processing peer USS data, cannot create a new operational intent"},
+            ) from exc
 
         if isinstance(all_existing_operational_intent_details, list):
             logger.info(
@@ -1553,41 +1480,24 @@ class SCDOperations:
         if not deconflicted:
             # When flight is not deconflicted, Flight Blender assigns a error code of 500
             logger.info("Flight not deconflicted, there are other flights in the area..")
-            d_r = OperationalIntentSubmissionStatus(
-                status="conflict_with_flight",
-                status_code=500,
-                message="Flight not deconflicted, there are other flights in the area",
-                dss_response=OtherError(notes="Flight not deconflicted, there are other flights in the area"),
-                operational_intent_id="",
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "Flight not deconflicted, there are other flights in the area"},
             )
-            return d_r
 
         airspace_keys.extend(all_constraint_ovns)
         operational_intent_reference.key = airspace_keys
 
         opint_creation_payload = json.loads(json.dumps(asdict(operational_intent_reference)))
 
-        try:
-            dss_request = requests.put(
-                new_operational_intent_ref_creation_url,
-                json=opint_creation_payload,
-                headers=headers,
-                timeout=30,
-            )
-        except Exception as re:
-            logger.error("Error in putting operational intent in the DSS %s " % re)
-            d_r = OperationalIntentSubmissionStatus(
-                status="failure",
-                status_code=500,
-                message=re.__str__(),
-                dss_response=OtherError(notes=re.__str__()),
-                operational_intent_id=new_entity_id,
-            )
-            dss_request_status_code = d_r.status_code
-
-        else:
-            dss_response = dss_request.json()
-            dss_request_status_code = dss_request.status_code
+        dss_request = await _async_request(
+            "PUT",
+            new_operational_intent_ref_creation_url,
+            json=opint_creation_payload,
+            headers=headers,
+        )
+        dss_response = _json_from_response(dss_request, new_operational_intent_ref_creation_url)
+        dss_request_status_code = dss_request.status_code
 
         if dss_request_status_code == 201:
             subscribers = dss_response["subscribers"]
@@ -1626,18 +1536,17 @@ class SCDOperations:
             )
         elif dss_request_status_code in [400, 401, 403, 409, 413, 429]:
             logger.error("DSS operational intent reference creation error %s" % dss_request.text)
-            d_r = OperationalIntentSubmissionStatus(
-                status="failure",
+            raise HTTPException(
                 status_code=dss_request_status_code,
-                message=dss_request.text,
-                dss_response=OperationalIntentSubmissionError(result=str(dss_response), notes=dss_request.text),
-                operational_intent_id=new_entity_id,
+                detail={"message": dss_response.get("message", dss_request.text)},
             )
 
         else:
-            d_r.status_code = dss_request_status_code
-            d_r.dss_response = dss_response
             logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
+            raise HTTPException(
+                status_code=dss_request_status_code,
+                detail={"message": dss_response.get("message", "Error submitting operational intent to the DSS")},
+            )
 
         return d_r
 
@@ -1685,7 +1594,10 @@ class DSSAreaClearHandler:
                         opint_id = composite_operational_intent.id
                         ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
                         logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-                        deletion_request = my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=str(opint_id), ovn=str(ovn))
+                        deletion_request = await my_scd_dss_helper.delete_operational_intent(
+                            dss_operational_intent_ref_id=str(opint_id),
+                            ovn=str(ovn),
+                        )
                         if deletion_request.status == 200:
                             logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             deletion_success = True
@@ -1749,19 +1661,15 @@ class DSSOperationalIntentsCreator:
 
     async def submit_flight_declaration_to_dss(self):
         import json as _json  # noqa: PLC0415
-        import uuid as _uuid  # noqa: PLC0415
 
         from dacite import from_dict  # noqa: PLC0415
 
         from flight_blender.domain_types.scd import (  # noqa: PLC0415
             CompositeOperationalIntentPayload,
             FlightDeclarationOperationalIntentStorageDetails,
-            OperationalIntentSubmissionStatus,
             OperationalIntentUSSDetails,
-            OtherError,
         )
 
-        new_entity_id = str(_uuid.uuid4())
         fd_id = uuid.UUID(self.flight_declaration_id)
 
         async with async_task_session() as db:
@@ -1769,12 +1677,9 @@ class DSSOperationalIntentsCreator:
             flight_declaration = await fd_repo.get_by_id(fd_id)
         if not flight_declaration:
             logger.error("Flight Declaration with ID %s not found in the database" % self.flight_declaration_id)
-            return OperationalIntentSubmissionStatus(
-                status="declaration_not_found",
+            raise HTTPException(
                 status_code=404,
-                message="Flight Declaration with ID %s not found in the database" % self.flight_declaration_id,
-                dss_response=OtherError(notes="Flight Declaration with ID %s not found in the database" % self.flight_declaration_id),
-                operational_intent_id=new_entity_id,
+                detail={"message": "Flight Declaration with ID %s not found in the database" % self.flight_declaration_id},
             )
 
         current_state = flight_declaration.state
@@ -1784,28 +1689,15 @@ class DSSOperationalIntentsCreator:
             data=operational_intent,
         )
 
-        auth_token = self.my_scd_dss_helper.get_auth_token()
+        auth_token = await self.my_scd_dss_helper.get_auth_token()
 
         if "error" in auth_token:
             logger.error("Error in retrieving auth_token, check if the auth server is running properly, error details displayed above")
-            notes = "Error in getting a token from the Auth server, flight not submitted to the DSS, check if the auth server is running properly"
             logger.error(auth_token["error"])
-            op_int_submission_result = OperationalIntentSubmissionStatus(
-                status="auth_server_error",
+            raise HTTPException(
                 status_code=500,
-                message="Error in getting a token from the Auth server",
-                dss_response=OtherError(notes=notes),
-                operational_intent_id=new_entity_id,
+                detail={"message": "Error in getting a token from the Auth server"},
             )
-            async with async_task_session() as db:
-                fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-                await fd_repo.update(fd_id, state=8)
-                await fd_repo.add_state_history_entry(
-                    flight_declaration_id=fd_id,
-                    original_state=current_state,
-                    new_state=8,
-                    notes=notes,
-                )
         else:
             op_int_submission_result = await self.my_scd_dss_helper.create_and_submit_operational_intent_reference(
                 state=operational_intent_data.state,
@@ -1927,10 +1819,12 @@ class DSSOperationalIntentsCreator:
                 uss_audience = ".".join([ext.subdomain, ext.domain, ext.suffix])
 
         if ext.subdomain != "dummy" and ext.domain != "uss":
-            my_scd_dss_helper.notify_peer_uss_of_created_updated_operational_intent(
-                uss_base_url=uss_base_url,
-                notification_payload=notification_payload,
-                audience=uss_audience,
+            asyncio.run(
+                my_scd_dss_helper.notify_peer_uss_of_created_updated_operational_intent(
+                    uss_base_url=uss_base_url,
+                    notification_payload=notification_payload,
+                    audience=uss_audience,
+                )
             )
 
 

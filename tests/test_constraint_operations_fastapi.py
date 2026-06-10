@@ -55,6 +55,7 @@ class TestConstraintDetailsFastAPI:
         nonexistent = str(uuid.uuid4())
         resp = mounted_fastapi_client.get(f"/constraint_ops/constraint_details/{nonexistent}", headers=_auth(CONSTRAINT_SCOPE))
         assert resp.status_code == 404
+        assert resp.json() == {"message": "Not found"}
 
 
 class TestConstraintReferencesFastAPI:
@@ -75,6 +76,7 @@ class TestConstraintReferencesFastAPI:
             f"/constraint_ops/constraint_references/{nonexistent}", headers=_auth(CONSTRAINT_SCOPE)
         )
         assert resp.status_code == 404
+        assert resp.json() == {"message": "Not found"}
 
 
 class TestConstraintAuthEnforcement:

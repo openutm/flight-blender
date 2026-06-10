@@ -1,7 +1,17 @@
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
+
+from flight_blender.domain_types.airspace import Altitude as Altitude
+from flight_blender.domain_types.airspace import Circle as Circle
+from flight_blender.domain_types.airspace import LatLngPoint as LatLngPoint
+from flight_blender.domain_types.airspace import Polygon as Polygon
+from flight_blender.domain_types.airspace import Radius as Radius
+from flight_blender.domain_types.airspace import SubscriptionState as SubscriptionState
+from flight_blender.domain_types.airspace import Time as Time
+from flight_blender.domain_types.airspace import Volume3D as Volume3D
+from flight_blender.domain_types.airspace import Volume4D as Volume4D
 
 UUIDv4Format = str
 CodeUSpaceClassType = str
@@ -14,63 +24,6 @@ EntityOVN = str
 ConstraintUssBaseURL = str
 EntityVersion = int
 EntityID = UUIDv4Format
-
-
-@dataclass
-class LatLngPoint:
-    lat: float
-    lng: float
-
-
-@dataclass
-class Radius:
-    value: float
-    units: str
-
-
-@dataclass
-class Polygon:
-    vertices: list[LatLngPoint]
-
-
-@dataclass
-class Circle:
-    center: LatLngPoint
-    radius: Radius
-
-
-@dataclass
-class Altitude:
-    value: int | float
-    reference: str
-    units: str
-
-
-@dataclass
-class Volume3D:
-    outline_polygon: Polygon
-    altitude_lower: Altitude
-    altitude_upper: Altitude
-    outline_circle: Circle | None = None
-
-
-@dataclass
-class SubscriptionState:
-    subscription_id: str
-    notification_index: int
-
-
-@dataclass
-class Time:
-    format: str
-    value: str
-
-
-@dataclass
-class Volume4D:
-    volume: Volume3D
-    time_start: Time
-    time_end: Time
 
 
 class CodeZoneReasonType(str, Enum):
@@ -184,7 +137,7 @@ class CompositeConstraintPayload:
     constraint_detail_id: str
     flight_declaration_id: str
     bounds: str
-    start_datetime: str
-    end_datetime: str
-    alt_max: str
-    alt_min: str
+    start_datetime: str | datetime
+    end_datetime: str | datetime
+    alt_max: str | int
+    alt_min: str | int
