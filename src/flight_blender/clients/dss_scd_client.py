@@ -399,11 +399,9 @@ class SCDOperations:
         }
 
         flight_blender_base_url = settings.FLIGHTBLENDER_FQDN
-        my_op_int_ref_helper = OperationalIntentReferenceHelper()
         all_uss_operational_intent_details = []
 
         for volume in volumes:
-            op_int_details_retrieved = False
             operational_intent_references = []
             area_of_interest = QueryOperationalIntentPayload(area_of_interest=volume)
             logger.info("Querying DSS for operational intents in the area..")
@@ -453,109 +451,83 @@ class SCDOperations:
 
             for current_uss_operational_intent_detail in all_uss_operational_intent_details:
                 logger.info("All Operational intents in the area..")
-
-                # check the USS for flight volume by using the URL to see if this is stored in Flight Blender, DSS will return all intent details including our own
-                current_uss_base_url = current_uss_operational_intent_detail.uss_base_url
-                op_int_det = {}
-                op_int_ref = {}
-                if current_uss_base_url == flight_blender_base_url or current_uss_base_url.startswith(flight_blender_base_url + "/"):
-                    # The opint is from Flight Blender itself
-                    # No need to query peer USS, just update the ovn and process the volume locally
-
-                    async with async_task_session() as db:
-                        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-                        flight_operational_intent_reference = await fd_repo.get_opint_reference_by_id(
-                            uuid.UUID(str(current_uss_operational_intent_detail.id))
-                        )
-                        flight_operational_intent_reference_exists = flight_operational_intent_reference is not None
-
-                        if flight_operational_intent_reference_exists:
-                            flight_declaration_id = flight_operational_intent_reference.declaration_id
-                            flight_operational_intent_detail = await fd_repo.get_opint_detail_by_declaration_id(flight_declaration_id)
-                            await fd_repo.update_opint_reference_ovn(
-                                ref_id=flight_operational_intent_reference.id,
-                                ovn=current_uss_operational_intent_detail.ovn,
-                            )
-                            _op_int_ref = OperationalIntentReferenceDSSResponse(
-                                subscription_id=current_uss_operational_intent_detail.subscription_id,
-                                id=str(flight_operational_intent_reference.id),
-                                uss_base_url=flight_operational_intent_reference.uss_base_url,
-                                manager=flight_operational_intent_reference.manager,
-                                uss_availability=flight_operational_intent_reference.uss_availability,
-                                version=flight_operational_intent_reference.version,
-                                state=flight_operational_intent_reference.state,
-                                ovn=flight_operational_intent_reference.ovn,
-                                time_start=Time(
-                                    format="RFC3339",
-                                    value=flight_operational_intent_reference.time_start,
-                                ),
-                                time_end=Time(
-                                    format="RFC3339",
-                                    value=flight_operational_intent_reference.time_end,
-                                ),
-                            )
-                            op_int_ref = asdict(_op_int_ref)
-                            op_int_det = {
-                                "volumes": json.loads(flight_operational_intent_detail.volumes),
-                                "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
-                                "priority": flight_operational_intent_detail.priority,
-                            }
-                        else:
-                            logger.warning(
-                                "Flight operational intent reference not found in the database, this is a new operational intent with id: {uss_op_int_id}".format(
-                                    uss_op_int_id=current_uss_operational_intent_detail.id
-                                )
-                            )
-                            # Construct a minimal reference from the DSS data so the OVN
-                            # is included in airspace keys (prevents DSS 409 errors)
-                            _op_int_ref = OperationalIntentReferenceDSSResponse(
-                                subscription_id=current_uss_operational_intent_detail.subscription_id,
-                                id=current_uss_operational_intent_detail.id,
-                                uss_base_url=current_uss_base_url,
-                                manager=current_uss_operational_intent_detail.manager,
-                                uss_availability=current_uss_operational_intent_detail.uss_availability,
-                                version=current_uss_operational_intent_detail.version,
-                                state=current_uss_operational_intent_detail.state,
-                                ovn=current_uss_operational_intent_detail.ovn,
-                                time_start=current_uss_operational_intent_detail.time_start,
-                                time_end=current_uss_operational_intent_detail.time_end,
-                            )
-                            op_int_ref = asdict(_op_int_ref)
-                            op_int_det = {"volumes": [], "off_nominal_volumes": [], "priority": 0}
-                    op_int_details_retrieved = True
-
-                else:  # This operational intent details is from a peer uss, need to query peer USS
-                    op_int_details_retrieved, op_int_ref, op_int_det = await self._fetch_peer_operational_intent_details(
-                        dss_reference=current_uss_operational_intent_detail,
-                    )
-
+                op_int_details_retrieved, op_int_ref, op_int_det = await self._retrieve_operational_intent_detail(
+                    dss_reference=current_uss_operational_intent_detail,
+                    flight_blender_base_url=flight_blender_base_url,
+                )
                 if op_int_details_retrieved:
-                    op_int_reference: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
-                        operational_intent_reference=op_int_ref
-                    )
-                    my_opint_ref_helper = OperationalIntentReferenceHelper()
-                    all_volumes = op_int_det["volumes"]
-                    all_v4d = []
-                    for cur_volume in all_volumes:
-                        cur_v4d = my_opint_ref_helper.parse_volume_to_volume4D(volume=cur_volume)
-                        all_v4d.append(cur_v4d)
-
-                    all_off_nominal_volumes = op_int_det["off_nominal_volumes"]
-                    all_off_nominal_v4d = []
-                    for cur_off_nominal_volume in all_off_nominal_volumes:
-                        cur_off_nominal_v4d = my_opint_ref_helper.parse_volume_to_volume4D(volume=cur_off_nominal_volume)
-                        all_off_nominal_v4d.append(cur_off_nominal_v4d)
-
-                    op_int_detail = OperationalIntentUSSDetails(
-                        volumes=all_v4d,
-                        priority=op_int_det["priority"],
-                        off_nominal_volumes=all_off_nominal_v4d,
-                    )
-
-                    uss_op_int_details = OperationalIntentDetailsUSSResponse(reference=op_int_reference, details=op_int_detail)
-                    nearby_operational_intents.append(uss_op_int_details)
+                    nearby_operational_intents.append(self._build_uss_operational_intent_detail(op_int_ref, op_int_det))
 
         return nearby_operational_intents
+
+    async def _retrieve_operational_intent_detail(
+        self, dss_reference: OperationalIntentReferenceDSSResponse, flight_blender_base_url: str
+    ) -> tuple[bool, dict, dict]:
+        """Resolve one operational intent's details: locally if Flight Blender manages it, else from the peer USS.
+
+        The DSS returns all intents in the area including Flight Blender's own.
+        """
+        current_uss_base_url = dss_reference.uss_base_url
+        if current_uss_base_url == flight_blender_base_url or current_uss_base_url.startswith(flight_blender_base_url + "/"):
+            return await self._load_local_operational_intent_detail(dss_reference)
+        return await self._fetch_peer_operational_intent_details(dss_reference=dss_reference)
+
+    async def _load_local_operational_intent_detail(
+        self, dss_reference: OperationalIntentReferenceDSSResponse
+    ) -> tuple[bool, dict, dict]:
+        """Load a Flight-Blender-managed operational intent from the DB, refreshing its stored OVN.
+
+        Falls back to a minimal reference (built from the DSS data, with empty details) when the intent is
+        not yet stored, so its OVN is still included in airspace keys (prevents DSS 409 errors).
+        """
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            flight_operational_intent_reference = await fd_repo.get_opint_reference_by_id(uuid.UUID(str(dss_reference.id)))
+
+            if flight_operational_intent_reference is not None:
+                flight_declaration_id = flight_operational_intent_reference.declaration_id
+                flight_operational_intent_detail = await fd_repo.get_opint_detail_by_declaration_id(flight_declaration_id)
+                await fd_repo.update_opint_reference_ovn(ref_id=flight_operational_intent_reference.id, ovn=dss_reference.ovn)
+                _op_int_ref = OperationalIntentReferenceDSSResponse(
+                    subscription_id=dss_reference.subscription_id,
+                    id=str(flight_operational_intent_reference.id),
+                    uss_base_url=flight_operational_intent_reference.uss_base_url,
+                    manager=flight_operational_intent_reference.manager,
+                    uss_availability=flight_operational_intent_reference.uss_availability,
+                    version=flight_operational_intent_reference.version,
+                    state=flight_operational_intent_reference.state,
+                    ovn=flight_operational_intent_reference.ovn,
+                    time_start=Time(format="RFC3339", value=flight_operational_intent_reference.time_start),
+                    time_end=Time(format="RFC3339", value=flight_operational_intent_reference.time_end),
+                )
+                op_int_ref = asdict(_op_int_ref)
+                op_int_det = {
+                    "volumes": json.loads(flight_operational_intent_detail.volumes),
+                    "off_nominal_volumes": json.loads(flight_operational_intent_detail.off_nominal_volumes),
+                    "priority": flight_operational_intent_detail.priority,
+                }
+            else:
+                logger.warning(
+                    "Flight operational intent reference not found in the database, this is a new operational intent with id: {uss_op_int_id}".format(
+                        uss_op_int_id=dss_reference.id
+                    )
+                )
+                op_int_ref = asdict(dss_reference)
+                op_int_det = {"volumes": [], "off_nominal_volumes": [], "priority": 0}
+        return True, op_int_ref, op_int_det
+
+    def _build_uss_operational_intent_detail(self, op_int_ref: dict, op_int_det: dict) -> OperationalIntentDetailsUSSResponse:
+        """Parse a DSS reference dict + USS details dict into a domain ``OperationalIntentDetailsUSSResponse``."""
+        helper = OperationalIntentReferenceHelper()
+        op_int_reference = helper.parse_operational_intent_reference_from_dss(operational_intent_reference=op_int_ref)
+        all_v4d = [helper.parse_volume_to_volume4D(volume=cur_volume) for cur_volume in op_int_det["volumes"]]
+        all_off_nominal_v4d = [helper.parse_volume_to_volume4D(volume=cur_volume) for cur_volume in op_int_det["off_nominal_volumes"]]
+        op_int_detail = OperationalIntentUSSDetails(
+            volumes=all_v4d,
+            priority=op_int_det["priority"],
+            off_nominal_volumes=all_off_nominal_v4d,
+        )
+        return OperationalIntentDetailsUSSResponse(reference=op_int_reference, details=op_int_detail)
 
     async def _fetch_peer_operational_intent_details(
         self, dss_reference: OperationalIntentReferenceDSSResponse
@@ -1160,22 +1132,8 @@ class SCDOperations:
                 status_code=dss_request_status_code,
                 detail={"message": dss_response.get("message", "Error in updating operational intent in the DSS")},
             )
-        # Update request was successful, notify the subscribers
-        subscribers = dss_response["subscribers"]
-        all_subscribers: list[SubscriberToNotify] = []
-        for subscriber in subscribers:
-            subscriptions = subscriber["subscriptions"]
-            uss_base_url = subscriber["uss_base_url"]
-            if uss_base_url != flight_blender_base_url and not uss_base_url.startswith(flight_blender_base_url + "/"):
-                all_subscription_states: list[SubscriptionState] = []
-                for subscription in subscriptions:
-                    s_state = SubscriptionState(
-                        subscription_id=subscription["subscription_id"],
-                        notification_index=subscription["notification_index"],
-                    )
-                    all_subscription_states.append(s_state)
-                subscriber_obj = SubscriberToNotify(subscriptions=all_subscription_states, uss_base_url=uss_base_url)
-                all_subscribers.append(subscriber_obj)
+        # Update request was successful, notify the subscribers (excluding Flight Blender itself)
+        all_subscribers = self._parse_subscribers_to_notify(dss_response["subscribers"], exclude_base_url=flight_blender_base_url)
         my_op_int_ref_helper = OperationalIntentReferenceHelper()
         operational_intent_reference: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
             operational_intent_reference=dss_response["operational_intent_reference"]
@@ -1244,7 +1202,6 @@ class SCDOperations:
         # Check if there are conflicts (or not)
         logger.info("Checking flight de-confliction status...")
         # Get all operational intents in the area
-        s = []
         try:
             all_existing_operational_intent_details = await self.get_latest_airspace_volumes(volumes=volumes)
         except ValueError as exc:
@@ -1352,58 +1309,67 @@ class SCDOperations:
             headers=headers,
         )
         dss_response = _json_from_response(dss_request, new_operational_intent_ref_creation_url)
-        dss_request_status_code = dss_request.status_code
 
-        if dss_request_status_code == 201:
-            subscribers = dss_response["subscribers"]
-            all_subscribers_to_notify = []
-            for s in subscribers:
-                subs = s["subscriptions"]
-                all_subs = []
-                for subscription in subs:
-                    s_s = SubscriptionState(
-                        subscription_id=subscription["subscription_id"],
-                        notification_index=subscription["notification_index"],
-                    )
-                    all_subs.append(s_s)
-                subscriber_to_notify = SubscriberToNotify(subscriptions=all_subs, uss_base_url=s["uss_base_url"])
-                all_subscribers_to_notify.append(subscriber_to_notify)
+        return self._build_creation_submission_status(
+            dss_request=dss_request,
+            dss_response=dss_response,
+            new_entity_id=new_entity_id,
+            all_nearby_constraints=all_nearby_constraints,
+        )
 
-            o_i_r = dss_response["operational_intent_reference"]
-            my_op_int_ref_helper = OperationalIntentReferenceHelper()
-            operational_intent_r: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
-                operational_intent_reference=o_i_r
+    def _parse_subscribers_to_notify(self, subscribers_json: list, exclude_base_url: str | None = None) -> list[SubscriberToNotify]:
+        """Parse a DSS ``subscribers`` array into domain ``SubscriberToNotify`` objects.
+
+        When ``exclude_base_url`` is given, subscribers managed by that base URL (i.e. Flight Blender
+        itself) are skipped.
+        """
+        subscribers_to_notify = []
+        for subscriber in subscribers_json:
+            uss_base_url = subscriber["uss_base_url"]
+            if exclude_base_url and (uss_base_url == exclude_base_url or uss_base_url.startswith(exclude_base_url + "/")):
+                continue
+            subscriptions = [
+                SubscriptionState(
+                    subscription_id=subscription["subscription_id"],
+                    notification_index=subscription["notification_index"],
+                )
+                for subscription in subscriber["subscriptions"]
+            ]
+            subscribers_to_notify.append(SubscriberToNotify(subscriptions=subscriptions, uss_base_url=uss_base_url))
+        return subscribers_to_notify
+
+    def _build_creation_submission_status(
+        self, dss_request: httpx.Response, dss_response: dict, new_entity_id: str, all_nearby_constraints: list
+    ) -> OperationalIntentSubmissionStatus:
+        """Map the DSS create response into an ``OperationalIntentSubmissionStatus`` (raises on DSS error)."""
+        status_code = dss_request.status_code
+        if status_code == 201:
+            subscribers = self._parse_subscribers_to_notify(dss_response["subscribers"])
+            helper = OperationalIntentReferenceHelper()
+            operational_intent_r = helper.parse_operational_intent_reference_from_dss(
+                operational_intent_reference=dss_response["operational_intent_reference"]
             )
-            dss_creation_response = OperationalIntentSubmissionSuccess(
-                operational_intent_reference=operational_intent_r,
-                subscribers=all_subscribers_to_notify,
-            )
-
             logger.info("Successfully created operational intent in the DSS")
             logger.debug(f"Response details from the DSS {dss_response}")
-            d_r = OperationalIntentSubmissionStatus(
+            return OperationalIntentSubmissionStatus(
                 status=SubmissionResultStatus.Success.value,
                 status_code=201,
                 message="Successfully created operational intent in the DSS",
-                dss_response=dss_creation_response,
+                dss_response=OperationalIntentSubmissionSuccess(
+                    operational_intent_reference=operational_intent_r,
+                    subscribers=subscribers,
+                ),
                 operational_intent_id=new_entity_id,
                 constraints=all_nearby_constraints,
             )
-        elif dss_request_status_code in [400, 401, 403, 409, 413, 429]:
+        if status_code in (400, 401, 403, 409, 413, 429):
             logger.error("DSS operational intent reference creation error %s" % dss_request.text)
-            raise HTTPException(
-                status_code=dss_request_status_code,
-                detail={"message": dss_response.get("message", dss_request.text)},
-            )
-
-        else:
-            logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
-            raise HTTPException(
-                status_code=dss_request_status_code,
-                detail={"message": dss_response.get("message", "Error submitting operational intent to the DSS")},
-            )
-
-        return d_r
+            raise HTTPException(status_code=status_code, detail={"message": dss_response.get("message", dss_request.text)})
+        logger.error("Error submitting operational intent to the DSS: %s" % dss_response)
+        raise HTTPException(
+            status_code=status_code,
+            detail={"message": dss_response.get("message", "Error submitting operational intent to the DSS")},
+        )
 
 
 # ── DSSAreaClearHandler (from scd/utils.py) ───────────────────────────────────
