@@ -23,7 +23,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
 
 
 async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) -> None:
-    my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=flight_declaration_id)
+    my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.UUID(flight_declaration_id))
 
     start_end_time_validated = await my_dss_opint_creator.validate_flight_declaration_start_end_time()
 
@@ -113,8 +113,7 @@ async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) ->
             accepted_state = OPERATION_STATES[1][0]
             from flight_blender.services.conformance_svc import FlightOperationConformanceHelper  # noqa: PLC0415
 
-            my_conformance_helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id)
-            transition_valid = my_conformance_helper.verify_operation_state_transition(
+            transition_valid = FlightOperationConformanceHelper.verify_operation_state_transition(
                 original_state=original_state,
                 new_state=accepted_state,
                 event="dss_accepts",

@@ -1,5 +1,6 @@
 import enum
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 
 from implicitdict import ImplicitDict
@@ -208,16 +209,16 @@ class GeoZone(ImplicitDict):
 @dataclass
 class GeofencePayload:
     id: str
-    upper_limit: str
-    lower_limit: str
+    upper_limit: str | int
+    lower_limit: str | int
     altitude_ref: str
     name: str
     bounds: str
     status: str
     message: str
     is_test_dataset: bool
-    start_datetime: str
-    end_datetime: str
+    start_datetime: str | datetime
+    end_datetime: str | datetime
     raw_geo_fence: dict
     geozone: dict
 

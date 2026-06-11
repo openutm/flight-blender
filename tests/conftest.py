@@ -323,7 +323,16 @@ def mock_scd_auth_error(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_error())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_error())
+
+
+def _async_returning(value):
+    """Build an async stub (for monkeypatching coroutine methods) that returns ``value``."""
+
+    async def _stub(self, *args, **kwargs):
+        return value
+
+    return _stub
 
 
 @pytest.fixture
@@ -332,15 +341,15 @@ def mock_scd_dss_success(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "create_and_submit_operational_intent_reference",
-        lambda self, **kwargs: fakes.fake_submission_success(),
+        _async_returning(fakes.fake_submission_success()),
     )
-    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", _async_returning(None))
     monkeypatch.setattr(
-        dss_helper.SCDOperations, "get_nearby_operational_intents", lambda self, **kwargs: fakes.fake_empty_nearby_operational_intents()
+        dss_helper.SCDOperations, "get_nearby_operational_intents", _async_returning(fakes.fake_empty_nearby_operational_intents())
     )
 
 
@@ -350,13 +359,13 @@ def mock_scd_dss_conflict(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "create_and_submit_operational_intent_reference",
-        lambda self, **kwargs: fakes.fake_submission_conflict(),
+        _async_returning(fakes.fake_submission_conflict()),
     )
-    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", _async_returning(None))
 
 
 @pytest.fixture
@@ -365,13 +374,13 @@ def mock_scd_dss_failure(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "create_and_submit_operational_intent_reference",
-        lambda self, **kwargs: fakes.fake_submission_failure(),
+        _async_returning(fakes.fake_submission_failure()),
     )
-    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", _async_returning(None))
 
 
 @pytest.fixture
@@ -380,13 +389,13 @@ def mock_scd_dss_timeout(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "create_and_submit_operational_intent_reference",
-        lambda self, **kwargs: fakes.fake_submission_timeout(),
+        _async_returning(fakes.fake_submission_timeout()),
     )
-    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
+    monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", _async_returning(None))
 
 
 @pytest.fixture
@@ -395,11 +404,11 @@ def mock_scd_delete_success(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "delete_operational_intent",
-        lambda self, **kwargs: fakes.fake_delete_success(),
+        _async_returning(fakes.fake_delete_success()),
     )
 
 
@@ -409,11 +418,11 @@ def mock_scd_delete_failure(monkeypatch):
     from tests import fakes
     import flight_blender.clients.dss_scd_client as dss_helper
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "delete_operational_intent",
-        lambda self, **kwargs: fakes.fake_delete_failure(),
+        _async_returning(fakes.fake_delete_failure()),
     )
 
 
@@ -426,7 +435,7 @@ def mock_network_opint_empty(monkeypatch):
     async def _empty_operational_intents(self, **kwargs):
         return {"type": "FeatureCollection", "features": []}
 
-    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self: fakes.fake_auth_token_success())
+    monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
     monkeypatch.setattr(
         dss_helper.SCDOperations,
         "get_and_process_nearby_operational_intents",

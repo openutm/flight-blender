@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -243,8 +244,6 @@ class FormatReportTests(unittest.TestCase):
         return p
 
     def setUp(self):
-        import tempfile
-
         self._tmpdir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmpdir.name)
 
@@ -356,7 +355,6 @@ class MainTests(unittest.TestCase):
         self.assertIn("not found", output)
 
     def test_multiple_files_concatenated(self):
-        import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
             p1 = Path(tmpdir) / "f3548" / "report.json"

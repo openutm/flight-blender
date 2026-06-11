@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -13,14 +14,14 @@ class PolygonAltitude:
 
 @dataclass
 class ConformanceRecord:
-    id: str
-    flight_declaration_id: str
+    id: uuid.UUID
+    flight_declaration_id: uuid.UUID
     conformance_state: int
     timestamp: datetime
     description: str
     event_type: str
     geofence_breach: bool
-    geofence_id: str | None
+    geofence_id: uuid.UUID | None
     resolved: bool
     created_at: datetime
     updated_at: datetime

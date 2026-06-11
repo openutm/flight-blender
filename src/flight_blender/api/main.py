@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from flight_blender.api.routers import (
     conformance_api,
@@ -20,6 +21,13 @@ from flight_blender.api.routers import (
 
 def create_fastapi_app() -> FastAPI:
     app = FastAPI(title="Flight Blender")
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_json_handler(_request: Request, exc: HTTPException):
+        if isinstance(exc.detail, dict):
+            return JSONResponse(exc.detail, status_code=exc.status_code, headers=exc.headers)
+        return JSONResponse({"message": exc.detail}, status_code=exc.status_code, headers=exc.headers)
+
     app.include_router(misc_api.router)
     app.include_router(geo_fence_api.router)
     app.include_router(weather_api.router)

@@ -1,17 +1,22 @@
-import enum
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+import uuid
 from math import atan2, cos, radians, sin, sqrt
-from typing import Literal, Never
+from typing import Never
 
 import arrow
+import requests
 import shapely.geometry
+from dacite import from_dict
 from geojson import Feature, FeatureCollection, Polygon
-from implicitdict import StringBasedDateTime
 from loguru import logger
+from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import box as shapely_box
 
+from flight_blender.auth import dss_auth as dss_auth_helper
+from flight_blender.auth.token_audience import generate_audience_from_base_url
+from flight_blender.domain_types.common import RESPONSE_CONTENT_TYPE
+from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
 from flight_blender.domain_types.rid import UASID, OperatorLocation, RIDStreamErrorDetail, UAClassificationEU
 from flight_blender.domain_types.rid_operations import (
     IdentificationServiceArea,
@@ -31,6 +36,7 @@ from flight_blender.domain_types.rid_operations import (
     SubscriptionState,
 )
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 
 __all__ = [
     "IdentificationServiceArea",
@@ -53,7 +59,7 @@ __all__ = [
 # ── viewport helpers (from rid/view_port_ops.py) ─────────────────────────────
 
 
-def build_view_port_box(view_port_coords) -> shapely_box:
+def build_view_port_box(view_port_coords) -> ShapelyPolygon:
     return shapely_box(
         view_port_coords[0],
         view_port_coords[1],
@@ -62,7 +68,7 @@ def build_view_port_box(view_port_coords) -> shapely_box:
     )
 
 
-def build_view_port_box_lng_lat(view_port_coords) -> shapely_box:
+def build_view_port_box_lng_lat(view_port_coords) -> ShapelyPolygon:
     return shapely_box(
         view_port_coords[1],
         view_port_coords[0],
@@ -71,7 +77,7 @@ def build_view_port_box_lng_lat(view_port_coords) -> shapely_box:
     )
 
 
-def convert_box_to_geojson_feature(box: shapely_box) -> FeatureCollection:
+def convert_box_to_geojson_feature(box: ShapelyPolygon) -> FeatureCollection:
     geo_json_coordinates = [list(box.exterior.coords)]
     geo_json_polygon = Polygon(coordinates=geo_json_coordinates)
     geo_json_feature = Feature(
@@ -120,7 +126,7 @@ def compute_view_hash(view: str) -> int:
     return int(hashlib.sha256(view.encode("utf-8")).hexdigest(), 16) % 10**8
 
 
-def build_view_port_box_lng_lat_str(view: str) -> shapely_box:
+def build_view_port_box_lng_lat_str(view: str) -> ShapelyPolygon:
     view_port = [float(i) for i in view.split(",")]
     return shapely.geometry.box(view_port[1], view_port[0], view_port[3], view_port[2])
 
@@ -235,153 +241,111 @@ class FlightTelemetryRIDEngine:
         return (True, [])
 
 
-class RIDCapabilitiesResponseEnum(str, enum.Enum):
-    ASTMRID2019 = "ASTMRID2019"
-    ASTMRID2022 = "ASTMRID2022"
+class USSPollingService:
+    """Polls remote USSes for RID flight data and persists observations to the DB."""
 
+    def __init__(self, rid_repo: SQLAlchemyRIDRepository, feed_repo: SQLAlchemyFlightFeedRepository):
+        self.rid_repo = rid_repo
+        self.feed_repo = feed_repo
 
-@dataclass
-class RIDCapabilitiesResponse:
-    capabilities: list[
-        Literal[
-            RIDCapabilitiesResponseEnum.ASTMRID2019,
-            RIDCapabilitiesResponseEnum.ASTMRID2022,
-        ]
-    ]
+    async def query_uss_for_rid_details(self, rid_flight_details_query_url: str, flight_id: uuid.UUID, headers: dict):
+        """Queries USS for RID flight details and persists them."""
+        flight_details_exist = await self.rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
 
+        if not flight_details_exist:
+            flight_details_request = requests.get(rid_flight_details_query_url, headers=headers, timeout=30)
+            if flight_details_request.status_code != 200:
+                logger.info("Error in retrieving flight details for %s" % flight_id)
+                logger.error(flight_details_request.text)
+                return
 
-@dataclass
-class RIDHeight:
-    distance: float
-    reference: str
+            _fd_raw = flight_details_request.json()
+            fd = _fd_raw["details"]
 
+            logger.info("Retrieved Flight Details for %s" % flight_id)
+            operation_description = fd.get("operation_description")
+            operator_id = fd.get("operator_id")
+            operator_location = None
+            if "operator_location" in fd.keys():
+                operator_location = from_dict(data_class=OperatorLocation, data=fd["operator_location"])
+            auth_data = None
+            if "auth_data" in fd.keys():
+                auth_data = from_dict(data_class=RIDAuthData, data=fd["auth_data"])
+            uas_id = None
+            if "uas_id" in fd.keys():
+                uas_id = from_dict(data_class=UASID, data=fd["uas_id"])
+            eu_classification = None
+            if fd.get("eu_classification"):
+                eu_classification = from_dict(data_class=UAClassificationEU, data=fd["eu_classification"])
 
-@dataclass
-class RIDAircraftPosition:
-    lat: float
-    lng: float
-    alt: float
-    accuracy_h: str
-    accuracy_v: str
-    extrapolated: bool | None
-    pressure_altitude: float | None
-    height: RIDHeight | None
+            flight_detail = RIDFlightDetails(
+                id=flight_id,
+                operation_description=operation_description,
+                operator_location=operator_location,
+                operator_id=operator_id,
+                auth_data=auth_data,
+                uas_id=uas_id,
+                eu_classification=eu_classification,
+            )
+            await self.rid_repo.create_or_update_flight_detail(rid_flight_details_payload=flight_detail)
 
+    async def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
+        _flight_details = from_dict(data_class=RIDFlightsRecord, data=json.loads(flight_details))
 
-@dataclass
-class AuthData:
-    format: int
-    data: str | None = ""
+        authority_credentials = dss_auth_helper.AuthorityCredentialsGetter()
 
+        for _service_area in _flight_details.service_areas:
+            rid_query_url = _service_area.uss_base_url + "/uss/flights" + "?view=" + view
 
-@dataclass
-class OperatorAltitude:
-    altitude: int
-    altitude_type: str
+            audience = generate_audience_from_base_url(base_url=_service_area.uss_base_url)
+            auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
+            headers = {
+                "content-type": RESPONSE_CONTENT_TYPE,
+                "Authorization": "Bearer " + auth_credentials["access_token"],
+            }
+            flights_request = requests.get(rid_query_url, headers=headers, timeout=30)
 
+            if flights_request.status_code == 200:
+                flights_response = flights_request.json()
+                for flight in flights_response["flights"]:
+                    flight_id = flight["id"]
+                    rid_flight_details_query_url = f"{_service_area.uss_base_url}/uss/flights/{flight_id}/details"
+                    await self.query_uss_for_rid_details(
+                        rid_flight_details_query_url=rid_flight_details_query_url,
+                        flight_id=uuid.UUID(flight_id),
+                        headers=headers,
+                    )
 
-@dataclass
-class RIDOperatorDetails:
-    id: str
-    operator_id: str | None
-    operator_location: OperatorLocation | None
-    operation_description: str | None
-    auth_data: RIDAuthData | None
-    serial_number: str | None
-    registration_number: str | None
-    aircraft_type: str | None = None
-    eu_classification: UAClassificationEU | None = None
-    uas_id: UASID | None = None
-
-
-@dataclass
-class RIDTestDetailsResponse:
-    effective_after: str
-    details: RIDFlightDetails
-
-
-@dataclass
-class HTTPErrorResponse:
-    message: str
-    status: int
-
-
-@dataclass
-class RIDAircraftState:
-    timestamp: RIDTime
-    timestamp_accuracy: float
-    speed_accuracy: str
-    position: RIDAircraftPosition
-    operational_status: str | None = None
-    track: float | None = None
-    speed: float | None = None
-    vertical_speed: float | None = None
-    height: RIDHeight | None = None
-
-    def as_dict(self):
-        data = asdict(self)
-        return {key: value for key, value in data.items() if value is not None}
-
-
-@dataclass
-class RIDRecentAircraftPosition:
-    time: StringBasedDateTime
-    position: RIDAircraftPosition
-
-
-@dataclass
-class FullRequestedFlightDetails:
-    id: str
-    telemetry_length: int
-
-
-@dataclass
-class TelemetryFlightDetails:
-    id: str
-    aircraft_type: str
-    current_state: RIDAircraftState
-    simulated: bool
-    recent_positions: list[RIDRecentAircraftPosition]
-    operator_details: RIDOperatorDetails
-
-
-@dataclass
-class RIDFlightResponse:
-    timestamp: RIDTime
-    flights: list[TelemetryFlightDetails]
-
-
-@dataclass
-class SingleObservationMetadata:
-    details_response: RIDTestDetailsResponse
-    telemetry: RIDAircraftState
-    aircraft_type: str
-    injection_id: str
-
-
-@dataclass
-class RIDTestInjection:
-    aircraft_type: str
-    injection_id: str
-    telemetry: list[RIDAircraftState]
-    details_responses: list[RIDTestDetailsResponse]
-
-
-@dataclass
-class RIDTestDataStorage:
-    flight_state: RIDAircraftState
-    details_response: RIDTestDetailsResponse
-    aircraft_type: str
-    injection_id: str
-
-
-@dataclass
-class CreateTestPayload:
-    requested_flights: list[RIDTestInjection]
-    test_id: str
-
-
-@dataclass
-class CreateTestResponse:
-    injected_flights: list[RIDTestInjection]
-    version: int
+                    if flight.get("current_state") is None:
+                        logger.error("There is no current_state provided by SP on the flights url %s" % rid_query_url)
+                        logger.debug(f"{json.dumps(flight)}")
+                    else:
+                        flight_current_state = flight["current_state"]
+                        position = flight_current_state["position"]
+                        recent_positions = flight.get("recent_positions", [])
+                        flight_metadata = {
+                            "id": flight_id,
+                            "simulated": flight["simulated"],
+                            "aircraft_type": flight["aircraft_type"],
+                            "subscription_id": subscription_id,
+                            "current_state": flight_current_state,
+                            "recent_positions": recent_positions,
+                        }
+                        if {"lat", "lng", "alt"} <= position.keys():
+                            single_observation = SingleAirtrafficObservation(
+                                session_id=subscription_id,
+                                icao_address=flight_id,
+                                traffic_source=11,
+                                source_type=1,
+                                lat_dd=position["lat"],
+                                lon_dd=position["lng"],
+                                altitude_mm=position["alt"],
+                                metadata=flight_metadata,
+                            )
+                            logger.debug("Writing flight remote-id data..")
+                            await self.feed_repo.write_flight_observation(single_observation=single_observation)
+                        else:
+                            logger.error("Error in received flights data: %{url}s ".format(**flight))
+            else:
+                logger.info("Received a non 200 error from {url} : {status_code} ".format(url=rid_query_url, status_code=flights_request.status_code))
+                logger.info("Detailed Response %s" % flights_request.text)

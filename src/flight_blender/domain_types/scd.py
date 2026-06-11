@@ -4,55 +4,20 @@ from enum import Enum
 from typing import Any, Literal, Optional
 
 from implicitdict import StringBasedDateTime
-from shapely.geometry import Polygon as Plgn
+from shapely.geometry.base import BaseGeometry
 
+from flight_blender.domain_types.airspace import Altitude as Altitude
+from flight_blender.domain_types.airspace import Circle as Circle
+from flight_blender.domain_types.airspace import LatLngPoint as LatLngPoint
+from flight_blender.domain_types.airspace import Polygon as Polygon
+from flight_blender.domain_types.airspace import Radius as Radius
+from flight_blender.domain_types.airspace import SubscriptionState as SubscriptionState
+from flight_blender.domain_types.airspace import Time as Time
+from flight_blender.domain_types.airspace import Volume3D as Volume3D
+from flight_blender.domain_types.airspace import Volume4D as Volume4D
 from flight_blender.domain_types.constraint import Constraint
 
 # --- Geometric primitives (from scd_data_definitions) ---
-
-
-@dataclass
-class LatLngPoint:
-    lat: float
-    lng: float
-
-
-@dataclass
-class Radius:
-    value: float
-    units: str
-
-
-@dataclass
-class Time:
-    format: str
-    value: str
-
-
-@dataclass
-class Polygon:
-    vertices: list[LatLngPoint]
-
-
-@dataclass
-class Circle:
-    center: LatLngPoint
-    radius: Radius
-
-
-@dataclass
-class Altitude:
-    value: int | float
-    reference: str
-    units: str
-
-
-@dataclass
-class Volume3D:
-    outline_polygon: Polygon
-    altitude_lower: Altitude
-    altitude_upper: Altitude
-    outline_circle: Circle | None = None
 
 
 class OperationalIntentState(str, enum.Enum):
@@ -62,11 +27,37 @@ class OperationalIntentState(str, enum.Enum):
     Contingent = "Contingent"
 
 
-@dataclass
-class Volume4D:
-    volume: Volume3D
-    time_start: Time
-    time_end: Time
+class SubmissionResultStatus(str, enum.Enum):
+    """Outcome status returned by ``SCDOperations.create_and_submit_operational_intent_reference``."""
+
+    Success = "success"
+    ConflictWithFlight = "conflict_with_flight"
+    Failure = "failure"
+    PeerUSSDataSharingIssue = "peer_uss_data_sharing_issue"
+
+
+# ASTM F3548-21 priority value reserved for high-priority (emergency) operations.
+HIGH_PRIORITY_OP_INTENT = 100
+
+# DSS uss_availability value indicating a peer USS is declared down.
+USS_AVAILABILITY_DOWN = "Down"
+
+# Per ASTM F3548-21 SCD0005/SCD0010, an operational intent managed by a DOWN USS whose details cannot be
+# retrieved is treated by its (DSS-readable) state: Accepted → lowest-bound priority (may plan over it);
+# Activated/Nonconforming/Contingent → highest priority (must reject the conflicting plan).
+DOWN_USS_BLOCKING_STATES = (
+    OperationalIntentState.Activated.value,
+    OperationalIntentState.Nonconforming.value,
+    OperationalIntentState.Contingent.value,
+)
+
+# Synthetic status on OperationalIntentUpdateResponse meaning "Flight Blender decided not to submit
+# the update to the DSS" (a domain rejection, not a transport error). The flight-planning layer
+# translates this into an HTTP 200 planning rejection per the InterUSS flight-planning interface.
+OPINT_UPDATE_NOT_SUBMITTED_STATUS = 999
+
+# Audiences that identify Flight Blender itself; peer-USS notifications to these are skipped.
+SELF_NOTIFICATION_AUDIENCES = ("host.docker.internal", "flight-blender", "flight-blender.localutm")
 
 
 @dataclass
@@ -255,12 +246,6 @@ class OperationalIntentReferenceDSSResponse:
 
 
 @dataclass
-class SubscriptionState:
-    subscription_id: str
-    notification_index: int
-
-
-@dataclass
 class SubscriberToNotify:
     subscriptions: list[SubscriptionState]
     uss_base_url: str
@@ -291,10 +276,7 @@ class PeerUSSUnavailableResponse:
     status: int
 
 
-@dataclass
-class LatLng:
-    lat: float
-    lng: float
+LatLng = LatLngPoint
 
 
 @dataclass
@@ -478,10 +460,13 @@ class OperationalIntentReferenceDSSDetails:
 @dataclass
 class OpInttoCheckDetails:
     ovn: str
-    shape: Plgn
+    shape: BaseGeometry
     id: str
     time_start: Optional[str] = None
     time_end: Optional[str] = None
+    # Set for an operational intent managed by a down USS whose state forces a conflict
+    # (ASTM F3548-21 down-USS mechanism): treated as conflicting regardless of geometry.
+    force_conflict: bool = False
 
 
 # --- Flight planning types (from flight_planning_data_definitions) ---
@@ -695,27 +680,10 @@ class FlightDeclarationCreationPayload:
     state: int
 
 
-@dataclass
-class SCDLatLngPoint:
-    lat: float
-    lng: float
-
-
-@dataclass
-class SCDRadius:
-    value: float
-    units: str
-
-
-@dataclass
-class SCDPolygon:
-    vertices: list[SCDLatLngPoint]
-
-
-@dataclass
-class SCDCircle:
-    center: SCDLatLngPoint
-    radius: SCDRadius
+SCDLatLngPoint = LatLngPoint
+SCDRadius = Radius
+SCDPolygon = Polygon
+SCDCircle = Circle
 
 
 @dataclass

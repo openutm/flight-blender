@@ -1,5 +1,6 @@
 import datetime
 import json
+import uuid
 from dataclasses import asdict, is_dataclass
 from decimal import Decimal
 from enum import Enum
@@ -11,6 +12,8 @@ class LazyEncoder(json.JSONEncoder):
             return float(obj)
         if isinstance(obj, (datetime.date, datetime.datetime)):
             return obj.isoformat()
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
         return super().default(obj)
 
 
@@ -24,6 +27,8 @@ class EnhancedJSONEncoder(json.JSONEncoder):
             return o.value
         if isinstance(o, Decimal):
             return float(o)
+        if isinstance(o, uuid.UUID):
+            return str(o)
         return super().default(o)
 
 

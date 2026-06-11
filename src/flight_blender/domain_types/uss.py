@@ -5,6 +5,26 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
 
+from flight_blender.domain_types.airspace import Altitude as _AirspaceAltitude
+from flight_blender.domain_types.airspace import Circle as _AirspaceCircle
+from flight_blender.domain_types.airspace import LatLngPoint as _AirspaceLatLngPoint
+from flight_blender.domain_types.airspace import Polygon as _AirspacePolygon
+from flight_blender.domain_types.airspace import Radius as _AirspaceRadius
+from flight_blender.domain_types.airspace import SubscriptionState as _AirspaceSubscriptionState
+from flight_blender.domain_types.airspace import Time as _AirspaceTime
+from flight_blender.domain_types.airspace import Volume3D as _AirspaceVolume3D
+from flight_blender.domain_types.airspace import Volume4D as _AirspaceVolume4D
+
+Time = _AirspaceTime
+USSSubscriptionState = _AirspaceSubscriptionState
+USSLatLngPoint = _AirspaceLatLngPoint
+USSRadius = _AirspaceRadius
+USSPolygon = _AirspacePolygon
+USSCircle = _AirspaceCircle
+USSAltitude = _AirspaceAltitude
+USSVolume3D = _AirspaceVolume3D
+USSVolume4D = _AirspaceVolume4D
+
 # --- RID spec types (from uss/rid_data_definitions.py) ---
 
 
@@ -405,12 +425,6 @@ class OperationalIntentNotFoundResponse:
 
 
 @dataclass
-class Time:
-    format: str
-    value: str
-
-
-@dataclass
 class UpdateOperationalIntent:
     message: str
 
@@ -436,62 +450,11 @@ class OperatorDetailsSuccessResponse:
     details: RIDFlightDetails
 
 
-@dataclass
-class USSSubscriptionState:
-    subscription_id: str
-    notification_index: int
-
-
-@dataclass
-class USSLatLngPoint:
-    lat: float
-    lng: float
-
-
-@dataclass
-class USSRadius:
-    value: float
-    units: str
-
-
-@dataclass
-class USSPolygon:
-    vertices: list[USSLatLngPoint]
-
-
-@dataclass
-class USSCircle:
-    center: USSLatLngPoint
-    radius: USSRadius
-
-
-@dataclass
-class USSAltitude:
-    value: int | float
-    reference: str
-    units: str
-
-
-@dataclass
-class USSVolume3D:
-    outline_polygon: USSPolygon
-    altitude_lower: USSAltitude
-    altitude_upper: USSAltitude
-    outline_circle: USSCircle | None = None
-
-
 class OperationalIntentState(str, Enum):
     Accepted = "Accepted"
     Activated = "Activated"
     Nonconforming = "Nonconforming"
     Contingent = "Contingent"
-
-
-@dataclass
-class USSVolume4D:
-    volume: USSVolume3D
-    time_start: Time
-    time_end: Time
 
 
 @dataclass

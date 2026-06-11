@@ -19,13 +19,10 @@ from shapely.geometry import LineString, Point, Polygon
 from uas_standards.astm.f3411.v22a.constants import NetMinClusterSizePercent, NetMinObfuscationDistanceM
 
 from flight_blender.auth import dss_auth as dss_auth_helper
-from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import RESPONSE_CONTENT_TYPE
-from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
-from flight_blender.domain_types.rid import UASID, OperatorLocation, UAClassificationEU
 from flight_blender.domain_types.rid_operations import (
     Cluster,
     ClusterDetail,
@@ -34,9 +31,7 @@ from flight_blender.domain_types.rid_operations import (
     ISACreationRequest,
     ISACreationResponse,
     RIDAltitude,
-    RIDAuthData,
     RIDFlight,
-    RIDFlightDetails,
     RIDFlightsRecord,
     RIDLatLngPoint,
     RIDPolygon,
@@ -49,22 +44,15 @@ from flight_blender.domain_types.rid_operations import (
     SubscriptionState,
 )
 from flight_blender.domain_types.scd import Volume4D
-from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 
 geod = Geod(ellps="WGS84")
 
 
 class RemoteIDOperations:
-    def __init__(
-        self,
-        rid_repo: SQLAlchemyRIDRepository | None = None,
-        feed_repo: SQLAlchemyFlightFeedRepository | None = None,
-    ):
+    def __init__(self):
         self.dss_base_url = settings.DSS_BASE_URL
         self.r = get_redis()
-        self.rid_repo = rid_repo
-        self.feed_repo = feed_repo
 
     def compute_polygon_area(self, polygon: Polygon):
         poly_area_m2, poly_perimeter = geod.geometry_area_perimeter(polygon)
@@ -315,8 +303,8 @@ class RemoteIDOperations:
 
         return isa_creation_response
 
+    @staticmethod
     def create_dss_subscription(
-        self,
         vertex_list: list,
         view: str,
         request_uuid,
@@ -347,7 +335,7 @@ class RemoteIDOperations:
         else:
             # A token from authority was received,
             new_subscription_id = str(uuid.uuid4())
-            dss_subscription_url = self.dss_base_url + "rid/v2/dss/subscriptions/" + new_subscription_id
+            dss_subscription_url = settings.DSS_BASE_URL + "rid/v2/dss/subscriptions/" + new_subscription_id
             # check if a subscription already exists for this view_port
 
             now = datetime.now()
@@ -423,7 +411,7 @@ class RemoteIDOperations:
                         rid_repo = SQLAlchemyRIDRepository(db)
                         await rid_repo.create_subscription(
                             subscription_id=subscription_id,
-                            record_id=request_uuid,
+                            record_id=uuid.UUID(request_uuid) if isinstance(request_uuid, str) else request_uuid,
                             view_hash=view_hash,
                             end_datetime=fifteen_seconds_from_now_isoformat,
                             is_simulated=is_simulated,
@@ -439,134 +427,3 @@ class RemoteIDOperations:
         """This module calls the DSS to delete a subscription"""
 
         pass
-
-    async def query_uss_for_rid_details(self, rid_flight_details_query_url: str, flight_id: str, headers: dict):
-        """Queries USS for RID flight details and persists them."""
-        flight_details_exist = await self.rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
-
-        if not flight_details_exist:
-            # Get and store the flight details
-            flight_details_request = requests.get(rid_flight_details_query_url, headers=headers, timeout=30)
-            if flight_details_request.status_code != 200:
-                logger.info("Error in retrieving flight details for %s" % flight_id)
-                logger.error(flight_details_request.text)
-                return
-
-            _fd_raw = flight_details_request.json()
-            fd = _fd_raw["details"]
-
-            logger.info("Retrieved Flight Details for %s" % flight_id)
-            operation_description = None
-            if "operation_description" in fd.keys():
-                operation_description = fd["operation_description"]
-            operator_id = None
-            if "operator_id" in fd.keys():
-                operator_id = fd["operator_id"]
-            operator_location = None
-            if "operator_location" in fd.keys():
-                operator_location = from_dict(data_class=OperatorLocation, data=fd["operator_location"])
-            auth_data = None
-            if "auth_data" in fd.keys():
-                auth_data = from_dict(data_class=RIDAuthData, data=fd["auth_data"])
-
-            uas_id = None
-            if "uas_id" in fd.keys():
-                uas_id = from_dict(data_class=UASID, data=fd["uas_id"])
-
-            eu_classification = None
-            if fd.get("eu_classification"):
-                eu_classification = from_dict(data_class=UAClassificationEU, data=fd["eu_classification"])
-
-            flight_detail = RIDFlightDetails(
-                id=flight_id,
-                operation_description=operation_description,
-                operator_location=operator_location,
-                operator_id=operator_id,
-                auth_data=auth_data,
-                uas_id=uas_id,
-                eu_classification=eu_classification,
-            )
-            await self.rid_repo.create_or_update_flight_detail(rid_flight_details_payload=flight_detail)
-
-    async def query_uss_for_rid(self, flight_details: str, subscription_id: str, view: str):
-        _flight_details = from_dict(data_class=RIDFlightsRecord, data=json.loads(flight_details))
-
-        authority_credentials = dss_auth_helper.AuthorityCredentialsGetter()
-
-        all_flights_url = []
-        for _service_area in _flight_details.service_areas:
-            rid_query_url = _service_area.uss_base_url + "/uss/flights" + "?view=" + view
-
-            logger.debug(f"Flight url list : {all_flights_url}")
-            audience = generate_audience_from_base_url(base_url=_service_area.uss_base_url)
-
-            auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
-            headers = {
-                "content-type": RESPONSE_CONTENT_TYPE,
-                "Authorization": "Bearer " + auth_credentials["access_token"],
-            }
-            flights_request = requests.get(rid_query_url, headers=headers, timeout=30)
-
-            if flights_request.status_code == 200:
-                # https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/uastech/standards/dd4016b09fc8cb98f30c2a17b5a088fb2995ab54/remoteid/canonical.yaml
-                flights_response = flights_request.json()
-
-                all_flights = flights_response["flights"]
-                for flight in all_flights:
-                    flight_id = flight["id"]
-
-                    rid_flight_details_query_url = f"{_service_area.uss_base_url}/uss/flights/{flight_id}/details"
-
-                    await self.query_uss_for_rid_details(
-                        rid_flight_details_query_url=rid_flight_details_query_url,
-                        flight_id=flight_id,
-                        headers=headers,
-                    )
-
-                    if flight.get("current_state") is None:
-                        logger.error("There is no current_state provided by SP on the flights url %s" % rid_query_url)
-                        logger.debug(f"{json.dumps(flight)}")
-                    else:
-                        flight_current_state = flight["current_state"]
-                        position = flight_current_state["position"]
-
-                        recent_positions = flight["recent_positions"] if "recent_positions" in flight.keys() else []
-
-                        flight_metadata = {
-                            "id": flight_id,
-                            "simulated": flight["simulated"],
-                            "aircraft_type": flight["aircraft_type"],
-                            "subscription_id": subscription_id,
-                            "current_state": flight_current_state,
-                            "recent_positions": recent_positions,
-                        }
-                        # logger.info("Writing flight remote-id data..")
-                        if {"lat", "lng", "alt"} <= position.keys():
-                            # check if lat / lng / alt existis
-                            single_observation = {
-                                "session_id": subscription_id,
-                                "icao_address": flight_id,
-                                "traffic_source": 11,
-                                "source_type": 1,
-                                "lat_dd": position["lat"],
-                                "lon_dd": position["lng"],
-                                "altitude_mm": position["alt"],
-                                "metadata": flight_metadata,
-                            }
-                            single_observation = from_dict(
-                                data_class=SingleAirtrafficObservation,
-                                data=single_observation,
-                            )
-                            logger.debug("Writing flight remote-id data..")
-                            await self.feed_repo.write_flight_observation(single_observation=single_observation)
-
-                        else:
-                            logger.error("Error in received flights data: %{url}s ".format(**flight))
-
-            else:
-                logs_dict = {
-                    "url": rid_query_url,
-                    "status_code": flights_request.status_code,
-                }
-                logger.info("Received a non 200 error from {url} : {status_code} ".format(**logs_dict))
-                logger.info("Detailed Response %s" % flights_request.text)

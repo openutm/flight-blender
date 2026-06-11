@@ -12,33 +12,37 @@ Covers the pure-logic classes that do not require a live DSS:
 """
 
 import arrow
+import httpx
 import pytest
+from fastapi import HTTPException
 
-from flight_blender.config import settings
-from flight_blender.clients.dss_scd_client import (
+import flight_blender.clients.dss_scd_client as dss_helper
+from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper
+from flight_blender.utils.scd_helpers import (
     FlightPlanningDataValidator,
-    OperationalIntentReferenceHelper,
     OperationalIntentValidator,
     PeerOperationalIntentValidator,
     VolumesConverter,
     VolumesValidator,
 )
-from flight_blender.domain_types.scd import FlightPlanningInjectionData
+from flight_blender.config import settings
 from flight_blender.domain_types.scd import (
     Altitude,
     Circle,
+    FlightPlanningInjectionData,
     LatLngPoint,
+    NotifyPeerUSSPostPayload,
     OperationalIntentDetailsUSSResponse,
     OperationalIntentReferenceDSSResponse,
     OperationalIntentTestInjection,
     OperationalIntentUSSDetails,
     Radius,
+    SubscriptionState,
     Time,
     Volume3D,
     Volume4D,
 )
 from flight_blender.domain_types.scd import Polygon as Plgn
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -80,6 +84,28 @@ def _make_circle_volume4d() -> Volume4D:
         volume=volume3d,
         time_start=Time(format="RFC3339", value=now.shift(minutes=5).isoformat()),
         time_end=Time(format="RFC3339", value=now.shift(hours=1).isoformat()),
+    )
+
+
+def _make_notification_payload() -> NotifyPeerUSSPostPayload:
+    now = arrow.now()
+    reference = OperationalIntentReferenceDSSResponse(
+        id="test-id",
+        manager="test-manager",
+        uss_availability="Unknown",
+        version=1,
+        state="Accepted",
+        ovn="test-ovn",
+        time_start=Time(format="RFC3339", value=now.isoformat()),
+        time_end=Time(format="RFC3339", value=now.shift(hours=1).isoformat()),
+        uss_base_url="http://peer.example.com",
+        subscription_id="subscription-id",
+    )
+    details = OperationalIntentUSSDetails(volumes=[_make_volume4d()], priority=0, off_nominal_volumes=[])
+    return NotifyPeerUSSPostPayload(
+        operational_intent_id="test-id",
+        operational_intent=OperationalIntentDetailsUSSResponse(reference=reference, details=details),
+        subscriptions=[SubscriptionState(subscription_id="subscription-id", notification_index=1)],
     )
 
 
@@ -406,7 +432,6 @@ class TestVolumesConverter:
 
 class TestOperationalIntentReferenceHelperParsing:
     def _volume_dict(self, minutes_ahead=5):
-        now = arrow.now()
         return {
             "volume": {
                 "outline_polygon": {
@@ -486,3 +511,92 @@ class TestOperationalIntentReferenceHelperParsing:
         assert ref.id == "ref-001"
         assert ref.version == 3
         assert ref.state == "Accepted"
+
+
+class TestPeerUSSNotification:
+    async def test_notify_auth_failure_raises_http_exception(self, monkeypatch):
+        ops = dss_helper.SCDOperations()
+
+        async def auth_error(audience):
+            return {"error": "auth_failed"}
+
+        monkeypatch.setattr(ops, "async_get_auth_token", auth_error)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await ops.notify_peer_uss_of_created_updated_operational_intent(
+                uss_base_url="http://peer.example.com",
+                notification_payload=_make_notification_payload(),
+                audience="peer.example.com",
+            )
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == {"message": "Failed to get auth token for peer USS notification"}
+
+    async def test_notify_transport_failure_raises_http_exception(self, monkeypatch):
+        ops = dss_helper.SCDOperations()
+
+        async def auth_success(audience):
+            return {"access_token": "token"}
+
+        monkeypatch.setattr(ops, "async_get_auth_token", auth_success)
+
+        async def raise_transport_error(method, endpoint, **kwargs):
+            raise HTTPException(status_code=504, detail={"message": f"Request to {endpoint} timed out"})
+
+        monkeypatch.setattr(dss_helper, "_async_request", raise_transport_error)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await ops.notify_peer_uss_of_created_updated_operational_intent(
+                uss_base_url="http://peer.example.com",
+                notification_payload=_make_notification_payload(),
+                audience="peer.example.com",
+            )
+
+        assert exc_info.value.status_code == 504
+        assert exc_info.value.detail == {"message": "Request to http://peer.example.com/uss/v1/operational_intents timed out"}
+
+    async def test_notify_peer_non_204_raises_http_exception(self, monkeypatch):
+        ops = dss_helper.SCDOperations()
+
+        async def auth_success(audience):
+            return {"access_token": "token"}
+
+        monkeypatch.setattr(ops, "async_get_auth_token", auth_success)
+        request = httpx.Request("POST", "http://peer.example.com/uss/v1/operational_intents")
+
+        async def peer_error_response(method, endpoint, **kwargs):
+            return httpx.Response(503, request=request)
+
+        monkeypatch.setattr(dss_helper, "_async_request", peer_error_response)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await ops.notify_peer_uss_of_created_updated_operational_intent(
+                uss_base_url="http://peer.example.com",
+                notification_payload=_make_notification_payload(),
+                audience="peer.example.com",
+            )
+
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == {"message": "Error in notification"}
+
+    async def test_notify_success_returns_response(self, monkeypatch):
+        ops = dss_helper.SCDOperations()
+
+        async def auth_success(audience):
+            return {"access_token": "token"}
+
+        monkeypatch.setattr(ops, "async_get_auth_token", auth_success)
+        request = httpx.Request("POST", "http://peer.example.com/uss/v1/operational_intents")
+
+        async def peer_success_response(method, endpoint, **kwargs):
+            return httpx.Response(204, request=request)
+
+        monkeypatch.setattr(dss_helper, "_async_request", peer_success_response)
+
+        response = await ops.notify_peer_uss_of_created_updated_operational_intent(
+            uss_base_url="http://peer.example.com",
+            notification_payload=_make_notification_payload(),
+            audience="peer.example.com",
+        )
+
+        assert response.status == 204

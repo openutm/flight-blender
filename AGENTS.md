@@ -31,7 +31,7 @@ src/flight_blender/
 ├── repositories/                          # Concrete SA repos, no Protocol (suffix: _repo)
 │   └── <domain>_repo.py                   # async + sync classes; flush not commit
 │
-├── domain_types/                          # Pure domain dataclasses for ASTM domains
+├── domain_types/                          # Pure domain dataclasses/pydantic models for ASTM domains
 │   ├── common.py                          # shared scopes, constants
 │   ├── rid.py                             # ASTM RID wire types
 │   ├── rid_operations.py                  # operational RID types (Cluster, ISA, etc.)
@@ -52,7 +52,6 @@ src/flight_blender/
 ├── clients/                               # External HTTP + Redis clients (suffix: _client)
 │   ├── dss_rid_client.py
 │   ├── dss_scd_client.py
-│   ├── dss_conformance_client.py
 │   ├── dss_constraint_client.py
 │   ├── weather_client.py
 │   ├── redis_client.py
@@ -143,7 +142,7 @@ Every value in the system is exactly one of these:
 | Type | Where | Rule |
 |------|-------|------|
 | **ORM** (SQLAlchemy model) | `models/*_orm.py` | Never leaves the repository. Repo converts it to domain type before returning. |
-| **Domain type** (dataclass/NamedTuple) | `domain_types/*.py` | Used within services and passed to clients. Not exposed directly via HTTP. |
+| **Domain type** (dataclass/pydantic/NamedTuple) | `domain_types/*.py` | Used within services and passed to clients. Not exposed directly via HTTP. |
 | **Schema** (Pydantic BaseModel) | `schemas/*.py` | HTTP boundary only. Router parses request → schema → service call → schema → response. |
 
 Simple domains (notifications, flight_feed, surveillance, weather) may use schemas directly without a domain type intermediary.
