@@ -39,6 +39,18 @@ class SubmissionResultStatus(str, enum.Enum):
 # ASTM F3548-21 priority value reserved for high-priority (emergency) operations.
 HIGH_PRIORITY_OP_INTENT = 100
 
+# DSS uss_availability value indicating a peer USS is declared down.
+USS_AVAILABILITY_DOWN = "Down"
+
+# Per ASTM F3548-21 SCD0005/SCD0010, an operational intent managed by a DOWN USS whose details cannot be
+# retrieved is treated by its (DSS-readable) state: Accepted → lowest-bound priority (may plan over it);
+# Activated/Nonconforming/Contingent → highest priority (must reject the conflicting plan).
+DOWN_USS_BLOCKING_STATES = (
+    OperationalIntentState.Activated.value,
+    OperationalIntentState.Nonconforming.value,
+    OperationalIntentState.Contingent.value,
+)
+
 # Synthetic status on OperationalIntentUpdateResponse meaning "Flight Blender decided not to submit
 # the update to the DSS" (a domain rejection, not a transport error). The flight-planning layer
 # translates this into an HTTP 200 planning rejection per the InterUSS flight-planning interface.
@@ -452,6 +464,9 @@ class OpInttoCheckDetails:
     id: str
     time_start: Optional[str] = None
     time_end: Optional[str] = None
+    # Set for an operational intent managed by a down USS whose state forces a conflict
+    # (ASTM F3548-21 down-USS mechanism): treated as conflicting regardless of geometry.
+    force_conflict: bool = False
 
 
 # --- Flight planning types (from flight_planning_data_definitions) ---

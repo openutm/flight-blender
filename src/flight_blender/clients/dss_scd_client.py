@@ -20,9 +20,11 @@ from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import OPINT_INDEX_BASEPATH, OperationStateCode
 from flight_blender.domain_types.scd import (
+    DOWN_USS_BLOCKING_STATES,
     HIGH_PRIORITY_OP_INTENT,
     OPINT_UPDATE_NOT_SUBMITTED_STATUS,
     SELF_NOTIFICATION_AUDIENCES,
+    USS_AVAILABILITY_DOWN,
     Altitude,
     Circle,
     ClearAreaResponse,
@@ -441,6 +443,11 @@ class SCDOperations:
                     uss_base_url=o_i_r["uss_base_url"],
                     subscription_id=o_i_r["subscription_id"],
                 )
+                logger.debug(
+                    f"DSS op_int reference {o_i_r_formatted.id}: state={o_i_r_formatted.state}, "
+                    f"manager={o_i_r_formatted.manager}, uss_availability={o_i_r_formatted.uss_availability}, "
+                    f"base_url={o_i_r_formatted.uss_base_url}"
+                )
                 # if o_i_r_formatted.uss_base_url != flight_blender_base_url:
                 all_uss_operational_intent_details.append(o_i_r_formatted)
 
@@ -518,43 +525,9 @@ class SCDOperations:
                     op_int_details_retrieved = True
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
-                    uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
-                    uss_auth_token = await self.async_get_auth_token(audience=uss_audience)
-                    logger.info(f"Auth Token {uss_auth_token}")
-
-                    uss_headers = {
-                        "Content-Type": "application/json",
-                        "Authorization": "Bearer " + uss_auth_token["access_token"],
-                    }
-                    # ASTM path is /uss/v1/operational_intents/{entityid}
-                    uss_operational_intent_url = current_uss_base_url + "/uss/v1/operational_intents/" + current_uss_operational_intent_detail.id
-
-                    logger.debug(f"Querying USS: {current_uss_base_url}")
-                    uss_operational_intent_request = await _async_request("GET", uss_operational_intent_url, headers=uss_headers)
-
-                    # Verify status of the response from the USS
-                    if uss_operational_intent_request.status_code == 200:
-                        # Request was successful
-                        operational_intent_details_json = _json_from_response(uss_operational_intent_request, uss_operational_intent_url)
-                        op_int_details_retrieved = True
-                        # outline_polygon = None
-                        # outline_circle = None
-
-                        op_int_det = operational_intent_details_json["operational_intent"]["details"]
-                        op_int_ref = operational_intent_details_json["operational_intent"]["reference"]
-                    # The attempt to get data from the USS in the network failed
-                    else:
-                        logger.debug(f"Response: {_json_from_response(uss_operational_intent_request, uss_operational_intent_url)}")
-                        logger.error(
-                            "Error in querying peer USS about operational intent (ID: {uss_op_int_id}) details from uss with base url {uss_base_url}".format(
-                                uss_op_int_id=current_uss_operational_intent_detail.id,
-                                uss_base_url=current_uss_base_url,
-                            )
-                        )
-                        raise HTTPException(
-                            status_code=uss_operational_intent_request.status_code,
-                            detail={"message": "Error in querying peer USS operational intent details"},
-                        )
+                    op_int_details_retrieved, op_int_ref, op_int_det = await self._fetch_peer_operational_intent_details(
+                        dss_reference=current_uss_operational_intent_detail,
+                    )
 
                 if op_int_details_retrieved:
                     op_int_reference: OperationalIntentReferenceDSSResponse = my_op_int_ref_helper.parse_operational_intent_reference_from_dss(
@@ -583,6 +556,93 @@ class SCDOperations:
                     nearby_operational_intents.append(uss_op_int_details)
 
         return nearby_operational_intents
+
+    async def _fetch_peer_operational_intent_details(
+        self, dss_reference: OperationalIntentReferenceDSSResponse
+    ) -> tuple[bool, dict, dict]:
+        """Fetch a peer USS's operational intent details (reference + details dicts).
+
+        On any failure (transport error or non-200) where the DSS reports the managing USS as down,
+        apply the ASTM F3548-21 down-USS mechanism: fall back to the DSS reference (whose state is still
+        known) with empty details, so the caller can apply state-based priority. Otherwise re-raise.
+        """
+        uss_base_url = dss_reference.uss_base_url
+        uss_audience = generate_audience_from_base_url(base_url=uss_base_url)
+        uss_auth_token = await self.async_get_auth_token(audience=uss_audience)
+        uss_headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + uss_auth_token["access_token"],
+        }
+        # ASTM path is /uss/v1/operational_intents/{entityid}
+        uss_operational_intent_url = uss_base_url + "/uss/v1/operational_intents/" + dss_reference.id
+        logger.debug(
+            f"Querying USS: {uss_base_url} (op_int {dss_reference.id}, manager={dss_reference.manager}, "
+            f"reference uss_availability={dss_reference.uss_availability})"
+        )
+
+        try:
+            response = await _async_request("GET", uss_operational_intent_url, headers=uss_headers)
+        except HTTPException:
+            logger.warning(f"Transport error querying peer USS {uss_base_url} for op_int {dss_reference.id} details")
+            if await self._is_managing_uss_down(dss_reference):
+                return self._down_uss_details_fallback(dss_reference)
+            raise
+
+        if response.status_code == 200:
+            body = _json_from_response(response, uss_operational_intent_url)
+            return True, body["operational_intent"]["reference"], body["operational_intent"]["details"]
+
+        logger.warning(f"Peer USS {uss_base_url} returned {response.status_code} for op_int {dss_reference.id} details")
+        if await self._is_managing_uss_down(dss_reference):
+            logger.info(f"Peer USS {uss_base_url} is down; applying down-USS mechanism")
+            return self._down_uss_details_fallback(dss_reference)
+
+        logger.error(
+            "Error in querying peer USS about operational intent (ID: {uss_op_int_id}) details from uss with base url {uss_base_url}".format(
+                uss_op_int_id=dss_reference.id, uss_base_url=uss_base_url
+            )
+        )
+        raise HTTPException(
+            status_code=response.status_code,
+            detail={"message": "Error in querying peer USS operational intent details"},
+        )
+
+    async def _get_uss_availability(self, uss_id: str) -> str:
+        """Query the DSS for the authoritative availability of a USS (ASTM F3548-21 GetUssAvailability).
+
+        The ``uss_availability`` carried on an operational intent reference defaults to ``Unknown``; the
+        live value lives behind ``GET /dss/v1/uss_availability/{uss_id}``. Returns "" if it cannot be read.
+        """
+        dss_audience = generate_audience_from_base_url(self.dss_base_url)
+        auth_token = await self.async_get_auth_token(audience=dss_audience)
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + auth_token["access_token"],
+        }
+        availability_url = self.dss_base_url + "dss/v1/uss_availability/" + uss_id
+        try:
+            response = await _async_request("GET", availability_url, headers=headers)
+        except HTTPException as exc:
+            logger.warning(f"Could not query USS availability for {uss_id}: {exc.detail}")
+            return ""
+        if response.status_code != 200:
+            logger.warning(f"USS availability query for {uss_id} returned {response.status_code}")
+            return ""
+        body = _json_from_response(response, availability_url)
+        availability = body.get("availability", {}).get("availability", "")
+        logger.info(f"DSS reports USS {uss_id} availability = {availability!r}")
+        return availability
+
+    async def _is_managing_uss_down(self, dss_reference: OperationalIntentReferenceDSSResponse) -> bool:
+        """True if the operational intent's managing USS is down (per the reference or the DSS endpoint)."""
+        if dss_reference.uss_availability == USS_AVAILABILITY_DOWN:
+            return True
+        return await self._get_uss_availability(dss_reference.manager) == USS_AVAILABILITY_DOWN
+
+    def _down_uss_details_fallback(self, dss_reference: OperationalIntentReferenceDSSResponse) -> tuple[bool, dict, dict]:
+        """Down-USS fallback: reuse the DSS reference (state/ovn/time still known) with empty details."""
+        logger.info(f"Applying down-USS mechanism for operational intent {dss_reference.id} (state={dss_reference.state})")
+        return True, asdict(dss_reference), {"volumes": [], "off_nominal_volumes": [], "priority": 0}
 
     def get_auth_token(self, audience: str = "") -> dict:
         """Fetch a DSS/peer-USS auth token synchronously.
@@ -738,6 +798,25 @@ class SCDOperations:
             raise ValueError("Error in validating received data, cannot progress with processing")
 
         for uss_op_int_detail in nearby_operational_intents:
+            reference = uss_op_int_detail.reference
+            has_volumes = bool(uss_op_int_detail.details.volumes or uss_op_int_detail.details.off_nominal_volumes)
+            if reference.uss_availability == USS_AVAILABILITY_DOWN and not has_volumes:
+                # Down USS with no retrievable details: apply ASTM F3548-21 down-USS mechanism by state.
+                # The OVN is always recorded (the DSS requires it in the airspace keys), but the geometry is
+                # unavailable. Accepted → lowest-bound priority → no conflict (plan may proceed over it).
+                # Activated/Nonconforming/Contingent → highest priority → force a conflict (reject).
+                all_opints_to_check.append(
+                    OpInttoCheckDetails(
+                        shape=Point(0, 0).buffer(0.00001),
+                        ovn=reference.ovn,
+                        id=reference.id,
+                        time_start=reference.time_start.value,
+                        time_end=reference.time_end.value,
+                        force_conflict=reference.state in DOWN_USS_BLOCKING_STATES,
+                    )
+                )
+                continue
+
             if uss_op_int_detail.details.off_nominal_volumes:
                 operational_intent_volumes = uss_op_int_detail.details.off_nominal_volumes
             else:
@@ -843,11 +922,16 @@ class SCDOperations:
                 if subscriber.uss_base_url == flight_blender_url or subscriber.uss_base_url.startswith(flight_blender_url + "/"):
                     continue
                 if audience not in SELF_NOTIFICATION_AUDIENCES:
-                    await self.notify_peer_uss_of_created_updated_operational_intent(
-                        uss_base_url=subscriber.uss_base_url,
-                        notification_payload=notification_payload,
-                        audience=audience,
-                    )
+                    # Peer notification is best-effort: a subscriber being down/unreachable must not fail
+                    # the plan, which the DSS has already recorded successfully.
+                    try:
+                        await self.notify_peer_uss_of_created_updated_operational_intent(
+                            uss_base_url=subscriber.uss_base_url,
+                            notification_payload=notification_payload,
+                            audience=audience,
+                        )
+                    except HTTPException as exc:
+                        logger.warning(f"Could not notify peer USS {subscriber.uss_base_url} (best-effort), continuing: {exc.detail}")
 
     def process_retrieved_airspace_volumes(
         self,
@@ -893,6 +977,10 @@ class SCDOperations:
         all_existing_operational_intent_details: list[OpInttoCheckDetails],
         extents: list[Volume4D],
     ) -> bool:
+        if any(op_int.force_conflict for op_int in all_existing_operational_intent_details):
+            # A down-USS operational intent in a blocking state forces a conflict regardless of geometry.
+            return True
+
         my_ind_volumes_converter = VolumesConverter()
         my_ind_volumes_converter.convert_volumes_to_geojson(volumes=extents)
         ind_volumes_polygon = my_ind_volumes_converter.get_minimum_rotated_rectangle()
@@ -1211,7 +1299,14 @@ class SCDOperations:
 
             is_conflicted_in_time = False
             is_conflicted_in_space = False
-            if priority == HIGH_PRIORITY_OP_INTENT:
+            # Down-USS operational intents in a blocking state (Activated/Nonconforming/Contingent) are
+            # treated as the highest priority allowed, so they force a conflict regardless of geometry AND
+            # regardless of this flight's own priority — even a high-priority flight must be rejected
+            # (ASTM F3548-21 SCD0010). Their real OVN is hidden by the DSS, so the plan cannot be submitted.
+            forced_conflict = any(op_int.force_conflict for op_int in all_existing_operational_intent_details)
+            if forced_conflict:
+                deconflicted = False
+            elif priority == HIGH_PRIORITY_OP_INTENT:
                 deconflicted = True
             else:
                 airspace_keys.append(management_key)
@@ -1227,7 +1322,7 @@ class SCDOperations:
                         volume_time_start=volume_time_start,
                     )
 
-                deconflicted = False if any([is_conflicted_in_space, is_conflicted_in_time]) else True
+                deconflicted = not (is_conflicted_in_space or is_conflicted_in_time)
         else:
             deconflicted = True
             logger.info("No existing operational intent references in the DSS, deconfliction status: %s" % deconflicted)
