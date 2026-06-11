@@ -6,7 +6,7 @@ from typing import Any
 
 import arrow
 from dacite import from_dict
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import delete
 from uas_standards.astm.f3411.v22a.constants import NetDetailsMaxDisplayAreaDiagonalKm
@@ -26,16 +26,12 @@ from flight_blender.domain_types.rid_operations import (
     RIDVolume4D,
     SubscriptionState,
 )
-from flight_blender.domain_types.uss import (
-    FlightDetailsNotFoundMessage,
-    GenericErrorResponseMessage,
-    OperatorDetailsSuccessResponse,
-    RIDFlightDetails,
-)
+from flight_blender.domain_types.uss import GenericErrorResponseMessage, OperatorDetailsSuccessResponse, RIDFlightDetails
 from flight_blender.models.flight_feed_orm import FlightObservationORM
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.schemas.rid import CreateTestBody, ISACallbackBody
+from flight_blender.schemas.scd import NotificationObservedAtSchema, UserNotificationSchema, UserNotificationsResponseSchema
 from flight_blender.services import rid_svc as view_port_ops
 from flight_blender.services.flight_feed_svc import ObservationReadOperations
 from flight_blender.services.rid_svc import CreateTestResponse
@@ -76,7 +72,7 @@ async def create_dss_subscription(
     request_id = str(uuid.uuid4())
 
     subscription_r = await asyncio.to_thread(
-        RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).create_dss_subscription,
+        RemoteIDOperations.create_dss_subscription,
         vertex_list,
         view or "",
         request_id,
@@ -157,10 +153,9 @@ async def get_flight_data(
     repo: SQLAlchemyRIDRepository = Depends(_rid_ops),
     _auth: Any = Depends(require_scopes(["dss.read.identification_service_areas"])),
 ):
-    fid_str = str(flight_id)
-    if not await repo.check_flight_detail_exists(fid_str):
-        return JSONResponse(asdict(FlightDetailsNotFoundMessage(message="The requested flight could not be found")), status_code=404)
-    flight_details = await repo.get_flight_detail_by_id(fid_str)
+    flight_details = await repo.get_flight_detail_by_id(flight_id)
+    if not flight_details:
+        raise HTTPException(status_code=404, detail="The requested flight could not be found")
     detail = RIDFlightDetails(
         id=str(flight_details.id),
         operator_id=flight_details.operator_id,
@@ -208,7 +203,7 @@ async def get_display_data(
         vertex_list = view_port_ops.build_vertex_list_from_box(box)
         subscription_end_time = arrow.utcnow().shift(seconds=subscription_duration_seconds).isoformat()
         await asyncio.to_thread(
-            dss_rid_helper.RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).create_dss_subscription,
+            dss_rid_helper.RemoteIDOperations.create_dss_subscription,
             vertex_list,
             view or "",
             request_id,
@@ -280,4 +275,12 @@ async def user_notifications(
         return JSONResponse({"message": "Invalid date format. Use ISO 8601 format."}, status_code=400)
 
     notifications = await repo.get_active_notifications_between(after_dt, before_dt)
-    return {"user_notifications": [{"message": n.message, "observed_at": {"value": n.created_at, "format": "RFC3339"}} for n in notifications]}
+    return UserNotificationsResponseSchema(
+        user_notifications=[
+            UserNotificationSchema(
+                message=n.message,
+                observed_at=NotificationObservedAtSchema(value=n.created_at.isoformat(), format="RFC3339"),
+            )
+            for n in notifications
+        ]
+    )

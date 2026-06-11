@@ -113,7 +113,7 @@ async def get_uss_flights(
 
 @router.get("/flights/{flight_id}/details")
 async def get_uss_flight_details(
-    flight_id: str,
+    flight_id: uuid.UUID,
     ops: USSService = Depends(_ops),
     _auth: Any = Depends(require_scopes(["rid.display_provider"])),
 ):

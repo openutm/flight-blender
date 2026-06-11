@@ -52,7 +52,6 @@ src/flight_blender/
 ├── clients/                               # External HTTP + Redis clients (suffix: _client)
 │   ├── dss_rid_client.py
 │   ├── dss_scd_client.py
-│   ├── dss_conformance_client.py
 │   ├── dss_constraint_client.py
 │   ├── weather_client.py
 │   ├── redis_client.py

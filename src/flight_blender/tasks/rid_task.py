@@ -112,7 +112,7 @@ async def _async_process_requested_flight(
     requested_flight: dict,
     flight_injection_sorted_set: str,
     test_id: str,
-    injection_id: str,
+    injection_id: uuid.UUID,
     rid_repo: SQLAlchemyRIDRepository,
 ) -> tuple[RIDTestInjection, list[LatLngPoint], list[float]]:
     """
@@ -309,8 +309,7 @@ async def _async_process_requested_flight(
 @app.task(name="submit_dss_subscription")
 def submit_dss_subscription(view, vertex_list, request_uuid):
     subscription_duration_seconds = 30
-    my_dss_subscriber = dss_rid_helper.RemoteIDOperations()
-    subscription_created = my_dss_subscriber.create_dss_subscription(
+    subscription_created = dss_rid_helper.RemoteIDOperations.create_dss_subscription(
         vertex_list=vertex_list,
         view=view,
         request_uuid=request_uuid,
@@ -342,7 +341,7 @@ async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> Non
     async with async_task_session() as db:
         rid_repo = SQLAlchemyRIDRepository(db)
         feed_repo = SQLAlchemyFlightFeedRepository(db)
-        subscription_record = await rid_repo.get_subscription_by_id(session_id)
+        subscription_record = await rid_repo.get_subscription_by_id(uuid.UUID(session_id))
         my_dss_subscriber = dss_rid_helper.RemoteIDOperations(rid_repo=rid_repo, feed_repo=feed_repo)
 
         if r.exists(async_polling_lock):

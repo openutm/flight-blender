@@ -74,7 +74,7 @@ async def upsert_flight_plan(
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
     ops: SCDService = Depends(_ops),
 ):
-    return await ops.upsert_flight_plan(str(flight_plan_id), body)
+    return await ops.upsert_flight_plan(flight_plan_id, body)
 
 
 @router.delete("/flight_planning/flight_plans/{flight_plan_id}", response_model=CloseFlightPlanResponseSchema)
@@ -84,7 +84,7 @@ async def delete_flight_plan(
     _auth: Any = Depends(require_scopes(["interuss.flight_planning.plan"])),
     ops: SCDService = Depends(_ops),
 ):
-    return await ops.delete_flight_plan(str(flight_plan_id))
+    return await ops.delete_flight_plan(flight_plan_id)
 
 
 @router.get("/flight_planning/user_notifications", response_model=UserNotificationsResponseSchema)

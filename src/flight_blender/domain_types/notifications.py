@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 
-class NotificationLevel(Enum):
+class NotificationLevel(StrEnum):
     CRITICAL = "critical"
     ERROR = "error"
     WARNING = "warning"

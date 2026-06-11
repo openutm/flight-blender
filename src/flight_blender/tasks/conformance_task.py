@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 from loguru import logger
 
@@ -27,7 +28,7 @@ async def _async_check_flight_conformance(flight_declaration_id: str, session_id
         my_conformance_ops = FlightBlenderConformanceEngine(db=db)
 
         flight_operational_intent_reference_conformant = await my_conformance_ops.check_flight_operational_intent_reference_conformance(
-            flight_declaration_id=flight_declaration_id
+            flight_declaration_id=uuid.UUID(flight_declaration_id)
         )
 
     if flight_operational_intent_reference_conformant == 1:
@@ -75,7 +76,7 @@ async def _async_check_operation_telemetry_conformance(flight_declaration_id: st
         async with async_task_session() as db:
             my_conformance_ops = FlightBlenderConformanceEngine(db=db)
             conformant_via_telemetry = await my_conformance_ops.is_operation_conformant_via_telemetry(
-                flight_declaration_id=flight_declaration_id,
+                flight_declaration_id=uuid.UUID(flight_declaration_id),
                 aircraft_id=aircraft_id,
                 telemetry_location=LatLngPoint(lat=lat_dd, lng=lon_dd),
                 altitude_m_wgs_84=float(altitude_m_wgs84),

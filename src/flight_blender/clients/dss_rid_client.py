@@ -58,8 +58,8 @@ geod = Geod(ellps="WGS84")
 class RemoteIDOperations:
     def __init__(
         self,
-        rid_repo: SQLAlchemyRIDRepository | None = None,
-        feed_repo: SQLAlchemyFlightFeedRepository | None = None,
+        rid_repo: SQLAlchemyRIDRepository,
+        feed_repo: SQLAlchemyFlightFeedRepository,
     ):
         self.dss_base_url = settings.DSS_BASE_URL
         self.r = get_redis()
@@ -315,8 +315,8 @@ class RemoteIDOperations:
 
         return isa_creation_response
 
+    @staticmethod
     def create_dss_subscription(
-        self,
         vertex_list: list,
         view: str,
         request_uuid,
@@ -347,7 +347,7 @@ class RemoteIDOperations:
         else:
             # A token from authority was received,
             new_subscription_id = str(uuid.uuid4())
-            dss_subscription_url = self.dss_base_url + "rid/v2/dss/subscriptions/" + new_subscription_id
+            dss_subscription_url = settings.DSS_BASE_URL + "rid/v2/dss/subscriptions/" + new_subscription_id
             # check if a subscription already exists for this view_port
 
             now = datetime.now()
@@ -423,7 +423,7 @@ class RemoteIDOperations:
                         rid_repo = SQLAlchemyRIDRepository(db)
                         await rid_repo.create_subscription(
                             subscription_id=subscription_id,
-                            record_id=request_uuid,
+                            record_id=uuid.UUID(request_uuid) if isinstance(request_uuid, str) else request_uuid,
                             view_hash=view_hash,
                             end_datetime=fifteen_seconds_from_now_isoformat,
                             is_simulated=is_simulated,
@@ -440,7 +440,7 @@ class RemoteIDOperations:
 
         pass
 
-    async def query_uss_for_rid_details(self, rid_flight_details_query_url: str, flight_id: str, headers: dict):
+    async def query_uss_for_rid_details(self, rid_flight_details_query_url: str, flight_id: uuid.UUID, headers: dict):
         """Queries USS for RID flight details and persists them."""
         flight_details_exist = await self.rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
 
@@ -519,7 +519,7 @@ class RemoteIDOperations:
 
                     await self.query_uss_for_rid_details(
                         rid_flight_details_query_url=rid_flight_details_query_url,
-                        flight_id=flight_id,
+                        flight_id=uuid.UUID(flight_id),
                         headers=headers,
                     )
 
@@ -543,19 +543,15 @@ class RemoteIDOperations:
                         # logger.info("Writing flight remote-id data..")
                         if {"lat", "lng", "alt"} <= position.keys():
                             # check if lat / lng / alt existis
-                            single_observation = {
-                                "session_id": subscription_id,
-                                "icao_address": flight_id,
-                                "traffic_source": 11,
-                                "source_type": 1,
-                                "lat_dd": position["lat"],
-                                "lon_dd": position["lng"],
-                                "altitude_mm": position["alt"],
-                                "metadata": flight_metadata,
-                            }
-                            single_observation = from_dict(
-                                data_class=SingleAirtrafficObservation,
-                                data=single_observation,
+                            single_observation = SingleAirtrafficObservation(
+                                session_id=subscription_id,
+                                icao_address=flight_id,
+                                traffic_source=11,
+                                source_type=1,
+                                lat_dd=position["lat"],
+                                lon_dd=position["lng"],
+                                altitude_mm=position["alt"],
+                                metadata=flight_metadata,
                             )
                             logger.debug("Writing flight remote-id data..")
                             await self.feed_repo.write_flight_observation(single_observation=single_observation)

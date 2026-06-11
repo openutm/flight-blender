@@ -86,7 +86,7 @@ def _close_response(response: CloseFlightPlanResponse) -> CloseFlightPlanRespons
 
 @dataclass
 class FlightPlanningContext:
-    operation_id: str
+    operation_id: uuid.UUID
     request: FlightPlanningRequest
     data: FlightPlanningInjectionData
     volumes: list[Volume4D]
@@ -513,11 +513,11 @@ class SCDService:
         self.fd_repo = fd_repo
         self.notifications_repo = notifications_repo
 
-    async def upsert_flight_plan(self, flight_plan_id: str, request: UpsertFlightPlanRequestSchema) -> UpsertFlightPlanResponseSchema:
+    async def upsert_flight_plan(self, flight_plan_id: uuid.UUID, request: UpsertFlightPlanRequestSchema) -> UpsertFlightPlanResponseSchema:
         scd_helper = dss_scd_helper.SCDOperations()
         volumes_validator = VolumesValidator()
         request_data = request.model_dump(mode="json", exclude_none=True)
-        ctx = self._build_flight_planning_context(str(flight_plan_id), request_data)
+        ctx = self._build_flight_planning_context(flight_plan_id, request_data)
 
         validation_response = self._validate_flight_plan(ctx, volumes_validator)
         if validation_response is not None:
@@ -528,13 +528,13 @@ class SCDService:
             return _upsert_response(failed_planning_response)
 
         test_harness_helper = SCDTestHarnessHelper(fd_repo=self.fd_repo)
-        flight_plan_exists_in_flight_blender = await test_harness_helper.check_if_same_flight_id_exists(operation_id=ctx.operation_id)
+        flight_plan_exists_in_flight_blender = await test_harness_helper.check_if_same_flight_id_exists(operation_id=str(ctx.operation_id))
 
         if flight_plan_exists_in_flight_blender:
             return await self._update_existing_flight_plan(ctx, scd_helper)
         return await self._create_new_flight_plan(ctx, scd_helper, volumes_validator)
 
-    def _build_flight_planning_context(self, operation_id: str, request_data: dict[str, Any]) -> FlightPlanningContext:
+    def _build_flight_planning_context(self, operation_id: uuid.UUID, request_data: dict[str, Any]) -> FlightPlanningContext:
         processor = FlightPlanningDataProcessor(incoming_flight_information=request_data)
         scd_test_data = processor.process_incoming_flight_plan_data()
         op_int_bridge = FlightPlantoOperationalIntentProcessor(flight_planning_request=scd_test_data)
@@ -585,15 +585,15 @@ class SCDService:
         self, ctx: FlightPlanningContext, scd_helper: dss_scd_helper.SCDOperations
     ) -> UpsertFlightPlanResponseSchema:
         opint_parser = dss_scd_helper.OperationalIntentReferenceHelper()
-        existing_op_int_details = await opint_parser.parse_stored_operational_intent_details(operation_id=ctx.operation_id)
-        flight_declaration = await self.fd_repo.get_by_id(uuid.UUID(ctx.operation_id))
+        existing_op_int_details = await opint_parser.parse_stored_operational_intent_details(operation_id=str(ctx.operation_id))
+        flight_declaration = await self.fd_repo.get_by_id(ctx.operation_id)
         if not flight_declaration:
             return _upsert_response(
                 replace(failed_planning_response, notes="Flight Declaration with ID %s not found in Flight Blender" % ctx.operation_id)
             )
 
         current_state_str = OPERATION_STATES[flight_declaration.state][1]
-        stored_details = await opint_parser.parse_and_load_stored_flight_operational_intent_reference(operation_id=ctx.operation_id)
+        stored_details = await opint_parser.parse_and_load_stored_flight_operational_intent_reference(operation_id=str(ctx.operation_id))
         update_job = await scd_helper.update_specified_operational_intent_reference(
             operational_intent_ref_id=str(stored_details.reference.id),
             extents=ctx.volumes,
@@ -668,7 +668,7 @@ class SCDService:
         opint_details: FlightOperationalIntentDetailORM,
         state: OperationStateCode,
     ) -> None:
-        await self.fd_repo.update(uuid.UUID(ctx.operation_id), state=state)
+        await self.fd_repo.update(ctx.operation_id, state=state)
         await self.fd_repo.create_opint_reference_subscribers(
             declaration_id=flight_declaration.id,
             subscribers=dss_response.subscribers,
@@ -710,7 +710,7 @@ class SCDService:
     ) -> UpsertFlightPlanResponseSchema:
         if existing_op_int_details is None:
             raise HTTPException(status_code=404, detail={"message": "Stored operational intent details not found for nonconforming update"})
-        await self.fd_repo.update(uuid.UUID(ctx.operation_id), state=OperationStateCode.Nonconforming)
+        await self.fd_repo.update(ctx.operation_id, state=OperationStateCode.Nonconforming)
         existing_op_int_details.operational_intent_details.off_nominal_volumes = ctx.volumes
         existing_op_int_details.success_response.operational_intent_reference.state = OperationalIntentState.Nonconforming
         existing_op_int_details.operational_intent_details.state = OperationalIntentState.Nonconforming
@@ -750,7 +750,7 @@ class SCDService:
 
     async def _create_flight_declaration(self, ctx: FlightPlanningContext) -> FlightDeclarationORM:
         return await self.fd_repo.create(
-            id=uuid.UUID(ctx.operation_id),
+            id=ctx.operation_id,
             operational_intent=json.dumps(asdict(ctx.data)),
             flight_declaration_raw_geojson=json.dumps(ctx.raw_geojson) if ctx.raw_geojson else "",
             bounds=ctx.view_rect_bounds_storage,
@@ -834,12 +834,11 @@ class SCDService:
             operational_intent_details_id=opint_detail_id,
         )
 
-    async def delete_flight_plan(self, flight_plan_id: str) -> CloseFlightPlanResponseSchema:
-        operation_id_str = str(flight_plan_id)
+    async def delete_flight_plan(self, flight_plan_id: uuid.UUID) -> CloseFlightPlanResponseSchema:
         my_scd_dss_helper = dss_scd_helper.SCDOperations()
 
         fd_repo = self.fd_repo
-        flight_operational_intent_reference = await fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(operation_id_str))
+        flight_operational_intent_reference = await fd_repo.get_opint_reference_by_declaration_id(flight_plan_id)
         opint_id = flight_operational_intent_reference.id if flight_operational_intent_reference else None
         ovn = flight_operational_intent_reference.ovn if flight_operational_intent_reference else None
 
@@ -847,7 +846,7 @@ class SCDService:
             return _close_response(flight_planning_deletion_failure_response)
         deletion_response = await my_scd_dss_helper.delete_operational_intent(dss_operational_intent_ref_id=str(opint_id), ovn=ovn)
         if deletion_response.status == 200:
-            await fd_repo.delete(uuid.UUID(operation_id_str))
+            await fd_repo.delete(flight_plan_id)
             return _close_response(flight_planning_deletion_success_response)
         return _close_response(flight_planning_deletion_failure_response)
 

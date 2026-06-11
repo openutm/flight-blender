@@ -1,6 +1,5 @@
 import asyncio
 import uuid
-from dataclasses import asdict
 from datetime import datetime
 from typing import Optional
 
@@ -133,23 +132,21 @@ class ConformanceOperations:
             return None, "start_date must be before end_date"
         return (start, end), None
 
-    async def get_records(self, start_time: datetime, end_time: datetime) -> list[dict]:
+    async def get_records(self, start_time: datetime, end_time: datetime) -> list[ConformanceRecord]:
         orm_records = await self._repo.get_conformance_records_for_duration(start_time=start_time, end_time=end_time)
         return [
-            asdict(
-                ConformanceRecord(
-                    id=str(r.id),
-                    flight_declaration_id=str(r.flight_declaration_id),
-                    conformance_state=r.conformance_state,
-                    timestamp=r.timestamp,
-                    description=r.description,
-                    event_type=r.event_type,
-                    geofence_breach=r.geofence_breach,
-                    geofence_id=str(r.geofence_id) if r.geofence_id else None,
-                    resolved=r.resolved,
-                    created_at=r.created_at,
-                    updated_at=r.updated_at,
-                )
+            ConformanceRecord(
+                id=r.id,
+                flight_declaration_id=r.flight_declaration_id,
+                conformance_state=r.conformance_state,
+                timestamp=r.timestamp,
+                description=r.description,
+                event_type=r.event_type,
+                geofence_breach=r.geofence_breach,
+                geofence_id=r.geofence_id,
+                resolved=r.resolved,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
             )
             for r in orm_records
         ]
@@ -343,7 +340,7 @@ class FlightOperationStateMachine:
 
 
 class FlightOperationConformanceHelper:
-    def __init__(self, flight_declaration_id: str, db: AsyncSession):
+    def __init__(self, flight_declaration_id: uuid.UUID, db: AsyncSession):
         self.flight_declaration_id = flight_declaration_id
         self.db = db
         self.fd_repo = SQLAlchemyFlightDeclarationRepository(db)
@@ -351,11 +348,11 @@ class FlightOperationConformanceHelper:
         self.ENABLE_CONFORMANCE_MONITORING = settings.ENABLE_CONFORMANCE_MONITORING
         self.USSP_NETWORK_ENABLED = settings.USSP_NETWORK_ENABLED
 
-    # ── Orchestration functions (moved from dss_conformance_client.py) ──────
+    # ── Orchestration functions
 
     async def operation_ended_clear_dss(self, dry_run: int = 1) -> None:
         my_scd_dss_helper = SCDOperations()
-        flight_declaration = await self.fd_repo.get_by_id(uuid.UUID(self.flight_declaration_id))
+        flight_declaration = await self.fd_repo.get_by_id(self.flight_declaration_id)
         if not flight_declaration:
             logger.error(f"Flight Declaration {self.flight_declaration_id} not found")
             return
@@ -379,15 +376,15 @@ class FlightOperationConformanceHelper:
         if dry_run:
             return
         my_operational_intents_helper = OperationalIntentReferenceHelper()
-        flight_declaration = await self.fd_repo.get_by_id(uuid.UUID(self.flight_declaration_id))
+        flight_declaration = await self.fd_repo.get_by_id(self.flight_declaration_id)
         if not flight_declaration:
             logger.error(f"Flight Declaration {self.flight_declaration_id} not found")
             return
-        flight_operational_intent_reference = await self.fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(self.flight_declaration_id))
+        flight_operational_intent_reference = await self.fd_repo.get_opint_reference_by_declaration_id(self.flight_declaration_id)
 
         if not flight_operational_intent_reference:
             return
-        await my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=self.flight_declaration_id)
+        await my_operational_intents_helper.parse_stored_operational_intent_details(operation_id=str(self.flight_declaration_id))
         operational_intent_id = str(flight_operational_intent_reference.id)
         logger.info(f"Updating operational intent {operational_intent_id} to activated")
 
@@ -408,7 +405,8 @@ class FlightOperationConformanceHelper:
 
     # ── State transition handlers ──────────────────────────────────────────
 
-    def verify_operation_state_transition(self, original_state: int, new_state: int, event: str) -> bool:
+    @staticmethod
+    def verify_operation_state_transition(original_state: int, new_state: int, event: str) -> bool:
         my_operation_state_machine = FlightOperationStateMachine(state=original_state)
         logger.info("Current Operation State %s" % my_operation_state_machine.state)
         my_operation_state_machine.on_event(event)
@@ -419,7 +417,7 @@ class FlightOperationConformanceHelper:
         return False
 
     async def manage_operation_state_transition(self, original_state: int, new_state: int, event: str):
-        self.flight_declaration = await self.fd_repo.get_by_id(uuid.UUID(self.flight_declaration_id))
+        self.flight_declaration = await self.fd_repo.get_by_id(self.flight_declaration_id)
         state_transition_handlers = {
             5: self._handle_operation_ended,
             4: self._handle_contingent_state,
@@ -604,7 +602,7 @@ async def _process_telemetry_conformance_db_work(
                 notes="State changed by telemetry conformance checks because of telemetry non-conformance: %s" % non_conformance_state_code,
             )
             await fd_repo.update(fd.id, state=new_state)
-            helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id, db=db)
+            helper = FlightOperationConformanceHelper(flight_declaration_id=fd.id, db=db)
             await helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)
 
 
@@ -640,7 +638,7 @@ async def _process_opint_reference_conformance_db_work(
                 notes="State changed by flight authorization checks: %s" % non_conformance_state_code,
             )
             await fd_repo.update(fd.id, state=new_state)
-            helper = FlightOperationConformanceHelper(flight_declaration_id=flight_declaration_id, db=db)
+            helper = FlightOperationConformanceHelper(flight_declaration_id=fd.id, db=db)
             await helper.manage_operation_state_transition(original_state=original_state, new_state=new_state, event=event)
 
 
@@ -802,18 +800,18 @@ class FlightBlenderConformanceEngine:
     def __init__(self, db: AsyncSession):
         self.db: AsyncSession = db
 
-    async def _get_flight_declaration(self, flight_declaration_id: str):
-        return await SQLAlchemyFlightDeclarationRepository(self.db).get_by_id(uuid.UUID(flight_declaration_id))
+    async def _get_flight_declaration(self, flight_declaration_id: uuid.UUID):
+        return await SQLAlchemyFlightDeclarationRepository(self.db).get_by_id(flight_declaration_id)
 
-    async def _get_opint_reference(self, flight_declaration_id: str):
-        return await SQLAlchemyFlightDeclarationRepository(self.db).get_opint_reference_by_declaration_id(uuid.UUID(flight_declaration_id))
+    async def _get_opint_reference(self, flight_declaration_id: uuid.UUID):
+        return await SQLAlchemyFlightDeclarationRepository(self.db).get_opint_reference_by_declaration_id(flight_declaration_id)
 
     async def _get_active_geofences(self):
         return await SQLAlchemyConformanceRepository(self.db).get_active_geofences()
 
     async def is_operation_conformant_via_telemetry(
         self,
-        flight_declaration_id: str,
+        flight_declaration_id: uuid.UUID,
         aircraft_id: str,
         telemetry_location: LatLngPoint,
         altitude_m_wgs_84: float,
@@ -943,7 +941,7 @@ class FlightBlenderConformanceEngine:
         geofence_polygon = _Plgn(coordinates)
         return rid_location.within(geofence_polygon)
 
-    async def check_flight_operational_intent_reference_conformance(self, flight_declaration_id: str) -> int:
+    async def check_flight_operational_intent_reference_conformance(self, flight_declaration_id: uuid.UUID) -> int:
         now = arrow.now()
         flight_declaration = await self._get_flight_declaration(flight_declaration_id=flight_declaration_id)
         flight_operational_intent_reference_exists = await self._get_opint_reference(flight_declaration_id=flight_declaration_id)

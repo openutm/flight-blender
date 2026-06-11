@@ -1451,7 +1451,7 @@ class DSSAreaClearHandler:
 class DSSOperationalIntentsCreator:
     """Helper to submit an operational intent to the DSS based on an operation ID."""
 
-    def __init__(self, flight_declaration_id: str):
+    def __init__(self, flight_declaration_id: uuid.UUID):
         # Inline import: flight_declarations_svc imports this module, so a top-level import would be circular.
         from flight_blender.services.flight_declarations_svc import OperationalIntentsConverter  # noqa: PLC0415
 
@@ -1463,7 +1463,7 @@ class DSSOperationalIntentsCreator:
 
         async with async_task_session() as db:
             fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            flight_declaration = await fd_repo.get_by_id(uuid.UUID(self.flight_declaration_id))
+            flight_declaration = await fd_repo.get_by_id(self.flight_declaration_id)
         if not flight_declaration:
             return False
         now = arrow.now()
@@ -1475,7 +1475,7 @@ class DSSOperationalIntentsCreator:
         return False not in [start_time_ok, end_time_ok]
 
     async def submit_flight_declaration_to_dss(self):
-        fd_id = uuid.UUID(self.flight_declaration_id)
+        fd_id = self.flight_declaration_id
 
         async with async_task_session() as db:
             fd_repo = SQLAlchemyFlightDeclarationRepository(db)
@@ -1532,7 +1532,7 @@ class DSSOperationalIntentsCreator:
                         generated_composite_operational_intent_data = (
                             self.my_operational_intent_reference_helper.generate_bounds_altitude_time_for_volumes(
                                 operational_intent_details_payload=operational_intent_details_payload,
-                                flight_declaration_id=self.flight_declaration_id,
+                                flight_declaration_id=str(self.flight_declaration_id),
                             )
                         )
                         composite_operational_intent_data = CompositeOperationalIntentPayload(

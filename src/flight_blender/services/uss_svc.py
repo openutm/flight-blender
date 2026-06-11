@@ -108,7 +108,7 @@ class USSService:
         try:
             incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=request_data)
         except Exception as e:
-            return {"message": str(e)}, 500
+            return asdict(GenericErrorResponseMessage(message=str(e))), 500
         operation_id_str = incoming_update_payload.operational_intent_id
 
         if incoming_update_payload.operational_intent:
@@ -182,7 +182,7 @@ class USSService:
 
         return 204
 
-    async def get_uss_flight_details(self, flight_id: str) -> tuple[dict, int]:
+    async def get_uss_flight_details(self, flight_id: uuid.UUID) -> tuple[dict, int]:
         if self.rid_repo is None:
             fd = FlightDetailsNotFoundMessage(message="RID repository not configured")
             return json.loads(json.dumps(asdict(fd))), 500
@@ -243,7 +243,7 @@ def peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
     try:
         error_report = from_dict(data_class=ErrorReport, data=request_data, config=Config(cast=[Enum]))
     except Exception as e:
-        return {"message": str(e)}, 500
+        return asdict(GenericErrorResponseMessage(message=str(e))), 500
     report_id = str(uuid.uuid4())
     error_report.report_id = report_id
     return json.loads(json.dumps(asdict(error_report), cls=EnhancedJSONEncoder)), 201

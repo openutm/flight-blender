@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.models.notifications_orm import OperatorRIDNotificationORM
 from flight_blender.models.rid_orm import ISASubscriptionORM, RIDFlightDetailORM
+from flight_blender.utils.json_codecs import LazyEncoder
 
 
 class SQLAlchemyRIDRepository:
@@ -29,19 +30,19 @@ class SQLAlchemyRIDRepository:
         result = await self.db.execute(select(ISASubscriptionORM).where(ISASubscriptionORM.subscription_id == uuid.UUID(subscription_id)))
         return result.scalar_one_or_none()
 
-    async def get_subscription_by_id(self, record_id: str) -> Optional[ISASubscriptionORM]:
-        return await self.db.get(ISASubscriptionORM, uuid.UUID(record_id))
+    async def get_subscription_by_id(self, record_id: uuid.UUID) -> Optional[ISASubscriptionORM]:
+        return await self.db.get(ISASubscriptionORM, record_id)
 
     async def update_subscription_flight_details(self, subscription: ISASubscriptionORM, flights_dict: str) -> None:
         subscription.flight_details = flights_dict
         await self.db.flush()
 
-    async def check_flight_detail_exists(self, flight_detail_id: str) -> bool:
-        result = await self.db.execute(select(RIDFlightDetailORM).where(RIDFlightDetailORM.id == uuid.UUID(flight_detail_id)))
+    async def check_flight_detail_exists(self, flight_detail_id: uuid.UUID) -> bool:
+        result = await self.db.execute(select(RIDFlightDetailORM).where(RIDFlightDetailORM.id == flight_detail_id))
         return result.scalar_one_or_none() is not None
 
-    async def get_flight_detail_by_id(self, flight_detail_id: str) -> Optional[RIDFlightDetailORM]:
-        return await self.db.get(RIDFlightDetailORM, uuid.UUID(flight_detail_id))
+    async def get_flight_detail_by_id(self, flight_detail_id: uuid.UUID) -> Optional[RIDFlightDetailORM]:
+        return await self.db.get(RIDFlightDetailORM, flight_detail_id)
 
     async def get_active_subscriptions_for_view(self, now: datetime) -> list[ISASubscriptionORM]:
         result = await self.db.execute(
@@ -61,7 +62,7 @@ class SQLAlchemyRIDRepository:
 
     async def create_subscription(
         self,
-        record_id: str,
+        record_id: uuid.UUID,
         subscription_id: str,
         view: str,
         view_hash: int,
@@ -70,7 +71,7 @@ class SQLAlchemyRIDRepository:
         is_simulated: bool,
     ) -> bool:
         obj = ISASubscriptionORM(
-            id=uuid.UUID(record_id),
+            id=record_id,
             subscription_id=uuid.UUID(subscription_id),
             view=view,
             view_hash=view_hash,
@@ -128,4 +129,4 @@ class SQLAlchemyRIDRepository:
 def _serialize_dataclass(obj) -> str:
     if obj is None:
         return json.dumps({})
-    return json.dumps(asdict(obj))
+    return json.dumps(asdict(obj), cls=LazyEncoder)

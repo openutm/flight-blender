@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import NamedTuple
+import uuid
 
 from implicitdict import ImplicitDict
 from shapely.geometry import Point
@@ -162,7 +163,7 @@ class RIDAuthData:
 
 @dataclass
 class RIDFlightDetails:
-    id: str
+    id: uuid.UUID
     operator_id: str | None
     operator_location: OperatorLocation | None
     operation_description: str | None
