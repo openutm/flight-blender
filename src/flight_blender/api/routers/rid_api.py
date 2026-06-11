@@ -19,6 +19,7 @@ from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.db.session import async_get_db
 from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE, FLIGHTBLENDER_WRITE_SCOPE
 from flight_blender.domain_types.rid_operations import (
+    CreateTestResponse,
     IdentificationServiceArea,
     RIDDisplayDataResponse,
     RIDFlightsRecord,
@@ -34,7 +35,6 @@ from flight_blender.schemas.rid import CreateTestBody, ISACallbackBody
 from flight_blender.schemas.scd import NotificationObservedAtSchema, UserNotificationSchema, UserNotificationsResponseSchema
 from flight_blender.services import rid_svc as view_port_ops
 from flight_blender.services.flight_feed_svc import ObservationReadOperations
-from flight_blender.services.rid_svc import CreateTestResponse
 from flight_blender.tasks import rid_task
 
 router = APIRouter(prefix="/rid")
@@ -220,9 +220,7 @@ async def get_display_data(
 
     clusters = []
     if should_cluster:
-        clusters = dss_rid_helper.RemoteIDOperations(rid_repo=repo, feed_repo=feed_repo).generate_cluster_details(
-            rid_flights=rid_flights, view_box=box
-        )
+        clusters = dss_rid_helper.RemoteIDOperations().generate_cluster_details(rid_flights=rid_flights, view_box=box)
         rid_flights = []
 
     response = view_port_ops.make_json_compatible(RIDDisplayDataResponse(flights=rid_flights, clusters=clusters))

@@ -28,9 +28,7 @@ from flight_blender.domain_types.scd import (
 )
 
 # Valid uas_state values for an incoming flight-planning test injection.
-_VALID_PLANNING_UAS_STATES = frozenset(
-    {UasState.Nominal.value, UasState.OffNominal.value, UasState.Contingent.value, UasState.NotSpecified.value}
-)
+_VALID_PLANNING_UAS_STATES = frozenset({UasState.Nominal.value, UasState.OffNominal.value, UasState.Contingent.value, UasState.NotSpecified.value})
 # usage_state values for which off-nominal volumes are not permitted.
 _NO_OFF_NOMINAL_USAGE_STATES = frozenset({UsageState.Planned.value, UsageState.InUse.value})
 # Operational-intent states accepted by the test injection (Contingent intentionally excluded).
@@ -70,8 +68,7 @@ class OperationalIntentValidator:
 
     def validate_operational_intent_state_off_nominals(self) -> bool:
         return not (
-            self.operational_intent_data.state in _NO_OFF_NOMINAL_OPERATIONAL_INTENT_STATES
-            and bool(self.operational_intent_data.off_nominal_volumes)
+            self.operational_intent_data.state in _NO_OFF_NOMINAL_OPERATIONAL_INTENT_STATES and bool(self.operational_intent_data.off_nominal_volumes)
         )
 
     def validate_operational_intent_test_data(self) -> bool:

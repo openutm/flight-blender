@@ -18,23 +18,17 @@ from flight_blender.clients import dss_rid_client as dss_rid_helper
 from flight_blender.config import settings
 from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.flight_feed import SingleRIDObservation
-from flight_blender.domain_types.rid import UASID, LatLngPoint, SignedUnsignedTelemetryObservation, UAClassificationEU
+from flight_blender.domain_types.rid import UASID, LatLngPoint, OperatorLocation, SignedUnsignedTelemetryObservation, UAClassificationEU
 from flight_blender.domain_types.rid import RIDAircraftState as LocalRIDAircraftState
 from flight_blender.domain_types.rid import RIDFlightDetails as LocalRIDFlightDetails
-from flight_blender.domain_types.rid_operations import RIDLatLngPoint
-from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
-from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
-from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
-from flight_blender.services.altitude import wgs84_to_barometric
-from flight_blender.services.rid_svc import (
-    OperatorLocation,
+from flight_blender.domain_types.rid_operations import (
     RIDAircraftPosition,
     RIDAircraftState,
     RIDAltitude,
     RIDAuthData,
     RIDFlightDetails,
     RIDHeight,
+    RIDLatLngPoint,
     RIDPolygon,
     RIDTestDataStorage,
     RIDTestDetailsResponse,
@@ -44,6 +38,12 @@ from flight_blender.services.rid_svc import (
     RIDVolume4D,
     SingleObservationMetadata,
 )
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
+from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
+from flight_blender.services.altitude import wgs84_to_barometric
+from flight_blender.services.rid_svc import USSPollingService
 from flight_blender.tasks.flight_feed_task import write_incoming_air_traffic_data
 
 
@@ -342,7 +342,7 @@ async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> Non
         rid_repo = SQLAlchemyRIDRepository(db)
         feed_repo = SQLAlchemyFlightFeedRepository(db)
         subscription_record = await rid_repo.get_subscription_by_id(uuid.UUID(session_id))
-        my_dss_subscriber = dss_rid_helper.RemoteIDOperations(rid_repo=rid_repo, feed_repo=feed_repo)
+        my_dss_subscriber = USSPollingService(rid_repo=rid_repo, feed_repo=feed_repo)
 
         if r.exists(async_polling_lock):
             logger.info("Polling is ongoing, not setting additional polling tasks..")
@@ -355,6 +355,10 @@ async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> Non
                 subscription_id = str(subscription_record.subscription_id)
                 view = subscription_record.view
                 flight_details = subscription_record.flight_details
+                if view is None or flight_details is None:
+                    logger.warning("Subscription record missing view or flight_details, skipping poll")
+                    await asyncio.sleep(0.6)
+                    continue
                 await my_dss_subscriber.query_uss_for_rid(
                     flight_details=flight_details,
                     subscription_id=subscription_id,

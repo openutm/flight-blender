@@ -566,9 +566,7 @@ class SCDService:
             raw_geojson=volume_converter.geo_json,
         )
 
-    def _validate_flight_plan(
-        self, ctx: FlightPlanningContext, volumes_validator: VolumesValidator
-    ) -> UpsertFlightPlanResponseSchema | None:
+    def _validate_flight_plan(self, ctx: FlightPlanningContext, volumes_validator: VolumesValidator) -> UpsertFlightPlanResponseSchema | None:
         data_validator = FlightPlanningDataValidator(incoming_flight_planning_data=ctx.data)
         if not data_validator.validate_flight_planning_test_data():
             return _upsert_response(not_planned_planning_response)

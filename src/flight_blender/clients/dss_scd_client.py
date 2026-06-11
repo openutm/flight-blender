@@ -472,9 +472,7 @@ class SCDOperations:
             return await self._load_local_operational_intent_detail(dss_reference)
         return await self._fetch_peer_operational_intent_details(dss_reference=dss_reference)
 
-    async def _load_local_operational_intent_detail(
-        self, dss_reference: OperationalIntentReferenceDSSResponse
-    ) -> tuple[bool, dict, dict]:
+    async def _load_local_operational_intent_detail(self, dss_reference: OperationalIntentReferenceDSSResponse) -> tuple[bool, dict, dict]:
         """Load a Flight-Blender-managed operational intent from the DB, refreshing its stored OVN.
 
         Falls back to a minimal reference (built from the DSS data, with empty details) when the intent is
@@ -529,9 +527,7 @@ class SCDOperations:
         )
         return OperationalIntentDetailsUSSResponse(reference=op_int_reference, details=op_int_detail)
 
-    async def _fetch_peer_operational_intent_details(
-        self, dss_reference: OperationalIntentReferenceDSSResponse
-    ) -> tuple[bool, dict, dict]:
+    async def _fetch_peer_operational_intent_details(self, dss_reference: OperationalIntentReferenceDSSResponse) -> tuple[bool, dict, dict]:
         """Fetch a peer USS's operational intent details (reference + details dicts).
 
         On any failure (transport error or non-200) where the DSS reports the managing USS as down,
