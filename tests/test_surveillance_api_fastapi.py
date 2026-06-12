@@ -1,5 +1,6 @@
 """FastAPI tests for surveillance_monitoring_ops endpoints."""
 import uuid
+from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
@@ -194,3 +195,175 @@ class TestSensorHealthNotificationsFastAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["notifications"] == []
+
+
+# ---------------------------------------------------------------------------
+# Scheduler additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestSchedulerCoverage:
+    """Additional tests for TaskSchedulerService."""
+
+    def test_schedule_conformance_check_success(self):
+        """Test schedule_conformance_check returns True on success."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task = MagicMock()
+
+            result = TaskSchedulerService.schedule_conformance_check(
+                flight_declaration_id="test-fd-id",
+                session_id="test-session-id",
+                expires="2024-12-31T23:59:59",
+            )
+
+            assert result is True
+            mock_app.send_task.assert_called_once()
+
+    def test_schedule_conformance_check_failure(self):
+        """Test schedule_conformance_check returns False on failure."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task.side_effect = Exception("test error")
+
+            result = TaskSchedulerService.schedule_conformance_check(
+                flight_declaration_id="test-fd-id",
+                session_id="test-session-id",
+                expires="2024-12-31T23:59:59",
+            )
+
+            assert result is False
+
+    def test_schedule_rid_stream_monitoring_success(self):
+        """Test schedule_rid_stream_monitoring returns True on success."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task = MagicMock()
+
+            result = TaskSchedulerService.schedule_rid_stream_monitoring(
+                session_id="test-session-id",
+                end_datetime="2024-12-31T23:59:59",
+            )
+
+            assert result is True
+            mock_app.send_task.assert_called_once()
+
+    def test_schedule_rid_stream_monitoring_failure(self):
+        """Test schedule_rid_stream_monitoring returns False on failure."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task.side_effect = Exception("test error")
+
+            result = TaskSchedulerService.schedule_rid_stream_monitoring(
+                session_id="test-session-id",
+                end_datetime="2024-12-31T23:59:59",
+            )
+
+            assert result is False
+
+    def test_schedule_surveillance_heartbeat_success(self):
+        """Test schedule_surveillance_heartbeat returns True on success."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task = MagicMock()
+
+            result = TaskSchedulerService.schedule_surveillance_heartbeat(
+                surveillance_session_id="test-session-id",
+            )
+
+            assert result is True
+            mock_app.send_task.assert_called_once()
+
+    def test_schedule_surveillance_heartbeat_failure(self):
+        """Test schedule_surveillance_heartbeat returns False on failure."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task.side_effect = Exception("test error")
+
+            result = TaskSchedulerService.schedule_surveillance_heartbeat(
+                surveillance_session_id="test-session-id",
+            )
+
+            assert result is False
+
+    def test_schedule_surveillance_track_success(self):
+        """Test schedule_surveillance_track returns True on success."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task = MagicMock()
+
+            result = TaskSchedulerService.schedule_surveillance_track(
+                surveillance_session_id="test-session-id",
+            )
+
+            assert result is True
+            mock_app.send_task.assert_called_once()
+
+    def test_schedule_surveillance_track_failure(self):
+        """Test schedule_surveillance_track returns False on failure."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.app') as mock_app:
+            mock_app.send_task.side_effect = Exception("test error")
+
+            result = TaskSchedulerService.schedule_surveillance_track(
+                surveillance_session_id="test-session-id",
+            )
+
+            assert result is False
+
+    def test_cancel_session_tasks(self):
+        """Test cancel_session_tasks sets Redis key."""
+        from flight_blender.tasks.scheduler import TaskSchedulerService
+
+        with patch('flight_blender.tasks.scheduler.get_redis') as mock_get_redis:
+            mock_redis = MagicMock()
+            mock_get_redis.return_value = mock_redis
+
+            TaskSchedulerService.cancel_session_tasks(session_id="test-session-id")
+
+            mock_redis.set.assert_called_once_with("stop_task_test-session-id", "1", ex=300)
+# Realtime service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestRealtimeServiceCoverage:
+    """Additional tests for realtime_svc."""
+
+    @pytest.mark.asyncio
+    async def test_redis_pubsub_websocket(self):
+        """Test redis_pubsub_websocket."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from fastapi import WebSocketDisconnect
+        from flight_blender.services.realtime_svc import redis_pubsub_websocket
+
+        mock_websocket = AsyncMock()
+        mock_redis_client = AsyncMock()
+        mock_pubsub = AsyncMock()
+        mock_redis_client.pubsub = MagicMock(return_value=mock_pubsub)
+
+        async def mock_from_url(*args, **kwargs):
+            return mock_redis_client
+
+        with patch('flight_blender.services.realtime_svc.aioredis') as mock_aioredis:
+            mock_aioredis.from_url = mock_from_url
+
+            # Mock the listen iterator to raise WebSocketDisconnect
+            async def mock_listen():
+                yield {"type": "message", "data": "test-message"}
+                raise WebSocketDisconnect()
+
+            mock_pubsub.listen = mock_listen
+
+            await redis_pubsub_websocket(mock_websocket, "test-channel")
+
+            mock_websocket.accept.assert_called_once()
+            mock_pubsub.subscribe.assert_called_once_with("test-channel")
+            mock_pubsub.unsubscribe.assert_called_once_with("test-channel")

@@ -849,3 +849,58 @@ class TrafficDataFuser(BaseTrafficDataFuser):
                     observations=[asdict(obs) for obs in observations],
                 )
                 track_store.add_active_track_to_session(session_id=self.session_id, active_track=active_track)
+
+
+# ── Task helper functions ────────────────────────────────────────────────
+
+
+async def record_surveillance_track_event(session_id: uuid.UUID, expected_at, had_active_tracks: bool) -> None:
+    """Record a track event for a surveillance session."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.surveillance_repo import SQLAlchemySurveillanceRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemySurveillanceRepository(db)
+        await repo.record_track_event(
+            session_id=session_id,
+            expected_at=expected_at,
+            had_active_tracks=had_active_tracks,
+        )
+
+
+async def get_surveillance_sensor_health() -> tuple[float, int]:
+    """Get average latency and horizontal accuracy from active sensors."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.surveillance_repo import SQLAlchemySurveillanceRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemySurveillanceRepository(db)
+        active_sensors = await repo.get_active_surveillance_sensors()
+        if active_sensors:
+            primary_sensor = active_sensors[0]
+            return primary_sensor.expected_latency_ms, int(primary_sensor.horizontal_accuracy_m)
+    return 0, 0
+
+
+async def record_surveillance_heartbeat_event(session_id: uuid.UUID, expected_at, delivered_on_time: bool) -> None:
+    """Record a heartbeat event for a surveillance session."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.surveillance_repo import SQLAlchemySurveillanceRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemySurveillanceRepository(db)
+        await repo.record_heartbeat_event(
+            session_id=session_id,
+            expected_at=expected_at,
+            delivered_on_time=delivered_on_time,
+        )
+
+
+async def cleanup_old_surveillance_events(cutoff) -> tuple[int, int]:
+    """Delete old surveillance events."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.surveillance_repo import SQLAlchemySurveillanceRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemySurveillanceRepository(db)
+        return await repo.cleanup_old_events(cutoff=cutoff)

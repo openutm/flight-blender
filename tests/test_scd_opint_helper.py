@@ -94,151 +94,168 @@ class TestDSSOperationalIntentsCreatorValidateTime:
     @pytest.mark.asyncio
     async def test_valid_start_end_time(self):
         """Declarations starting within 2 h return True."""
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
         fd = _fake_flight_declaration()
         fd.start_datetime = arrow.utcnow().shift(minutes=10).datetime
         fd.end_datetime = arrow.utcnow().shift(minutes=90).datetime
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            assert await creator.validate_flight_declaration_start_end_time() is True
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        assert await creator.validate_flight_declaration_start_end_time() is True
 
     @pytest.mark.asyncio
     async def test_past_start_time_returns_false(self):
         """Declarations with start in the past return False."""
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
         fd = _fake_flight_declaration()
         fd.start_datetime = arrow.utcnow().shift(hours=-1).datetime
         fd.end_datetime = arrow.utcnow().shift(hours=1).datetime
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            assert await creator.validate_flight_declaration_start_end_time() is False
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        assert await creator.validate_flight_declaration_start_end_time() is False
 
     @pytest.mark.asyncio
     async def test_far_future_start_time_returns_false(self):
         """Declarations starting more than 2 h from now return False."""
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
         fd = _fake_flight_declaration()
         fd.start_datetime = arrow.utcnow().shift(hours=3).datetime
         fd.end_datetime = arrow.utcnow().shift(hours=4).datetime
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            assert await creator.validate_flight_declaration_start_end_time() is False
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        assert await creator.validate_flight_declaration_start_end_time() is False
 
 
 class TestDSSOperationalIntentsCreatorSubmit:
     @pytest.mark.asyncio
     async def test_not_found_returns_declaration_not_found(self):
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=None):
-            with pytest.raises(HTTPException) as exc_info:
-                await creator.submit_flight_declaration_to_dss()
+        mock_fd_repo = AsyncMock()
+        mock_fd_repo.get_by_id = AsyncMock(return_value=None)
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await creator.submit_flight_declaration_to_dss()
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == {"message": "Flight Declaration with ID %s not found in the database" % creator.flight_declaration_id}
 
     @pytest.mark.asyncio
     async def test_auth_error_returns_auth_server_error(self):
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"error": "conn_error"}):
-                with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.update", new_callable=AsyncMock):
-                    with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.add_state_history_entry", new_callable=AsyncMock):
-                        with pytest.raises(HTTPException) as exc_info:
-                            await creator.submit_flight_declaration_to_dss()
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
+        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"error": "conn_error"}):
+            with pytest.raises(HTTPException) as exc_info:
+                await creator.submit_flight_declaration_to_dss()
         assert exc_info.value.status_code == 500
         assert exc_info.value.detail == {"message": "Error in getting a token from the Auth server"}
 
     @pytest.mark.asyncio
     async def test_successful_submission_updates_state(self):
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
         opint_ref = _fake_opint_ref()
         opint_detail = _fake_opint_detail()
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.create_opint_reference = AsyncMock(return_value=opint_ref)
+        mock_fd_repo.create_opint_detail = AsyncMock(return_value=opint_detail)
+        mock_fd_repo.create_or_update_composite_opint = AsyncMock()
+        mock_fd_repo.update = AsyncMock()
+        mock_fd_repo.add_state_history_entry = AsyncMock()
+        mock_converter = MagicMock()
+        mock_converter.generate_bounds_altitude_time_for_volumes = MagicMock(
+            return_value=MagicMock(
+                bounds="0,0,1,1",
+                start_datetime=arrow.utcnow().shift(minutes=5).datetime,
+                end_datetime=arrow.utcnow().shift(hours=1).datetime,
+                alt_max=100,
+                alt_min=0,
+            )
+        )
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+            operational_intents_converter=mock_converter,
+        )
         success = _submission_success()
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
-                with patch.object(creator.my_scd_dss_helper, "create_and_submit_operational_intent_reference", new_callable=AsyncMock, return_value=success):
-                    with patch(
-                        "flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.create_opint_reference",
-                        new_callable=AsyncMock,
-                        return_value=opint_ref,
-                    ):
-                        with patch(
-                            "flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.create_opint_detail",
-                            new_callable=AsyncMock,
-                            return_value=opint_detail,
-                        ):
-                            with patch.object(
-                                creator.my_operational_intent_reference_helper,
-                                "generate_bounds_altitude_time_for_volumes",
-                                return_value=MagicMock(
-                                    bounds="0,0,1,1",
-                                    start_datetime=arrow.utcnow().shift(minutes=5).datetime,
-                                    end_datetime=arrow.utcnow().shift(hours=1).datetime,
-                                    alt_max=100,
-                                    alt_min=0,
-                                ),
-                            ):
-                                with patch(
-                                    "flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.create_or_update_composite_opint",
-                                    new_callable=AsyncMock,
-                                ):
-                                    with patch(
-                                        "flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.update",
-                                        new_callable=AsyncMock,
-                                    ) as mock_state:
-                                        with patch(
-                                            "flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.add_state_history_entry",
-                                            new_callable=AsyncMock,
-                                        ):
-                                            result = await creator.submit_flight_declaration_to_dss()
+        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+            with patch.object(creator.my_scd_dss_helper, "create_and_submit_operational_intent_reference", new_callable=AsyncMock, return_value=success):
+                result = await creator.submit_flight_declaration_to_dss()
         assert result.status_code == 201
-        mock_state.assert_called_once_with(creator.flight_declaration_id, state=1)
+        mock_fd_repo.update.assert_called_once_with(creator.flight_declaration_id, state=1)
 
     @pytest.mark.asyncio
     async def test_dss_400_error_sets_rejected_state(self):
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
-                with patch.object(
-                    creator.my_scd_dss_helper,
-                    "create_and_submit_operational_intent_reference",
-                    new_callable=AsyncMock,
-                    return_value=_submission_dss_error(400),
-                ):
-                    with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.update", new_callable=AsyncMock) as mock_state:
-                        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.add_state_history_entry", new_callable=AsyncMock):
-                            await creator.submit_flight_declaration_to_dss()
-        mock_state.assert_called_once_with(creator.flight_declaration_id, state=8)
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.update = AsyncMock()
+        mock_fd_repo.add_state_history_entry = AsyncMock()
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
+        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+            with patch.object(
+                creator.my_scd_dss_helper,
+                "create_and_submit_operational_intent_reference",
+                new_callable=AsyncMock,
+                return_value=_submission_dss_error(400),
+            ):
+                await creator.submit_flight_declaration_to_dss()
+        mock_fd_repo.update.assert_called_once_with(creator.flight_declaration_id, state=8)
 
     @pytest.mark.asyncio
     async def test_dss_409_error_sets_rejected_state(self):
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
-                with patch.object(
-                    creator.my_scd_dss_helper,
-                    "create_and_submit_operational_intent_reference",
-                    new_callable=AsyncMock,
-                    return_value=_submission_dss_error(409),
-                ):
-                    with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.update", new_callable=AsyncMock) as mock_state:
-                        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.add_state_history_entry", new_callable=AsyncMock):
-                            await creator.submit_flight_declaration_to_dss()
-        mock_state.assert_called_once_with(creator.flight_declaration_id, state=8)
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.update = AsyncMock()
+        mock_fd_repo.add_state_history_entry = AsyncMock()
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
+        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+            with patch.object(
+                creator.my_scd_dss_helper,
+                "create_and_submit_operational_intent_reference",
+                new_callable=AsyncMock,
+                return_value=_submission_dss_error(409),
+            ):
+                await creator.submit_flight_declaration_to_dss()
+        mock_fd_repo.update.assert_called_once_with(creator.flight_declaration_id, state=8)
 
     @pytest.mark.asyncio
     async def test_conflict_with_flight_sets_rejected_state(self):
-        creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.uuid4())
+        mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
-        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.get_by_id", new_callable=AsyncMock, return_value=fd):
-            with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
-                with patch.object(
-                    creator.my_scd_dss_helper,
-                    "create_and_submit_operational_intent_reference",
-                    new_callable=AsyncMock,
-                    return_value=_submission_conflict(),
-                ):
-                    with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.update", new_callable=AsyncMock) as mock_state:
-                        with patch("flight_blender.clients.dss_scd_client.SQLAlchemyFlightDeclarationRepository.add_state_history_entry", new_callable=AsyncMock):
-                            await creator.submit_flight_declaration_to_dss()
-        mock_state.assert_called_once_with(creator.flight_declaration_id, state=8)
+        mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.update = AsyncMock()
+        mock_fd_repo.add_state_history_entry = AsyncMock()
+        creator = DSSOperationalIntentsCreator(
+            flight_declaration_id=uuid.uuid4(),
+            fd_repo=mock_fd_repo,
+        )
+        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+            with patch.object(
+                creator.my_scd_dss_helper,
+                "create_and_submit_operational_intent_reference",
+                new_callable=AsyncMock,
+                return_value=_submission_conflict(),
+            ):
+                await creator.submit_flight_declaration_to_dss()
+        mock_fd_repo.update.assert_called_once_with(creator.flight_declaration_id, state=8)
