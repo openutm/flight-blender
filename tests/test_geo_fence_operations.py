@@ -1,6 +1,9 @@
 """FastAPI tests for geo_fence_ops endpoints."""
 import json
+import uuid
+from unittest.mock import AsyncMock, MagicMock
 
+import arrow
 import jwt
 import pytest
 from tests.conftest import (
@@ -216,3 +219,263 @@ class TestGeoAwarenessTestHarness:
             headers=_fastapi_auth(GA_TEST_SCOPE),
         )
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Spatial geo fence additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestSpatialGeoFenceCoverage:
+    """Additional tests for spatial_geo_fence."""
+
+    def test_to_from_utm_polygon(self):
+        """Test toFromUTM with Polygon."""
+        from shapely.geometry import Polygon as ShpPolygon
+        from flight_blender.utils.spatial_geo_fence import toFromUTM
+        import pyproj
+
+        proj = pyproj.Proj(proj="utm", zone=32, ellps="WGS84")
+        polygon = ShpPolygon([(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)])
+
+        result = toFromUTM(polygon, proj)
+
+        assert result is not None
+
+    def test_to_from_utm_point(self):
+        """Test toFromUTM with Point."""
+        from shapely.geometry import Point
+        from flight_blender.utils.spatial_geo_fence import toFromUTM
+        import pyproj
+
+        proj = pyproj.Proj(proj="utm", zone=32, ellps="WGS84")
+        point = Point(0, 0)
+
+        result = toFromUTM(point, proj)
+
+        assert result is not None
+
+    def test_convert_shapely_to_geojson(self):
+        """Test convert_shapely_to_geojson."""
+        from shapely.geometry import Polygon as ShpPolygon
+        from flight_blender.utils.spatial_geo_fence import convert_shapely_to_geojson
+
+        polygon = ShpPolygon([(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)])
+
+        result = convert_shapely_to_geojson(polygon)
+
+        assert isinstance(result, str)
+        assert "Polygon" in result
+
+    def test_geo_fence_rtree_index_factory_add_box_to_index(self):
+        """Test GeoFenceRTreeIndexFactory.add_box_to_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        factory.add_box_to_index(
+            id=1,
+            geo_fence_id="test-fence-id",
+            view=[0, 0, 1, 1],
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+        )
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_geo_fence_rtree_index_factory_delete_from_index(self):
+        """Test GeoFenceRTreeIndexFactory.delete_from_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        factory.add_box_to_index(
+            id=1,
+            geo_fence_id="test-fence-id",
+            view=[0, 0, 1, 1],
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+        )
+
+        factory.delete_from_index(
+            enumerated_id=1,
+            view=[0, 0, 1, 1],
+        )
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_geo_fence_rtree_index_factory_generate_geo_fence_index(self):
+        """Test GeoFenceRTreeIndexFactory.generate_geo_fence_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_fence.bounds = "0,0,1,1"
+
+        factory.generate_geo_fence_index([mock_fence])
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_geo_fence_rtree_index_factory_check_box_intersection(self):
+        """Test GeoFenceRTreeIndexFactory.check_box_intersection."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_fence.bounds = "0,0,1,1"
+
+        factory.generate_geo_fence_index([mock_fence])
+
+        result = factory.check_box_intersection(view_box=[0, 0, 1, 1])
+
+        assert isinstance(result, list)
+
+    def test_geo_fence_rtree_index_factory_clear_rtree_index(self):
+        """Test GeoFenceRTreeIndexFactory.clear_rtree_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_fence.bounds = "0,0,1,1"
+
+        factory.generate_geo_fence_index([mock_fence])
+
+        factory.clear_rtree_index([mock_fence])
+
+        # No assertion needed, just ensure it doesn't raise
+# GeoFenceService additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestGeoFenceServiceCoverage:
+    """Additional tests for GeoFenceOperations."""
+
+    @pytest.mark.asyncio
+    async def test_get_geofences_with_viewport(self):
+        """Test get_geofences with viewport filter."""
+        from flight_blender.services.geo_fence_svc import GeoFenceOperations
+
+        mock_repo = AsyncMock()
+        mock_dispatcher = MagicMock()
+        mock_spatial = MagicMock()
+        mock_redis = MagicMock()
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_fence.name = "Test Fence"
+        mock_fence.bounds = "0,0,1,1"
+        mock_fence.start_datetime = arrow.utcnow().datetime
+        mock_fence.end_datetime = arrow.utcnow().shift(days=1).datetime
+        mock_fence.upper_limit = 1000
+        mock_fence.lower_limit = 0
+        mock_fence.is_test_dataset = False
+
+        mock_repo.get_geofences_by_date_range = AsyncMock(return_value=[mock_fence])
+        mock_spatial.filter_fences_by_viewport = MagicMock(return_value=[mock_fence])
+
+        service = GeoFenceOperations(
+            repo=mock_repo,
+            dispatcher=mock_dispatcher,
+            spatial=mock_spatial,
+            redis=mock_redis,
+        )
+
+        result = await service.list_geofences(viewport="0,0,1,1")
+
+        assert len(result) == 1
+        mock_repo.get_geofences_by_date_range.assert_called_once()
+        mock_spatial.filter_fences_by_viewport.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_geofence_returns_none_when_not_found(self):
+        """Test get_geofence returns None when geofence not found."""
+        from flight_blender.services.geo_fence_svc import GeoFenceOperations
+
+        mock_repo = AsyncMock()
+        mock_dispatcher = MagicMock()
+        mock_spatial = MagicMock()
+        mock_redis = MagicMock()
+
+        mock_repo.get_by_id = AsyncMock(return_value=None)
+
+        service = GeoFenceOperations(
+            repo=mock_repo,
+            dispatcher=mock_dispatcher,
+            spatial=mock_spatial,
+            redis=mock_redis,
+        )
+
+        result = await service.get_geofence(geofence_id=uuid.uuid4())
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_create_geofence_from_feature_collection(self):
+        """Test create_geofence_from_feature_collection."""
+        from flight_blender.services.geo_fence_svc import GeoFenceOperations
+
+        mock_repo = AsyncMock()
+        mock_dispatcher = MagicMock()
+        mock_spatial = MagicMock()
+        mock_redis = MagicMock()
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_repo.create = AsyncMock(return_value=mock_fence)
+
+        service = GeoFenceOperations(
+            repo=mock_repo,
+            dispatcher=mock_dispatcher,
+            spatial=mock_spatial,
+            redis=mock_redis,
+        )
+
+        geo_fence_data = {
+            "features": [{
+                "type": "Feature",
+                "properties": {
+                    "name": "Test Fence",
+                    "start_time": arrow.utcnow().isoformat(),
+                    "end_time": arrow.utcnow().shift(days=1).isoformat(),
+                },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]],
+                },
+            }]
+        }
+
+        result = await service.create_geofence_from_feature_collection(geo_fence_data)
+
+        assert "id" in result
+        mock_repo.create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_geofence(self):
+        """Test delete_geofence."""
+        from flight_blender.services.geo_fence_svc import GeoFenceOperations
+
+        mock_repo = AsyncMock()
+        mock_dispatcher = MagicMock()
+        mock_spatial = MagicMock()
+        mock_redis = MagicMock()
+
+        mock_repo.delete = AsyncMock(return_value=True)
+
+        service = GeoFenceOperations(
+            repo=mock_repo,
+            dispatcher=mock_dispatcher,
+            spatial=mock_spatial,
+            redis=mock_redis,
+        )
+
+        result = await service.delete_geofence(geofence_id=uuid.uuid4())
+
+        assert result is True
+        mock_repo.delete.assert_called_once()

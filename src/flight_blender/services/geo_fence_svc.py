@@ -320,3 +320,35 @@ def validate_geo_zone(geo_zone) -> bool:
     all_zones = parse_response.all_zones
     all_zones_valid = all(all_zones)
     return all_zones_valid
+
+
+async def save_geofence_feature(
+    geo_zone_feature,
+    fc: dict,
+    bounds_str: str,
+    name: str,
+    start_time,
+    end_time,
+    upper_limit,
+    lower_limit,
+    test_harness_datasource: int,
+) -> None:
+    """Save a single geofence feature to the database."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.models.geo_fence_orm import GeoFenceORM
+
+    async with async_task_session() as db:
+        db.add(
+            GeoFenceORM(
+                geozone=json.dumps(geo_zone_feature),
+                raw_geo_fence=json.dumps(fc),
+                start_datetime=start_time,
+                end_datetime=end_time,
+                upper_limit=upper_limit,
+                lower_limit=lower_limit,
+                bounds=bounds_str,
+                name=name,
+                is_test_dataset=bool(test_harness_datasource),
+            )
+        )
+        await db.flush()

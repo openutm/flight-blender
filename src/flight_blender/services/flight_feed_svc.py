@@ -4,7 +4,7 @@ import uuid
 from dataclasses import asdict
 from enum import Enum
 from itertools import zip_longest
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import arrow
 import dacite
@@ -31,7 +31,9 @@ from flight_blender.domain_types.rid import (
     SubmittedTelemetryFlightDetails,
 )
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-from flight_blender.tasks.flight_feed_task import CeleryFlightFeedTaskDispatcher
+
+if TYPE_CHECKING:
+    from flight_blender.tasks.flight_feed_task import CeleryFlightFeedTaskDispatcher
 
 
 def _check_view_port(view_port_coords: list[float]) -> bool:
@@ -56,7 +58,7 @@ class FlightFeedOperations:
     def __init__(
         self,
         repo: SQLAlchemyFlightFeedRepository,
-        dispatcher: CeleryFlightFeedTaskDispatcher,
+        dispatcher: "CeleryFlightFeedTaskDispatcher",
         telemetry_validator: "FlightBlenderTelemetryValidator",
         redis: Any,
     ):
@@ -505,3 +507,40 @@ class ObservationReadOperations:
             else:
                 pending_messages.append(observation)
         return pending_messages
+
+
+# ── Task helper functions ────────────────────────────────────────────────
+
+
+async def bulk_write_flight_observations(observations: list) -> None:
+    """Write multiple flight observations to the database in bulk."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightFeedRepository(db)
+        await repo.bulk_write_flight_observations(observations)
+
+
+async def write_flight_observation(observation) -> None:
+    """Write a single flight observation to the database."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightFeedRepository(db)
+        await repo.write_flight_observation(observation)
+
+
+async def get_latest_flight_observation_by_declaration_id(flight_declaration_id: str):
+    """Get the latest flight observation for a declaration."""
+    from flight_blender.auth.token_cache import get_redis
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightFeedRepository(db)
+        obs_helper = ObservationReadOperations(repo=repo, redis=get_redis())
+        return await obs_helper.get_latest_flight_observation_by_flight_declaration_id(
+            flight_declaration_id=flight_declaration_id
+        )

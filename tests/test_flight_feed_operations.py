@@ -1,6 +1,7 @@
-from unittest.mock import patch
 import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import arrow
 import pytest
 from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE
 
@@ -379,3 +380,76 @@ class TestFlightFeedTaskCoverage:
         assert isinstance(y, float)
         assert x != 0.0
         assert y != 0.0
+# FlightFeed service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFlightFeedServiceCoverage:
+    """Additional tests for FlightFeedOperations."""
+
+    @pytest.mark.asyncio
+    async def test_get_air_traffic_with_valid_viewport(self):
+        """Test get_air_traffic with valid viewport."""
+        from flight_blender.services.flight_feed_svc import FlightFeedOperations
+
+        mock_repo = AsyncMock()
+        mock_dispatcher = MagicMock()
+        mock_telemetry_validator = MagicMock()
+        mock_redis = MagicMock()
+
+        mock_redis.exists.return_value = False
+
+        mock_row = MagicMock()
+        mock_row.id = uuid.uuid4()
+        mock_row.session_id = uuid.uuid4()
+        mock_row.latitude_dd = 0.5
+        mock_row.longitude_dd = 0.5
+        mock_row.altitude_mm = 100
+        mock_row.traffic_source = 1
+        mock_row.source_type = 1
+        mock_row.icao_address = "test-aircraft"
+        mock_row.created_at = arrow.utcnow().datetime
+        mock_row.updated_at = arrow.utcnow().datetime
+        mock_row.raw_metadata = "{}"
+
+        mock_repo.get_recent_flight_observations = AsyncMock(return_value=[mock_row])
+
+        service = FlightFeedOperations(
+            repo=mock_repo,
+            dispatcher=mock_dispatcher,
+            telemetry_validator=mock_telemetry_validator,
+            redis=mock_redis,
+        )
+
+        result, status = await service.get_air_traffic(
+            session_id=uuid.uuid4(),
+            view="0,0,1,1",
+        )
+
+        assert status == 200
+        assert "observations" in result
+
+    @pytest.mark.asyncio
+    async def test_get_air_traffic_with_invalid_viewport(self):
+        """Test get_air_traffic with invalid viewport."""
+        from flight_blender.services.flight_feed_svc import FlightFeedOperations
+
+        mock_repo = AsyncMock()
+        mock_dispatcher = MagicMock()
+        mock_telemetry_validator = MagicMock()
+        mock_redis = MagicMock()
+
+        service = FlightFeedOperations(
+            repo=mock_repo,
+            dispatcher=mock_dispatcher,
+            telemetry_validator=mock_telemetry_validator,
+            redis=mock_redis,
+        )
+
+        result, status = await service.get_air_traffic(
+            session_id=uuid.uuid4(),
+            view="0,0",
+        )
+
+        assert status == 400
+        assert "message" in result

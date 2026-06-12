@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import MagicMock
 
 import pytest
 from flight_blender.config import settings
@@ -479,3 +480,104 @@ class TestNetworkFlightDeclarationsByViewEnabled:
             headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code in (400, 404)
+
+
+# ---------------------------------------------------------------------------
+# Spatial flight declarations additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestSpatialFlightDeclarationsCoverage:
+    """Additional tests for spatial_flight_declarations."""
+
+    def test_open_or_recover_index(self):
+        """Test _open_or_recover_index function."""
+        from flight_blender.utils.spatial_flight_declarations import _open_or_recover_index
+
+        result = _open_or_recover_index("test-index")
+
+        assert result is not None
+
+    def test_flight_declaration_rtree_index_factory_add_box_to_index(self):
+        """Test FlightDeclarationRTreeIndexFactory.add_box_to_index."""
+        from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
+
+        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+
+        factory.add_box_to_index(
+            id=1,
+            flight_declaration_id="test-declaration-id",
+            view=[0, 0, 1, 1],
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+        )
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_flight_declaration_rtree_index_factory_delete_from_index(self):
+        """Test FlightDeclarationRTreeIndexFactory.delete_from_index."""
+        from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
+
+        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+
+        factory.add_box_to_index(
+            id=1,
+            flight_declaration_id="test-declaration-id",
+            view=[0, 0, 1, 1],
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+        )
+
+        factory.delete_from_index(
+            enumerated_id=1,
+            view=[0, 0, 1, 1],
+        )
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_flight_declaration_rtree_index_factory_generate_flight_declaration_index(self):
+        """Test FlightDeclarationRTreeIndexFactory.generate_flight_declaration_index."""
+        from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
+
+        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+
+        mock_declaration = MagicMock()
+        mock_declaration.id = uuid.uuid4()
+        mock_declaration.bounds = "0,0,1,1"
+
+        factory.generate_flight_declaration_index([mock_declaration])
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_flight_declaration_rtree_index_factory_check_flight_declaration_box_intersection(self):
+        """Test FlightDeclarationRTreeIndexFactory.check_flight_declaration_box_intersection."""
+        from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
+
+        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+
+        mock_declaration = MagicMock()
+        mock_declaration.id = uuid.uuid4()
+        mock_declaration.bounds = "0,0,1,1"
+
+        factory.generate_flight_declaration_index([mock_declaration])
+
+        result = factory.check_flight_declaration_box_intersection(view_box=[0, 0, 1, 1])
+
+        assert isinstance(result, list)
+
+    def test_flight_declaration_rtree_index_factory_clear_rtree_index(self):
+        """Test FlightDeclarationRTreeIndexFactory.clear_rtree_index."""
+        from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
+
+        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+
+        mock_declaration = MagicMock()
+        mock_declaration.id = uuid.uuid4()
+        mock_declaration.bounds = "0,0,1,1"
+
+        factory.generate_flight_declaration_index([mock_declaration])
+
+        import asyncio
+        asyncio.run(factory.clear_rtree_index([mock_declaration]))
+
+        # No assertion needed, just ensure it doesn't raise
