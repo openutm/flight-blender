@@ -318,6 +318,64 @@ class TestOperationConformanceNotification:
 
 
 # ---------------------------------------------------------------------------
+# Conformance task additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestConformanceTaskCoverage:
+    """Additional tests for conformance_task."""
+
+    @pytest.mark.asyncio
+    async def test_check_operation_telemetry_conformance_with_observation(self):
+        """Test check_operation_telemetry_conformance with observation."""
+        from flight_blender.tasks.conformance_task import _async_check_operation_telemetry_conformance
+
+        test_id = str(uuid.uuid4())
+
+        with patch('flight_blender.tasks.conformance_task.flight_stream_helper.ObservationReadOperations') as mock_obs_cls:
+            mock_obs_instance = MagicMock()
+            mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id = AsyncMock(return_value=MagicMock(
+                metadata={"flight_details": {"id": test_id}},
+                latitude_dd=0.0,
+                longitude_dd=0.0,
+                altitude_mm=100,
+                icao_address="test-aircraft",
+            ))
+            mock_obs_cls.return_value = mock_obs_instance
+
+            with patch('flight_blender.tasks.conformance_task.FlightBlenderConformanceEngine') as mock_engine:
+                mock_engine.return_value.is_operation_conformant_via_telemetry = AsyncMock(return_value=100)
+
+                with patch('flight_blender.tasks.conformance_task.custom_signals') as mock_signals:
+                    await _async_check_operation_telemetry_conformance(flight_declaration_id=test_id)
+
+                    mock_signals.telemetry_non_conformance_signal.send.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_check_operation_telemetry_conformance_non_conformant(self):
+        """Test check_operation_telemetry_conformance with non-conformant observation."""
+        from flight_blender.tasks.conformance_task import _async_check_operation_telemetry_conformance
+
+        test_id = str(uuid.uuid4())
+
+        with patch('flight_blender.tasks.conformance_task.flight_stream_helper.ObservationReadOperations') as mock_obs_cls:
+            mock_obs_instance = MagicMock()
+            mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id = AsyncMock(return_value=MagicMock(
+                metadata={"flight_details": {"id": test_id}},
+                latitude_dd=0.0,
+                longitude_dd=0.0,
+                altitude_mm=100,
+                icao_address="test-aircraft",
+            ))
+            mock_obs_cls.return_value = mock_obs_instance
+
+            with patch('flight_blender.tasks.conformance_task.FlightBlenderConformanceEngine') as mock_engine:
+                mock_engine.return_value.is_operation_conformant_via_telemetry = AsyncMock(return_value=50)
+
+                with patch('flight_blender.tasks.conformance_task.custom_signals') as mock_signals:
+                    await _async_check_operation_telemetry_conformance(flight_declaration_id=test_id)
+
+                    mock_signals.telemetry_non_conformance_signal.send.assert_called_once()
 # Conformance service additional coverage
 # ---------------------------------------------------------------------------
 
