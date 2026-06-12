@@ -318,3 +318,74 @@ class TestOperationConformanceNotification:
                 notif = OperationConformanceNotification(flight_declaration_id="fd-amqp", notifier=notifier)
                 notif.send_conformance_status_notification(message="Some message", level="info")
                 mock_delay.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# FlightBlenderConformanceEngine - check_flight_operational_intent_reference_conformance
+# ---------------------------------------------------------------------------
+
+
+class TestCheckFlightOperationalIntentReferenceConformance:
+    """Tests for the operational intent reference conformance check."""
+
+    @pytest.mark.asyncio
+    async def test_returns_1_when_conformant(self):
+        """Test that a conformant operation returns 1."""
+        import json
+        mock_db = AsyncMock()
+
+        with patch('flight_blender.services.conformance_svc.SQLAlchemyFlightDeclarationRepository') as mock_fd_repo_cls:
+            mock_fd_repo = AsyncMock()
+            mock_fd_repo_cls.return_value = mock_fd_repo
+
+            # Mock flight declaration
+            mock_fd = MagicMock()
+            mock_fd.state = 2  # Activated
+            mock_fd.start_datetime = arrow.utcnow().shift(hours=-1).datetime
+            mock_fd.end_datetime = arrow.utcnow().shift(hours=1).datetime
+            mock_fd.aircraft_id = "test-aircraft"
+            mock_fd.latest_telemetry_datetime = arrow.utcnow().datetime
+            mock_fd_repo.get_by_id = AsyncMock(return_value=mock_fd)
+
+            # Mock opint reference
+            mock_opint_ref = MagicMock()
+            mock_opint_ref.state = "Accepted"
+            mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=mock_opint_ref)
+
+            with patch('flight_blender.services.conformance_svc.SQLAlchemyConformanceRepository') as mock_conformance_repo_cls:
+                mock_conformance_repo = AsyncMock()
+                mock_conformance_repo_cls.return_value = mock_conformance_repo
+
+                # Mock active geofences
+                mock_conformance_repo.get_active_geofences = AsyncMock(return_value=[])
+
+                engine = FlightBlenderConformanceEngine(db=mock_db)
+
+                result = await engine.check_flight_operational_intent_reference_conformance(
+                    flight_declaration_id=uuid.uuid4(),
+                )
+
+                assert result == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_12_when_no_flight_declaration(self):
+        """Test that missing flight declaration returns 12."""
+        mock_db = AsyncMock()
+
+        with patch('flight_blender.services.conformance_svc.SQLAlchemyFlightDeclarationRepository') as mock_fd_repo_cls:
+            mock_fd_repo = AsyncMock()
+            mock_fd_repo_cls.return_value = mock_fd_repo
+
+            mock_fd_repo.get_by_id = AsyncMock(return_value=None)
+
+            with patch('flight_blender.services.conformance_svc.SQLAlchemyConformanceRepository') as mock_conformance_repo_cls:
+                mock_conformance_repo = AsyncMock()
+                mock_conformance_repo_cls.return_value = mock_conformance_repo
+
+                engine = FlightBlenderConformanceEngine(db=mock_db)
+
+                result = await engine.check_flight_operational_intent_reference_conformance(
+                    flight_declaration_id=uuid.uuid4(),
+                )
+
+                assert result == 12  # C10
