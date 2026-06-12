@@ -1,20 +1,17 @@
 import asyncio
 import json
-import uuid
 
 import arrow
 from dacite import from_dict
 from loguru import logger
 
 from flight_blender.celery import app
-from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator
+from flight_blender.clients.dss_scd_client import SCDOperations
 from flight_blender.clients.notification_client import NotificationFactory
 from flight_blender.config import settings
-from flight_blender.db.session import async_task_session
-from flight_blender.domain_types.common import OPERATION_STATES
 from flight_blender.domain_types.notifications import FlightDeclarationUpdateMessage
 from flight_blender.domain_types.scd import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
-from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.services.flight_declarations_svc import submit_flight_declaration_to_dss, verify_and_update_declaration_state
 
 
 @app.task(name="submit_flight_declaration_to_dss_async")
@@ -23,39 +20,7 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
 
 
 async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) -> None:
-    my_dss_opint_creator = DSSOperationalIntentsCreator(flight_declaration_id=uuid.UUID(flight_declaration_id))
-
-    start_end_time_validated = await my_dss_opint_creator.validate_flight_declaration_start_end_time()
-
-    logger.info("Flight Operation start end time status %s" % start_end_time_validated)
-
-    if not start_end_time_validated:
-        logger.error(
-            "Flight Declaration start / end times are not valid, please check the submitted declaration, this operation will not be sent to the DSS for strategic deconfliction"
-        )
-        validation_not_ok_msg = (
-            "Flight Operation with ID {operation_id} did not pass time validation, start and end time may not be ahead of two hours".format(
-                operation_id=flight_declaration_id
-            )
-        )
-        send_operational_update_message.delay(
-            flight_declaration_id=flight_declaration_id,
-            message_text=validation_not_ok_msg,
-            level="error",
-        )
-        return
-
-    validation_ok_msg = "Flight Operation with ID {operation_id} validated for start and end time, submitting to DSS..".format(
-        operation_id=flight_declaration_id
-    )
-    send_operational_update_message.delay(
-        flight_declaration_id=flight_declaration_id,
-        message_text=validation_ok_msg,
-        level="info",
-    )
-    logger.info("Submitting flight declaration to DSS..")
-
-    opint_submission_result = await my_dss_opint_creator.submit_flight_declaration_to_dss()
+    opint_submission_result = await submit_flight_declaration_to_dss(flight_declaration_id)
 
     if opint_submission_result.status_code == 500:
         logger.error("Error in submitting Flight Declaration to the DSS %s" % opint_submission_result.status)
@@ -97,36 +62,11 @@ async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) ->
             level="info",
         )
 
-        async with async_task_session() as db:
-            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
+        flight_declaration, created_opint = await verify_and_update_declaration_state(flight_declaration_id)
 
-            if not flight_declaration:
-                logger.error("Flight Declaration with ID %s not found in the database" % flight_declaration_id)
-                return
-
-            opint_ref = await fd_repo.get_opint_reference_by_declaration_id(flight_declaration.id)
-            created_opint = opint_ref.id if opint_ref else None
-
-            logger.info("Changing operation state..")
-            original_state = flight_declaration.state
-            accepted_state = OPERATION_STATES[1][0]
-            from flight_blender.services.conformance_svc import FlightOperationConformanceHelper  # noqa: PLC0415
-
-            transition_valid = FlightOperationConformanceHelper.verify_operation_state_transition(
-                original_state=original_state,
-                new_state=accepted_state,
-                event="dss_accepts",
-            )
-            if transition_valid:
-                await fd_repo.update(flight_declaration.id, state=accepted_state)
-                logger.info("The state change transition to Accepted state from current state Created is valid..")
-                await fd_repo.add_state_history_entry(
-                    flight_declaration_id=flight_declaration.id,
-                    new_state=accepted_state,
-                    original_state=original_state,
-                    notes="Successfully submitted to the DSS..",
-                )
+        if not flight_declaration:
+            logger.error("Flight Declaration with ID %s not found in the database" % flight_declaration_id)
+            return
 
         submission_state_updated_msg = "Flight Operation with ID {operation_id} has a updated state: Accepted. ".format(
             operation_id=flight_declaration_id
@@ -160,7 +100,8 @@ async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) ->
                         operational_intent=operational_intent,
                         subscriptions=subscriptions_raw,
                     )
-                    my_dss_opint_creator.notify_peer_uss(
+                    scd_ops = SCDOperations()
+                    scd_ops.notify_peer_uss(
                         uss_base_url=uss_base_url,
                         notification_payload=post_notification_payload,
                     )

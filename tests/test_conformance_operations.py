@@ -288,10 +288,7 @@ class TestCheckFlightConformanceTask:
 
 class TestCheckOperationTelemetryConformanceTask:
     def test_no_observation_returns_early(self):
-        with patch("flight_blender.tasks.conformance_task.flight_stream_helper.ObservationReadOperations") as mock_obs_cls:
-            mock_obs_instance = MagicMock()
-            mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id = AsyncMock(return_value=None)
-            mock_obs_cls.return_value = mock_obs_instance
+        with patch("flight_blender.tasks.conformance_task.get_latest_flight_observation_by_declaration_id", new_callable=AsyncMock, return_value=None):
             # Should return early without raising
             check_operation_telemetry_conformance(flight_declaration_id=str(uuid.uuid4()))
 
