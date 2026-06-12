@@ -318,6 +318,81 @@ class TestOperationConformanceNotification:
 
 
 # ---------------------------------------------------------------------------
+# Conformance service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestConformanceServiceCoverage:
+    """Additional tests for conformance_svc."""
+
+    def test_status_code_list(self):
+        """Test StatusCode.list method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.list()
+
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    def test_status_code_text(self):
+        """Test StatusCode.text method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.text(ConformanceChecksList.C2)
+
+        assert result is not None
+        assert isinstance(result, str)
+
+    def test_status_code_items(self):
+        """Test StatusCode.items method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.items()
+
+        assert len(list(result)) > 0
+
+    def test_status_code_keys(self):
+        """Test StatusCode.keys method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.keys()
+
+        assert len(list(result)) > 0
+
+    def test_status_code_labels(self):
+        """Test StatusCode.labels method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.labels()
+
+        assert len(list(result)) > 0
+
+    def test_status_code_names(self):
+        """Test StatusCode.names method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.names()
+
+        assert isinstance(result, dict)
+        assert len(result) > 0
+
+    def test_status_code_dict(self):
+        """Test StatusCode.dict method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.dict()
+
+        assert isinstance(result, dict)
+        assert len(result) > 0
+
+    def test_status_code_label(self):
+        """Test StatusCode.label method."""
+        from flight_blender.services.conformance_svc import ConformanceChecksList
+
+        result = ConformanceChecksList.label(ConformanceChecksList.C2)
+
+        assert result is not None
+        assert isinstance(result, str)
 # FlightBlenderConformanceEngine
 # ---------------------------------------------------------------------------
 
