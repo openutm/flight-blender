@@ -1,6 +1,9 @@
 """FastAPI tests for geo_fence_ops endpoints."""
 import json
+import uuid
+from unittest.mock import AsyncMock, MagicMock
 
+import arrow
 import jwt
 import pytest
 from tests.conftest import (
@@ -216,3 +219,133 @@ class TestGeoAwarenessTestHarness:
             headers=_fastapi_auth(GA_TEST_SCOPE),
         )
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Spatial geo fence additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestSpatialGeoFenceCoverage:
+    """Additional tests for spatial_geo_fence."""
+
+    def test_to_from_utm_polygon(self):
+        """Test toFromUTM with Polygon."""
+        from shapely.geometry import Polygon as ShpPolygon
+        from flight_blender.utils.spatial_geo_fence import toFromUTM
+        import pyproj
+
+        proj = pyproj.Proj(proj="utm", zone=32, ellps="WGS84")
+        polygon = ShpPolygon([(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)])
+
+        result = toFromUTM(polygon, proj)
+
+        assert result is not None
+
+    def test_to_from_utm_point(self):
+        """Test toFromUTM with Point."""
+        from shapely.geometry import Point
+        from flight_blender.utils.spatial_geo_fence import toFromUTM
+        import pyproj
+
+        proj = pyproj.Proj(proj="utm", zone=32, ellps="WGS84")
+        point = Point(0, 0)
+
+        result = toFromUTM(point, proj)
+
+        assert result is not None
+
+    def test_convert_shapely_to_geojson(self):
+        """Test convert_shapely_to_geojson."""
+        from shapely.geometry import Polygon as ShpPolygon
+        from flight_blender.utils.spatial_geo_fence import convert_shapely_to_geojson
+
+        polygon = ShpPolygon([(0, 0), (0, 1), (1, 1), (1, 0), (0, 0)])
+
+        result = convert_shapely_to_geojson(polygon)
+
+        assert isinstance(result, str)
+        assert "Polygon" in result
+
+    def test_geo_fence_rtree_index_factory_add_box_to_index(self):
+        """Test GeoFenceRTreeIndexFactory.add_box_to_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        factory.add_box_to_index(
+            id=1,
+            geo_fence_id="test-fence-id",
+            view=[0, 0, 1, 1],
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+        )
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_geo_fence_rtree_index_factory_delete_from_index(self):
+        """Test GeoFenceRTreeIndexFactory.delete_from_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        factory.add_box_to_index(
+            id=1,
+            geo_fence_id="test-fence-id",
+            view=[0, 0, 1, 1],
+            start_date="2024-01-01",
+            end_date="2024-12-31",
+        )
+
+        factory.delete_from_index(
+            enumerated_id=1,
+            view=[0, 0, 1, 1],
+        )
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_geo_fence_rtree_index_factory_generate_geo_fence_index(self):
+        """Test GeoFenceRTreeIndexFactory.generate_geo_fence_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_fence.bounds = "0,0,1,1"
+
+        factory.generate_geo_fence_index([mock_fence])
+
+        # No assertion needed, just ensure it doesn't raise
+
+    def test_geo_fence_rtree_index_factory_check_box_intersection(self):
+        """Test GeoFenceRTreeIndexFactory.check_box_intersection."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_fence.bounds = "0,0,1,1"
+
+        factory.generate_geo_fence_index([mock_fence])
+
+        result = factory.check_box_intersection(view_box=[0, 0, 1, 1])
+
+        assert isinstance(result, list)
+
+    def test_geo_fence_rtree_index_factory_clear_rtree_index(self):
+        """Test GeoFenceRTreeIndexFactory.clear_rtree_index."""
+        from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
+
+        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+
+        mock_fence = MagicMock()
+        mock_fence.id = uuid.uuid4()
+        mock_fence.bounds = "0,0,1,1"
+
+        factory.generate_geo_fence_index([mock_fence])
+
+        factory.clear_rtree_index([mock_fence])
+
+        # No assertion needed, just ensure it doesn't raise
