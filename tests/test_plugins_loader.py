@@ -7,9 +7,12 @@ Covers:
 - Plugin settings (new prefix, backward-compat fallback)
 """
 
+import uuid
 from datetime import datetime, timezone
 from unittest import TestCase
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import arrow
 import pytest
 
 from flight_blender.domain_types.plugin_protocols import (
@@ -397,3 +400,94 @@ class PluginSettingsTests(TestCase):
 
         # Default is empty string (inherited from CUSTOM_VOLUME_4D_GENERATION_CLASS default)
         self.assertIsInstance(settings.FLIGHT_BLENDER_PLUGIN_VOLUME_4D_GENERATOR, str)
+
+
+# ---------------------------------------------------------------------------
+# Deconfliction engine additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestDeconflictionEngineCoverage:
+    """Additional tests for deconfliction_engine."""
+
+    @pytest.mark.asyncio
+    async def test_check_deconfliction_no_conflicts(self):
+        """Test check_deconfliction returns approved when no conflicts."""
+        from flight_blender.services.deconfliction_engine import DefaultDeconflictionEngine
+        from flight_blender.domain_types.flight_declarations import DeconflictionRequest
+
+        mock_db = AsyncMock()
+
+        with patch('flight_blender.services.deconfliction_engine.SQLAlchemyGeoFenceRepository') as mock_fence_repo_cls:
+            mock_fence_repo = AsyncMock()
+            mock_fence_repo_cls.return_value = mock_fence_repo
+            mock_fence_repo.get_geofences_overlapping_time_window = AsyncMock(return_value=[])
+
+            with patch('flight_blender.services.deconfliction_engine.SQLAlchemyFlightDeclarationRepository') as mock_fd_repo_cls:
+                mock_fd_repo = AsyncMock()
+                mock_fd_repo_cls.return_value = mock_fd_repo
+                mock_fd_repo.get_active_declarations_overlapping_time_window = AsyncMock(return_value=[])
+
+                with patch('flight_blender.services.deconfliction_engine.rtree_geo_fence_helper') as mock_rtree:
+                    mock_rtree.GeoFenceRTreeIndexFactory.return_value.generate_geo_fence_index = MagicMock()
+                    mock_rtree.GeoFenceRTreeIndexFactory.return_value.check_box_intersection = MagicMock(return_value=[])
+                    mock_rtree.GeoFenceRTreeIndexFactory.return_value.clear_rtree_index = MagicMock()
+
+                    with patch('flight_blender.services.deconfliction_engine.FlightDeclarationRTreeIndexFactory') as mock_fd_rtree:
+                        mock_fd_rtree.return_value.generate_flight_declaration_index = MagicMock()
+                        mock_fd_rtree.return_value.check_flight_declaration_box_intersection = MagicMock(return_value=[])
+                        mock_fd_rtree.return_value.clear_rtree_index = MagicMock()
+
+                        engine = DefaultDeconflictionEngine()
+
+                        request = DeconflictionRequest(
+                            view_box=[0, 0, 1, 1],
+                            start_datetime=arrow.utcnow().shift(hours=-1).datetime,
+                            end_datetime=arrow.utcnow().shift(hours=1).datetime,
+                            ussp_network_enabled=False,
+                        )
+
+                        result = await engine.check_deconfliction(request=request, db=mock_db)
+
+                        assert result.is_approved is True
+
+    @pytest.mark.asyncio
+    async def test_check_deconfliction_geofence_conflict(self):
+        """Test check_deconfliction returns rejected when geofence conflict."""
+        from flight_blender.services.deconfliction_engine import DefaultDeconflictionEngine
+        from flight_blender.domain_types.flight_declarations import DeconflictionRequest
+
+        mock_db = AsyncMock()
+
+        with patch('flight_blender.services.deconfliction_engine.SQLAlchemyGeoFenceRepository') as mock_fence_repo_cls:
+            mock_fence_repo = AsyncMock()
+            mock_fence_repo_cls.return_value = mock_fence_repo
+            mock_fence_repo.get_geofences_overlapping_time_window = AsyncMock(return_value=[MagicMock()])
+
+            with patch('flight_blender.services.deconfliction_engine.SQLAlchemyFlightDeclarationRepository') as mock_fd_repo_cls:
+                mock_fd_repo = AsyncMock()
+                mock_fd_repo_cls.return_value = mock_fd_repo
+                mock_fd_repo.get_active_declarations_overlapping_time_window = AsyncMock(return_value=[])
+
+                with patch('flight_blender.services.deconfliction_engine.rtree_geo_fence_helper') as mock_rtree:
+                    mock_rtree.GeoFenceRTreeIndexFactory.return_value.generate_geo_fence_index = MagicMock()
+                    mock_rtree.GeoFenceRTreeIndexFactory.return_value.check_box_intersection = MagicMock(return_value=[MagicMock()])
+                    mock_rtree.GeoFenceRTreeIndexFactory.return_value.clear_rtree_index = MagicMock()
+
+                    with patch('flight_blender.services.deconfliction_engine.FlightDeclarationRTreeIndexFactory') as mock_fd_rtree:
+                        mock_fd_rtree.return_value.generate_flight_declaration_index = MagicMock()
+                        mock_fd_rtree.return_value.check_flight_declaration_box_intersection = MagicMock(return_value=[])
+                        mock_fd_rtree.return_value.clear_rtree_index = MagicMock()
+
+                        engine = DefaultDeconflictionEngine()
+
+                        request = DeconflictionRequest(
+                            view_box=[0, 0, 1, 1],
+                            start_datetime=arrow.utcnow().shift(hours=-1).datetime,
+                            end_datetime=arrow.utcnow().shift(hours=1).datetime,
+                            ussp_network_enabled=False,
+                        )
+
+                        result = await engine.check_deconfliction(request=request, db=mock_db)
+
+                        assert result.is_approved is False

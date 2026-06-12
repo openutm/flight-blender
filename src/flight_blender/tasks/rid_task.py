@@ -38,12 +38,10 @@ from flight_blender.domain_types.rid_operations import (
     RIDVolume4D,
     SingleObservationMetadata,
 )
-from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
 from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.services.altitude import wgs84_to_barometric
-from flight_blender.services.rid_svc import USSPollingService
+from flight_blender.services.rid_svc import USSPollingService, create_rid_notification, get_rid_subscription, update_telemetry_timestamp
 from flight_blender.tasks.flight_feed_task import write_incoming_air_traffic_data
 
 
@@ -99,13 +97,7 @@ def write_operator_rid_notification(message: str, session_id: str):
 
 
 async def _async_write_operator_rid_notification(message: str, session_id: str) -> None:
-    try:
-        session_uuid = uuid.UUID(session_id)
-    except (ValueError, AttributeError):
-        session_uuid = None
-    async with async_task_session() as db:
-        repo = SQLAlchemyNotificationsRepository(db)
-        await repo.create_notification(message=message, session_id=session_uuid)
+    await create_rid_notification(message=message, session_id=session_id)
 
 
 async def _async_process_requested_flight(
@@ -113,7 +105,7 @@ async def _async_process_requested_flight(
     flight_injection_sorted_set: str,
     test_id: str,
     injection_id: uuid.UUID,
-    rid_repo: SQLAlchemyRIDRepository,
+    rid_repo: "SQLAlchemyRIDRepository",
 ) -> tuple[RIDTestInjection, list[LatLngPoint], list[float]]:
     """
     Processes a requested flight by parsing flight details and telemetry data, storing relevant information in Redis,
@@ -338,10 +330,10 @@ async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> Non
     r = get_redis()
     async_polling_lock = f"async_polling_lock_{session_id}"
 
+    subscription_record = await get_rid_subscription(session_id)
     async with async_task_session() as db:
         rid_repo = SQLAlchemyRIDRepository(db)
         feed_repo = SQLAlchemyFlightFeedRepository(db)
-        subscription_record = await rid_repo.get_subscription_by_id(uuid.UUID(session_id))
         my_dss_subscriber = USSPollingService(rid_repo=rid_repo, feed_repo=feed_repo)
 
         if r.exists(async_polling_lock):
@@ -385,9 +377,7 @@ async def _async_stream_rid_telemetry_data(rid_telemetry_observations) -> None:
         current_states = observation["current_states"]
         operation_id = flight_details["id"]
 
-        async with async_task_session() as db:
-            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            await fd_repo.update_telemetry_timestamp(uuid.UUID(operation_id))
+        await update_telemetry_timestamp(operation_id)
 
         for current_state in current_states:
             _current_state = from_dict(data_class=LocalRIDAircraftState, data=current_state, config=Config(cast=[Enum]))
@@ -654,12 +644,6 @@ async def _async_check_rid_stream_conformance(session_id: str) -> None:
         return
 
     logger.info(f"RID Data stream for {session_id} is NOT OK...")
-    try:
-        session_uuid = uuid.UUID(session_id)
-    except (ValueError, AttributeError):
-        session_uuid = None
 
-    async with async_task_session() as db:
-        notif_repo = SQLAlchemyNotificationsRepository(db)
-        for error_msg in errors:
-            await notif_repo.create_notification(message=error_msg, session_id=session_uuid)
+    for error_msg in errors:
+        await create_rid_notification(message=error_msg, session_id=session_id)
