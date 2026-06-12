@@ -349,3 +349,82 @@ class USSPollingService:
             else:
                 logger.info("Received a non 200 error from {url} : {status_code} ".format(url=rid_query_url, status_code=flights_request.status_code))
                 logger.info("Detailed Response %s" % flights_request.text)
+
+
+# ── Task helper functions ────────────────────────────────────────────────
+
+
+async def create_rid_notification(message: str, session_id):
+    """Create a notification for RID operations."""
+    import uuid as uuid_mod
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
+
+    try:
+        session_uuid = uuid_mod.UUID(session_id)
+    except (ValueError, AttributeError):
+        session_uuid = None
+    async with async_task_session() as db:
+        repo = SQLAlchemyNotificationsRepository(db)
+        await repo.create_notification(message=message, session_id=session_uuid)
+
+
+async def create_rid_subscription(subscription_id, record_id, view_hash, end_datetime, is_simulated, view, flights_dict):
+    """Create a RID subscription."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyRIDRepository(db)
+        await repo.create_subscription(
+            subscription_id=subscription_id,
+            record_id=record_id,
+            view_hash=view_hash,
+            end_datetime=end_datetime,
+            is_simulated=is_simulated,
+            view=view,
+            flights_dict=flights_dict,
+        )
+
+
+async def create_or_update_rid_flight_detail(rid_flight_details_payload):
+    """Create or update RID flight details."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyRIDRepository(db)
+        await repo.create_or_update_flight_detail(rid_flight_details_payload=rid_flight_details_payload)
+
+
+async def update_telemetry_timestamp(operation_id):
+    """Update telemetry timestamp for an operation."""
+    import uuid as uuid_mod
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightDeclarationRepository(db)
+        await repo.update_telemetry_timestamp(uuid_mod.UUID(operation_id))
+
+
+async def get_rid_subscription(subscription_id):
+    """Get a RID subscription."""
+    import uuid as uuid_mod
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyRIDRepository(db)
+        return await repo.get_subscription_by_id(uuid_mod.UUID(subscription_id))
+
+
+async def create_rid_observations(observations):
+    """Write RID observations to the database."""
+    from flight_blender.db.session import async_task_session
+    from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightFeedRepository(db)
+        for obs in observations:
+            await repo.write_flight_observation(single_observation=obs)

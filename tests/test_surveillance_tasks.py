@@ -261,49 +261,49 @@ def _mock_sa_repo():
     return repo
 
 
-def _sa_repo_patch(mock_repo):
-    """Patch the async surveillance repository as looked up in the task module."""
-    return patch("flight_blender.tasks.surveillance_task.SQLAlchemySurveillanceRepository", return_value=mock_repo)
+def _svc_patches(mock_repo):
+    """Patch the surveillance service functions."""
+    return [
+        patch("flight_blender.services.surveillance_svc.record_surveillance_heartbeat_event", new_callable=AsyncMock),
+        patch("flight_blender.services.surveillance_svc.record_surveillance_track_event", new_callable=AsyncMock),
+        patch("flight_blender.services.surveillance_svc.get_surveillance_sensor_health", new_callable=AsyncMock, return_value=(100, 5)),
+        patch("flight_blender.services.surveillance_svc.cleanup_old_surveillance_events", new_callable=AsyncMock, return_value=(0, 0)),
+    ]
 
 
 class TestSendHeartbeatToConsumer:
     def test_heartbeat_sent_successfully(self):
         """send_heartbeat_to_consumer should record event when Redis publish succeeds."""
-        mock_repo = _mock_sa_repo()
-        sensor_mock = MagicMock()
-        sensor_mock.expected_latency_ms = 100
-        sensor_mock.horizontal_accuracy_m = 5
-        mock_repo.get_active_surveillance_sensors.return_value = [sensor_mock]
         session_id = str(uuid.uuid4())
         with patch("flight_blender.tasks.surveillance_task.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.return_value = 1
             with patch.object(send_heartbeat_to_consumer, "apply_async") as mock_apply_async:
-                with _sa_repo_patch(mock_repo):
-                    send_heartbeat_to_consumer(session_id=session_id)
-        mock_repo.record_heartbeat_event.assert_awaited_once()
+                with patch("flight_blender.tasks.surveillance_task.get_surveillance_sensor_health", new_callable=AsyncMock, return_value=(100, 5)) as mock_health:
+                    with patch("flight_blender.tasks.surveillance_task.record_surveillance_heartbeat_event", new_callable=AsyncMock) as mock_record:
+                        send_heartbeat_to_consumer(session_id=session_id)
+        mock_record.assert_awaited_once()
         mock_from_url.return_value.publish.assert_called_once()
         mock_apply_async.assert_called_once()
 
     def test_heartbeat_channel_error_still_records(self):
         """send_heartbeat_to_consumer records the event even when Redis publish fails."""
-        mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
         with patch("flight_blender.tasks.surveillance_task.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.side_effect = Exception("redis unavailable")
             with patch.object(send_heartbeat_to_consumer, "apply_async") as mock_apply_async:
-                with _sa_repo_patch(mock_repo):
-                    send_heartbeat_to_consumer(session_id=session_id)
+                with patch("flight_blender.tasks.surveillance_task.get_surveillance_sensor_health", new_callable=AsyncMock, return_value=(100, 5)):
+                    with patch("flight_blender.tasks.surveillance_task.record_surveillance_heartbeat_event", new_callable=AsyncMock) as mock_record:
+                        send_heartbeat_to_consumer(session_id=session_id)
         # Even on error, we record the heartbeat
-        mock_repo.record_heartbeat_event.assert_awaited_once()
+        mock_record.assert_awaited_once()
         mock_apply_async.assert_called_once()
-        kwargs = mock_repo.record_heartbeat_event.call_args.kwargs
+        kwargs = mock_record.call_args.kwargs
         assert kwargs.get("delivered_on_time") is False
 
 
 class TestSendAndGenerateTrackToConsumer:
     def test_track_consumer_runs(self):
         """send_and_generate_track_to_consumer calls record_track_event."""
-        mock_repo = _mock_sa_repo()
         session_id = str(uuid.uuid4())
         with patch("flight_blender.tasks.surveillance_task.redis.from_url") as mock_from_url:
             mock_from_url.return_value.publish.return_value = 1
@@ -314,9 +314,9 @@ class TestSendAndGenerateTrackToConsumer:
                         mock_fuser.return_value.generate_track_messages.return_value = []
                         mock_load.return_value = mock_fuser
                         with patch.object(send_and_generate_track_to_consumer, "apply_async") as mock_apply_async:
-                            with _sa_repo_patch(mock_repo):
+                            with patch("flight_blender.tasks.surveillance_task.record_surveillance_track_event", new_callable=AsyncMock) as mock_record:
                                 send_and_generate_track_to_consumer(session_id=session_id)
-        mock_repo.record_track_event.assert_awaited_once()
+        mock_record.assert_awaited_once()
         mock_from_url.return_value.publish.assert_called_once()
         mock_apply_async.assert_called_once()
 
@@ -324,16 +324,13 @@ class TestSendAndGenerateTrackToConsumer:
 class TestCleanupOldHeartbeatEvents:
     def test_cleanup_deletes_old_records(self):
         """cleanup_old_heartbeat_events deletes records older than retention period."""
-        mock_repo = _mock_sa_repo()
-        mock_repo.cleanup_old_events.return_value = (5, 3)
-        with _sa_repo_patch(mock_repo):
+        with patch("flight_blender.tasks.surveillance_task.cleanup_old_surveillance_events", new_callable=AsyncMock, return_value=(5, 3)) as mock_cleanup:
             cleanup_old_heartbeat_events()
-        mock_repo.cleanup_old_events.assert_called_once()
+        mock_cleanup.assert_called_once()
 
     def test_cleanup_with_custom_retention(self, monkeypatch):
         """cleanup_old_heartbeat_events respects HEARTBEAT_RETENTION_DAYS env var."""
         monkeypatch.setattr(settings, "HEARTBEAT_RETENTION_DAYS", 7)
-        mock_repo = _mock_sa_repo()
-        with _sa_repo_patch(mock_repo):
+        with patch("flight_blender.tasks.surveillance_task.cleanup_old_surveillance_events", new_callable=AsyncMock, return_value=(5, 3)) as mock_cleanup:
             cleanup_old_heartbeat_events()
-        mock_repo.cleanup_old_events.assert_called_once()
+        mock_cleanup.assert_called_once()

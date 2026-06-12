@@ -437,3 +437,80 @@ class TestSpatialRIDCoverage:
         )
 
         assert isinstance(result, bool)
+# RID service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestRIDServiceCoverage:
+    """Additional tests for rid_svc."""
+
+    def test_build_view_port_box(self):
+        """Test build_view_port_box."""
+        from flight_blender.services.rid_svc import build_view_port_box
+
+        result = build_view_port_box([0, 0, 1, 1])
+
+        assert result is not None
+        assert result.bounds == (0, 0, 1, 1)
+
+    def test_build_view_port_box_lng_lat(self):
+        """Test build_view_port_box_lng_lat."""
+        from flight_blender.services.rid_svc import build_view_port_box_lng_lat
+
+        result = build_view_port_box_lng_lat([0, 0, 1, 1])
+
+        assert result is not None
+        assert result.bounds == (0, 0, 1, 1)
+
+    def test_convert_box_to_geojson_feature(self):
+        """Test convert_box_to_geojson_feature."""
+        from shapely.geometry import box
+        from flight_blender.services.rid_svc import convert_box_to_geojson_feature
+
+        test_box = box(0, 0, 1, 1)
+        result = convert_box_to_geojson_feature(test_box)
+
+        assert result is not None
+        assert "features" in result
+        assert len(result["features"]) == 1
+
+    def test_get_view_port_diagonal_length_kms(self):
+        """Test get_view_port_diagonal_length_kms."""
+        from flight_blender.services.rid_svc import get_view_port_diagonal_length_kms
+
+        result = get_view_port_diagonal_length_kms([0, 0, 1, 1])
+
+        assert isinstance(result, float)
+        assert result > 0
+
+    def test_check_view_port_valid(self):
+        """Test check_view_port with valid viewport."""
+        from flight_blender.services.rid_svc import check_view_port
+
+        result = check_view_port([0, 0, 1, 1])
+
+        assert result is True
+
+    def test_check_view_port_invalid_length(self):
+        """Test check_view_port with invalid length."""
+        from flight_blender.services.rid_svc import check_view_port
+
+        result = check_view_port([0, 0, 1])
+
+        assert result is False
+
+    def test_check_view_port_invalid_latitude(self):
+        """Test check_view_port with invalid latitude."""
+        from flight_blender.services.rid_svc import check_view_port
+
+        result = check_view_port([100, 0, 200, 1])
+
+        assert result is False
+
+    def test_check_view_port_invalid_longitude(self):
+        """Test check_view_port with invalid longitude."""
+        from flight_blender.services.rid_svc import check_view_port
+
+        result = check_view_port([0, 400, 1, 500])
+
+        assert result is False
