@@ -354,6 +354,32 @@ class TestTrafficInformationDiscovery:
 
 
 # ---------------------------------------------------------------------------
+# Flight feed task additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFlightFeedTaskCoverage:
+    """Additional tests for flight_feed_task."""
+
+    def test_mercator_transform(self):
+        """Test mercator_transform function."""
+        from flight_blender.tasks.flight_feed_task import mercator_transform
+
+        x, y = mercator_transform(0.0, 0.0)
+
+        assert isinstance(x, float)
+        assert isinstance(y, float)
+
+    def test_mercator_transform_different_coords(self):
+        """Test mercator_transform with different coordinates."""
+        from flight_blender.tasks.flight_feed_task import mercator_transform
+
+        x, y = mercator_transform(10.0, 20.0)
+
+        assert isinstance(x, float)
+        assert isinstance(y, float)
+        assert x != 0.0
+        assert y != 0.0
 # FlightFeed service additional coverage
 # ---------------------------------------------------------------------------
 
