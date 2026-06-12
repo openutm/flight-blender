@@ -1,6 +1,8 @@
 import uuid
+from unittest.mock import AsyncMock, MagicMock
 
 import arrow
+import pytest
 from tests.conftest import (
     fastapi_auth_header,
     STRATEGIC_SCOPE,
@@ -249,3 +251,70 @@ class TestUSSUpdateOpIntDetails:
         )
         assert resp.status_code == 204
 
+
+
+# ---------------------------------------------------------------------------
+# USS service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestUSSServiceCoverage:
+    """Additional tests for uss_svc."""
+
+    @pytest.mark.asyncio
+    async def test_uss_operational_intent_details_not_found(self):
+        """Test uss_operational_intent_details returns 404 when not found."""
+        from flight_blender.services.uss_svc import USSService
+
+        mock_fd_repo = AsyncMock()
+        mock_fd_repo.get_opint_reference_by_id = AsyncMock(return_value=None)
+
+        mock_constraint_repo = AsyncMock()
+
+        service = USSService(fd_repo=mock_fd_repo, constraint_repo=mock_constraint_repo)
+
+        result, status = await service.uss_operational_intent_details(opint_id=str(uuid.uuid4()))
+
+        assert status == 404
+        assert "message" in result
+
+    @pytest.mark.asyncio
+    async def test_uss_operational_intent_details_found(self):
+        """Test uss_operational_intent_details returns 200 when found."""
+        import json
+        from flight_blender.services.uss_svc import USSService
+
+        mock_fd_repo = AsyncMock()
+
+        mock_ref = MagicMock()
+        mock_ref.id = uuid.uuid4()
+        mock_ref.declaration_id = uuid.uuid4()
+        mock_ref.state = "Accepted"
+        mock_ref.manager = "test-manager"
+        mock_ref.uss_availability = "Normal"
+        mock_ref.version = 1
+        mock_ref.ovn = "test-ovn"
+        mock_ref.time_start = arrow.utcnow().datetime
+        mock_ref.time_end = arrow.utcnow().shift(hours=1).datetime
+        mock_ref.uss_base_url = "https://test.uss.com"
+        mock_ref.subscription_id = "test-subscription"
+
+        mock_fd_repo.get_opint_reference_by_id = AsyncMock(return_value=mock_ref)
+
+        mock_composite = MagicMock()
+        mock_composite.operational_intent_details = MagicMock()
+        mock_composite.operational_intent_details.volumes = json.dumps([])
+        mock_composite.operational_intent_details.off_nominal_volumes = json.dumps([])
+        mock_composite.operational_intent_details.priority = 0
+        mock_composite.operational_intent_reference = mock_ref
+
+        mock_fd_repo.get_composite_opint_by_declaration_id = AsyncMock(return_value=mock_composite)
+
+        mock_constraint_repo = AsyncMock()
+
+        service = USSService(fd_repo=mock_fd_repo, constraint_repo=mock_constraint_repo)
+
+        result, status = await service.uss_operational_intent_details(opint_id=str(mock_ref.id))
+
+        assert status == 200
+        assert "operational_intent" in result
