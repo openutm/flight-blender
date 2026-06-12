@@ -318,3 +318,167 @@ class TestOperationConformanceNotification:
                 notif = OperationConformanceNotification(flight_declaration_id="fd-amqp", notifier=notifier)
                 notif.send_conformance_status_notification(message="Some message", level="info")
                 mock_delay.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# FlightBlenderConformanceEngine
+# ---------------------------------------------------------------------------
+
+
+class TestFlightBlenderConformanceEngine:
+    """Tests for the main conformance engine."""
+
+    @pytest.mark.asyncio
+    async def test_is_operation_conformant_via_telemetry_returns_100_when_conformant(self):
+        """Test that a conformant operation returns 100."""
+        import json
+        mock_db = AsyncMock()
+
+        with patch('flight_blender.services.conformance_svc.SQLAlchemyFlightDeclarationRepository') as mock_fd_repo_cls:
+            mock_fd_repo = AsyncMock()
+            mock_fd_repo_cls.return_value = mock_fd_repo
+
+            # Mock flight declaration
+            mock_fd = MagicMock()
+            mock_fd.state = 2  # Activated
+            mock_fd.start_datetime = arrow.utcnow().shift(hours=-1).datetime
+            mock_fd.end_datetime = arrow.utcnow().shift(hours=1).datetime
+            mock_fd.aircraft_id = "test-aircraft"
+            mock_fd.operational_intent = json.dumps({
+                "volumes": [{
+                    "volume": {
+                        "altitude_lower": {"value": 0, "reference": "W84", "units": "M"},
+                        "altitude_upper": {"value": 1000, "reference": "W84", "units": "M"},
+                        "outline_polygon": {
+                            "vertices": [
+                                {"lng": -1, "lat": -1},
+                                {"lng": -1, "lat": 1},
+                                {"lng": 1, "lat": 1},
+                                {"lng": 1, "lat": -1},
+                                {"lng": -1, "lat": -1},  # Duplicate to be popped
+                            ]
+                        }
+                    },
+                    "time_start": {"format": "RFC3339", "value": arrow.utcnow().shift(hours=-1).isoformat()},
+                    "time_end": {"format": "RFC3339", "value": arrow.utcnow().shift(hours=1).isoformat()},
+                }],
+                "priority": 0,
+            })
+            mock_fd_repo.get_by_id = AsyncMock(return_value=mock_fd)
+
+            # Mock opint reference
+            mock_opint_ref = MagicMock()
+            mock_opint_ref.state = "Accepted"
+            mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=mock_opint_ref)
+
+            with patch('flight_blender.services.conformance_svc.SQLAlchemyConformanceRepository') as mock_conformance_repo_cls:
+                mock_conformance_repo = AsyncMock()
+                mock_conformance_repo_cls.return_value = mock_conformance_repo
+
+                # Mock active geofences
+                mock_conformance_repo.get_active_geofences = AsyncMock(return_value=[])
+
+                engine = FlightBlenderConformanceEngine(db=mock_db)
+
+                result = await engine.is_operation_conformant_via_telemetry(
+                    flight_declaration_id=uuid.uuid4(),
+                    aircraft_id="test-aircraft",
+                    telemetry_location=LatLngPoint(lat=0.0, lng=0.0),
+                    altitude_m_wgs_84=100.0,
+                )
+
+                assert result == 100
+
+    @pytest.mark.asyncio
+    async def test_is_operation_conformant_via_telemetry_returns_3_when_no_flight_declaration(self):
+        """Test that missing flight declaration returns check C2."""
+        mock_db = AsyncMock()
+
+        with patch('flight_blender.services.conformance_svc.SQLAlchemyFlightDeclarationRepository') as mock_fd_repo_cls:
+            mock_fd_repo = AsyncMock()
+            mock_fd_repo_cls.return_value = mock_fd_repo
+
+            mock_fd_repo.get_by_id = AsyncMock(return_value=None)
+
+            engine = FlightBlenderConformanceEngine(db=mock_db)
+
+            result = await engine.is_operation_conformant_via_telemetry(
+                flight_declaration_id=uuid.uuid4(),
+                aircraft_id="test-aircraft",
+                telemetry_location=LatLngPoint(lat=0.0, lng=0.0),
+                altitude_m_wgs_84=100.0,
+            )
+
+            assert result == 2  # C2
+
+    @pytest.mark.asyncio
+    async def test_is_operation_conformant_via_telemetry_returns_4_when_aircraft_id_mismatch(self):
+        """Test that aircraft ID mismatch returns check C3."""
+        import json
+        mock_db = AsyncMock()
+
+        with patch('flight_blender.services.conformance_svc.SQLAlchemyFlightDeclarationRepository') as mock_fd_repo_cls:
+            mock_fd_repo = AsyncMock()
+            mock_fd_repo_cls.return_value = mock_fd_repo
+
+            mock_fd = MagicMock()
+            mock_fd.state = 2
+            mock_fd.start_datetime = arrow.utcnow().shift(hours=-1).datetime
+            mock_fd.end_datetime = arrow.utcnow().shift(hours=1).datetime
+            mock_fd.aircraft_id = "different-aircraft"  # Different from test-aircraft
+            mock_fd.operational_intent = json.dumps({"volumes": [], "priority": 0})
+            mock_fd_repo.get_by_id = AsyncMock(return_value=mock_fd)
+
+            mock_opint_ref = MagicMock()
+            mock_opint_ref.state = "Accepted"
+            mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=mock_opint_ref)
+
+            with patch('flight_blender.services.conformance_svc.SQLAlchemyConformanceRepository') as mock_conformance_repo_cls:
+                mock_conformance_repo = AsyncMock()
+                mock_conformance_repo_cls.return_value = mock_conformance_repo
+
+                mock_conformance_repo.get_active_geofences = AsyncMock(return_value=[])
+
+                engine = FlightBlenderConformanceEngine(db=mock_db)
+
+                result = await engine.is_operation_conformant_via_telemetry(
+                    flight_declaration_id=uuid.uuid4(),
+                    aircraft_id="test-aircraft",
+                    telemetry_location=LatLngPoint(lat=0.0, lng=0.0),
+                    altitude_m_wgs_84=100.0,
+                )
+
+                assert result == 3  # C3
+
+
+# ---------------------------------------------------------------------------
+# FlightOperationConformanceHelper
+# ---------------------------------------------------------------------------
+
+
+class TestFlightOperationConformanceHelper:
+    """Tests for the conformance helper state transitions."""
+
+    def test_verify_operation_state_transition_returns_true_for_valid_transition(self):
+        """Test that valid state transition returns True."""
+        from flight_blender.services.conformance_svc import FlightOperationConformanceHelper
+
+        result = FlightOperationConformanceHelper.verify_operation_state_transition(
+            original_state=0,  # Created
+            new_state=1,  # Accepted
+            event="dss_accepts",
+        )
+
+        assert result is True
+
+    def test_verify_operation_state_transition_returns_false_for_invalid_transition(self):
+        """Test that invalid state transition returns False."""
+        from flight_blender.services.conformance_svc import FlightOperationConformanceHelper
+
+        result = FlightOperationConformanceHelper.verify_operation_state_transition(
+            original_state=0,  # Created
+            new_state=5,  # Ended
+            event="dss_accepts",
+        )
+
+        assert result is False
