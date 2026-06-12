@@ -2,6 +2,7 @@ import json
 import uuid
 from dataclasses import asdict
 from enum import Enum
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import requests
@@ -12,14 +13,15 @@ from loguru import logger
 from flight_blender.auth.dss_auth import get_dss_auth_token
 from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.config import settings
-from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.constraint import Constraint, ConstraintDetails, ConstraintReference, QueryConstraintsPayload
 from flight_blender.domain_types.scd import Time, Volume4D
-from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
+
+if TYPE_CHECKING:
+    from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository
 
 
 class ConstraintOperations:
-    def __init__(self, constraint_repo: SQLAlchemyConstraintRepository | None = None):
+    def __init__(self, constraint_repo: "SQLAlchemyConstraintRepository | None" = None):
         self.dss_base_url = settings.DSS_BASE_URL
         self.constraint_repo = constraint_repo
 
@@ -91,11 +93,7 @@ class ConstraintOperations:
                     if self.constraint_repo is not None:
                         constraint_repo = self.constraint_repo
                     else:
-                        from flight_blender.repositories.constraint_repo import SQLAlchemyConstraintRepository  # noqa: PLC0415
-
-                        _db_ctx = async_task_session()
-                        db = await _db_ctx.__aenter__()
-                        constraint_repo = SQLAlchemyConstraintRepository(db)
+                        raise ValueError("constraint_repo must be provided for local constraint queries")
                     db_constraint_reference = await constraint_repo.get_constraint_reference_by_id(uuid.UUID(str(_constraint_reference.id)))
                     constraints_reference_exists = db_constraint_reference is not None
 
