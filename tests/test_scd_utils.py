@@ -120,3 +120,54 @@ class TestOperatorRegistrationNumberValidator:
         validator = OperatorRegistrationNumberValidator("placeholder")
         with pytest.raises(ValueError, match="15 characters"):
             validator.gen_checksum("short")
+
+
+# ---------------------------------------------------------------------------
+# Altitude service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestAltitudeServiceCoverage:
+    """Additional tests for altitude service."""
+
+    def test_wgs84_to_barometric(self):
+        """Test wgs84_to_barometric function."""
+        from flight_blender.services.altitude import wgs84_to_barometric
+
+        msl_height, pressure_altitude = wgs84_to_barometric(
+            lat=0.0,
+            lon=0.0,
+            hae_meters=100.0,
+        )
+
+        assert isinstance(msl_height, float)
+        assert isinstance(pressure_altitude, float)
+        assert msl_height == pressure_altitude
+
+    def test_wgs84_to_barometric_negative_altitude(self):
+        """Test wgs84_to_barometric with negative altitude."""
+        from flight_blender.services.altitude import wgs84_to_barometric
+
+        msl_height, pressure_altitude = wgs84_to_barometric(
+            lat=0.0,
+            lon=0.0,
+            hae_meters=-100.0,
+        )
+
+        assert isinstance(msl_height, float)
+        assert isinstance(pressure_altitude, float)
+        assert msl_height == pressure_altitude
+
+    def test_wgs84_to_barometric_high_altitude(self):
+        """Test wgs84_to_barometric with high altitude."""
+        from flight_blender.services.altitude import wgs84_to_barometric
+
+        msl_height, pressure_altitude = wgs84_to_barometric(
+            lat=0.0,
+            lon=0.0,
+            hae_meters=10000.0,
+        )
+
+        assert isinstance(msl_height, float)
+        assert isinstance(pressure_altitude, float)
+        assert msl_height == pressure_altitude
