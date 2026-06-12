@@ -15,6 +15,7 @@ from loguru import logger
 
 from flight_blender.clients import dss_scd_client as dss_scd_helper
 from flight_blender.clients.dss_scd_client import DSSAreaClearHandler, SCDTestHarnessHelper
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import ALTITUDE_REF_LOOKUP, OPERATION_STATES, OPERATION_STATES_LOOKUP, OperationStateCode
 from flight_blender.domain_types.constraint import CompositeConstraintPayload, Constraint
 from flight_blender.domain_types.geo_fence import GeofencePayload
@@ -438,7 +439,9 @@ async def clear_area(request: ClearAreaRequestSchema) -> ClearAreaResponseSchema
     if request.request_id is None or request.extent is None:
         raise HTTPException(status_code=400, detail={"result": "Clear area payload must contain 'request_id' and 'extent'"})
     extent_raw = request.extent.model_dump(mode="json", exclude_none=True)
-    handler = DSSAreaClearHandler(request_id=request.request_id)
+    async with async_task_session() as db:
+        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+        handler = DSSAreaClearHandler(request_id=request.request_id, fd_repo=fd_repo)
     clear_area_response = await handler.clear_area_request(extent_raw=extent_raw)
     return ClearAreaResponseSchema.model_validate(clear_area_response)
 
