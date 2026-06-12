@@ -380,3 +380,85 @@ class TestFlightTelemetryRIDEngine:
         ok, errors = await engine.check_rid_stream_ok()
         assert ok is False
         assert len(errors) == 1
+
+
+# ---------------------------------------------------------------------------
+# RID task additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestRIDTaskCoverage:
+    """Additional tests for rid_task."""
+
+    def test_parse_rid_timestamp_us_valid(self):
+        """Test _parse_rid_timestamp_us with valid timestamp."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp_us
+
+        result = _parse_rid_timestamp_us("2024-01-01T00:00:00Z", "test-context")
+
+        assert isinstance(result, int)
+        assert result > 0
+
+    def test_parse_rid_timestamp_us_invalid(self):
+        """Test _parse_rid_timestamp_us with invalid timestamp."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp_us
+
+        result = _parse_rid_timestamp_us("invalid-timestamp", "test-context")
+
+        assert result == 0
+
+    def test_parse_rid_timestamp_us_none(self):
+        """Test _parse_rid_timestamp_us with None."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp_us
+
+        result = _parse_rid_timestamp_us(None, "test-context")
+
+        assert result == 0
+
+    def test_parse_rid_timestamp_value_valid(self):
+        """Test _parse_rid_timestamp_value with valid timestamp."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp_value
+
+        result = _parse_rid_timestamp_value("2024-01-01T00:00:00Z")
+
+        assert result is not None
+
+    def test_parse_rid_timestamp_value_none(self):
+        """Test _parse_rid_timestamp_value with None."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp_value
+
+        result = _parse_rid_timestamp_value(None)
+
+        assert result is None
+
+    def test_parse_rid_timestamp_value_float(self):
+        """Test _parse_rid_timestamp_value with float."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp_value
+
+        result = _parse_rid_timestamp_value(1704067200.0)
+
+        assert result is not None
+
+    def test_parse_rid_timestamp_value_invalid(self):
+        """Test _parse_rid_timestamp_value with invalid timestamp."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp_value
+
+        result = _parse_rid_timestamp_value("invalid-timestamp")
+
+        assert result is None
+
+    def test_parse_rid_timestamp_valid(self):
+        """Test _parse_rid_timestamp with valid timestamp."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp
+
+        result = _parse_rid_timestamp("2024-01-01T00:00:00Z")
+
+        assert result is not None
+
+    def test_parse_rid_timestamp_invalid(self):
+        """Test _parse_rid_timestamp with invalid timestamp."""
+        from flight_blender.tasks.rid_task import _parse_rid_timestamp
+
+        result = _parse_rid_timestamp("invalid-timestamp")
+
+        assert result is not None  # Should return current time
