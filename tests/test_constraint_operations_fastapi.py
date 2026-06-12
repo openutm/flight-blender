@@ -1,7 +1,9 @@
 """FastAPI tests for constraint_ops endpoints."""
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock
 
+import arrow
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -104,3 +106,140 @@ class TestConstraintAuthEnforcement:
             "/constraint_ops/constraint_details", headers=_rsa_auth(["wrong.scope"], rsa_private_key)
         )
         assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Constraint service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestConstraintServiceCoverage:
+    """Additional tests for ConstraintOperations."""
+
+    @pytest.mark.asyncio
+    async def test_list_constraint_details(self):
+        """Test list_constraint_details."""
+        from flight_blender.services.constraint_svc import ConstraintOperations
+
+        mock_repo = AsyncMock()
+
+        mock_detail = MagicMock()
+        mock_detail.id = uuid.uuid4()
+        mock_detail.volumes = "[]"
+        mock_detail._type = "constraint"
+        mock_detail.geofence_id = uuid.uuid4()
+        mock_detail.created_at = arrow.utcnow().datetime
+
+        mock_repo.get_constraint_details = AsyncMock(return_value=[mock_detail])
+
+        service = ConstraintOperations(repo=mock_repo)
+
+        result = await service.list_constraint_details()
+
+        assert len(result) == 1
+        assert "id" in result[0]
+
+    @pytest.mark.asyncio
+    async def test_get_constraint_detail(self):
+        """Test get_constraint_detail."""
+        from flight_blender.services.constraint_svc import ConstraintOperations
+
+        mock_repo = AsyncMock()
+
+        mock_detail = MagicMock()
+        mock_detail.id = uuid.uuid4()
+        mock_detail.volumes = "[]"
+        mock_detail._type = "constraint"
+        mock_detail.geofence_id = uuid.uuid4()
+        mock_detail.created_at = arrow.utcnow().datetime
+
+        mock_repo.get_constraint_detail_by_id = AsyncMock(return_value=mock_detail)
+
+        service = ConstraintOperations(repo=mock_repo)
+
+        result = await service.get_constraint_detail(constraint_id=uuid.uuid4())
+
+        assert result is not None
+        assert "id" in result
+
+    @pytest.mark.asyncio
+    async def test_get_constraint_detail_not_found(self):
+        """Test get_constraint_detail returns None when not found."""
+        from flight_blender.services.constraint_svc import ConstraintOperations
+
+        mock_repo = AsyncMock()
+
+        mock_repo.get_constraint_detail_by_id = AsyncMock(return_value=None)
+
+        service = ConstraintOperations(repo=mock_repo)
+
+        result = await service.get_constraint_detail(constraint_id=uuid.uuid4())
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_list_constraint_references(self):
+        """Test list_constraint_references."""
+        from flight_blender.services.constraint_svc import ConstraintOperations
+
+        mock_repo = AsyncMock()
+
+        mock_ref = MagicMock()
+        mock_ref.id = uuid.uuid4()
+        mock_ref.uss_availability = "Normal"
+        mock_ref.ovn = "test-ovn"
+        mock_ref.manager = "test-manager"
+        mock_ref.uss_base_url = "https://test.uss.com"
+        mock_ref.version = 1
+        mock_ref.is_live = True
+        mock_ref.created_at = arrow.utcnow().datetime
+
+        mock_repo.get_constraint_references = AsyncMock(return_value=[mock_ref])
+
+        service = ConstraintOperations(repo=mock_repo)
+
+        result = await service.list_constraint_references()
+
+        assert len(result) == 1
+        assert "id" in result[0]
+
+    @pytest.mark.asyncio
+    async def test_get_constraint_reference(self):
+        """Test get_constraint_reference."""
+        from flight_blender.services.constraint_svc import ConstraintOperations
+
+        mock_repo = AsyncMock()
+
+        mock_ref = MagicMock()
+        mock_ref.id = uuid.uuid4()
+        mock_ref.uss_availability = "Normal"
+        mock_ref.ovn = "test-ovn"
+        mock_ref.manager = "test-manager"
+        mock_ref.uss_base_url = "https://test.uss.com"
+        mock_ref.version = 1
+        mock_ref.is_live = True
+        mock_ref.created_at = arrow.utcnow().datetime
+
+        mock_repo.get_constraint_reference_by_id = AsyncMock(return_value=mock_ref)
+
+        service = ConstraintOperations(repo=mock_repo)
+
+        result = await service.get_constraint_reference(ref_id=uuid.uuid4())
+
+        assert result is not None
+        assert "id" in result
+
+    @pytest.mark.asyncio
+    async def test_get_constraint_reference_not_found(self):
+        """Test get_constraint_reference returns None when not found."""
+        from flight_blender.services.constraint_svc import ConstraintOperations
+
+        mock_repo = AsyncMock()
+
+        mock_repo.get_constraint_reference_by_id = AsyncMock(return_value=None)
+
+        service = ConstraintOperations(repo=mock_repo)
+
+        result = await service.get_constraint_reference(ref_id=uuid.uuid4())
+
+        assert result is None

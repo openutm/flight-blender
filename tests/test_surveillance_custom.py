@@ -1,7 +1,8 @@
 """Tests for flight_blender.surveillance custom_utils, custom_signals, and utils."""
 
+import uuid
 from dataclasses import asdict
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -114,3 +115,115 @@ class TestTrafficDataFuserInstantiation:
         )
         fuser._generate_active_tracks([obs])
         mock_redis.update_active_track.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Surveillance service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestSurveillanceServiceCoverage:
+    """Additional tests for SurveillanceOperations."""
+
+    @pytest.mark.asyncio
+    async def test_get_health_with_operational_sensors(self):
+        """Test get_health returns operational status."""
+        from flight_blender.services.surveillance_svc import SurveillanceOperations
+
+        mock_repo = AsyncMock()
+        mock_scheduler = MagicMock()
+        mock_flight_feed_repo = AsyncMock()
+
+        mock_sensor = MagicMock()
+        mock_sensor.id = uuid.uuid4()
+        mock_repo.get_active_surveillance_sensors = AsyncMock(return_value=[mock_sensor])
+
+        mock_health = MagicMock()
+        mock_health.status = "operational"
+        mock_repo.get_sensor_health_record = AsyncMock(return_value=mock_health)
+
+        service = SurveillanceOperations(
+            repo=mock_repo,
+            scheduler=mock_scheduler,
+            flight_feed_repo=mock_flight_feed_repo,
+        )
+
+        result = await service.get_health()
+
+        assert result["current_status"] == "operational"
+        mock_repo.get_active_surveillance_sensors.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_health_with_degraded_sensors(self):
+        """Test get_health returns degraded status."""
+        from flight_blender.services.surveillance_svc import SurveillanceOperations
+
+        mock_repo = AsyncMock()
+        mock_scheduler = MagicMock()
+        mock_flight_feed_repo = AsyncMock()
+
+        mock_sensor = MagicMock()
+        mock_sensor.id = uuid.uuid4()
+        mock_repo.get_active_surveillance_sensors = AsyncMock(return_value=[mock_sensor])
+
+        mock_health = MagicMock()
+        mock_health.status = "degraded"
+        mock_repo.get_sensor_health_record = AsyncMock(return_value=mock_health)
+
+        service = SurveillanceOperations(
+            repo=mock_repo,
+            scheduler=mock_scheduler,
+            flight_feed_repo=mock_flight_feed_repo,
+        )
+
+        result = await service.get_health()
+
+        assert result["current_status"] == "degraded"
+
+    @pytest.mark.asyncio
+    async def test_get_health_with_outage_sensors(self):
+        """Test get_health returns outage status."""
+        from flight_blender.services.surveillance_svc import SurveillanceOperations
+
+        mock_repo = AsyncMock()
+        mock_scheduler = MagicMock()
+        mock_flight_feed_repo = AsyncMock()
+
+        mock_sensor = MagicMock()
+        mock_sensor.id = uuid.uuid4()
+        mock_repo.get_active_surveillance_sensors = AsyncMock(return_value=[mock_sensor])
+
+        mock_health = MagicMock()
+        mock_health.status = "outage"
+        mock_repo.get_sensor_health_record = AsyncMock(return_value=mock_health)
+
+        service = SurveillanceOperations(
+            repo=mock_repo,
+            scheduler=mock_scheduler,
+            flight_feed_repo=mock_flight_feed_repo,
+        )
+
+        result = await service.get_health()
+
+        assert result["current_status"] == "outage"
+
+    @pytest.mark.asyncio
+    async def test_get_health_with_no_sensors(self):
+        """Test get_health returns outage status when no sensors."""
+        from flight_blender.services.surveillance_svc import SurveillanceOperations
+
+        mock_repo = AsyncMock()
+        mock_scheduler = MagicMock()
+        mock_flight_feed_repo = AsyncMock()
+
+        mock_repo.get_active_surveillance_sensors = AsyncMock(return_value=[])
+
+        service = SurveillanceOperations(
+            repo=mock_repo,
+            scheduler=mock_scheduler,
+            flight_feed_repo=mock_flight_feed_repo,
+        )
+
+        result = await service.get_health()
+
+        assert result["current_status"] == "outage"
