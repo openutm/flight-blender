@@ -3,8 +3,10 @@
 All pika network calls are mocked – no RabbitMQ required.
 """
 
-from unittest.mock import MagicMock, patch
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import arrow
 import pytest
 from pika.exceptions import ChannelClosedByBroker
 
@@ -162,3 +164,84 @@ class TestInitialNotificationFactory:
         factory.declare_exchange()
         call_kwargs = mock_channel.exchange_declare.call_args
         assert call_kwargs.kwargs["exchange"] == "custom-exchange"
+
+
+# ---------------------------------------------------------------------------
+# Notifications service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestNotificationsServiceCoverage:
+    """Additional tests for NotificationsOperations."""
+
+    @pytest.mark.asyncio
+    async def test_get_active_notifications(self):
+        """Test get_active_notifications."""
+        from flight_blender.services.notifications_svc import NotificationsOperations
+
+        mock_repo = AsyncMock()
+
+        mock_notification = MagicMock()
+        mock_notification.id = uuid.uuid4()
+        mock_notification.session_id = uuid.uuid4()
+        mock_notification.message = "Test message"
+        mock_notification.is_active = True
+        mock_notification.created_at = arrow.utcnow().datetime
+
+        mock_repo.get_active_notifications_between = AsyncMock(return_value=[mock_notification])
+
+        service = NotificationsOperations(repo=mock_repo)
+
+        result = await service.get_active_notifications(
+            start_time=arrow.utcnow().shift(hours=-1).datetime,
+            end_time=arrow.utcnow().datetime,
+        )
+
+        assert len(result) == 1
+        assert "id" in result[0]
+
+    @pytest.mark.asyncio
+    async def test_create_notification(self):
+        """Test create_notification."""
+        from flight_blender.services.notifications_svc import NotificationsOperations
+
+        mock_repo = AsyncMock()
+
+        mock_notification = MagicMock()
+        mock_notification.id = uuid.uuid4()
+        mock_notification.session_id = uuid.uuid4()
+        mock_notification.message = "Test message"
+        mock_notification.is_active = True
+
+        mock_repo.create_notification = AsyncMock(return_value=mock_notification)
+
+        service = NotificationsOperations(repo=mock_repo)
+
+        result = await service.create_notification(message="Test message")
+
+        assert "id" in result
+        assert "message" in result
+
+    def test_parse_date_range_with_lookback(self):
+        """Test parse_date_range_with_lookback static method."""
+        from flight_blender.services.notifications_svc import NotificationsOperations
+
+        result, error = NotificationsOperations.parse_date_range_with_lookback(
+            start_date=arrow.utcnow().shift(hours=-1).isoformat(),
+            end_date=arrow.utcnow().isoformat(),
+        )
+
+        assert result is not None
+        assert error is None
+
+    def test_parse_date_range_with_lookback_invalid(self):
+        """Test parse_date_range_with_lookback with invalid date."""
+        from flight_blender.services.notifications_svc import NotificationsOperations
+
+        result, error = NotificationsOperations.parse_date_range_with_lookback(
+            start_date="invalid-date",
+            end_date="also-invalid",
+        )
+
+        assert result is None
+        assert error is not None
