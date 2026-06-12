@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from flight_blender.config import settings
@@ -483,6 +483,55 @@ class TestNetworkFlightDeclarationsByViewEnabled:
 
 
 # ---------------------------------------------------------------------------
+# Flight declarations task additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFlightDeclarationsTaskCoverage:
+    """Additional tests for flight_declarations_task."""
+
+    def test_send_operational_update_message(self):
+        """Test send_operational_update_message function."""
+        from flight_blender.tasks.flight_declarations_task import send_operational_update_message
+
+        with patch('flight_blender.tasks.flight_declarations_task.settings') as mock_settings:
+            mock_settings.AMQP_URL = None
+
+            send_operational_update_message(
+                flight_declaration_id="test-fd-id",
+                message_text="Test message",
+                level="info",
+            )
+
+            # No assertion needed, just ensure it doesn't raise
+
+    def test_celery_scd_notifier_send_operational_update_message(self):
+        """Test CelerySCDNotifier.send_operational_update_message."""
+        from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
+
+        with patch('flight_blender.tasks.flight_declarations_task.send_operational_update_message') as mock_task:
+            mock_task.delay = MagicMock()
+
+            notifier = CelerySCDNotifier()
+            notifier.send_operational_update_message(
+                flight_declaration_id="test-fd-id",
+                message_text="Test message",
+                level="info",
+            )
+
+            mock_task.delay.assert_called_once()
+
+    def test_celery_scd_notifier_submit_flight_declaration_to_dss_async(self):
+        """Test CelerySCDNotifier.submit_flight_declaration_to_dss_async."""
+        from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
+
+        with patch('flight_blender.tasks.flight_declarations_task.submit_flight_declaration_to_dss_async') as mock_task:
+            mock_task.delay = MagicMock()
+
+            notifier = CelerySCDNotifier()
+            notifier.submit_flight_declaration_to_dss_async(flight_declaration_id="test-fd-id")
+
+            mock_task.delay.assert_called_once()
 # Spatial flight declarations additional coverage
 # ---------------------------------------------------------------------------
 
