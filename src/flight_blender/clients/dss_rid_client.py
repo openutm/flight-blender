@@ -9,6 +9,7 @@ import math
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 import requests
 import tldextract
@@ -21,7 +22,6 @@ from uas_standards.astm.f3411.v22a.constants import NetMinClusterSizePercent, Ne
 from flight_blender.auth import dss_auth as dss_auth_helper
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
-from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import RESPONSE_CONTENT_TYPE
 from flight_blender.domain_types.rid_operations import (
     Cluster,
@@ -44,7 +44,9 @@ from flight_blender.domain_types.rid_operations import (
     SubscriptionState,
 )
 from flight_blender.domain_types.scd import Volume4D
-from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
+
+if TYPE_CHECKING:
+    from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 
 geod = Geod(ellps="WGS84")
 
@@ -310,6 +312,7 @@ class RemoteIDOperations:
         request_uuid,
         subscription_duration_seconds: int = 30,
         is_simulated: bool = False,
+        rid_repo: "SQLAlchemyRIDRepository | None" = None,
     ) -> SubscriptionResponse:
         """This method PUTS /dss/subscriptions"""
         subscription_response = SubscriptionResponse(created=False, dss_subscription_id=None, notification_index=0)
@@ -407,17 +410,17 @@ class RemoteIDOperations:
                 )
 
                 async def _write_subscription() -> None:
-                    async with async_task_session() as db:
-                        rid_repo = SQLAlchemyRIDRepository(db)
-                        await rid_repo.create_subscription(
-                            subscription_id=subscription_id,
-                            record_id=uuid.UUID(request_uuid) if isinstance(request_uuid, str) else request_uuid,
-                            view_hash=view_hash,
-                            end_datetime=fifteen_seconds_from_now_isoformat,
-                            is_simulated=is_simulated,
-                            view=view,
-                            flights_dict=flights_dict_str,
-                        )
+                    if rid_repo is None:
+                        raise ValueError("rid_repo must be provided")
+                    await rid_repo.create_subscription(
+                        subscription_id=subscription_id,
+                        record_id=uuid.UUID(request_uuid) if isinstance(request_uuid, str) else request_uuid,
+                        view_hash=view_hash,
+                        end_datetime=fifteen_seconds_from_now_isoformat,
+                        is_simulated=is_simulated,
+                        view=view,
+                        flights_dict=flights_dict_str,
+                    )
 
                 asyncio.run(_write_subscription())
 
