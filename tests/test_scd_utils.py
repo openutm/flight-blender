@@ -1,5 +1,10 @@
 """Tests for flight_blender.scd/utils.py – UAVSerialNumberValidator and OperatorRegistrationNumberValidator."""
 
+import datetime
+import json
+import uuid
+from enum import Enum
+
 import pytest
 
 from flight_blender.services.scd_svc import OperatorRegistrationNumberValidator, UAVSerialNumberValidator
@@ -123,6 +128,105 @@ class TestOperatorRegistrationNumberValidator:
 
 
 # ---------------------------------------------------------------------------
+# JSON codecs additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestJSONCodecsCoverage:
+    """Additional tests for json_codecs."""
+
+    def test_lazy_encoder_decimal(self):
+        """Test LazyEncoder with Decimal."""
+        from decimal import Decimal
+        from flight_blender.utils.json_codecs import LazyEncoder
+
+        result = json.dumps({"value": Decimal("3.14")}, cls=LazyEncoder)
+
+        assert result == '{"value": 3.14}'
+
+    def test_lazy_encoder_datetime(self):
+        """Test LazyEncoder with datetime."""
+        import datetime
+        from flight_blender.utils.json_codecs import LazyEncoder
+
+        now = datetime.datetime.now()
+        result = json.dumps({"value": now}, cls=LazyEncoder)
+
+        assert now.isoformat() in result
+
+    def test_lazy_encoder_uuid(self):
+        """Test LazyEncoder with UUID."""
+        from flight_blender.utils.json_codecs import LazyEncoder
+
+        test_uuid = uuid.uuid4()
+        result = json.dumps({"value": test_uuid}, cls=LazyEncoder)
+
+        assert str(test_uuid) in result
+
+    def test_enhanced_json_encoder_datetime(self):
+        """Test EnhancedJSONEncoder with datetime."""
+        import datetime
+        from flight_blender.utils.json_codecs import EnhancedJSONEncoder
+
+        now = datetime.datetime.now()
+        result = json.dumps({"value": now}, cls=EnhancedJSONEncoder)
+
+        assert now.isoformat() in result
+
+    def test_enhanced_json_encoder_dataclass(self):
+        """Test EnhancedJSONEncoder with dataclass."""
+        from dataclasses import dataclass
+        from flight_blender.utils.json_codecs import EnhancedJSONEncoder
+
+        @dataclass
+        class TestData:
+            name: str
+            value: int
+
+        data = TestData(name="test", value=42)
+        result = json.dumps({"data": data}, cls=EnhancedJSONEncoder)
+
+        assert '"name": "test"' in result
+        assert '"value": 42' in result
+
+    def test_enhanced_json_encoder_enum(self):
+        """Test EnhancedJSONEncoder with enum."""
+        from flight_blender.utils.json_codecs import EnhancedJSONEncoder
+
+        class TestEnum(Enum):
+            VALUE1 = "value1"
+            VALUE2 = "value2"
+
+        result = json.dumps({"value": TestEnum.VALUE1}, cls=EnhancedJSONEncoder)
+
+        assert '"value": "value1"' in result
+
+    def test_enhanced_json_encoder_decimal(self):
+        """Test EnhancedJSONEncoder with Decimal."""
+        from decimal import Decimal
+        from flight_blender.utils.json_codecs import EnhancedJSONEncoder
+
+        result = json.dumps({"value": Decimal("3.14")}, cls=EnhancedJSONEncoder)
+
+        assert '{"value": 3.14}' in result
+
+    def test_enhanced_json_encoder_uuid(self):
+        """Test EnhancedJSONEncoder with UUID."""
+        from flight_blender.utils.json_codecs import EnhancedJSONEncoder
+
+        test_uuid = uuid.uuid4()
+        result = json.dumps({"value": test_uuid}, cls=EnhancedJSONEncoder)
+
+        assert str(test_uuid) in result
+
+    def test_enhanced_json_decoder_datetime(self):
+        """Test EnhancedJSONDecoder with datetime."""
+        from flight_blender.utils.json_codecs import EnhancedJSONDecoder
+
+        json_str = '{"value": "2024-01-01T00:00:00"}'
+        result = json.loads(json_str, cls=EnhancedJSONDecoder)
+
+        assert isinstance(result["value"], datetime.datetime)
 # Altitude service additional coverage
 # ---------------------------------------------------------------------------
 
