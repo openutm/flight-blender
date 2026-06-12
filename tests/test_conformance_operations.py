@@ -318,3 +318,77 @@ class TestOperationConformanceNotification:
                 notif = OperationConformanceNotification(flight_declaration_id="fd-amqp", notifier=notifier)
                 notif.send_conformance_status_notification(message="Some message", level="info")
                 mock_delay.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Signals service additional coverage
+# ---------------------------------------------------------------------------
+
+
+class TestSignalsServiceCoverage:
+    """Additional tests for signals service."""
+
+    def test_signal_connect(self):
+        """Test Signal.connect method."""
+        from flight_blender.services.signals import Signal
+
+        signal = Signal()
+        receiver = lambda sender, **kwargs: None
+
+        signal.connect(receiver)
+
+        assert receiver in signal._receivers
+
+    def test_signal_send(self):
+        """Test Signal.send method."""
+        from flight_blender.services.signals import Signal
+
+        signal = Signal()
+        received = []
+
+        def test_receiver(sender, **kwargs):
+            received.append(sender)
+
+        signal.connect(test_receiver)
+        signal.send(sender="test-sender")
+
+        assert received == ["test-sender"]
+
+    def test_signal_send_with_exception(self):
+        """Test Signal.send method with exception in receiver."""
+        from flight_blender.services.signals import Signal
+
+        signal = Signal()
+
+        def bad_receiver(sender, **kwargs):
+            raise ValueError("test error")
+
+        signal.connect(bad_receiver)
+
+        # Should not raise
+        signal.send(sender="test-sender")
+
+    def test_signal_disconnect(self):
+        """Test Signal.disconnect method."""
+        from flight_blender.services.signals import Signal
+
+        signal = Signal()
+        receiver = lambda sender, **kwargs: None
+
+        signal.connect(receiver)
+        assert receiver in signal._receivers
+
+        signal.disconnect(receiver)
+        assert receiver not in signal._receivers
+
+    def test_receiver_decorator(self):
+        """Test receiver decorator."""
+        from flight_blender.services.signals import Signal, receiver
+
+        signal = Signal()
+
+        @receiver(signal)
+        def test_receiver(sender, **kwargs):
+            pass
+
+        assert test_receiver in signal._receivers
