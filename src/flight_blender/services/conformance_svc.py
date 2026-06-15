@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import arrow
 from loguru import logger
@@ -14,8 +16,9 @@ from flight_blender.domain_types.conformance import ConformanceRecord, Conforman
 from flight_blender.domain_types.scd import Altitude, Circle, LatLngPoint, Polygon, Radius, Time, Volume3D, Volume4D
 from flight_blender.repositories.conformance_repo import SQLAlchemyConformanceRepository
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
-from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
+if TYPE_CHECKING:
+    from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
 class StatusCode:
     @classmethod
