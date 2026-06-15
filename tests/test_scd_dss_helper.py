@@ -18,24 +18,20 @@ from fastapi import HTTPException
 
 import flight_blender.clients.dss_scd_client as dss_helper
 from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper
-from flight_blender.utils.scd_helpers import (
-    FlightPlanningDataValidator,
-    OperationalIntentValidator,
-    PeerOperationalIntentValidator,
-    VolumesConverter,
-    VolumesValidator,
-)
 from flight_blender.config import settings
 from flight_blender.domain_types.scd import (
     Altitude,
     Circle,
+    FlightPlanCurrentStatus,
     FlightPlanningInjectionData,
     LatLngPoint,
     NotifyPeerUSSPostPayload,
     OperationalIntentDetailsUSSResponse,
     OperationalIntentReferenceDSSResponse,
+    OperationalIntentState,
     OperationalIntentTestInjection,
     OperationalIntentUSSDetails,
+    OpIntUpdateCheckResultCodes,
     Radius,
     SubscriptionState,
     Time,
@@ -43,6 +39,13 @@ from flight_blender.domain_types.scd import (
     Volume4D,
 )
 from flight_blender.domain_types.scd import Polygon as Plgn
+from flight_blender.utils.scd_helpers import (
+    FlightPlanningDataValidator,
+    OperationalIntentValidator,
+    PeerOperationalIntentValidator,
+    VolumesConverter,
+    VolumesValidator,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -511,6 +514,22 @@ class TestOperationalIntentReferenceHelperParsing:
         assert ref.id == "ref-001"
         assert ref.version == 3
         assert ref.state == "Accepted"
+
+
+class TestOperationalIntentUpdatePreSubmissionChecks:
+    def test_activated_update_with_conflict_is_rejected_before_dss_submission(self):
+        ops = dss_helper.SCDOperations()
+
+        response = ops.check_if_update_payload_should_be_submitted_to_dss(
+            current_state=OperationalIntentState.Activated.value,
+            new_state=OperationalIntentState.Activated.value,
+            extents_conflict_with_dss_volumes=True,
+            priority=0,
+        )
+
+        assert response.should_submit_update_payload_to_dss == 0
+        assert response.check_id == OpIntUpdateCheckResultCodes.B
+        assert response.tentative_flight_plan_processing_response == FlightPlanCurrentStatus.OkToFly
 
 
 class TestPeerUSSNotification:

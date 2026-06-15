@@ -17,7 +17,6 @@ from flight_blender.auth.token_audience import generate_audience_from_base_url
 from flight_blender.auth.token_cache import get_redis
 from flight_blender.clients.dss_constraint_client import ConstraintOperations
 from flight_blender.config import settings
-from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.common import OPINT_INDEX_BASEPATH, OperationStateCode
 from flight_blender.domain_types.scd import (
     DOWN_USS_BLOCKING_STATES,
@@ -151,15 +150,14 @@ class OperationalIntentReferenceHelper:
         if not repo:
             raise ValueError("fd_repo must be provided either in __init__ or as method parameter")
 
-        async with async_task_session() as db:
-            flight_operational_intent_reference = await repo.get_opint_reference_by_declaration_id(uuid.UUID(operation_id))
+        flight_operational_intent_reference = await repo.get_opint_reference_by_declaration_id(uuid.UUID(operation_id))
 
-            if not flight_operational_intent_reference:
-                logger.error("Flight operational intent reference not found in the database")
-                return None
+        if not flight_operational_intent_reference:
+            logger.error("Flight operational intent reference not found in the database")
+            return None
 
-            flight_operational_intent_details = await repo.get_opint_detail_by_declaration_id(uuid.UUID(operation_id))
-            operational_intent_subscribers = await repo.get_subscribers_of_opint_reference(ref_id=flight_operational_intent_reference.id)
+        flight_operational_intent_details = await repo.get_opint_detail_by_declaration_id(uuid.UUID(operation_id))
+        operational_intent_subscribers = await repo.get_subscribers_of_opint_reference(ref_id=flight_operational_intent_reference.id)
 
         subscribers: list[SubscriberToNotify] = []
         for s in operational_intent_subscribers:
@@ -213,9 +211,7 @@ class OperationalIntentReferenceHelper:
             off_nominal_volumes=all_off_nominal_volumes,
             state=state,
         )
-        async with async_task_session() as db:
-            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-            composite_operational_intent_details = await fd_repo.get_composite_opint_by_declaration_id(uuid.UUID(operation_id))
+        composite_operational_intent_details = await repo.get_composite_opint_by_declaration_id(uuid.UUID(operation_id))
         if composite_operational_intent_details is None:
             return None
 
@@ -1005,7 +1001,7 @@ class SCDOperations:
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.B
             should_opint_be_sent_to_dss.tentative_flight_plan_processing_response = FlightPlanCurrentStatus.OkToFly
         elif current_state == activated or new_state in off_nominal_states:
-            # NOTE: this branch subsumes the former (unreachable) "Case C" for Activated→Activated.
+            # NOTE: this branch subsumes the former (unreachable) "Case C" for Activated->Activated.
             logger.debug("Case A")
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 1
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.A
@@ -1422,24 +1418,25 @@ class DSSAreaClearHandler:
                 if existing_op_ints_in_area:
                     deletion_success = False
                     operation_id = existing_op_ints_in_area["flight_id"]
-                    async with async_task_session() as db:
-                        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-                        composite_operational_intent = await fd_repo.get_composite_opint_by_declaration_id(uuid.UUID(operation_id))
+                    composite_operational_intent = await repo.get_composite_opint_by_declaration_id(uuid.UUID(operation_id))
                     if composite_operational_intent:
                         ovn = composite_operational_intent.operational_intent_reference.ovn
-                        opint_id = composite_operational_intent.id
+                        opint_id = composite_operational_intent.operational_intent_reference_id
                         ovn_opint = {"ovn_id": ovn, "opint_id": opint_id}
                         logger.info("Deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
-                        deletion_request = await my_scd_dss_helper.delete_operational_intent(
-                            dss_operational_intent_ref_id=str(opint_id),
-                            ovn=str(ovn),
-                        )
+                        try:
+                            deletion_request = await my_scd_dss_helper.delete_operational_intent(
+                                dss_operational_intent_ref_id=str(opint_id),
+                                ovn=str(ovn),
+                            )
+                        except HTTPException as exc:
+                            logger.warning(f"Failed to delete operational intent {opint_id} from DSS while clearing area: {exc.detail}")
+                            all_deletion_requests_status.append(False)
+                            continue
                         if deletion_request.status == 200:
                             logger.info("Success in deleting operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             deletion_success = True
-                            async with async_task_session() as db:
-                                fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-                                await fd_repo.delete(uuid.UUID(operation_id))
+                            await repo.delete(uuid.UUID(operation_id))
                         else:
                             logger.info("Failed to delete operational intent {opint_id} with ovn {ovn_id}".format(**ovn_opint))
                             logger.error(deletion_request.dss_response)

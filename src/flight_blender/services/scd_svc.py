@@ -442,7 +442,7 @@ async def clear_area(request: ClearAreaRequestSchema) -> ClearAreaResponseSchema
     async with async_task_session() as db:
         fd_repo = SQLAlchemyFlightDeclarationRepository(db)
         handler = DSSAreaClearHandler(request_id=request.request_id, fd_repo=fd_repo)
-    clear_area_response = await handler.clear_area_request(extent_raw=extent_raw)
+        clear_area_response = await handler.clear_area_request(extent_raw=extent_raw)
     return ClearAreaResponseSchema.model_validate(clear_area_response)
 
 
@@ -517,7 +517,7 @@ class SCDService:
         self.notifications_repo = notifications_repo
 
     async def upsert_flight_plan(self, flight_plan_id: uuid.UUID, request: UpsertFlightPlanRequestSchema) -> UpsertFlightPlanResponseSchema:
-        scd_helper = dss_scd_helper.SCDOperations()
+        scd_helper = dss_scd_helper.SCDOperations(fd_repo=self.fd_repo)
         volumes_validator = VolumesValidator()
         request_data = request.model_dump(mode="json", exclude_none=True)
         ctx = self._build_flight_planning_context(flight_plan_id, request_data)
@@ -585,7 +585,7 @@ class SCDService:
     async def _update_existing_flight_plan(
         self, ctx: FlightPlanningContext, scd_helper: dss_scd_helper.SCDOperations
     ) -> UpsertFlightPlanResponseSchema:
-        opint_parser = dss_scd_helper.OperationalIntentReferenceHelper()
+        opint_parser = dss_scd_helper.OperationalIntentReferenceHelper(fd_repo=self.fd_repo)
         existing_op_int_details = await opint_parser.parse_stored_operational_intent_details(operation_id=str(ctx.operation_id))
         flight_declaration = await self.fd_repo.get_by_id(ctx.operation_id)
         if not flight_declaration:
