@@ -6,6 +6,7 @@ from loguru import logger
 from flight_blender.celery import app
 from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.scd import LatLngPoint
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.services import conformance_svc as custom_signals
 from flight_blender.services.conformance_svc import FlightBlenderConformanceEngine
 from flight_blender.services.flight_feed_svc import get_latest_flight_observation_by_declaration_id
@@ -54,7 +55,10 @@ async def _async_check_operation_telemetry_conformance(flight_declaration_id: st
     # This method checks the conformance status for ongoing operations and sends notifications / via the notifications channel
     dry_run = dry_run == "1"
     # Get Telemetry
-    latest_rid_observation = await get_latest_flight_observation_by_declaration_id(flight_declaration_id)
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightFeedRepository(db)
+        latest_rid_observation = await get_latest_flight_observation_by_declaration_id(flight_declaration_id, repo=repo)
     # Get the latest telemetry
 
     if not latest_rid_observation:

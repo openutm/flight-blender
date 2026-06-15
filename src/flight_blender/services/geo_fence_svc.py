@@ -14,6 +14,7 @@ from loguru import logger
 from shapely.geometry import Point, mapping, shape
 from shapely.ops import transform, unary_union
 
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.geo_fence import (
     ED269Geometry,
     GeoAwarenessImportResponseEnum,
@@ -30,6 +31,7 @@ from flight_blender.domain_types.geo_fence import (
     ParseValidateResponse,
     ZoneAuthority,
 )
+from flight_blender.models.geo_fence_orm import GeoFenceORM
 from flight_blender.repositories.geo_fence_repo import SQLAlchemyGeoFenceRepository
 from flight_blender.utils.spatial_geo_fence import RTreeGeoFenceSpatialService
 
@@ -334,9 +336,6 @@ async def save_geofence_feature(
     test_harness_datasource: int,
 ) -> None:
     """Save a single geofence feature to the database."""
-    from flight_blender.db.session import async_task_session
-    from flight_blender.models.geo_fence_orm import GeoFenceORM
-
     async with async_task_session() as db:
         db.add(
             GeoFenceORM(

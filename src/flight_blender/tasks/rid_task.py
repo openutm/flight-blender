@@ -38,7 +38,9 @@ from flight_blender.domain_types.rid_operations import (
     RIDVolume4D,
     SingleObservationMetadata,
 )
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
+from flight_blender.repositories.notifications_repo import SQLAlchemyNotificationsRepository
 from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.services.altitude import wgs84_to_barometric
 from flight_blender.services.rid_svc import USSPollingService, create_rid_notification, get_rid_subscription, update_telemetry_timestamp
@@ -97,7 +99,9 @@ def write_operator_rid_notification(message: str, session_id: str):
 
 
 async def _async_write_operator_rid_notification(message: str, session_id: str) -> None:
-    await create_rid_notification(message=message, session_id=session_id)
+    async with async_task_session() as db:
+        repo = SQLAlchemyNotificationsRepository(db)
+        await create_rid_notification(message=message, session_id=session_id, repo=repo)
 
 
 async def _async_process_requested_flight(
@@ -330,10 +334,10 @@ async def _async_run_ussp_polling_for_rid(end_time: str, session_id: str) -> Non
     r = get_redis()
     async_polling_lock = f"async_polling_lock_{session_id}"
 
-    subscription_record = await get_rid_subscription(session_id)
     async with async_task_session() as db:
         rid_repo = SQLAlchemyRIDRepository(db)
         feed_repo = SQLAlchemyFlightFeedRepository(db)
+        subscription_record = await get_rid_subscription(session_id, repo=rid_repo)
         my_dss_subscriber = USSPollingService(rid_repo=rid_repo, feed_repo=feed_repo)
 
         if r.exists(async_polling_lock):
@@ -372,48 +376,50 @@ def stream_rid_telemetry_data(rid_telemetry_observations):
 async def _async_stream_rid_telemetry_data(rid_telemetry_observations) -> None:
     telemetry_observations = json.loads(rid_telemetry_observations)
 
-    for observation in telemetry_observations:
-        flight_details = observation["flight_details"]
-        current_states = observation["current_states"]
-        operation_id = flight_details["id"]
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightDeclarationRepository(db)
+        for observation in telemetry_observations:
+            flight_details = observation["flight_details"]
+            current_states = observation["current_states"]
+            operation_id = flight_details["id"]
 
-        await update_telemetry_timestamp(operation_id)
+            await update_telemetry_timestamp(operation_id, repo=repo)
 
-        for current_state in current_states:
-            _current_state = from_dict(data_class=LocalRIDAircraftState, data=current_state, config=Config(cast=[Enum]))
-            _flight_details = from_dict(data_class=LocalRIDFlightDetails, data=flight_details, config=Config(cast=[Enum]))
-            observation_and_metadata = SignedUnsignedTelemetryObservation(current_state=_current_state, flight_details=_flight_details)
-            current_wgs84_m_altitude = observation_and_metadata.current_state.position.alt
+            for current_state in current_states:
+                _current_state = from_dict(data_class=LocalRIDAircraftState, data=current_state, config=Config(cast=[Enum]))
+                _flight_details = from_dict(data_class=LocalRIDFlightDetails, data=flight_details, config=Config(cast=[Enum]))
+                observation_and_metadata = SignedUnsignedTelemetryObservation(current_state=_current_state, flight_details=_flight_details)
+                current_wgs84_m_altitude = observation_and_metadata.current_state.position.alt
 
-            msl_height, pressure_altitude = wgs84_to_barometric(
-                lat=observation_and_metadata.current_state.position.lat,
-                lon=observation_and_metadata.current_state.position.lng,
-                hae_meters=current_wgs84_m_altitude,
-            )
-            altitude_mm = pressure_altitude * 1000
-            flight_details_id = observation_and_metadata.flight_details.uas_id.serial_number
-            lat_dd = observation_and_metadata.current_state.position.lat
-            lon_dd = observation_and_metadata.current_state.position.lng
-            traffic_source = 11
-            source_type = 0
-            icao_address = flight_details_id
+                msl_height, pressure_altitude = wgs84_to_barometric(
+                    lat=observation_and_metadata.current_state.position.lat,
+                    lon=observation_and_metadata.current_state.position.lng,
+                    hae_meters=current_wgs84_m_altitude,
+                )
+                altitude_mm = pressure_altitude * 1000
+                flight_details_id = observation_and_metadata.flight_details.uas_id.serial_number
+                lat_dd = observation_and_metadata.current_state.position.lat
+                lon_dd = observation_and_metadata.current_state.position.lng
+                traffic_source = 11
+                source_type = 0
+                icao_address = flight_details_id
 
-            rid_ts_value = getattr(_current_state.timestamp, "value", None)
-            rid_timestamp_us = _parse_rid_timestamp_us(rid_ts_value, f"operation {operation_id}")
+                rid_ts_value = getattr(_current_state.timestamp, "value", None)
+                rid_timestamp_us = _parse_rid_timestamp_us(rid_ts_value, f"operation {operation_id}")
 
-            so = SingleRIDObservation(
-                session_id=operation_id,
-                lat_dd=lat_dd,
-                lon_dd=lon_dd,
-                altitude_mm=altitude_mm,
-                traffic_source=traffic_source,
-                source_type=source_type,
-                icao_address=icao_address,
-                timestamp=rid_timestamp_us,
-                metadata=asdict(observation_and_metadata),
-            )
-            write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
-            logger.debug("Submitted observation..")
+                so = SingleRIDObservation(
+                    session_id=operation_id,
+                    lat_dd=lat_dd,
+                    lon_dd=lon_dd,
+                    altitude_mm=altitude_mm,
+                    traffic_source=traffic_source,
+                    source_type=source_type,
+                    icao_address=icao_address,
+                    timestamp=rid_timestamp_us,
+                    metadata=asdict(observation_and_metadata),
+                )
+                write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
+                logger.debug("Submitted observation..")
 
 
 @app.task(name="stream_rid_test_data")
@@ -645,5 +651,8 @@ async def _async_check_rid_stream_conformance(session_id: str) -> None:
 
     logger.info(f"RID Data stream for {session_id} is NOT OK...")
 
-    for error_msg in errors:
-        await create_rid_notification(message=error_msg, session_id=session_id)
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyNotificationsRepository(db)
+        for error_msg in errors:
+            await create_rid_notification(message=error_msg, session_id=session_id, repo=repo)

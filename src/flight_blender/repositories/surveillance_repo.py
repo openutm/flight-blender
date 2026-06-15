@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, cast
 
 from loguru import logger
-from sqlalchemy import and_, select
+from sqlalchemy import CursorResult, and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flight_blender.models.surveillance_orm import (
@@ -247,3 +247,9 @@ class SQLAlchemySurveillanceRepository:
         self.db.add(event)
         await self.db.flush()
         return True
+
+    async def cleanup_old_events(self, cutoff: datetime) -> tuple[int, int]:
+        heartbeat_result = cast(CursorResult, await self.db.execute(delete(SurveillanceHeartbeatEventORM).where(SurveillanceHeartbeatEventORM.dispatched_at < cutoff)))
+        track_result = cast(CursorResult, await self.db.execute(delete(SurveillanceTrackEventORM).where(SurveillanceTrackEventORM.dispatched_at < cutoff)))
+        await self.db.flush()
+        return heartbeat_result.rowcount or 0, track_result.rowcount or 0

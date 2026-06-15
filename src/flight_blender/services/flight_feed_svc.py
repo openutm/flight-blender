@@ -15,6 +15,7 @@ from loguru import logger
 from shapely.geometry import Point
 from shapely.geometry import box as shapely_box
 
+from flight_blender.auth.token_cache import get_redis
 from flight_blender.config import settings
 from flight_blender.domain_types.flight_feed import (
     FlightObservationSchema,
@@ -512,35 +513,19 @@ class ObservationReadOperations:
 # ── Task helper functions ────────────────────────────────────────────────
 
 
-async def bulk_write_flight_observations(observations: list) -> None:
+async def bulk_write_flight_observations(observations: list, repo: SQLAlchemyFlightFeedRepository) -> None:
     """Write multiple flight observations to the database in bulk."""
-    from flight_blender.db.session import async_task_session
-    from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-
-    async with async_task_session() as db:
-        repo = SQLAlchemyFlightFeedRepository(db)
-        await repo.bulk_write_flight_observations(observations)
+    await repo.bulk_write_flight_observations(observations)
 
 
-async def write_flight_observation(observation) -> None:
+async def write_flight_observation(observation, repo: SQLAlchemyFlightFeedRepository) -> None:
     """Write a single flight observation to the database."""
-    from flight_blender.db.session import async_task_session
-    from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-
-    async with async_task_session() as db:
-        repo = SQLAlchemyFlightFeedRepository(db)
-        await repo.write_flight_observation(observation)
+    await repo.write_flight_observation(observation)
 
 
-async def get_latest_flight_observation_by_declaration_id(flight_declaration_id: str):
+async def get_latest_flight_observation_by_declaration_id(flight_declaration_id: str, repo: SQLAlchemyFlightFeedRepository):
     """Get the latest flight observation for a declaration."""
-    from flight_blender.auth.token_cache import get_redis
-    from flight_blender.db.session import async_task_session
-    from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
-
-    async with async_task_session() as db:
-        repo = SQLAlchemyFlightFeedRepository(db)
-        obs_helper = ObservationReadOperations(repo=repo, redis=get_redis())
-        return await obs_helper.get_latest_flight_observation_by_flight_declaration_id(
-            flight_declaration_id=flight_declaration_id
-        )
+    obs_helper = ObservationReadOperations(repo=repo, redis=get_redis())
+    return await obs_helper.get_latest_flight_observation_by_flight_declaration_id(
+        flight_declaration_id=flight_declaration_id
+    )

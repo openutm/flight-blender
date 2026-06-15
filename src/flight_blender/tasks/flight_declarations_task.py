@@ -9,8 +9,10 @@ from flight_blender.celery import app
 from flight_blender.clients.dss_scd_client import SCDOperations
 from flight_blender.clients.notification_client import NotificationFactory
 from flight_blender.config import settings
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.notifications import FlightDeclarationUpdateMessage
 from flight_blender.domain_types.scd import NotifyPeerUSSPostPayload, OperationalIntentDetailsUSSResponse, OperationalIntentUSSDetails
+from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
 from flight_blender.services.flight_declarations_svc import submit_flight_declaration_to_dss, verify_and_update_declaration_state
 
 
@@ -20,7 +22,9 @@ def submit_flight_declaration_to_dss_async(flight_declaration_id: str):
 
 
 async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) -> None:
-    opint_submission_result = await submit_flight_declaration_to_dss(flight_declaration_id)
+    async with async_task_session() as db:
+        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+        opint_submission_result = await submit_flight_declaration_to_dss(flight_declaration_id, fd_repo=fd_repo)
 
     if opint_submission_result.status_code == 500:
         logger.error("Error in submitting Flight Declaration to the DSS %s" % opint_submission_result.status)
@@ -62,7 +66,10 @@ async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) ->
             level="info",
         )
 
-        flight_declaration, created_opint = await verify_and_update_declaration_state(flight_declaration_id)
+
+        async with async_task_session() as db:
+            fd_repo = SQLAlchemyFlightDeclarationRepository(db)
+            flight_declaration, created_opint = await verify_and_update_declaration_state(flight_declaration_id, fd_repo=fd_repo)
 
         if not flight_declaration:
             logger.error("Flight Declaration with ID %s not found in the database" % flight_declaration_id)
