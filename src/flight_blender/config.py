@@ -13,6 +13,8 @@ class FlightBlenderSettings(BaseSettings):
     POSTGRES_HOST: str = "db"
     POSTGRES_PORT: int = 5432
     CONTAINER_STARTUP_TIMEOUT_SECS: int = 60
+    UVICORN_HOST: str = "0.0.0.0"  # nosec B104
+    UVICORN_PORT: int = 8000
     UVICORN_WORKERS: int = 3
     CELERY_WORKER_CONCURRENCY: int = 4
     CELERY_MAX_TASKS_PER_CHILD: int = 200

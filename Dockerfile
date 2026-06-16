@@ -2,6 +2,7 @@
 
 ARG PYTHON_BUILDER_IMAGE=cgr.dev/chainguard/python:latest-dev
 ARG PYTHON_RUNTIME_IMAGE=cgr.dev/chainguard/python:latest
+ARG SHELL_COMPAT_IMAGE=busybox:1.37.0-musl
 
 FROM ${PYTHON_BUILDER_IMAGE} AS builder
 
@@ -23,6 +24,8 @@ COPY alembic.ini ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
+FROM ${SHELL_COMPAT_IMAGE} AS shell-compat
+
 FROM ${PYTHON_RUNTIME_IMAGE} AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
@@ -32,6 +35,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+COPY --from=shell-compat /bin/busybox /bin/sh
 COPY --from=builder --chown=65532:65532 /app/.venv /venv
 COPY --chown=65532:65532 src ./src
 COPY --chown=65532:65532 alembic ./alembic

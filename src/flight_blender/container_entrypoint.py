@@ -9,6 +9,23 @@ from alembic.config import Config
 from alembic import command
 from flight_blender.config import settings
 
+LEGACY_MODES = {
+    "./entrypoints/with-database/entrypoint.sh": "serve",
+    "entrypoints/with-database/entrypoint.sh": "serve",
+    "./entrypoints/with-database/entrypoint-prod.sh": "serve",
+    "entrypoints/with-database/entrypoint-prod.sh": "serve",
+    "./entrypoints/no-database/entrypoint.sh": "serve",
+    "entrypoints/no-database/entrypoint.sh": "serve",
+    "./entrypoints/with-database/entrypoint-celery.sh": "worker",
+    "entrypoints/with-database/entrypoint-celery.sh": "worker",
+    "./entrypoints/no-database/entrypoint-celery.sh": "worker",
+    "entrypoints/no-database/entrypoint-celery.sh": "worker",
+    "./entrypoints/with-database/entrypoint-beat.sh": "beat",
+    "entrypoints/with-database/entrypoint-beat.sh": "beat",
+    "./entrypoints/no-database/entrypoint-beat.sh": "beat",
+    "entrypoints/no-database/entrypoint-beat.sh": "beat",
+}
+
 
 def _wait_for_service(host: str, port: int) -> None:
     deadline = time.monotonic() + settings.CONTAINER_STARTUP_TIMEOUT_SECS
@@ -45,7 +62,8 @@ def _exec(args: list[str]) -> None:
     print(f"Starting {' '.join(args)}", flush=True)
     sys.stdout.flush()
     sys.stderr.flush()
-    os.execvp(args[0], args)
+    # Fixed argv is assembled internally for container process replacement.
+    os.execvp(args[0], args)  # nosec B606
 
 
 def _serve(reload: bool) -> None:
@@ -53,12 +71,14 @@ def _serve(reload: bool) -> None:
     _run_migrations()
 
     args = [
+        sys.executable,
+        "-m",
         "uvicorn",
         "flight_blender.asgi:application",
         "--host",
-        "0.0.0.0",
+        settings.UVICORN_HOST,
         "--port",
-        "8000",
+        str(settings.UVICORN_PORT),
     ]
     if reload:
         args.append("--reload")
@@ -71,6 +91,8 @@ def _worker() -> None:
     _wait_for_dependencies(include_postgres=False)
     _exec(
         [
+            sys.executable,
+            "-m",
             "celery",
             "--app=flight_blender",
             "worker",
@@ -83,19 +105,20 @@ def _worker() -> None:
 
 def _beat() -> None:
     _wait_for_dependencies(include_postgres=True)
-    _exec(["celery", "--app=flight_blender", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"])
+    _exec([sys.executable, "-m", "celery", "--app=flight_blender", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"])
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["serve", "serve-reload", "worker", "beat"])
+    parser.add_argument("mode", choices=["serve", "serve-reload", "worker", "beat", *LEGACY_MODES])
     args = parser.parse_args()
+    mode = LEGACY_MODES.get(args.mode, args.mode)
 
-    if args.mode == "serve":
+    if mode == "serve":
         _serve(reload=False)
-    elif args.mode == "serve-reload":
+    elif mode == "serve-reload":
         _serve(reload=True)
-    elif args.mode == "worker":
+    elif mode == "worker":
         _worker()
     else:
         _beat()
