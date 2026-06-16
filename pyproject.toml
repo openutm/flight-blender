@@ -44,7 +44,7 @@ dependencies = [
     "psycopg2-binary==2.9.12",
     "pyjwt==2.13.0",
     "pyproj==3.7.2",
-    "requests==2.33.0",
+    "requests==2.34.2",
     "rtree==1.4.0",
     "shapely==2.1.2",
     "tldextract==5.3.0",
