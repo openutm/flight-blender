@@ -48,6 +48,7 @@ v1:
           second_utm_auth: second_utm_auth
           planning_area: planning_area
           problematically_big_area: problematically_big_area
+          test_exclusions: test_exclusions
 
     non_baseline_inputs:
       - v1.test_run.resources.resource_declarations.utm_auth
@@ -58,6 +59,7 @@ v1:
       - v1.test_run.resources.resource_declarations.dss
       - v1.test_run.resources.resource_declarations.dss_instances
       - v1.test_run.resources.resource_declarations.mock_uss
+      - v1.test_run.resources.resource_declarations.test_exclusions
 
     resources:
       resource_declarations:
@@ -160,6 +162,15 @@ v1:
           specification:
             participant_id: mock_uss
             mock_uss_base_url: http://scdsc.log.uss6.localutm
+
+        # Local Docker hostnames resolve to private bridge IPs. Permit those
+        # addresses in the local verifier run while still exercising DSS checks.
+        test_exclusions:
+          $content_schema: monitoring/uss_qualifier/resources/definitions/ResourceDeclaration.json
+          resource_type: resources.dev.TestExclusionsResource
+          specification:
+            allow_private_addresses: true
+            allow_cleartext_queries: true
 
         # =================================
         # ========== Baseline =============
