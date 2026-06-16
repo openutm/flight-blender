@@ -547,11 +547,11 @@ class TestSpatialFlightDeclarationsCoverage:
 
         assert result is not None
 
-    def test_flight_declaration_rtree_index_factory_add_box_to_index(self):
+    def test_flight_declaration_rtree_index_factory_add_box_to_index(self, tmp_path):
         """Test FlightDeclarationRTreeIndexFactory.add_box_to_index."""
         from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 
-        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+        factory = FlightDeclarationRTreeIndexFactory(index_name=str(tmp_path / "flight-declaration-index"))
 
         factory.add_box_to_index(
             id=1,
@@ -563,11 +563,11 @@ class TestSpatialFlightDeclarationsCoverage:
 
         # No assertion needed, just ensure it doesn't raise
 
-    def test_flight_declaration_rtree_index_factory_delete_from_index(self):
+    def test_flight_declaration_rtree_index_factory_delete_from_index(self, tmp_path):
         """Test FlightDeclarationRTreeIndexFactory.delete_from_index."""
         from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 
-        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+        factory = FlightDeclarationRTreeIndexFactory(index_name=str(tmp_path / "flight-declaration-index"))
 
         factory.add_box_to_index(
             id=1,
@@ -584,11 +584,11 @@ class TestSpatialFlightDeclarationsCoverage:
 
         # No assertion needed, just ensure it doesn't raise
 
-    def test_flight_declaration_rtree_index_factory_generate_flight_declaration_index(self):
+    def test_flight_declaration_rtree_index_factory_generate_flight_declaration_index(self, tmp_path):
         """Test FlightDeclarationRTreeIndexFactory.generate_flight_declaration_index."""
         from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 
-        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+        factory = FlightDeclarationRTreeIndexFactory(index_name=str(tmp_path / "flight-declaration-index"))
 
         mock_declaration = MagicMock()
         mock_declaration.id = uuid.uuid4()
@@ -598,11 +598,11 @@ class TestSpatialFlightDeclarationsCoverage:
 
         # No assertion needed, just ensure it doesn't raise
 
-    def test_flight_declaration_rtree_index_factory_check_flight_declaration_box_intersection(self):
+    def test_flight_declaration_rtree_index_factory_check_flight_declaration_box_intersection(self, tmp_path):
         """Test FlightDeclarationRTreeIndexFactory.check_flight_declaration_box_intersection."""
         from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 
-        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+        factory = FlightDeclarationRTreeIndexFactory(index_name=str(tmp_path / "flight-declaration-index"))
 
         mock_declaration = MagicMock()
         mock_declaration.id = uuid.uuid4()
@@ -614,11 +614,11 @@ class TestSpatialFlightDeclarationsCoverage:
 
         assert isinstance(result, list)
 
-    def test_flight_declaration_rtree_index_factory_clear_rtree_index(self):
+    def test_flight_declaration_rtree_index_factory_clear_rtree_index(self, tmp_path):
         """Test FlightDeclarationRTreeIndexFactory.clear_rtree_index."""
         from flight_blender.utils.spatial_flight_declarations import FlightDeclarationRTreeIndexFactory
 
-        factory = FlightDeclarationRTreeIndexFactory(index_name="test-index")
+        factory = FlightDeclarationRTreeIndexFactory(index_name=str(tmp_path / "flight-declaration-index"))
 
         mock_declaration = MagicMock()
         mock_declaration.id = uuid.uuid4()
