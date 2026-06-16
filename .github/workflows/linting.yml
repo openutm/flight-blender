@@ -49,7 +49,7 @@ jobs:
           fi
       - name: Comment on PR
         if: always() && github.event_name == 'pull_request' && steps.ruff.outputs.exit_code != '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -63,7 +63,7 @@ jobs:
             await upsertPrComment({ github, context, marker, body });
       - name: Remove PR comment if passing
         if: always() && github.event_name == 'pull_request' && steps.ruff.outputs.exit_code == '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { deletePrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
@@ -103,7 +103,7 @@ jobs:
           fi
       - name: Comment on PR
         if: always() && github.event_name == 'pull_request' && steps.codespell.outputs.exit_code != '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -117,7 +117,7 @@ jobs:
             await upsertPrComment({ github, context, marker, body });
       - name: Remove PR comment if passing
         if: always() && github.event_name == 'pull_request' && steps.codespell.outputs.exit_code == '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { deletePrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
@@ -160,7 +160,7 @@ jobs:
           fi
       - name: Comment on PR
         if: always() && github.event_name == 'pull_request' && steps.pytest.outputs.exit_code != '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -175,7 +175,7 @@ jobs:
             await upsertPrComment({ github, context, marker, body });
       - name: Remove PR comment if passing
         if: always() && github.event_name == 'pull_request' && steps.pytest.outputs.exit_code == '0'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { deletePrComment } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-comment.js`);
