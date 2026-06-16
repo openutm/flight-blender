@@ -332,7 +332,7 @@ class TestConformanceTaskCoverage:
 
         test_id = str(uuid.uuid4())
 
-        with patch('flight_blender.tasks.conformance_task.flight_stream_helper.ObservationReadOperations') as mock_obs_cls:
+        with patch('flight_blender.services.flight_feed_svc.ObservationReadOperations') as mock_obs_cls:
             mock_obs_instance = MagicMock()
             mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id = AsyncMock(return_value=MagicMock(
                 metadata={"flight_details": {"id": test_id}},
@@ -358,7 +358,7 @@ class TestConformanceTaskCoverage:
 
         test_id = str(uuid.uuid4())
 
-        with patch('flight_blender.tasks.conformance_task.flight_stream_helper.ObservationReadOperations') as mock_obs_cls:
+        with patch('flight_blender.services.flight_feed_svc.ObservationReadOperations') as mock_obs_cls:
             mock_obs_instance = MagicMock()
             mock_obs_instance.get_latest_flight_observation_by_flight_declaration_id = AsyncMock(return_value=MagicMock(
                 metadata={"flight_details": {"id": test_id}},

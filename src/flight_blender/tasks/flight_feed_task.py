@@ -14,7 +14,9 @@ from pyproj import Transformer
 from flight_blender.celery import app
 from flight_blender.clients.redis_client import RedisStreamOperations
 from flight_blender.config import settings
+from flight_blender.db.session import async_task_session
 from flight_blender.domain_types.flight_feed import SingleAirtrafficObservation
+from flight_blender.repositories.flight_feed_repo import SQLAlchemyFlightFeedRepository
 from flight_blender.services.flight_feed_svc import bulk_write_flight_observations, write_flight_observation
 
 #### Airtraffic Endpoint
@@ -48,7 +50,10 @@ async def _async_bulk_write_incoming_air_traffic_data(observations_str: str) -> 
 
     if parsed_observations:
         logger.info(f"Writing {len(parsed_observations)} observations to database in bulk..")
-        await bulk_write_flight_observations(parsed_observations)
+
+        async with async_task_session() as db:
+            repo = SQLAlchemyFlightFeedRepository(db)
+            await bulk_write_flight_observations(parsed_observations, repo=repo)
 
         logger.info("Writing batch to Redis stream..")
         for single_obs in parsed_observations:
@@ -84,7 +89,10 @@ async def _async_write_incoming_air_traffic_data(observation: str) -> None:
     logger.debug(f"Parsed observation: {single_air_traffic_observation}")
 
     logger.info("Writing observation..")
-    await write_flight_observation(single_air_traffic_observation)
+
+    async with async_task_session() as db:
+        repo = SQLAlchemyFlightFeedRepository(db)
+        await write_flight_observation(single_air_traffic_observation, repo=repo)
 
     logger.info("Writing to Redis stream..")
     my_redis_helper.add_air_traffic_data(stream_name="air_traffic_stream", observation=asdict(single_air_traffic_observation))

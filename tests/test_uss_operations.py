@@ -1,16 +1,12 @@
+import json
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import arrow
 import pytest
-from tests.conftest import (
-    fastapi_auth_header,
-    STRATEGIC_SCOPE,
-    CONSTRAINT_SCOPE,
-    CONFORMANCE_SCOPE,
-    RID_DP_SCOPE,
-)
 
+from flight_blender.services.uss_svc import USSService
+from tests.conftest import CONFORMANCE_SCOPE, CONSTRAINT_SCOPE, RID_DP_SCOPE, STRATEGIC_SCOPE, fastapi_auth_header
 
 REPORT_SCOPES = [
     "utm.strategic_coordination",
@@ -87,6 +83,39 @@ class TestUSSOperationalIntents:
             headers=fastapi_auth_header(STRATEGIC_SCOPE),
         )
         assert resp.status_code == 204
+
+    def test_update_operational_intent_invalid_state_returns_400(self, mounted_sync_client):
+        now_iso = arrow.utcnow().isoformat()
+        payload = {
+            "operational_intent_id": str(uuid.uuid4()),
+            "subscriptions": [],
+            "operational_intent": {
+                "reference": {
+                    "id": str(uuid.uuid4()),
+                    "manager": "mock_uss",
+                    "uss_availability": "Unknown",
+                    "version": 1,
+                    "state": "Flying",
+                    "ovn": "test-ovn",
+                    "time_start": {"format": "RFC3339", "value": now_iso},
+                    "time_end": {"format": "RFC3339", "value": now_iso},
+                    "uss_base_url": "http://mock-uss",
+                    "subscription_id": str(uuid.uuid4()),
+                },
+                "details": {
+                    "volumes": [],
+                    "priority": 0,
+                    "off_nominal_volumes": [],
+                },
+            },
+        }
+        resp = mounted_sync_client.post(
+            "/uss/v1/operational_intents",
+            json=payload,
+            headers=fastapi_auth_header(STRATEGIC_SCOPE),
+        )
+        assert resp.status_code == 400
+        assert "Flying" in resp.json()["message"]
 
 
 class TestUSSConstraints:
@@ -187,8 +216,7 @@ class TestUSSUpdateOpIntDetails:
             json={},
             headers=fastapi_auth_header(STRATEGIC_SCOPE),
         )
-        # Missing required fields → dacite error → 500
-        assert resp.status_code == 500
+        assert resp.status_code == 400
 
     def test_update_opint_invalid_payload(self, mounted_sync_client):
         payload = {"operational_intent_id": "not-a-uuid"}
@@ -197,7 +225,7 @@ class TestUSSUpdateOpIntDetails:
             json=payload,
             headers=fastapi_auth_header(STRATEGIC_SCOPE),
         )
-        assert resp.status_code == 500
+        assert resp.status_code == 400
 
     def test_update_opint_with_operational_intent(self, mounted_sync_client):
         """Provide a full operational_intent body → DB write → 204."""
@@ -252,7 +280,6 @@ class TestUSSUpdateOpIntDetails:
         assert resp.status_code == 204
 
 
-
 # ---------------------------------------------------------------------------
 # USS service additional coverage
 # ---------------------------------------------------------------------------
@@ -264,7 +291,6 @@ class TestUSSServiceCoverage:
     @pytest.mark.asyncio
     async def test_uss_operational_intent_details_not_found(self):
         """Test uss_operational_intent_details returns 404 when not found."""
-        from flight_blender.services.uss_svc import USSService
 
         mock_fd_repo = AsyncMock()
         mock_fd_repo.get_opint_reference_by_id = AsyncMock(return_value=None)
@@ -281,8 +307,6 @@ class TestUSSServiceCoverage:
     @pytest.mark.asyncio
     async def test_uss_operational_intent_details_found(self):
         """Test uss_operational_intent_details returns 200 when found."""
-        import json
-        from flight_blender.services.uss_svc import USSService
 
         mock_fd_repo = AsyncMock()
 

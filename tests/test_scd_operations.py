@@ -4,6 +4,13 @@ import arrow
 from fastapi import HTTPException
 
 import flight_blender.clients.dss_scd_client as dss_helper
+from flight_blender.domain_types.scd import (
+    CommonPeer9xxResponse,
+    FlightPlanCurrentStatus,
+    OperationalIntentUpdateResponse,
+    OpIntUpdateCheckResultCodes,
+    ShouldSendtoDSSProcessingResponse,
+)
 from tests import fakes
 from tests.conftest import SCD_INJECT_SCOPE, SCD_PLAN_SCOPE, SCD_TEST_SCOPE, fastapi_auth_header
 from tests.fakes import VALID_OPERATOR_ID, VALID_UAS_SERIAL_NUMBER
@@ -212,6 +219,40 @@ class TestFlightPlanUpsertDSSPaths:
         assert resp.status_code == 200
         data = resp.json()
         assert data["planning_result"] in ("Planned", "ReadyToFly", "NotPlanned", "Completed")
+
+    def test_update_existing_flight_plan_uses_request_repo(self, mounted_sync_client, mock_scd_dss_success, monkeypatch):
+        """Existing-plan updates must parse stored operational intent data with the request repo."""
+        async def reject_update(self, **kwargs):
+            return OperationalIntentUpdateResponse(
+                dss_response=CommonPeer9xxResponse(message="Update not submitted to DSS"),
+                status=dss_helper.OPINT_UPDATE_NOT_SUBMITTED_STATUS,
+                message="Update not submitted to DSS",
+                additional_information=ShouldSendtoDSSProcessingResponse(
+                    check_id=OpIntUpdateCheckResultCodes.B,
+                    should_submit_update_payload_to_dss=0,
+                    tentative_flight_plan_processing_response=FlightPlanCurrentStatus.OkToFly,
+                ),
+            )
+
+        monkeypatch.setattr(dss_helper.SCDOperations, "update_specified_operational_intent_reference", reject_update)
+
+        plan_id = str(uuid.uuid4())
+        payload = self._valid_payload()
+        create_resp = mounted_sync_client.put(
+            f"/scd/flight_planning/flight_plans/{plan_id}",
+            json=payload,
+            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
+        )
+        assert create_resp.status_code == 200
+
+        update_resp = mounted_sync_client.put(
+            f"/scd/flight_planning/flight_plans/{plan_id}",
+            json=payload,
+            headers=fastapi_auth_header(SCD_PLAN_SCOPE),
+        )
+
+        assert update_resp.status_code == 200
+        assert update_resp.json()["planning_result"] in ("NotPlanned", "Rejected")
 
     def test_upsert_dss_conflict_returns_not_planned(self, mounted_sync_client, mock_scd_dss_conflict):
         """DSS reports a conflict → NotPlanned or ConflictWithFlight."""

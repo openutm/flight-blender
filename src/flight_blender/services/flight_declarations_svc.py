@@ -15,8 +15,9 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import box as shapely_box
 from shapely.ops import unary_union
 
-from flight_blender.clients.dss_scd_client import OperationalIntentReferenceHelper, SCDOperations
+from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator, OperationalIntentReferenceHelper, SCDOperations
 from flight_blender.config import settings
+from flight_blender.domain_types.common import OPERATION_STATES
 from flight_blender.domain_types.flight_declarations import (
     DEFAULT_UAV_CLIMB_RATE_M_PER_S,
     DEFAULT_UAV_DESCENT_RATE_M_PER_S,
@@ -44,6 +45,7 @@ from flight_blender.domain_types.scd import (
 from flight_blender.domain_types.scd import Polygon as Plgn
 from flight_blender.plugins.loader import load_plugin
 from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+from flight_blender.services.conformance_svc import FlightOperationConformanceHelper
 
 if TYPE_CHECKING:
     from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
@@ -1075,73 +1077,40 @@ class CustomVolumeGenerator:
 # ── Task helper functions ────────────────────────────────────────────────
 
 
-async def submit_flight_declaration_to_dss(flight_declaration_id: str):
+async def submit_flight_declaration_to_dss(flight_declaration_id: str, fd_repo: SQLAlchemyFlightDeclarationRepository):
     """Submit a flight declaration to the DSS."""
-    from flight_blender.clients.dss_scd_client import DSSOperationalIntentsCreator
-    from flight_blender.db.session import async_task_session
-    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
-
-    async with async_task_session() as db:
-        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-        my_dss_opint_creator = DSSOperationalIntentsCreator(
-            flight_declaration_id=uuid.UUID(flight_declaration_id),
-            fd_repo=fd_repo,
-        )
-        return await my_dss_opint_creator.submit_flight_declaration_to_dss()
+    my_dss_opint_creator = DSSOperationalIntentsCreator(
+        flight_declaration_id=uuid.UUID(flight_declaration_id),
+        fd_repo=fd_repo,
+    )
+    return await my_dss_opint_creator.submit_flight_declaration_to_dss()
 
 
-async def get_flight_declaration(flight_declaration_id: str):
-    """Get a flight declaration from the database."""
-    from flight_blender.db.session import async_task_session
-    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
-
-    async with async_task_session() as db:
-        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-        return await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
-
-
-async def get_opint_reference(flight_declaration_id: str):
-    """Get the operational intent reference for a flight declaration."""
-    from flight_blender.db.session import async_task_session
-    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
-
-    async with async_task_session() as db:
-        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-        return await fd_repo.get_opint_reference_by_declaration_id(uuid.UUID(flight_declaration_id))
-
-
-async def verify_and_update_declaration_state(flight_declaration_id: str) -> tuple:
+async def verify_and_update_declaration_state(flight_declaration_id: str, fd_repo: SQLAlchemyFlightDeclarationRepository) -> tuple:
     """Verify state transition and update to Accepted if valid. Returns (flight_declaration, created_opint)."""
-    from flight_blender.db.session import async_task_session
-    from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+    flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
 
-    from flight_blender.services.conformance_svc import FlightOperationConformanceHelper
+    if not flight_declaration:
+        return None, None
 
-    async with async_task_session() as db:
-        fd_repo = SQLAlchemyFlightDeclarationRepository(db)
-        flight_declaration = await fd_repo.get_by_id(uuid.UUID(flight_declaration_id))
+    opint_ref = await fd_repo.get_opint_reference_by_declaration_id(flight_declaration.id)
+    created_opint = opint_ref.id if opint_ref else None
 
-        if not flight_declaration:
-            return None, None
+    original_state = flight_declaration.state
+    accepted_state = OPERATION_STATES[1][0]
 
-        opint_ref = await fd_repo.get_opint_reference_by_declaration_id(flight_declaration.id)
-        created_opint = opint_ref.id if opint_ref else None
-
-        original_state = flight_declaration.state
-        accepted_state = OPERATION_STATES[1][0]
-
-        transition_valid = FlightOperationConformanceHelper.verify_operation_state_transition(
-            original_state=original_state,
+    transition_valid = FlightOperationConformanceHelper.verify_operation_state_transition(
+        original_state=original_state,
+        new_state=accepted_state,
+        event="dss_accepts",
+    )
+    if transition_valid:
+        await fd_repo.update(flight_declaration.id, state=accepted_state)
+        await fd_repo.add_state_history_entry(
+            flight_declaration_id=flight_declaration.id,
             new_state=accepted_state,
-            event="dss_accepts",
+            original_state=original_state,
+            notes="Successfully submitted to the DSS..",
         )
-        if transition_valid:
-            await fd_repo.update(flight_declaration.id, state=accepted_state)
-            await fd_repo.add_state_history_entry(
-                flight_declaration_id=flight_declaration.id,
-                new_state=accepted_state,
-                original_state=original_state,
-                notes="Successfully submitted to the DSS..",
-            )
 
-        return flight_declaration, created_opint
+    return flight_declaration, created_opint

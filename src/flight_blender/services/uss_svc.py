@@ -23,6 +23,7 @@ from flight_blender.domain_types.uss import (
     OperationalIntentDetailsUSSResponse,
     OperationalIntentNotFoundResponse,
     OperationalIntentReferenceDSSResponse,
+    OperationalIntentState,
     OperationalIntentUSSDetails,
     OperatorDetailsSuccessResponse,
     RIDAircraftPosition,
@@ -108,12 +109,25 @@ class USSService:
         try:
             incoming_update_payload = from_dict(data_class=UpdateChangedOpIntDetailsPost, data=request_data)
         except Exception as e:
-            return asdict(GenericErrorResponseMessage(message=str(e))), 500
+            return asdict(GenericErrorResponseMessage(message=f"Error parsing request: {e}")), 400
         operation_id_str = incoming_update_payload.operational_intent_id
 
         if incoming_update_payload.operational_intent:
             updated_operational_intent_reference = incoming_update_payload.operational_intent.reference
             update_operational_intent_details = incoming_update_payload.operational_intent.details
+            valid_states = {state.value for state in OperationalIntentState}
+            if updated_operational_intent_reference.state not in valid_states:
+                return (
+                    asdict(
+                        GenericErrorResponseMessage(
+                            message=(
+                                "Error parsing request: operational_intent.reference.state "
+                                f"{updated_operational_intent_reference.state!r} must be one of {sorted(valid_states)}"
+                            )
+                        )
+                    ),
+                    400,
+                )
 
             await self.fd_repo.create_or_update_peer_opint_detail(
                 peer_id=uuid.UUID(operation_id_str),

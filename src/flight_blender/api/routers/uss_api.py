@@ -76,6 +76,8 @@ async def uss_update_opint_details(
     _auth: Any = Depends(require_scopes(["utm.strategic_coordination"])),
 ):
     data, status_code = await ops.uss_update_opint_details(body)
+    if status_code != 204:
+        return JSONResponse(data, status_code=status_code)
     return Response(status_code=status_code)
 
 
