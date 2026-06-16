@@ -23,6 +23,9 @@ COPY alembic ./alembic
 COPY alembic.ini ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
+RUN find /app/.venv -type d \( -name test -o -name tests \) -prune -exec rm -rf '{}' + \
+    && find /app/.venv -type f \( -name '*.pyc' -o -name '*.pyo' -o -name '*.a' \) -delete \
+    && find /app/.venv -type f \( -name '*.so' -o -name '*.so.*' \) -exec strip --strip-unneeded '{}' +
 
 FROM ${SHELL_COMPAT_IMAGE} AS shell-compat
 
