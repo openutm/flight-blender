@@ -1,22 +1,43 @@
-FROM python:3.12-slim
+# syntax=docker/dockerfile:1.7
 
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
+ARG PYTHON_BUILDER_IMAGE=cgr.dev/chainguard/python:latest-dev
+ARG PYTHON_RUNTIME_IMAGE=cgr.dev/chainguard/python:latest
+
+FROM ${PYTHON_BUILDER_IMAGE} AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /app
 
-RUN pip install -U pip && pip install uv
+# Dependency layers stay cached unless the dependency metadata or lockfile changes.
+COPY uv.lock pyproject.toml ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
 
-RUN addgroup --gid 10000 django && adduser --shell /bin/bash --disabled-password --gecos "" --uid 10000 --ingroup django django
-RUN chown -R django:django /app
-USER django:django
+COPY LICENSE README.md ./
+COPY src ./src
+COPY alembic ./alembic
+COPY alembic.ini ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
-# Install dependencies (cached layer — only invalidated when lockfile changes)
-COPY --chown=django:django uv.lock pyproject.toml LICENSE README.md ./
-RUN uv sync --frozen --no-dev --no-install-project
+FROM ${PYTHON_RUNTIME_IMAGE} AS runtime
 
-# Copy source, then install the project itself (fast — deps already in .venv)
-COPY --chown=django:django . .
-RUN uv sync --frozen --no-dev
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/venv/bin:${PATH}" \
+    VIRTUAL_ENV="/venv"
+
+WORKDIR /app
+
+COPY --from=builder --chown=65532:65532 /app/.venv /venv
+COPY --chown=65532:65532 src ./src
+COPY --chown=65532:65532 alembic ./alembic
+COPY --chown=65532:65532 alembic.ini LICENSE README.md ./
 
 EXPOSE 8000
+
+ENTRYPOINT ["/venv/bin/python", "-m", "flight_blender.container_entrypoint"]
+CMD ["serve"]
