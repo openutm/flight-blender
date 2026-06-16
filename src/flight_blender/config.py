@@ -10,6 +10,14 @@ class FlightBlenderSettings(BaseSettings):
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str | None = None
+    POSTGRES_HOST: str = "db"
+    POSTGRES_PORT: int = 5432
+    CONTAINER_STARTUP_TIMEOUT_SECS: int = 60
+    UVICORN_HOST: str = "0.0.0.0"  # nosec B104
+    UVICORN_PORT: int = 8000
+    UVICORN_WORKERS: int = 3
+    CELERY_WORKER_CONCURRENCY: int = 4
+    CELERY_MAX_TASKS_PER_CHILD: int = 200
     AIR_TRAFFIC_STREAM_TTL_MS: int = 4000
     SECRET_KEY: str = "changeme"
     IS_DEBUG: bool = False

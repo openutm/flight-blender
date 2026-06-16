@@ -34,7 +34,7 @@ services:
       - ".env"
     build: .
     image: openutm/flight-blender
-    command: ./entrypoints/no-database/entrypoint.sh
+    command: ["serve-reload"]
     ports:
       - "8000:8000"
     expose:
@@ -56,7 +56,7 @@ services:
       context: "."
     env_file:
       - ".env"
-    command: ./entrypoints/with-database/entrypoint-celery.sh
+    command: ["worker"]
     volumes:
       - .:/app
     depends_on:

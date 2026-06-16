@@ -267,11 +267,11 @@ class TestSpatialGeoFenceCoverage:
         assert isinstance(result, str)
         assert "Polygon" in result
 
-    def test_geo_fence_rtree_index_factory_add_box_to_index(self):
+    def test_geo_fence_rtree_index_factory_add_box_to_index(self, tmp_path):
         """Test GeoFenceRTreeIndexFactory.add_box_to_index."""
         from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
 
-        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+        factory = GeoFenceRTreeIndexFactory(index_name=str(tmp_path / "geo-fence-index"))
 
         factory.add_box_to_index(
             id=1,
@@ -283,11 +283,11 @@ class TestSpatialGeoFenceCoverage:
 
         # No assertion needed, just ensure it doesn't raise
 
-    def test_geo_fence_rtree_index_factory_delete_from_index(self):
+    def test_geo_fence_rtree_index_factory_delete_from_index(self, tmp_path):
         """Test GeoFenceRTreeIndexFactory.delete_from_index."""
         from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
 
-        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+        factory = GeoFenceRTreeIndexFactory(index_name=str(tmp_path / "geo-fence-index"))
 
         factory.add_box_to_index(
             id=1,
@@ -304,11 +304,11 @@ class TestSpatialGeoFenceCoverage:
 
         # No assertion needed, just ensure it doesn't raise
 
-    def test_geo_fence_rtree_index_factory_generate_geo_fence_index(self):
+    def test_geo_fence_rtree_index_factory_generate_geo_fence_index(self, tmp_path):
         """Test GeoFenceRTreeIndexFactory.generate_geo_fence_index."""
         from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
 
-        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+        factory = GeoFenceRTreeIndexFactory(index_name=str(tmp_path / "geo-fence-index"))
 
         mock_fence = MagicMock()
         mock_fence.id = uuid.uuid4()
@@ -318,11 +318,11 @@ class TestSpatialGeoFenceCoverage:
 
         # No assertion needed, just ensure it doesn't raise
 
-    def test_geo_fence_rtree_index_factory_check_box_intersection(self):
+    def test_geo_fence_rtree_index_factory_check_box_intersection(self, tmp_path):
         """Test GeoFenceRTreeIndexFactory.check_box_intersection."""
         from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
 
-        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+        factory = GeoFenceRTreeIndexFactory(index_name=str(tmp_path / "geo-fence-index"))
 
         mock_fence = MagicMock()
         mock_fence.id = uuid.uuid4()
@@ -334,11 +334,11 @@ class TestSpatialGeoFenceCoverage:
 
         assert isinstance(result, list)
 
-    def test_geo_fence_rtree_index_factory_clear_rtree_index(self):
+    def test_geo_fence_rtree_index_factory_clear_rtree_index(self, tmp_path):
         """Test GeoFenceRTreeIndexFactory.clear_rtree_index."""
         from flight_blender.utils.spatial_geo_fence import GeoFenceRTreeIndexFactory
 
-        factory = GeoFenceRTreeIndexFactory(index_name="test-index")
+        factory = GeoFenceRTreeIndexFactory(index_name=str(tmp_path / "geo-fence-index"))
 
         mock_fence = MagicMock()
         mock_fence.id = uuid.uuid4()

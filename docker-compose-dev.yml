@@ -37,7 +37,7 @@ services:
     build: .
     image: openutm/flight-blender-dev
     pull_policy: never
-    command: ./entrypoints/with-database/entrypoint.sh
+    command: ["serve-reload"]
     ports:
       - "8000:8000"
     expose:
@@ -61,7 +61,7 @@ services:
       context: "."
     env_file:
       - ".env"
-    command: ./entrypoints/with-database/entrypoint-celery.sh
+    command: ["worker"]
     # volumes:
     #   - .:/app
     depends_on:
@@ -80,7 +80,7 @@ services:
     env_file:
       - ".env"
     hostname: celery-beat
-    command: ./entrypoints/with-database/entrypoint-beat.sh
+    command: ["beat"]
     # volumes:
     #   - .:/app
     depends_on:
