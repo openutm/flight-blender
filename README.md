@@ -2,7 +2,10 @@
 
 ![blender-logo](images/blender-logo.jpg)
 
-![Coverage](badges/coverage.svg)
+[![Coverage](badges/coverage.svg)](https://github.com/openutm/flight-blender/actions/workflows/code-quality.yml)
+[![Coverage Workflow](https://github.com/openutm/flight-blender/actions/workflows/code-quality.yml/badge.svg?branch=main)](https://github.com/openutm/flight-blender/actions/workflows/code-quality.yml)
+[![ASTM F3548-21](badges/interuss-f3548.svg)](https://github.com/openutm/flight-blender/actions/workflows/interuss-qualification.yml)
+[![ASTM F3411-22a](badges/interuss-f3411.svg)](https://github.com/openutm/flight-blender/actions/workflows/interuss-qualification.yml)
 
 Flight Blender is an open-source backend and data-processing engine designed to support standards-compliant UTM (Unmanned Traffic Management) services. It adheres to the latest regulations for UTM/U-Space in the EU and other jurisdictions. With Flight Blender, you can:
 
