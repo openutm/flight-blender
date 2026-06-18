@@ -3,7 +3,7 @@
 ![blender-logo](images/blender-logo.jpg)
 
 [![Coverage](badges/coverage.svg)](https://github.com/openutm/flight-blender/actions/workflows/code-quality.yml)
-[![Coverage Workflow](https://github.com/openutm/flight-blender/actions/workflows/code-quality.yml/badge.svg?branch=master)](https://github.com/openutm/flight-blender/actions/workflows/code-quality.yml)
+[![Code Quality](badges/code-quality.svg)](https://github.com/openutm/flight-blender/actions/workflows/code-quality.yml)
 [![ASTM F3548-21](badges/interuss-f3548.svg)](https://github.com/openutm/flight-blender/actions/workflows/interuss-qualification.yml)
 [![ASTM F3411-22a](badges/interuss-f3411.svg)](https://github.com/openutm/flight-blender/actions/workflows/interuss-qualification.yml)
 

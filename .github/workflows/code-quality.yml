@@ -48,39 +48,25 @@ jobs:
           else
             echo "total_coverage=N/A" >> "$GITHUB_OUTPUT"
           fi
-      - name: Generate coverage badge
+      - name: Generate quality badges
         if: always()
+        env:
+          COVERAGE_EXIT_CODE: ${{ steps.coverage.outputs.exit_code }}
         run: |
           mkdir -p badges
           python3 <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          total = None
-          coverage_file = Path("coverage.json")
-          if coverage_file.exists():
-              total = float(json.loads(coverage_file.read_text())["totals"]["percent_covered"])
+          def write_badge(path: Path, label: str, message: str, color: str) -> None:
+              label_width = max(68, len(label) * 7 + 12)
+              message_width = max(48, len(message) * 8 + 12)
+              width = label_width + message_width
+              x_label = label_width / 2
+              x_message = label_width + message_width / 2
 
-          if total is None:
-              label = "coverage"
-              message = "unknown"
-              color = "#9f9f9f"
-          else:
-              label = "coverage"
-              message = f"{total:.1f}%"
-              if total >= 80:
-                  color = "#4c1"
-              elif total >= 60:
-                  color = "#dfb317"
-              else:
-                  color = "#e05d44"
-
-          label_width = 68
-          message_width = max(48, len(message) * 8 + 12)
-          width = label_width + message_width
-          x_message = label_width + message_width / 2
-
-          svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="20" role="img" aria-label="{label}: {message}">
+              svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="20" role="img" aria-label="{label}: {message}">
           <title>{label}: {message}</title>
           <linearGradient id="s" x2="0" y2="100%">
             <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
@@ -95,33 +81,51 @@ jobs:
             <rect width="{width}" height="20" fill="url(#s)"/>
           </g>
           <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
-            <text aria-hidden="true" x="340" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="580">coverage</text>
-            <text x="340" y="140" transform="scale(.1)" textLength="580">coverage</text>
+            <text aria-hidden="true" x="{x_label * 10:.0f}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="{(label_width - 12) * 10:.0f}">{label}</text>
+            <text x="{x_label * 10:.0f}" y="140" transform="scale(.1)" textLength="{(label_width - 12) * 10:.0f}">{label}</text>
             <text aria-hidden="true" x="{x_message * 10:.0f}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="{(message_width - 12) * 10:.0f}">{message}</text>
             <text x="{x_message * 10:.0f}" y="140" transform="scale(.1)" textLength="{(message_width - 12) * 10:.0f}">{message}</text>
           </g>
           </svg>
           """
-          Path("badges/coverage.svg").write_text(svg)
+              path.write_text(svg)
+
+          total = None
+          coverage_file = Path("coverage.json")
+          if coverage_file.exists():
+              total = float(json.loads(coverage_file.read_text())["totals"]["percent_covered"])
+
+          if total is None:
+              write_badge(Path("badges/coverage.svg"), "coverage", "unknown", "#9f9f9f")
+          else:
+              color = "#4c1" if total >= 80 else "#dfb317" if total >= 60 else "#e05d44"
+              write_badge(Path("badges/coverage.svg"), "coverage", f"{total:.1f}%", color)
+
+          if os.environ.get("COVERAGE_EXIT_CODE") == "0":
+              write_badge(Path("badges/code-quality.svg"), "code quality", "passing", "#4c1")
+          else:
+              write_badge(Path("badges/code-quality.svg"), "code quality", "failing", "#e05d44")
           PY
-      - name: Upload coverage badge
+      - name: Upload quality badges
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-badge
-          path: badges/coverage.svg
+          name: quality-badges
+          path: |
+            badges/coverage.svg
+            badges/code-quality.svg
           retention-days: 14
-      - name: Commit coverage badge to PR branch
+      - name: Commit quality badges to PR branch
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.coverage.outputs.exit_code == '0' && hashFiles('coverage.json') != ''
         run: |
-          if [ -z "$(git status --porcelain badges/coverage.svg)" ]; then
-            echo "Coverage badge unchanged."
+          if [ -z "$(git status --porcelain badges/coverage.svg badges/code-quality.svg)" ]; then
+            echo "Quality badges unchanged."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add badges/coverage.svg
-          git commit -m "Update coverage badge"
+          git add badges/coverage.svg badges/code-quality.svg
+          git commit -m "Update quality badges"
           git push origin HEAD:${{ github.head_ref }}
       - name: Upload HTML coverage report
         if: always() && hashFiles('htmlcov/index.html') != ''
