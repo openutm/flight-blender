@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="178" height="20" role="img" aria-label="ASTM F3411-22a: unknown">
-<title>ASTM F3411-22a: unknown</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="178" height="20" role="img" aria-label="ASTM F3411-22a: passing">
+<title>ASTM F3411-22a: passing</title>
 <linearGradient id="s" x2="0" y2="100%">
   <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
   <stop offset="1" stop-opacity=".1"/>
@@ -9,13 +9,13 @@
 </clipPath>
 <g clip-path="url(#r)">
   <rect width="110" height="20" fill="#555"/>
-  <rect x="110" width="68" height="20" fill="#9f9f9f"/>
+  <rect x="110" width="68" height="20" fill="#4c1"/>
   <rect width="178" height="20" fill="url(#s)"/>
 </g>
 <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
   <text aria-hidden="true" x="550" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="980">ASTM F3411-22a</text>
   <text x="550" y="140" transform="scale(.1)" textLength="980">ASTM F3411-22a</text>
-  <text aria-hidden="true" x="1440" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="560">unknown</text>
-  <text x="1440" y="140" transform="scale(.1)" textLength="560">unknown</text>
+  <text aria-hidden="true" x="1440" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="560">passing</text>
+  <text x="1440" y="140" transform="scale(.1)" textLength="560">passing</text>
 </g>
 </svg>
