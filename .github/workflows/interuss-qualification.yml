@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
     inputs:
       suite:
@@ -162,7 +162,7 @@ jobs:
           retention-days: 30
 
       - name: Commit InterUSS result badges
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('testing/interuss/output/f3548/report.json') != '' && hashFiles('testing/interuss/output/netrid_v22a/report.json') != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && hashFiles('testing/interuss/output/f3548/report.json') != '' && hashFiles('testing/interuss/output/netrid_v22a/report.json') != ''
         run: |
           if [ -z "$(git status --porcelain badges/interuss-f3548.svg badges/interuss-f3411.svg)" ]; then
             echo "InterUSS result badges unchanged."
