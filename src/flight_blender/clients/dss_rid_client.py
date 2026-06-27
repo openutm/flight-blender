@@ -2,7 +2,6 @@
 ## For more information review: https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/uastech/standards/astm_rid_1.0/remoteid/canonical.yaml
 ## and this diagram https://github.com/interuss/dss/blob/master/assets/generated/rid_display.png
 
-import asyncio
 import hashlib
 import json
 import math
@@ -11,7 +10,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-import requests
+import httpx
 import tldextract
 from dacite import from_dict
 from loguru import logger
@@ -20,7 +19,7 @@ from shapely.geometry import LineString, Point, Polygon
 from uas_standards.astm.f3411.v22a.constants import NetMinClusterSizePercent, NetMinObfuscationDistanceM
 
 from flight_blender.auth import dss_auth as dss_auth_helper
-from flight_blender.auth.token_cache import get_redis
+from flight_blender.auth.token_cache import get_async_redis
 from flight_blender.config import settings
 from flight_blender.domain_types.common import RESPONSE_CONTENT_TYPE
 from flight_blender.domain_types.rid_operations import (
@@ -54,7 +53,7 @@ geod = Geod(ellps="WGS84")
 class RemoteIDOperations:
     def __init__(self):
         self.dss_base_url = settings.DSS_BASE_URL
-        self.r = get_redis()
+        self.r = get_async_redis()
 
     def compute_polygon_area(self, polygon: Polygon):
         poly_area_m2, poly_perimeter = geod.geometry_area_perimeter(polygon)
@@ -169,7 +168,7 @@ class RemoteIDOperations:
 
         return cluster_details
 
-    def create_dss_isa(
+    async def create_dss_isa(
         self,
         flight_extents: RIDVolume4D | Volume4D,
         uss_base_url: str,
@@ -188,7 +187,7 @@ class RemoteIDOperations:
             return isa_creation_response
 
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
+            auth_token = await my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             return isa_creation_response
@@ -210,12 +209,12 @@ class RemoteIDOperations:
         p = ISACreationRequest(extents=flight_extents, uss_base_url=uss_base_url)
         p_dict = asdict(p)
         try:
-            dss_r = requests.put(
-                dss_isa_create_url,
-                json=json.loads(json.dumps(p_dict)),
-                headers=headers,
-                timeout=30,
-            )
+            async with httpx.AsyncClient(timeout=30) as client:
+                dss_r = await client.put(
+                    dss_isa_create_url,
+                    json=json.loads(json.dumps(p_dict)),
+                    headers=headers,
+                )
         except Exception as re:
             logger.error("Error in posting to DSS URL %s " % re)
             return isa_creation_response
@@ -281,15 +280,17 @@ class RemoteIDOperations:
                 "extents": json.loads(json.dumps(asdict(flight_extents))),
             }
 
-            auth_credentials = my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")  # nosec B106
+            auth_credentials = await my_authorization_helper.get_cached_credentials(audience=uss_audience, token_type="rid")  # nosec B106
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_credentials["access_token"],
             }
             try:
-                response = requests.post(url, headers=headers, json=json.loads(json.dumps(payload)), timeout=30)
+                async with httpx.AsyncClient(timeout=30) as client:
+                    response = await client.post(url, headers=headers, json=json.loads(json.dumps(payload)))
             except Exception as re:
                 logger.error(f"Error in sending subscriber notification to {url} :  {re} ")
+                continue
             if response.status_code == 204:
                 logger.info("Successfully notified subscriber %s" % url)
 
@@ -297,8 +298,8 @@ class RemoteIDOperations:
         # iterate over the service areas to get flights URL to poll
         isa_key = "isa-" + service_area.id
         isa_seconds_timedelta = timedelta(seconds=expiration_time_seconds)
-        self.r.set(isa_key, 1)
-        self.r.expire(name=isa_key, time=isa_seconds_timedelta)
+        await self.r.set(isa_key, 1)
+        await self.r.expire(name=isa_key, time=isa_seconds_timedelta)
         isa_creation_response.created = 1
         isa_creation_response.service_area = service_area
         isa_creation_response.subscribers = dss_r_subs
@@ -306,7 +307,7 @@ class RemoteIDOperations:
         return isa_creation_response
 
     @staticmethod
-    def create_dss_subscription(
+    async def create_dss_subscription(
         vertex_list: list,
         view: str,
         request_uuid,
@@ -326,7 +327,7 @@ class RemoteIDOperations:
             return subscription_response
 
         try:
-            auth_token = my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
+            auth_token = await my_authorization_helper.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
         except Exception as e:
             logger.error("Error in getting Authority Access Token %s " % e)
             return subscription_response
@@ -376,7 +377,8 @@ class RemoteIDOperations:
             }
 
             try:
-                dss_r = requests.put(dss_subscription_url, json=payload, headers=headers, timeout=30)
+                async with httpx.AsyncClient(timeout=30) as client:
+                    dss_r = await client.put(dss_subscription_url, json=payload, headers=headers)
             except Exception as re:
                 logger.error("Error in posting to subscription URL %s " % re)
                 return subscription_response
@@ -409,20 +411,17 @@ class RemoteIDOperations:
                     )
                 )
 
-                async def _write_subscription() -> None:
-                    if rid_repo is None:
-                        raise ValueError("rid_repo must be provided")
-                    await rid_repo.create_subscription(
-                        subscription_id=subscription_id,
-                        record_id=uuid.UUID(request_uuid) if isinstance(request_uuid, str) else request_uuid,
-                        view_hash=view_hash,
-                        end_datetime=fifteen_seconds_from_now_isoformat,
-                        is_simulated=is_simulated,
-                        view=view,
-                        flights_dict=flights_dict_str,
-                    )
-
-                asyncio.run(_write_subscription())
+                if rid_repo is None:
+                    raise ValueError("rid_repo must be provided")
+                await rid_repo.create_subscription(
+                    subscription_id=subscription_id,
+                    record_id=uuid.UUID(request_uuid) if isinstance(request_uuid, str) else request_uuid,
+                    view_hash=view_hash,
+                    end_datetime=fifteen_seconds_from_now_isoformat,
+                    is_simulated=is_simulated,
+                    view=view,
+                    flights_dict=flights_dict_str,
+                )
 
                 return subscription_response
 

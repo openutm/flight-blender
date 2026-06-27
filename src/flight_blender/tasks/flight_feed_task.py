@@ -1,11 +1,10 @@
 import asyncio
 import json
-import time
 from dataclasses import asdict
 
 import arrow
+import httpx
 import pandas as pd
-import requests
 from dacite import from_dict
 from dacite.exceptions import DaciteError, WrongTypeError
 from loguru import logger
@@ -108,6 +107,10 @@ def mercator_transform(lon, lat):
 
 @app.task(name="start_opensky_network_stream")
 def start_opensky_network_stream(view_port: str, session_id: str):
+    asyncio.run(_async_start_opensky_network_stream(view_port, session_id))
+
+
+async def _async_start_opensky_network_stream(view_port: str, session_id: str) -> None:
     """
     Starts streaming data from the OpenSky Network within the specified viewport.
     Args:
@@ -143,11 +146,11 @@ def start_opensky_network_stream(view_port: str, session_id: str):
 
     while arrow.now() < end_time:
         url_data = f"https://opensky-network.org/api/states/all?lamin={lat_min}&lomin={lng_min}&lamax={lat_max}&lomax={lng_max}"
-        response = requests.get(
-            url_data,
-            auth=(settings.OPENSKY_NETWORK_USERNAME, settings.OPENSKY_NETWORK_PASSWORD),
-            timeout=30,
-        )
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                url_data,
+                auth=(settings.OPENSKY_NETWORK_USERNAME, settings.OPENSKY_NETWORK_PASSWORD),
+            )
         logger.info(url_data)
         if response.status_code == 200:
             response_data = response.json()
@@ -191,7 +194,7 @@ def start_opensky_network_stream(view_port: str, session_id: str):
                     )
                     write_incoming_air_traffic_data.delay(json.dumps(asdict(so)))
 
-        time.sleep(heartbeat)
+        await asyncio.sleep(heartbeat)
 
 
 class CeleryFlightFeedTaskDispatcher:

@@ -1,20 +1,23 @@
 import hashlib
 import hmac
 import json
+from types import SimpleNamespace
 
 import http_sfv
+import httpx
 import jwt
-import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from http_message_signatures import HTTPMessageVerifier, HTTPSignatureKeyResolver, algorithms  # type: ignore
 from jwcrypto import jwk, jws
 from jwcrypto.common import json_encode
 from loguru import logger
+from sqlalchemy import select
 
-from flight_blender.auth.token_cache import get_redis
+from flight_blender.auth.token_cache import get_async_redis
 from flight_blender.config import settings
-from flight_blender.db.session import session_scope
+from flight_blender.db.session import async_task_session
+from flight_blender.models.flight_feed_orm import SignedTelmetryPublicKeyORM
 
 
 class MyHTTPSignatureKeyResolver(HTTPSignatureKeyResolver):
@@ -110,7 +113,7 @@ class MessageVerifier:
     """
     # method implementation
 
-    def get_public_keys(self):
+    async def get_public_keys(self) -> dict:
         """
         Retrieve public keys from the database and cache them in Redis.
         This method fetches all active public keys from the SignedTelmetryPublicKey model.
@@ -121,27 +124,25 @@ class MessageVerifier:
                   corresponding public key data.
         """
 
-        r = get_redis()
-        s = requests.Session()
+        r = get_async_redis()
 
         public_keys = {}
-        from sqlalchemy import select  # noqa: PLC0415
 
-        from flight_blender.models.flight_feed_orm import SignedTelmetryPublicKeyORM  # noqa: PLC0415
-
-        with session_scope() as _db:
-            _result = _db.execute(select(SignedTelmetryPublicKeyORM).where(SignedTelmetryPublicKeyORM.is_active == True))  # noqa: E712
+        async with async_task_session() as _db:
+            _result = await _db.execute(select(SignedTelmetryPublicKeyORM).where(SignedTelmetryPublicKeyORM.is_active == True))  # noqa: E712
             all_public_keys = list(_result.scalars().all())
             for o in all_public_keys:
                 _db.expunge(o)
         for current_public_key in all_public_keys:
             redis_jwks_key = str(current_public_key.id) + "-jwks"
             current_kid = current_public_key.key_id
-            if r.exists(redis_jwks_key):
-                k = r.get(redis_jwks_key)
+            if await r.exists(redis_jwks_key):
+                k = await r.get(redis_jwks_key)
                 key = json.loads(k)
             else:
-                response = s.get(current_public_key.url)
+                async with httpx.AsyncClient(timeout=30) as client:
+                    response = await client.get(current_public_key.url)
+                response.raise_for_status()
                 jwks_data = response.json()
                 jwk = None
 
@@ -152,14 +153,14 @@ class MessageVerifier:
 
                 key = jwk if jwk else {"000"}
 
-                r.set(redis_jwks_key, json.dumps(key))
-                r.expire(redis_jwks_key, 60000)
+                await r.set(redis_jwks_key, json.dumps(key))
+                await r.expire(redis_jwks_key, 60000)
 
             public_keys[current_kid] = key
 
         return public_keys
 
-    def verify_message(self, body: bytes, headers: dict, url: str) -> bool:
+    async def verify_message(self, body: bytes, headers: dict, url: str) -> bool:
         """
         Verifies the authenticity of an HTTP request using stored public keys.
         Args:
@@ -169,21 +170,16 @@ class MessageVerifier:
         Returns:
             bool: True if successfully verified, False otherwise.
         """
-        stored_public_keys = self.get_public_keys()
+        stored_public_keys = await self.get_public_keys()
         if not stored_public_keys:
             return False
 
         try:
             parsed_body = json.loads(body) if body else {}
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError, ValueError:
             return False
 
-        r = requests.Request(
-            "PUT",
-            url,
-            json=parsed_body,
-            headers=dict(headers),
-        )
+        r = SimpleNamespace(method="PUT", url=url, headers=dict(headers), body=json.dumps(parsed_body).encode())
 
         for key_id, jwk_detail in stored_public_keys.items():
             verifier = HTTPMessageVerifier(
