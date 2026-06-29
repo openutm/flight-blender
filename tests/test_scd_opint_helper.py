@@ -157,7 +157,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"error": "conn_error"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"error": "conn_error"}):
             with pytest.raises(HTTPException) as exc_info:
                 await creator.submit_flight_declaration_to_dss()
         assert exc_info.value.status_code == 500
@@ -191,8 +191,10 @@ class TestDSSOperationalIntentsCreatorSubmit:
             operational_intents_converter=mock_converter,
         )
         success = _submission_success()
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
-            with patch.object(creator.my_scd_dss_helper, "create_and_submit_operational_intent_reference", new_callable=AsyncMock, return_value=success):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
+            with patch.object(
+                creator.my_scd_dss_helper, "create_and_submit_operational_intent_reference", new_callable=AsyncMock, return_value=success
+            ):
                 result = await creator.submit_flight_declaration_to_dss()
         assert result.status_code == 201
         mock_fd_repo.update.assert_called_once_with(creator.flight_declaration_id, state=1)
@@ -208,7 +210,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
             with patch.object(
                 creator.my_scd_dss_helper,
                 "create_and_submit_operational_intent_reference",
@@ -229,7 +231,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
             with patch.object(
                 creator.my_scd_dss_helper,
                 "create_and_submit_operational_intent_reference",
@@ -250,7 +252,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
             with patch.object(
                 creator.my_scd_dss_helper,
                 "create_and_submit_operational_intent_reference",

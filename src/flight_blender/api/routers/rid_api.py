@@ -1,4 +1,3 @@
-import asyncio
 import json
 import uuid
 from dataclasses import asdict
@@ -71,13 +70,13 @@ async def create_dss_subscription(
     vertex_list = view_port_ops.build_vertex_list_from_box(box)
     request_id = str(uuid.uuid4())
 
-    subscription_r = await asyncio.to_thread(
-        RemoteIDOperations.create_dss_subscription,
-        vertex_list,
-        view or "",
-        request_id,
-        30,
-        False,
+    subscription_r = await RemoteIDOperations.create_dss_subscription(
+        vertex_list=vertex_list,
+        view=view or "",
+        request_uuid=request_id,
+        subscription_duration_seconds=30,
+        is_simulated=False,
+        rid_repo=repo,
     )
     if subscription_r.created:
         return JSONResponse(
@@ -202,13 +201,13 @@ async def get_display_data(
         subscription_duration_seconds = 20
         vertex_list = view_port_ops.build_vertex_list_from_box(box)
         subscription_end_time = arrow.utcnow().shift(seconds=subscription_duration_seconds).isoformat()
-        await asyncio.to_thread(
-            dss_rid_helper.RemoteIDOperations.create_dss_subscription,
-            vertex_list,
-            view or "",
-            request_id,
-            subscription_duration_seconds,
-            True,
+        await dss_rid_helper.RemoteIDOperations.create_dss_subscription(
+            vertex_list=vertex_list,
+            view=view or "",
+            request_uuid=request_id,
+            subscription_duration_seconds=subscription_duration_seconds,
+            is_simulated=True,
+            rid_repo=repo,
         )
         rid_task.run_ussp_polling_for_rid.delay(session_id=request_id, end_time=subscription_end_time)
 

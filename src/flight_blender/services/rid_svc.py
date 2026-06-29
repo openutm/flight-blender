@@ -5,7 +5,7 @@ from math import atan2, cos, radians, sin, sqrt
 from typing import Never
 
 import arrow
-import requests
+import httpx
 import shapely.geometry
 from dacite import from_dict
 from geojson import Feature, FeatureCollection, Polygon
@@ -255,7 +255,8 @@ class USSPollingService:
         flight_details_exist = await self.rid_repo.check_flight_detail_exists(flight_detail_id=flight_id)
 
         if not flight_details_exist:
-            flight_details_request = requests.get(rid_flight_details_query_url, headers=headers, timeout=30)
+            async with httpx.AsyncClient(timeout=30) as client:
+                flight_details_request = await client.get(rid_flight_details_query_url, headers=headers)
             if flight_details_request.status_code != 200:
                 logger.info("Error in retrieving flight details for %s" % flight_id)
                 logger.error(flight_details_request.text)
@@ -300,12 +301,13 @@ class USSPollingService:
             rid_query_url = _service_area.uss_base_url + "/uss/flights" + "?view=" + view
 
             audience = generate_audience_from_base_url(base_url=_service_area.uss_base_url)
-            auth_credentials = authority_credentials.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
+            auth_credentials = await authority_credentials.get_cached_credentials(audience=audience, token_type="rid")  # nosec B106
             headers = {
                 "content-type": RESPONSE_CONTENT_TYPE,
                 "Authorization": "Bearer " + auth_credentials["access_token"],
             }
-            flights_request = requests.get(rid_query_url, headers=headers, timeout=30)
+            async with httpx.AsyncClient(timeout=30) as client:
+                flights_request = await client.get(rid_query_url, headers=headers)
 
             if flights_request.status_code == 200:
                 flights_response = flights_request.json()
@@ -360,7 +362,7 @@ async def create_rid_notification(message: str, session_id, repo: SQLAlchemyNoti
     """Create a notification for RID operations."""
     try:
         session_uuid = uuid.UUID(session_id)
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         session_uuid = None
     await repo.create_notification(message=message, session_id=session_uuid)
 

@@ -99,7 +99,7 @@ async def set_signed_telemetry(
     headers = dict(request.headers)
     url = str(request.url)
 
-    if not MessageVerifier().verify_message(body=body, headers=headers, url=url):
+    if not await MessageVerifier().verify_message(body=body, headers=headers, url=url):
         raise HTTPException(
             status_code=400,
             detail={"message": "Could not verify against public keys setup in Flight Blender"},

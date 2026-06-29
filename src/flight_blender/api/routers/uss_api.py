@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 from typing import Any
 
@@ -46,7 +45,7 @@ async def peer_uss_report_notification(
         )
     ),
 ):
-    data, status_code = await asyncio.to_thread(uss_svc.peer_uss_report_notification, body)
+    data, status_code = await uss_svc.peer_uss_report_notification(body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -65,7 +64,7 @@ async def uss_opint_detail_telemetry(
     opint_id: uuid.UUID,
     _auth: Any = Depends(require_scopes(["utm.conformance_monitoring_sa"])),
 ):
-    data = await asyncio.to_thread(uss_svc.uss_telemetry, str(opint_id))
+    data = await uss_svc.uss_telemetry(str(opint_id))
     return JSONResponse(data, status_code=200)
 
 

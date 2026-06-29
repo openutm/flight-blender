@@ -81,10 +81,10 @@ def _parse_rid_timestamp_value(rid_ts_value) -> arrow.Arrow | None:
         s = s[:-1] + "+00:00"
     try:
         return arrow.get(s)
-    except (ParserError, TypeError, ValueError):
+    except ParserError, TypeError, ValueError:
         try:
             return arrow.get(float(s))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
 
@@ -304,13 +304,19 @@ async def _async_process_requested_flight(
 
 @app.task(name="submit_dss_subscription")
 def submit_dss_subscription(view, vertex_list, request_uuid):
+    asyncio.run(_async_submit_dss_subscription(view, vertex_list, request_uuid))
+
+
+async def _async_submit_dss_subscription(view, vertex_list, request_uuid) -> None:
     subscription_duration_seconds = 30
-    subscription_created = dss_rid_helper.RemoteIDOperations.create_dss_subscription(
-        vertex_list=vertex_list,
-        view=view,
-        request_uuid=request_uuid,
-        subscription_duration_seconds=subscription_duration_seconds,
-    )
+    async with async_task_session() as db:
+        subscription_created = await dss_rid_helper.RemoteIDOperations.create_dss_subscription(
+            vertex_list=vertex_list,
+            view=view,
+            request_uuid=request_uuid,
+            subscription_duration_seconds=subscription_duration_seconds,
+            rid_repo=SQLAlchemyRIDRepository(db),
+        )
     logger.info("Subscription creation status: %s" % subscription_created.created)
 
 
@@ -519,7 +525,7 @@ async def _async_stream_rid_test_data(requested_flights, test_id) -> None:
     my_dss_helper = dss_rid_helper.RemoteIDOperations()
 
     logger.info("Creating a DSS ISA..")
-    my_dss_helper.create_dss_isa(flight_extents=volume_4_d, uss_base_url=uss_base_url)
+    await my_dss_helper.create_dss_isa(flight_extents=volume_4_d, uss_base_url=uss_base_url)
 
     r.expire(flight_injection_sorted_set, time=3000)
     await asyncio.sleep(2)
@@ -650,7 +656,6 @@ async def _async_check_rid_stream_conformance(session_id: str) -> None:
         return
 
     logger.info(f"RID Data stream for {session_id} is NOT OK...")
-
 
     async with async_task_session() as db:
         repo = SQLAlchemyNotificationsRepository(db)
