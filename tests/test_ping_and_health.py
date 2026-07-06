@@ -12,6 +12,22 @@ class TestHome:
         assert "<title>Flight Blender</title>" in resp.text
         assert "Your instance of Flight Blender is working" in resp.text
 
+    def test_home_automatically_connects_when_auth_bypass_is_enabled(self, fastapi_client):
+        with patch("flight_blender.api.routers.misc_api.settings") as mock_settings:
+            mock_settings.BYPASS_AUTH_TOKEN_VERIFICATION = True
+            resp = fastapi_client.get("/")
+
+        assert resp.status_code == 200
+        assert "const authBypassEnabled = true;" in resp.text
+
+    def test_home_does_not_automatically_connect_when_auth_bypass_is_disabled(self, fastapi_client):
+        with patch("flight_blender.api.routers.misc_api.settings") as mock_settings:
+            mock_settings.BYPASS_AUTH_TOKEN_VERIFICATION = False
+            resp = fastapi_client.get("/")
+
+        assert resp.status_code == 200
+        assert "const authBypassEnabled = false;" in resp.text
+
 
 class TestPing:
     def test_ping_returns_pong(self, fastapi_client):

@@ -1,48 +1,581 @@
-
-<!DOCTYPE html>
-
-
+<!doctype html>
 <html lang="en">
-
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="author" content="OpenUTM Ltd.">
-
-
-
-    <meta charset="utf-8">
-    <meta name="description" content="Flight Blender ">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        /*! chota.css v0.7.2 | MIT License | github.com/jenil/chota */:root{--bg-color:#fff;--bg-secondary-color:#f3f3f6;--color-primary:#0000CD;--color-lightGrey:#d2d6dd;--color-grey:#747681;--color-darkGrey:#3f4144;--color-error:#d43939;--color-success:#28bd14;--grid-maxWidth:120rem;--grid-gutter:2rem;--font-size:1.6rem;--font-color:#333;--font-family-sans:-apple-system,BlinkMacSystemFont,Avenir,"Avenir Next","Segoe UI","Roboto","Oxygen","Ubuntu","Cantarell","Fira Sans","Droid Sans","Helvetica Neue",sans-serif;--font-family-mono:monaco,"Consolas","Lucida Console",monospace}html{-webkit-box-sizing:border-box;box-sizing:border-box;font-size:62.5%;line-height:1.15;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}*,:after,:before{-webkit-box-sizing:inherit;box-sizing:inherit}body{background-color:var(--bg-color);line-height:1.6;font-size:var(--font-size);color:var(--font-color);font-family:Segoe UI,Helvetica Neue,sans-serif;font-family:var(--font-family-sans);margin:0;padding:0}h1,h2,h3,h4,h5,h6{font-weight:500;margin:.35em 0 .7em}h1{font-size:2em}h2{font-size:1.75em}h3{font-size:1.5em}h4{font-size:1.25em}h5{font-size:1em}h6{font-size:.85em}a{color:var(--color-primary);text-decoration:none}a:hover:not(.button){opacity:.75}button{font-family:inherit}p{margin-top:0}blockquote{background-color:var(--bg-secondary-color);padding:1.5rem 2rem;border-left:3px solid var(--color-lightGrey)}dl dt{font-weight:700}hr{background-color:var(--color-lightGrey);height:1px;margin:1rem 0}hr,table{border:none}table{width:100%;border-collapse:collapse;border-spacing:0;text-align:left}table.striped tr:nth-of-type(2n){background-color:var(--bg-secondary-color)}td,th{vertical-align:middle;padding:1.2rem .4rem}thead{border-bottom:2px solid var(--color-lightGrey)}tfoot{border-top:2px solid var(--color-lightGrey)}code,kbd,pre,samp,tt{font-family:var(--font-family-mono)}code,kbd{font-size:90%;white-space:pre-wrap;border-radius:4px;padding:.2em .4em;color:var(--color-error)}code,kbd,pre{background-color:var(--bg-secondary-color)}pre{font-size:1em;padding:1rem;overflow-x:auto}pre code{background:none;padding:0}abbr[title]{border-bottom:none;text-decoration:underline;-webkit-text-decoration:underline dotted;text-decoration:underline dotted}img{max-width:100%}fieldset{border:1px solid var(--color-lightGrey)}iframe{border:0}.container{max-width:var(--grid-maxWidth);margin:0 auto;width:96%;padding:0 calc(var(--grid-gutter)/2)}.row{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-direction:normal;-ms-flex-flow:row wrap;flex-flow:row wrap;-webkit-box-pack:start;-ms-flex-pack:start;justify-content:flex-start;margin-left:calc(var(--grid-gutter)/-2);margin-right:calc(var(--grid-gutter)/-2)}.row,.row.reverse{-webkit-box-orient:horizontal}.row.reverse{-webkit-box-direction:reverse;-ms-flex-direction:row-reverse;flex-direction:row-reverse}.col{-webkit-box-flex:1;-ms-flex:1;flex:1}.col,[class*=" col-"],[class^=col-]{margin:0 calc(var(--grid-gutter)/2) calc(var(--grid-gutter)/2)}.col-1{-ms-flex:0 0 calc(8.33333% - var(--grid-gutter));flex:0 0 calc(8.33333% - var(--grid-gutter));max-width:calc(8.33333% - var(--grid-gutter))}.col-1,.col-2{-webkit-box-flex:0}.col-2{-ms-flex:0 0 calc(16.66667% - var(--grid-gutter));flex:0 0 calc(16.66667% - var(--grid-gutter));max-width:calc(16.66667% - var(--grid-gutter))}.col-3{-ms-flex:0 0 calc(25% - var(--grid-gutter));flex:0 0 calc(25% - var(--grid-gutter));max-width:calc(25% - var(--grid-gutter))}.col-3,.col-4{-webkit-box-flex:0}.col-4{-ms-flex:0 0 calc(33.33333% - var(--grid-gutter));flex:0 0 calc(33.33333% - var(--grid-gutter));max-width:calc(33.33333% - var(--grid-gutter))}.col-5{-ms-flex:0 0 calc(41.66667% - var(--grid-gutter));flex:0 0 calc(41.66667% - var(--grid-gutter));max-width:calc(41.66667% - var(--grid-gutter))}.col-5,.col-6{-webkit-box-flex:0}.col-6{-ms-flex:0 0 calc(50% - var(--grid-gutter));flex:0 0 calc(50% - var(--grid-gutter));max-width:calc(50% - var(--grid-gutter))}.col-7{-ms-flex:0 0 calc(58.33333% - var(--grid-gutter));flex:0 0 calc(58.33333% - var(--grid-gutter));max-width:calc(58.33333% - var(--grid-gutter))}.col-7,.col-8{-webkit-box-flex:0}.col-8{-ms-flex:0 0 calc(66.66667% - var(--grid-gutter));flex:0 0 calc(66.66667% - var(--grid-gutter));max-width:calc(66.66667% - var(--grid-gutter))}.col-9{-ms-flex:0 0 calc(75% - var(--grid-gutter));flex:0 0 calc(75% - var(--grid-gutter));max-width:calc(75% - var(--grid-gutter))}.col-9,.col-10{-webkit-box-flex:0}.col-10{-ms-flex:0 0 calc(83.33333% - var(--grid-gutter));flex:0 0 calc(83.33333% - var(--grid-gutter));max-width:calc(83.33333% - var(--grid-gutter))}.col-11{-ms-flex:0 0 calc(91.66667% - var(--grid-gutter));flex:0 0 calc(91.66667% - var(--grid-gutter));max-width:calc(91.66667% - var(--grid-gutter))}.col-11,.col-12{-webkit-box-flex:0}.col-12{-ms-flex:0 0 calc(100% - var(--grid-gutter));flex:0 0 calc(100% - var(--grid-gutter));max-width:calc(100% - var(--grid-gutter))}@media screen and (max-width:599px){.container{width:100%}.col,[class*=col-],[class^=col-]{-webkit-box-flex:0;-ms-flex:0 1 100%;flex:0 1 100%;max-width:100%}}@media screen and (min-width:900px){.col-1-md{-webkit-box-flex:0;-ms-flex:0 0 calc(8.33333% - var(--grid-gutter));flex:0 0 calc(8.33333% - var(--grid-gutter));max-width:calc(8.33333% - var(--grid-gutter))}.col-2-md{-webkit-box-flex:0;-ms-flex:0 0 calc(16.66667% - var(--grid-gutter));flex:0 0 calc(16.66667% - var(--grid-gutter));max-width:calc(16.66667% - var(--grid-gutter))}.col-3-md{-webkit-box-flex:0;-ms-flex:0 0 calc(25% - var(--grid-gutter));flex:0 0 calc(25% - var(--grid-gutter));max-width:calc(25% - var(--grid-gutter))}.col-4-md{-webkit-box-flex:0;-ms-flex:0 0 calc(33.33333% - var(--grid-gutter));flex:0 0 calc(33.33333% - var(--grid-gutter));max-width:calc(33.33333% - var(--grid-gutter))}.col-5-md{-webkit-box-flex:0;-ms-flex:0 0 calc(41.66667% - var(--grid-gutter));flex:0 0 calc(41.66667% - var(--grid-gutter));max-width:calc(41.66667% - var(--grid-gutter))}.col-6-md{-webkit-box-flex:0;-ms-flex:0 0 calc(50% - var(--grid-gutter));flex:0 0 calc(50% - var(--grid-gutter));max-width:calc(50% - var(--grid-gutter))}.col-7-md{-webkit-box-flex:0;-ms-flex:0 0 calc(58.33333% - var(--grid-gutter));flex:0 0 calc(58.33333% - var(--grid-gutter));max-width:calc(58.33333% - var(--grid-gutter))}.col-8-md{-webkit-box-flex:0;-ms-flex:0 0 calc(66.66667% - var(--grid-gutter));flex:0 0 calc(66.66667% - var(--grid-gutter));max-width:calc(66.66667% - var(--grid-gutter))}.col-9-md{-webkit-box-flex:0;-ms-flex:0 0 calc(75% - var(--grid-gutter));flex:0 0 calc(75% - var(--grid-gutter));max-width:calc(75% - var(--grid-gutter))}.col-10-md{-webkit-box-flex:0;-ms-flex:0 0 calc(83.33333% - var(--grid-gutter));flex:0 0 calc(83.33333% - var(--grid-gutter));max-width:calc(83.33333% - var(--grid-gutter))}.col-11-md{-webkit-box-flex:0;-ms-flex:0 0 calc(91.66667% - var(--grid-gutter));flex:0 0 calc(91.66667% - var(--grid-gutter));max-width:calc(91.66667% - var(--grid-gutter))}.col-12-md{-webkit-box-flex:0;-ms-flex:0 0 calc(100% - var(--grid-gutter));flex:0 0 calc(100% - var(--grid-gutter));max-width:calc(100% - var(--grid-gutter))}}@media screen and (min-width:1200px){.col-1-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(8.33333% - var(--grid-gutter));flex:0 0 calc(8.33333% - var(--grid-gutter));max-width:calc(8.33333% - var(--grid-gutter))}.col-2-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(16.66667% - var(--grid-gutter));flex:0 0 calc(16.66667% - var(--grid-gutter));max-width:calc(16.66667% - var(--grid-gutter))}.col-3-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(25% - var(--grid-gutter));flex:0 0 calc(25% - var(--grid-gutter));max-width:calc(25% - var(--grid-gutter))}.col-4-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(33.33333% - var(--grid-gutter));flex:0 0 calc(33.33333% - var(--grid-gutter));max-width:calc(33.33333% - var(--grid-gutter))}.col-5-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(41.66667% - var(--grid-gutter));flex:0 0 calc(41.66667% - var(--grid-gutter));max-width:calc(41.66667% - var(--grid-gutter))}.col-6-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(50% - var(--grid-gutter));flex:0 0 calc(50% - var(--grid-gutter));max-width:calc(50% - var(--grid-gutter))}.col-7-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(58.33333% - var(--grid-gutter));flex:0 0 calc(58.33333% - var(--grid-gutter));max-width:calc(58.33333% - var(--grid-gutter))}.col-8-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(66.66667% - var(--grid-gutter));flex:0 0 calc(66.66667% - var(--grid-gutter));max-width:calc(66.66667% - var(--grid-gutter))}.col-9-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(75% - var(--grid-gutter));flex:0 0 calc(75% - var(--grid-gutter));max-width:calc(75% - var(--grid-gutter))}.col-10-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(83.33333% - var(--grid-gutter));flex:0 0 calc(83.33333% - var(--grid-gutter));max-width:calc(83.33333% - var(--grid-gutter))}.col-11-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(91.66667% - var(--grid-gutter));flex:0 0 calc(91.66667% - var(--grid-gutter));max-width:calc(91.66667% - var(--grid-gutter))}.col-12-lg{-webkit-box-flex:0;-ms-flex:0 0 calc(100% - var(--grid-gutter));flex:0 0 calc(100% - var(--grid-gutter));max-width:calc(100% - var(--grid-gutter))}}fieldset{padding:.5rem 2rem}legend{text-transform:uppercase;font-size:.8em;letter-spacing:.1rem}input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=color]):not([type=button]):not([type=reset]),select,textarea,textarea[type=text]{font-family:inherit;padding:.8rem 1rem;border-radius:4px;border:1px solid var(--color-lightGrey);font-size:1em;-webkit-transition:all .2s ease;transition:all .2s ease;display:block;width:100%}input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=color]):not([type=button]):not([type=reset]):not(:disabled):hover,select:hover,textarea:hover,textarea[type=text]:hover{border-color:var(--color-grey)}input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=color]):not([type=button]):not([type=reset]):focus,select:focus,textarea:focus,textarea[type=text]:focus{outline:none;border-color:var(--color-primary);-webkit-box-shadow:0 0 1px var(--color-primary);box-shadow:0 0 1px var(--color-primary)}input.error:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=color]):not([type=button]):not([type=reset]),textarea.error{border-color:var(--color-error)}input.success:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=color]):not([type=button]):not([type=reset]),textarea.success{border-color:var(--color-success)}select{-webkit-appearance:none;background:#f3f3f6 no-repeat 100%;background-size:1ex;background-origin:content-box;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='60' height='40' fill='%23555'><polygon points='0,0 60,0 30,40'/></svg>")}[type=checkbox],[type=radio]{width:1.6rem;height:1.6rem}.button,[type=button],[type=reset],[type=submit],button{padding:1rem 2.5rem;color:var(--color-darkGrey);background:var(--color-lightGrey);border-radius:4px;border:1px solid transparent;font-size:var(--font-size);line-height:1;text-align:center;-webkit-transition:opacity .2s ease;transition:opacity .2s ease;text-decoration:none;-webkit-transform:scale(1);transform:scale(1);display:inline-block;cursor:pointer}.grouped{display:-webkit-box;display:-ms-flexbox;display:flex}.grouped>:not(:last-child){margin-right:16px}.grouped.gapless>*{margin:0 0 0 -1px!important;border-radius:0!important}.grouped.gapless>:first-child{margin:0!important;border-radius:4px 0 0 4px!important}.grouped.gapless>:last-child{border-radius:0 4px 4px 0!important}.button+.button{margin-left:1rem}.button:hover,[type=button]:hover,[type=reset]:hover,[type=submit]:hover,button:hover{opacity:.8}.button:active,[type=button]:active,[type=reset]:active,[type=submit]:active,button:active{-webkit-transform:scale(.98);transform:scale(.98)}button:disabled,button:disabled:hover,input:disabled,input:disabled:hover{opacity:.4;cursor:not-allowed}.button.dark,.button.error,.button.primary,.button.secondary,.button.success,[type=submit]{color:#fff;z-index:1;background-color:#000;background-color:var(--color-primary)}.button.secondary{background-color:var(--color-grey)}.button.dark{background-color:var(--color-darkGrey)}.button.error{background-color:var(--color-error)}.button.success{background-color:var(--color-success)}.button.outline{background-color:transparent;border-color:var(--color-lightGrey)}.button.outline.primary{border-color:var(--color-primary);color:var(--color-primary)}.button.outline.secondary{border-color:var(--color-grey);color:var(--color-grey)}.button.outline.dark{border-color:var(--color-darkGrey);color:var(--color-darkGrey)}.button.clear{background-color:transparent;border-color:transparent;color:var(--color-primary)}.button.icon{display:-webkit-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center}.button.icon>img{margin-left:2px}.button.icon-only{padding:1rem}::-webkit-input-placeholder{color:#bdbfc4}::-moz-placeholder{color:#bdbfc4}:-ms-input-placeholder{color:#bdbfc4}::-ms-input-placeholder{color:#bdbfc4}::placeholder{color:#bdbfc4}.nav{display:-webkit-box;display:-ms-flexbox;display:flex;min-height:5rem;-webkit-box-align:stretch;-ms-flex-align:stretch;align-items:stretch}.nav img{max-height:3rem}.nav-center,.nav-left,.nav-right,.nav>.container{display:-webkit-box;display:-ms-flexbox;display:flex}.nav-center,.nav-left,.nav-right{-webkit-box-flex:1;-ms-flex:1;flex:1}.nav-left{-webkit-box-pack:start;-ms-flex-pack:start;justify-content:flex-start}.nav-right{-webkit-box-pack:end;-ms-flex-pack:end;justify-content:flex-end}.nav-center{-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center}@media screen and (max-width:480px){.nav,.nav>.container{-webkit-box-orient:vertical;-webkit-box-direction:normal;-ms-flex-direction:column;flex-direction:column}.nav-center,.nav-left,.nav-right{-ms-flex-wrap:wrap;flex-wrap:wrap;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center}}.nav .brand,.nav a{text-decoration:none;display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;padding:1rem 2rem;color:var(--color-darkGrey)}.nav .active:not(.button){color:#000;color:var(--color-primary)}.nav .brand{font-size:1.75em;padding-top:0;padding-bottom:0}.nav .brand img{padding-right:1rem}.nav .button{margin:auto 1rem}.card{padding:1rem 2rem;border-radius:4px;background:var(--bg-color);-webkit-box-shadow:0 1px 3px var(--color-grey);box-shadow:0 1px 3px var(--color-grey)}.card p:last-child{margin:0}.card header>*{margin-top:0;margin-bottom:1rem}.tabs{display:-webkit-box;display:-ms-flexbox;display:flex}.tabs a{text-decoration:none}.tabs>.dropdown>summary,.tabs>a{padding:1rem 2rem;-webkit-box-flex:0;-ms-flex:0 1 auto;flex:0 1 auto;color:var(--color-darkGrey);border-bottom:2px solid var(--color-lightGrey);text-align:center}.tabs>a.active,.tabs>a:hover{opacity:1;border-bottom:2px solid var(--color-darkGrey)}.tabs>a.active{border-color:var(--color-primary)}.tabs.is-full a{-webkit-box-flex:1;-ms-flex:1 1 auto;flex:1 1 auto}.tag{display:inline-block;border:1px solid var(--color-lightGrey);text-transform:uppercase;color:var(--color-grey);padding:.5rem;line-height:1;letter-spacing:.5px}.tag.is-small{padding:.4rem;font-size:.75em}.tag.is-large{padding:.7rem;font-size:1.125em}.tag+.tag{margin-left:1rem}details.dropdown{position:relative;display:inline-block}details.dropdown>:last-child{position:absolute;left:0;white-space:nowrap}.bg-primary{background-color:var(--color-primary)!important}.bg-light{background-color:var(--color-lightGrey)!important}.bg-dark{background-color:var(--color-darkGrey)!important}.bg-grey{background-color:var(--color-grey)!important}.bg-error{background-color:var(--color-error)!important}.bg-success{background-color:var(--color-success)!important}.bd-primary{border:1px solid var(--color-primary)!important}.bd-light{border:1px solid var(--color-lightGrey)!important}.bd-dark{border:1px solid var(--color-darkGrey)!important}.bd-grey{border:1px solid var(--color-grey)!important}.bd-error{border:1px solid var(--color-error)!important}.bd-success{border:1px solid var(--color-success)!important}.text-primary{color:var(--color-primary)!important}.text-light{color:var(--color-lightGrey)!important}.text-dark{color:var(--color-darkGrey)!important}.text-grey{color:var(--color-grey)!important}.text-error{color:var(--color-error)!important}.text-success{color:var(--color-success)!important}.text-white{color:#fff!important}.pull-right{float:right!important}.pull-left{float:left!important}.text-center{text-align:center}.text-left{text-align:left}.text-right{text-align:right}.text-justify{text-align:justify}.text-uppercase{text-transform:uppercase}.text-lowercase{text-transform:lowercase}.text-capitalize{text-transform:capitalize}.is-full-screen{width:100%;min-height:100vh}.is-full-width{width:100%!important}.is-vertical-align{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center}.is-center,.is-horizontal-align{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center}.is-center{-webkit-box-align:center;-ms-flex-align:center;align-items:center}.is-right{-webkit-box-pack:end;-ms-flex-pack:end;justify-content:flex-end}.is-left,.is-right{display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center}.is-left{-webkit-box-pack:start;-ms-flex-pack:start;justify-content:flex-start}.is-fixed{position:fixed;width:100%}.is-paddingless{padding:0!important}.is-marginless{margin:0!important}.is-pointer{cursor:pointer!important}.is-rounded{border-radius:100%}.clearfix{content:"";display:table;clear:both}.is-hidden{display:none!important}@media screen and (max-width:599px){.hide-xs{display:none!important}}@media screen and (min-width:600px) and (max-width:899px){.hide-sm{display:none!important}}@media screen and (min-width:900px) and (max-width:1199px){.hide-md{display:none!important}}@media screen and (min-width:1200px){.hide-lg{display:none!important}}@media print{.hide-pr{display:none!important}}
-    </style>
-    <title>Flight Blender</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Flight Blender operations dashboard">
+  <meta name="theme-color" content="#08111f">
+  <title>Flight Blender</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f5f7fa; --muted: #8b98aa; --muted-2: #5d6b7e;
+      --bg: #07101d; --panel: #0c1726; --panel-2: #101d2d; --line: #1b2a3c;
+      --cyan: #4ee8c8; --blue: #65a8ff; --amber: #ffbd66; --red: #ff7185;
+      --shadow: 0 18px 60px rgba(0,0,0,.28); --radius: 18px;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body { margin: 0; min-width: 320px; color: var(--ink); background: radial-gradient(circle at 48% -10%, #122b42 0, transparent 34rem), var(--bg); }
+    button, input { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    a { color: inherit; text-decoration: none; }
+    button { color: inherit; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+    .shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
+    .sidebar { position: sticky; top: 0; height: 100vh; padding: 26px 20px; border-right: 1px solid var(--line); background: rgba(7,16,29,.78); backdrop-filter: blur(18px); display: flex; flex-direction: column; z-index: 5; }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 28px; font-weight: 760; letter-spacing: -.02em; }
+    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; color: #07101d; background: var(--cyan); box-shadow: 0 0 28px rgba(78,232,200,.2); }
+    .brand-mark svg { width: 20px; }
+    .version { margin-left: auto; color: var(--muted-2); font: 600 10px/1 ui-monospace, monospace; }
+    .nav-label { margin: 8px 10px; color: var(--muted-2); font-size: 10px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    .nav { display: grid; gap: 5px; }
+    .nav a { display: flex; align-items: center; gap: 12px; min-height: 43px; padding: 0 12px; border-radius: 11px; color: var(--muted); font-size: 13px; font-weight: 600; transition: .18s ease; }
+    .nav a:hover { color: var(--ink); background: #111e2f; }
+    .nav a.active { color: var(--ink); background: #142437; box-shadow: inset 3px 0 var(--cyan); }
+    .nav svg { width: 18px; color: currentColor; }
+    .sidebar-foot { margin-top: auto; }
+    .instance-card { padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #0b1624; }
+    .instance-card small { display: block; color: var(--muted-2); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .instance-card strong { display: block; margin-top: 7px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+    .instance-state { display: flex; align-items: center; gap: 7px; margin-top: 11px; color: var(--muted); font-size: 11px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted-2); }
+    .dot.online { background: var(--cyan); box-shadow: 0 0 0 4px rgba(78,232,200,.1); }
+    main { min-width: 0; padding: 0 34px 38px; }
+    .topbar { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
+    .eyebrow { color: var(--muted-2); font-size: 10px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 5px 0 0; font-size: 20px; letter-spacing: -.035em; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .sync { color: var(--muted); font-size: 11px; margin-right: 6px; }
+    .btn { min-height: 39px; padding: 0 15px; border: 1px solid var(--line); border-radius: 10px; background: #0e1a2a; cursor: pointer; font-size: 12px; font-weight: 700; transition: .18s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn:hover { border-color: #38506b; transform: translateY(-1px); }
+    .btn.primary { color: #06111b; border-color: var(--cyan); background: var(--cyan); }
+    .btn svg { width: 15px; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 26px 0 20px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(12,23,38,.84); box-shadow: var(--shadow); overflow: hidden; }
+    .stats[hidden], .content[hidden] { display: none; }
+    .stat { min-height: 112px; padding: 22px; border-right: 1px solid var(--line); }
+    .stat:last-child { border: 0; }
+    .stat-label { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; font-weight: 650; }
+    .stat-label svg { width: 17px; color: var(--muted-2); }
+    .stat-value { margin-top: 13px; font-size: 27px; font-weight: 720; letter-spacing: -.045em; }
+    .stat-value small { color: var(--muted-2); font-size: 11px; font-weight: 600; letter-spacing: 0; }
+    .trend { margin-top: 4px; color: var(--muted-2); font-size: 10px; }
+    .trend.good { color: var(--cyan); }
+    .content { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(285px, .8fr); gap: 20px; }
+    .content.airspace-mode { display: block; }
+    .content.airspace-mode #airspace { width: 100%; }
+    .content.airspace-mode #airspace .map-wrap { height: calc(100vh - 178px); min-height: 620px; }
+    .content.airspace-mode .side-stack, .content.airspace-mode .activity { display: none; }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius); background: rgba(12,23,38,.9); box-shadow: var(--shadow); overflow: hidden; }
+    .panel-head { min-height: 70px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; border-bottom: 1px solid var(--line); }
+    .panel-title h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+    .panel-title p { margin: 5px 0 0; color: var(--muted-2); font-size: 10px; }
+    .map-wrap { position: relative; height: 430px; overflow: hidden; background: #081421; }
+    .map { position: absolute; inset: 0; z-index: 0; background: #091725; }
+    .map .leaflet-tile-pane { filter: brightness(.68) saturate(.72) hue-rotate(165deg); }
+    .map .leaflet-control-zoom a { color: var(--ink); border-color: var(--line); background: rgba(7,16,29,.92); }
+    .map .leaflet-control-zoom a:hover { background: #142437; }
+    .map .leaflet-control-attribution { color: var(--muted-2); background: rgba(7,16,29,.78); }
+    .map .leaflet-control-attribution a { color: var(--blue); }
+    .map .leaflet-control-layers { color: var(--ink); border: 1px solid var(--line); background: rgba(7,16,29,.92); }
+    .map .leaflet-control-layers label { margin: 0; color: var(--muted); font-size: 10px; }
+    .map .leaflet-popup-content-wrapper, .map .leaflet-popup-tip { color: var(--ink); background: #0c1726; }
+    .map .leaflet-popup-content { margin: 13px 15px; font-size: 11px; line-height: 1.55; }
+    .map .leaflet-popup-content strong { display: block; margin-bottom: 3px; color: var(--amber); }
+    .map .leaflet-popup-content span { color: var(--muted); }
+    .aircraft-marker { background: transparent; border: 0; }
+    .aircraft { position: relative; width: 31px; height: 31px; border: 1px solid rgba(78,232,200,.5); border-radius: 50%; background: rgba(7,35,39,.88); color: var(--cyan); display: grid; place-items: center; filter: drop-shadow(0 0 8px rgba(78,232,200,.45)); }
+    .aircraft svg { width: 15px; transform: rotate(var(--track, 30deg)); }
+    .aircraft span { position: absolute; left: 35px; padding: 4px 6px; color: #c4d4e5; background: rgba(6,14,25,.84); border-radius: 4px; font: 600 9px/1 ui-monospace, monospace; white-space: nowrap; }
+    .empty-map { position: absolute; inset: 0; z-index: 400; display: grid; place-content: center; text-align: center; pointer-events: none; }
+    .empty-icon { width: 48px; height: 48px; margin: auto; border: 1px solid #24394e; border-radius: 50%; display: grid; place-items: center; color: var(--muted-2); background: rgba(8,20,33,.8); }
+    .empty-icon svg { width: 20px; }
+    .empty-map strong { margin-top: 13px; font-size: 12px; }
+    .empty-map span { max-width: 230px; margin-top: 5px; color: var(--muted-2); font-size: 10px; line-height: 1.5; }
+    .map-meta { position: absolute; z-index: 500; left: 16px; bottom: 28px; right: 16px; display: flex; justify-content: space-between; align-items: end; pointer-events: none; }
+    .coordinates { padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: rgba(7,16,29,.86); font: 500 9px/1 ui-monospace, monospace; }
+    .live-pill { display: flex; gap: 7px; align-items: center; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: rgba(7,16,29,.86); font-size: 9px; font-weight: 700; }
+    .side-stack { display: grid; gap: 20px; align-content: start; }
+    .service-list { padding: 6px 18px 14px; }
+    .service { display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 11px; min-height: 54px; border-bottom: 1px solid rgba(27,42,60,.7); }
+    .service:last-child { border: 0; }
+    .service strong { display: block; font-size: 11px; }
+    .service small { color: var(--muted-2); font-size: 9px; }
+    .status-text { color: var(--muted); font: 600 9px/1 ui-monospace, monospace; text-transform: uppercase; }
+    .quick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px; }
+    .quick { min-height: 92px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #0d1928; transition: .18s ease; }
+    .quick:hover { border-color: #365069; transform: translateY(-2px); }
+    .quick svg { width: 18px; color: var(--blue); }
+    .quick strong { display: block; margin-top: 11px; font-size: 10px; }
+    .quick span { display: block; margin-top: 3px; color: var(--muted-2); font-size: 8px; }
+    .workspace { margin-top: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow); overflow: hidden; }
+    .workspace[hidden] { display: none; }
+    .workspace-bar { min-height: 58px; padding: 0 14px 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 15px; color: var(--ink); background: #0c1726; border-bottom: 1px solid var(--line); }
+    .workspace-title strong { display: block; font-size: 12px; }
+    .workspace-title span { display: block; margin-top: 3px; color: var(--muted-2); font-size: 9px; }
+    .workspace-actions { display: flex; gap: 8px; }
+    .workspace-frame { display: block; width: 100%; height: calc(100vh - 193px); min-height: 620px; border: 0; background: #fff; }
+    .activity { grid-column: 1 / -1; }
+    .events { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .event { min-height: 91px; padding: 19px 20px; border-right: 1px solid var(--line); display: grid; grid-template-columns: 28px 1fr; gap: 11px; }
+    .event:last-child { border: 0; }
+    .event-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: var(--cyan); background: rgba(78,232,200,.08); }
+    .event-icon svg { width: 14px; }
+    .event strong { display: block; font-size: 10px; }
+    .event p { margin: 5px 0 0; color: var(--muted-2); font-size: 9px; line-height: 1.45; }
+    dialog { width: min(500px, calc(100% - 28px)); padding: 0; border: 1px solid #263a50; border-radius: 18px; color: var(--ink); background: #0c1726; box-shadow: 0 30px 90px #000; }
+    dialog::backdrop { background: rgba(2,8,15,.78); backdrop-filter: blur(5px); }
+    .dialog-head { padding: 22px 24px; border-bottom: 1px solid var(--line); }
+    .dialog-head h2 { margin: 0; font-size: 16px; }
+    .dialog-head p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .dialog-body { padding: 21px 24px; }
+    label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 10px; font-weight: 700; }
+    input { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; outline: none; color: var(--ink); background: #081421; font: 500 11px ui-monospace, monospace; }
+    input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(78,232,200,.08); }
+    .field + .field { margin-top: 17px; }
+    .hint { margin: 7px 0 0; color: var(--muted-2); font-size: 9px; line-height: 1.5; }
+    .dialog-actions { padding: 16px 24px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+    .mobile-menu { display: none; }
+    @media (max-width: 1050px) { .shell { grid-template-columns: 76px minmax(0,1fr); } .sidebar { padding: 25px 14px; } .brand { padding-left: 7px; } .brand-name, .version, .nav-label, .nav span, .instance-card { display: none; } .nav a { justify-content: center; padding: 0; } .content { grid-template-columns: 1fr; } .side-stack { grid-template-columns: 1fr 1fr; } .activity { grid-column: auto; } }
+    @media (max-width: 720px) { .shell { display: block; } .sidebar { display: none; } main { padding: 0 16px 25px; } .topbar { min-height: 70px; } .mobile-menu { display: grid; width: 39px; height: 39px; place-items: center; padding: 0; } .mobile-menu svg { width: 18px; } .sync { display: none; } .stats { grid-template-columns: 1fr 1fr; } .stat { min-height: 101px; border-bottom: 1px solid var(--line); } .stat:nth-child(2) { border-right: 0; } .stat:nth-child(n+3) { border-bottom: 0; } .content, .side-stack { display: grid; grid-template-columns: 1fr; } .map-wrap { height: 380px; } .events { grid-template-columns: 1fr; } .event { border-right: 0; border-bottom: 1px solid var(--line); } }
+    @media (max-width: 430px) { h1 { font-size: 17px; } .top-actions .btn:not(.mobile-menu) { width: 39px; padding: 0; } .top-actions .btn span { display: none; } .stat { padding: 17px; } .stat-value { font-size: 23px; } .map-wrap { height: 340px; } }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
 </head>
-
-<div class="container">
-    <div class="row">
-        <div class="col-6">
-            <img alt="Logo" src="https://flightblender.com/images/blender-logo.jpg" width="400px">
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            <p><b>Congratulations!</b> Your instance of Flight Blender is working! What next? </p>
-            <ul>
-                <li>Check the <a href="/ping">Ping</a> status</li>
-                <li>Review the <a href="https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/openutm/flight-blender/refs/heads/master/api/flight-blender-server-1.0.0-resolved.yaml">API documentation</a>.</li>
-            </ul>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            &copy; OpenUTM Ltd. see <a href="https://github.com/openutm">Github</a> for more details.
-        </div>
-    </div>
-</div>
 <body>
+  <p class="sr-only">Your instance of Flight Blender is working</p>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Flight Blender home">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="m4 15 8-11 8 11-8 5-8-5Z" stroke="currentColor" stroke-width="2"/><path d="m8 13 4 2.5 4-2.5" stroke="currentColor" stroke-width="2"/></svg></span>
+        <span class="brand-name">Flight Blender</span><span class="version">UTM</span>
+      </a>
+      <div class="nav-label">Workspace</div>
+      <nav class="nav" aria-label="Primary navigation">
+        <a class="active" href="/" aria-current="page" data-dashboard-view="overview"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z" stroke="currentColor" stroke-width="1.7"/></svg><span>Overview</span></a>
+        <a href="#airspace" data-dashboard-view="airspace"><svg viewBox="0 0 24 24" fill="none"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15" stroke="currentColor" stroke-width="1.7"/></svg><span>Live airspace</span></a>
+        <a href="/docs" data-workspace="API explorer"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3h11l3 3v15H5V3Zm10 0v4h4M8 11h8M8 15h8" stroke="currentColor" stroke-width="1.7"/></svg><span>API explorer</span></a>
+        <a href="/redoc" data-workspace="API reference"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Zm0 0v16M8 7h8M8 11h6" stroke="currentColor" stroke-width="1.7"/></svg><span>Reference</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="instance-card"><small>Connected instance</small><strong id="instanceHost">localhost</strong><div class="instance-state"><i class="dot" id="instanceDot"></i><span id="instanceState">Checking service</span></div></div>
+      </div>
+    </aside>
 
+    <main>
+      <header class="topbar">
+        <div><div class="eyebrow">Operations center</div><h1 id="pageTitle">Airspace overview</h1></div>
+        <div class="top-actions">
+          <span class="sync" id="syncLabel">Connecting…</span>
+          <button class="btn mobile-menu" aria-label="Open API documentation" data-workspace-path="/docs" data-workspace-title="API explorer"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2"/></svg></button>
+          <button class="btn" id="refreshButton"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6v5h-5M4 18v-5h5M6.1 9A7 7 0 0 1 18.4 6.6L20 11M4 13l1.6 4.4A7 7 0 0 0 17.9 15" stroke="currentColor" stroke-width="1.8"/></svg><span>Refresh</span></button>
+          <button class="btn primary" id="connectButton"><svg viewBox="0 0 24 24" fill="none"><path d="M7 11V8a5 5 0 0 1 10 0v3m-11 0h12v10H6V11Z" stroke="currentColor" stroke-width="1.8"/></svg><span>Connect data</span></button>
+        </div>
+      </header>
+
+      <section class="workspace" id="workspace" hidden aria-label="Embedded API documentation">
+        <div class="workspace-bar">
+          <div class="workspace-title"><strong id="workspaceTitle">API explorer</strong><span>Flight Blender developer tools</span></div>
+          <div class="workspace-actions"><a class="btn" id="workspaceExternal" href="/docs" target="_blank" rel="noopener">Open full page</a><button class="btn primary" id="workspaceClose">Back to dashboard</button></div>
+        </div>
+        <iframe class="workspace-frame" id="workspaceFrame" title="Flight Blender API documentation"></iframe>
+      </section>
+
+      <section class="stats" aria-label="System metrics">
+        <article class="stat"><div class="stat-label"><span>Active flights</span><svg viewBox="0 0 24 24" fill="none"><path d="m3 14 8-3V5l2-2 2 2v6l6 3v2l-6-1v4l2 1v1l-4-1-4 1v-1l2-1v-4l-8 1v-2Z" stroke="currentColor" stroke-width="1.5"/></svg></div><div class="stat-value" id="flightCount">—</div><div class="trend" id="flightTrend">Connect to live RID data</div></article>
+        <article class="stat"><div class="stat-label"><span>API latency</span><svg viewBox="0 0 24 24" fill="none"><path d="M4 14a8 8 0 1 1 16 0M12 14l4-4M7 18h10" stroke="currentColor" stroke-width="1.7"/></svg></div><div class="stat-value"><span id="latency">—</span> <small>ms</small></div><div class="trend" id="latencyTrend">Measuring round trip</div></article>
+        <article class="stat"><div class="stat-label"><span>Server status</span><svg viewBox="0 0 24 24" fill="none"><path d="M5 5h14v5H5V5Zm0 9h14v5H5v-5Zm3-6h.01M8 17h.01" stroke="currentColor" stroke-width="1.7"/></svg></div><div class="stat-value" id="serverStatus">Checking</div><div class="trend" id="serverTrend">Waiting for heartbeat</div></article>
+        <article class="stat"><div class="stat-label"><span>Dashboard session</span><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.7"/></svg></div><div class="stat-value" id="uptime">00:00</div><div class="trend good">Monitoring continuously</div></article>
+      </section>
+
+      <div class="content">
+        <section class="panel" id="airspace">
+          <div class="panel-head"><div class="panel-title"><h2>Live airspace</h2><p id="mapSubtitle">Remote ID traffic and reserved zones in the viewport</p></div><button class="btn" id="viewportButton">Set viewport</button></div>
+          <div class="map-wrap">
+            <div class="map" id="map" aria-label="Interactive live airspace map"></div>
+            <div class="empty-map" id="emptyMap"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none"><path d="m3 14 8-3V5l2-2 2 2v6l6 3v2l-6-1v4l2 1v1l-4-1-4 1v-1l2-1v-4l-8 1v-2Z" stroke="currentColor" stroke-width="1.5"/></svg></div><strong>Live traffic is protected</strong><span>Add a bearer token with the RID display scope to track current flights.</span></div>
+            <div class="map-meta"><span class="coordinates" id="coordinates">47.490,19.040 · 47.530,19.090</span><span class="live-pill"><i class="dot" id="mapDot"></i><span id="mapState">STANDBY</span></span></div>
+          </div>
+        </section>
+
+        <div class="side-stack">
+          <section class="panel">
+            <div class="panel-head"><div class="panel-title"><h2>Service health</h2><p>Core UTM capabilities</p></div><span class="status-text" id="serviceSummary">Checking</span></div>
+            <div class="service-list">
+              <div class="service"><i class="dot" id="apiDot"></i><div><strong>API gateway</strong><small>HTTP request handling</small></div><span class="status-text" id="apiStatus">Checking</span></div>
+              <div class="service"><i class="dot" id="ridDot"></i><div><strong>Remote ID</strong><small>ASTM F3411 display provider</small></div><span class="status-text" id="ridStatus">Locked</span></div>
+              <div class="service"><i class="dot" id="scdDot"></i><div><strong>Conformance monitoring</strong><small>Operational status</small></div><span class="status-text" id="scdStatus">Locked</span></div>
+              <div class="service"><i class="dot" id="geoDot"></i><div><strong>Geo-awareness</strong><small>SQL-backed geozones</small></div><span class="status-text" id="geoStatus">Locked</span></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><div class="panel-title"><h2>OpenUTM tools</h2><p>Explore this instance</p></div></div>
+            <div class="quick-grid">
+              <a class="quick" href="/docs" data-workspace="API explorer"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3h11l3 3v15H5V3Zm10 0v4h4M8 11h8M8 15h6" stroke="currentColor" stroke-width="1.7"/></svg><strong>API explorer</strong><span>Interactive OpenAPI</span></a>
+              <a class="quick" href="/redoc" data-workspace="API reference"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" stroke="currentColor" stroke-width="1.7"/></svg><strong>Reference</strong><span>Endpoint documentation</span></a>
+              <a class="quick" href="/rid/capabilities"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v4l3 2" stroke="currentColor" stroke-width="1.7"/></svg><strong>Remote ID</strong><span>Provider capabilities</span></a>
+              <a class="quick" href="/signing_public_key"><svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.7"/><path d="m11 12 8-8m-3 3 2 2m-5 1 2 2" stroke="currentColor" stroke-width="1.7"/></svg><strong>Public keys</strong><span>Signing configuration</span></a>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel activity">
+          <div class="panel-head"><div class="panel-title"><h2>System activity</h2><p>Signals observed by this dashboard</p></div><span class="status-text">Live session</span></div>
+          <div class="events" id="events">
+            <article class="event"><div class="event-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M5 5h14v5H5V5Zm0 9h14v5H5v-5Z" stroke="currentColor" stroke-width="1.7"/></svg></div><div><strong>Dashboard initialized</strong><p>Waiting for the first service heartbeat.</p></div></article>
+            <article class="event"><div class="event-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v4m0 4h.01M4 20h16L12 4 4 20Z" stroke="currentColor" stroke-width="1.7"/></svg></div><div><strong id="accessEventTitle">Operational data locked</strong><p id="accessEventDetail">Connect credentials to query protected services.</p></div></article>
+            <article class="event"><div class="event-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h4l2-5 4 10 2-5h4" stroke="currentColor" stroke-width="1.7"/></svg></div><div><strong>Health monitor active</strong><p>Automatic refresh runs every 15 seconds.</p></div></article>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="connectionDialog">
+    <form method="dialog" id="connectionForm">
+      <div class="dialog-head"><h2>Connect operational data</h2><p>Use a JWT with <code>rid.display_provider</code> to load current flights. The token stays in memory and is cleared when this page closes.</p></div>
+      <div class="dialog-body">
+        <div class="field"><label for="tokenInput">Bearer token</label><input id="tokenInput" type="password" autocomplete="off" placeholder="eyJhbGciOi…"><p class="hint">Credentials are sent only to this Flight Blender instance.</p></div>
+        <div class="field"><label for="viewportInput">Viewport · lat1,lng1,lat2,lng2</label><input id="viewportInput" value="47.490,19.040,47.530,19.090" inputmode="decimal"><p class="hint">The viewport diagonal must be no greater than 7.1 km.</p></div>
+      </div>
+      <div class="dialog-actions"><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="connect" id="saveConnection">Connect live data</button></div>
+    </form>
+  </dialog>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const started = Date.now();
+      const authBypassEnabled = {{ auth_bypass_enabled | tojson }};
+      const localBypassToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkdW1teSIsImF1ZCI6ImxvY2FsaG9zdCIsInNjb3BlIjoicmlkLmRpc3BsYXlfcHJvdmlkZXIgZmxpZ2h0YmxlbmRlci5yZWFkIn0.2X3X1-gIzbajm2q8rHuesel9XgBPtmyYCE_rNoynAaw";
+      let token = authBypassEnabled ? localBypassToken : "";
+      let viewport = [47.490, 19.040, 47.530, 19.090];
+      let refreshing = false;
+      let mapRefreshTimer;
+      let visibleFlightCount = 0;
+      let visibleZoneCount = 0;
+      let visibleDeclarationCount = 0;
+      let visibleIntentCount = 0;
+      let activeDashboardView = location.hash === "#airspace" ? "airspace" : "overview";
+
+      const map = L.map("map", {zoomControl: true, attributionControl: true});
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(map);
+      const flightLayer = L.layerGroup().addTo(map);
+      const reservedZoneLayer = L.layerGroup().addTo(map);
+      const declarationLayer = L.layerGroup().addTo(map);
+      const operationalIntentLayer = L.layerGroup().addTo(map);
+      L.control.layers(null, {
+        "Live flights": flightLayer,
+        "Reserved zones": reservedZoneLayer,
+        "Flight declarations": declarationLayer,
+        "Operational intents": operationalIntentLayer
+      }, {collapsed: false}).addTo(map);
+      map.setView([(viewport[0] + viewport[2]) / 2, (viewport[1] + viewport[3]) / 2], 14);
+
+      $("instanceHost").textContent = location.host;
+      function setDot(id, state) { $(id).className = "dot" + (state === "online" ? " online" : ""); }
+      function elapsed() { const s = Math.floor((Date.now() - started) / 1000); $("uptime").textContent = String(Math.floor(s / 60)).padStart(2,"0") + ":" + String(s % 60).padStart(2,"0"); }
+      function clock() { return new Intl.DateTimeFormat([], {hour:"2-digit", minute:"2-digit", second:"2-digit"}).format(new Date()); }
+      function normalizeToken(value) { return value.trim().replace(/^Bearer\s+/i, ""); }
+      function escapeHTML(value) {
+        return String(value).replace(/[&<>'"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
+      }
+      function authHeaders() { return token ? {Authorization: "Bearer " + token} : {}; }
+      function updateViewportDisplay() {
+        $("coordinates").textContent = viewport.slice(0,2).map(v=>v.toFixed(3)).join(",") + " · " + viewport.slice(2).map(v=>v.toFixed(3)).join(",");
+        $("viewportInput").value = viewport.map(v=>v.toFixed(6)).join(",");
+      }
+      function serviceState(prefix, status, online) { setDot(prefix + "Dot", online ? "online" : "off"); $(prefix + "Status").textContent = status; }
+      function mapMessage(title, message) {
+        $("emptyMap").style.display = "grid";
+        $("emptyMap").querySelector("strong").textContent = title;
+        $("emptyMap").querySelector("span").textContent = message;
+      }
+      function accessMessage(title, message) {
+        $("accessEventTitle").textContent = title;
+        $("accessEventDetail").textContent = message;
+      }
+
+      async function probe(path) {
+        try { const response = await fetch(path, {headers: authHeaders(), cache: "no-store"}); return response; }
+        catch (_) { return null; }
+      }
+
+      function renderFlights(flights) {
+        flightLayer.clearLayers();
+        flights.forEach((flight) => {
+          const state = flight.current_state || {};
+          const pos = state.position || {};
+          const lat = Number(pos.lat), lng = Number(pos.lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const name = String(flight.id || "FLIGHT").slice(0,8).toUpperCase();
+          const markerIcon = L.divIcon({
+            className: "aircraft-marker",
+            iconSize: [31, 31], iconAnchor: [15, 15],
+            html: `<div class="aircraft" style="--track:${Number(state.track) || 0}deg"><svg viewBox="0 0 24 24"><path d="m3 14 8-3V5l2-2 2 2v6l6 3v2l-6-1v4l2 1v1l-4-1-4 1v-1l2-1v-4l-8 1v-2Z" fill="currentColor"/></svg><span>${escapeHTML(name)} · ${escapeHTML(pos.alt ?? "—")}m</span></div>`
+          });
+          L.marker([lat, lng], {icon: markerIcon, title: `${flight.id || "Flight"} · ${lat.toFixed(5)}, ${lng.toFixed(5)}`}).addTo(flightLayer);
+        });
+        visibleFlightCount = flightLayer.getLayers().length;
+        updateMapEmptyState();
+      }
+
+      function updateMapEmptyState() {
+        const hasMapData = visibleFlightCount > 0 || visibleZoneCount > 0 || visibleDeclarationCount > 0 || visibleIntentCount > 0;
+        $("emptyMap").style.display = hasMapData ? "none" : "grid";
+        if (!hasMapData) {
+          $("emptyMap").querySelector("strong").textContent = "No current airspace activity";
+          $("emptyMap").querySelector("span").textContent = "No flights, declarations, operational intents, or reserved zones were returned for this viewport.";
+        }
+      }
+
+      function formatZoneTime(value) {
+        if (!value) return "Not specified";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+      }
+
+      function renderReservedZones(zones) {
+        reservedZoneLayer.clearLayers();
+        zones.forEach((zone) => {
+          try {
+            const geojson = typeof zone.raw_geo_fence === "string" ? JSON.parse(zone.raw_geo_fence) : zone.raw_geo_fence;
+            if (!geojson) return;
+            const name = escapeHTML(zone.name || "Reserved zone");
+            const altitude = `${escapeHTML(zone.lower_limit ?? "—")}–${escapeHTML(zone.upper_limit ?? "—")} m`;
+            const popup = `<strong>${name}</strong><span>Altitude: ${altitude}<br>Active: ${escapeHTML(formatZoneTime(zone.start_datetime))}<br>Until: ${escapeHTML(formatZoneTime(zone.end_datetime))}</span>`;
+            L.geoJSON(geojson, {
+              style: {color: "#ffbd66", weight: 2, opacity: .95, fillColor: "#ff9f43", fillOpacity: .2},
+              onEachFeature: (_, layer) => layer.bindPopup(popup).bindTooltip(name, {sticky: true})
+            }).addTo(reservedZoneLayer);
+          } catch (_) { /* Ignore malformed legacy geofence geometry. */ }
+        });
+        visibleZoneCount = reservedZoneLayer.getLayers().length;
+        updateMapEmptyState();
+      }
+
+      async function loadReservedZones() {
+        if (!token) { renderReservedZones([]); return; }
+        const response = await probe("/geo_fence_ops/geo_fence?limit=100&view=" + encodeURIComponent(viewport.join(",")));
+        if (!response || !response.ok) { renderReservedZones([]); return; }
+        const data = await response.json();
+        renderReservedZones(Array.isArray(data.results) ? data.results : []);
+      }
+
+      function declarationState(value) {
+        return ({0:"Processing",1:"Accepted",2:"Activated",3:"Nonconforming",4:"Contingent",5:"Ended",8:"Withdrawn"})[value] || `State ${value ?? "unknown"}`;
+      }
+
+      function renderFlightDeclarations(declarations) {
+        declarationLayer.clearLayers();
+        declarations.forEach((declaration) => {
+          try {
+            const geojson = declaration.flight_declaration_geojson || declaration.flight_declaration_raw_geojson;
+            if (!geojson) return;
+            const id = escapeHTML(String(declaration.id || "Unknown").slice(0, 12));
+            const state = escapeHTML(declarationState(declaration.state));
+            const party = escapeHTML(declaration.originating_party || "Unknown operator");
+            const popup = `<strong style="color:#65a8ff">Flight declaration ${id}</strong><span>Status: ${state}<br>Operator: ${party}<br>Active: ${escapeHTML(formatZoneTime(declaration.start_datetime))}<br>Until: ${escapeHTML(formatZoneTime(declaration.end_datetime))}</span>`;
+            L.geoJSON(geojson, {
+              style: {color: "#65a8ff", weight: 2, dashArray: "7 5", opacity: .95, fillColor: "#438cff", fillOpacity: .14},
+              onEachFeature: (_, layer) => layer.bindPopup(popup).bindTooltip(`Declaration · ${state}`, {sticky: true})
+            }).addTo(declarationLayer);
+          } catch (_) { /* Ignore malformed legacy declaration geometry. */ }
+        });
+        visibleDeclarationCount = declarationLayer.getLayers().length;
+        updateMapEmptyState();
+      }
+
+      async function loadFlightDeclarations() {
+        if (!token) { renderFlightDeclarations([]); return; }
+        const response = await probe("/flight_declaration_ops/flight_declaration?page_size=100&view=" + encodeURIComponent(viewport.join(",")));
+        if (!response || !response.ok) { renderFlightDeclarations([]); return; }
+        const data = await response.json();
+        renderFlightDeclarations(Array.isArray(data.results) ? data.results : []);
+      }
+
+      function renderOperationalIntents(geojson) {
+        operationalIntentLayer.clearLayers();
+        if (geojson && geojson.type) {
+          try {
+            L.geoJSON(geojson, {
+              style: {color: "#d58cff", weight: 2.5, opacity: .95, fillColor: "#b45cff", fillOpacity: .17},
+              onEachFeature: (feature, layer) => {
+                const props = feature.properties || {};
+                const id = escapeHTML(String(props.operational_intent_reference_id || "Network intent").slice(0, 16));
+                const manager = escapeHTML(props.operational_intent_reference_manager || "Unknown manager");
+                const state = escapeHTML(props.operational_intent_state || "Unknown state");
+                layer.bindPopup(`<strong style="color:#d58cff">Operational intent ${id}</strong><span>Status: ${state}<br>Manager: ${manager}</span>`).bindTooltip(`Operational intent · ${state}`, {sticky: true});
+              }
+            }).addTo(operationalIntentLayer);
+          } catch (_) { /* Ignore malformed network intent geometry. */ }
+        }
+        visibleIntentCount = operationalIntentLayer.getLayers().length;
+        updateMapEmptyState();
+      }
+
+      async function loadOperationalIntents() {
+        if (!token) { renderOperationalIntents(null); return; }
+        const [localResponse, networkResponse] = await Promise.all([
+          probe("/flight_declaration_ops/flight_declaration?page_size=100&view=" + encodeURIComponent(viewport.join(","))),
+          probe("/flight_declaration_ops/network_flight_declarations_by_view?view=" + encodeURIComponent(viewport.join(",")))
+        ]);
+        const combined = {type: "FeatureCollection", features: []};
+        if (localResponse && localResponse.ok) {
+          const localData = await localResponse.json();
+          (Array.isArray(localData.results) ? localData.results : []).forEach(declaration => {
+            const geometry = declaration.flight_declaration_geojson || declaration.flight_declaration_raw_geojson;
+            if (!geometry || !Array.isArray(geometry.features)) return;
+            geometry.features.forEach(feature => combined.features.push({
+              ...feature,
+              properties: {
+                ...(feature.properties || {}),
+                operational_intent_reference_id: declaration.id,
+                operational_intent_reference_manager: declaration.originating_party || "Local Flight Blender",
+                operational_intent_state: declarationState(declaration.state)
+              }
+            }));
+          });
+        }
+        if (networkResponse && networkResponse.ok) {
+          const networkData = await networkResponse.json();
+          if (networkData && Array.isArray(networkData.features)) combined.features.push(...networkData.features);
+        }
+        renderOperationalIntents(combined);
+      }
+
+      map.on("moveend", () => {
+        const bounds = map.getBounds();
+        viewport = [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()];
+        updateViewportDisplay();
+        clearTimeout(mapRefreshTimer);
+        mapRefreshTimer = setTimeout(refresh, 350);
+      });
+
+      async function loadFlights() {
+        const connectLabel = $("connectButton").querySelector("span");
+        if (!token) {
+          $("flightCount").textContent = "—"; $("flightTrend").textContent = "Connect to live RID data"; connectLabel.textContent = "Connect data";
+          mapMessage("Live traffic is protected", "Add a bearer token with the RID display scope to track current flights.");
+          accessMessage("Operational data locked", "Connect credentials to query protected services.");
+          return;
+        }
+        mapMessage("Connecting to live traffic", "Validating access and querying the configured viewport…");
+        accessMessage("Validating credentials", "Checking the token and its Remote ID scopes.");
+        $("mapState").textContent = "CONNECTING";
+        const response = await probe("/uss/flights?view=" + viewport.join(","));
+        if (!response) {
+          $("flightTrend").textContent = "Flight service unreachable"; setDot("mapDot", "off"); $("mapState").textContent = "OFFLINE"; connectLabel.textContent = "Token connected";
+          mapMessage("Live traffic unavailable", "Your token is connected, but the flight service could not be reached.");
+          accessMessage("Credentials connected", "Authentication succeeded; the live traffic service is unreachable.");
+          return;
+        }
+        if (!response.ok) {
+          let detail = "Query failed · HTTP " + response.status;
+          try { const body = await response.json(); detail = body.message || body.detail || detail; } catch (_) {}
+          const unauthorized = response.status === 401 || response.status === 403;
+          $("flightTrend").textContent = unauthorized ? "Token missing rid.display_provider scope" : detail;
+          setDot("mapDot", "off"); $("mapState").textContent = unauthorized ? "UNAUTHORIZED" : response.status === 413 ? "VIEW TOO LARGE" : "ERROR";
+          connectLabel.textContent = unauthorized ? "Connection failed" : "Token connected";
+          mapMessage(
+            unauthorized ? "Live traffic access denied" : response.status === 413 ? "Viewport is too large" : "Live traffic unavailable",
+            unauthorized ? "The token is missing the rid.display_provider scope." : response.status === 413 ? "Choose a viewport with a diagonal no greater than 7.1 km." : "Your token is connected, but the live traffic service returned an error. Check that Redis is running."
+          );
+          accessMessage(
+            unauthorized ? "Operational access denied" : "Credentials connected",
+            unauthorized ? "The token does not include the required Remote ID scope." : "Authentication succeeded; live traffic is unavailable because its backing service returned an error."
+          );
+          return;
+        }
+        const data = await response.json(); const flights = Array.isArray(data.flights) ? data.flights : [];
+        $("flightCount").textContent = flights.length; $("flightTrend").textContent = flights.length === 1 ? "1 aircraft in viewport" : flights.length + " aircraft in viewport";
+        renderFlights(flights); setDot("mapDot", "online"); $("mapState").textContent = "LIVE"; connectLabel.textContent = "Data connected";
+        accessMessage("Operational data connected", "Credentials accepted and the live Remote ID feed is available.");
+      }
+
+      async function refresh() {
+        if (refreshing) return; refreshing = true; $("syncLabel").textContent = "Syncing…";
+        const began = performance.now(); const ping = await probe("/ping"); const ms = Math.max(1, Math.round(performance.now() - began));
+        const online = Boolean(ping && ping.ok);
+        $("latency").textContent = online ? ms : "—"; $("latencyTrend").textContent = online ? (ms < 150 ? "Healthy response time" : "Elevated response time") : "No response";
+        $("serverStatus").textContent = online ? "Operational" : "Offline"; $("serverTrend").textContent = online ? "All public checks passed" : "Heartbeat check failed"; $("serverTrend").className = "trend" + (online ? " good" : "");
+        $("instanceState").textContent = online ? "Operational" : "Unreachable"; setDot("instanceDot", online ? "online" : "off"); serviceState("api", online ? "Healthy" : "Offline", online);
+        if (token) {
+          const [rid, conformance, geo] = await Promise.all([probe("/rid/capabilities"), probe("/conformance_monitoring_ops/conformance_status"), probe("/geo_fence_ops/geo_fence?limit=1")]);
+          const protectedServices = [["rid",rid],["scd",conformance],["geo",geo]];
+          protectedServices.forEach(([key,res]) => serviceState(key, res && res.ok ? "Healthy" : res && (res.status === 401 || res.status === 403) ? "No scope" : "Unavailable", Boolean(res && res.ok)));
+          const healthy = 1 + protectedServices.filter(([,res]) => res && res.ok).length;
+          $("serviceSummary").textContent = healthy + " / 4 healthy";
+        } else { ["rid","scd","geo"].forEach(key => serviceState(key,"Locked",false)); $("serviceSummary").textContent = online ? "1 / 4 public" : "Offline"; }
+        await Promise.all([loadFlights(), loadReservedZones(), loadFlightDeclarations(), loadOperationalIntents()]); $("syncLabel").textContent = online ? "Updated " + clock() : "Connection lost"; refreshing = false;
+      }
+
+      function openDialog() { $("tokenInput").value = token; $("viewportInput").value = viewport.join(","); $("connectionDialog").showModal(); setTimeout(() => $("tokenInput").focus(), 50); }
+      function setActiveNavigation(href) {
+        document.querySelectorAll(".nav a").forEach(link => {
+          const active = link.getAttribute("href") === href;
+          link.classList.toggle("active", active);
+          if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
+        });
+      }
+      function showDashboardView(view, updateHistory = true) {
+        activeDashboardView = view;
+        $("workspace").hidden = true;
+        $("workspaceFrame").src = "about:blank";
+        document.querySelector(".stats").hidden = view === "airspace";
+        document.querySelector(".content").hidden = false;
+        document.querySelector(".content").classList.toggle("airspace-mode", view === "airspace");
+        $("pageTitle").textContent = view === "airspace" ? "Live airspace" : "Airspace overview";
+        setActiveNavigation(view === "airspace" ? "#airspace" : "/");
+        if (updateHistory) history.pushState({view}, "", view === "airspace" ? "#airspace" : location.pathname);
+        setTimeout(() => map.invalidateSize(), 0);
+      }
+      function openWorkspace(path, title) {
+        document.querySelector(".stats").hidden = true;
+        document.querySelector(".content").hidden = true;
+        $("workspaceTitle").textContent = title;
+        $("pageTitle").textContent = title;
+        $("workspaceExternal").href = path;
+        $("workspaceFrame").src = path;
+        $("workspace").hidden = false;
+        setActiveNavigation(path);
+        window.scrollTo({top: 0, behavior: "smooth"});
+      }
+      function closeWorkspace() {
+        $("workspace").hidden = true;
+        $("workspaceFrame").src = "about:blank";
+        showDashboardView(activeDashboardView, false);
+      }
+      document.querySelectorAll("[data-dashboard-view]").forEach(link => link.addEventListener("click", (event) => {
+        event.preventDefault();
+        showDashboardView(link.dataset.dashboardView);
+      }));
+      document.querySelectorAll("a[data-workspace]").forEach(link => link.addEventListener("click", (event) => {
+        event.preventDefault();
+        openWorkspace(link.getAttribute("href"), link.dataset.workspace);
+      }));
+      document.querySelectorAll("[data-workspace-path]").forEach(button => button.addEventListener("click", () => openWorkspace(button.dataset.workspacePath, button.dataset.workspaceTitle)));
+      $("workspaceClose").addEventListener("click", closeWorkspace);
+      document.addEventListener("keydown", event => { if (event.key === "Escape" && !$("workspace").hidden) closeWorkspace(); });
+      window.addEventListener("popstate", () => showDashboardView(location.hash === "#airspace" ? "airspace" : "overview", false));
+      $("connectButton").addEventListener("click", openDialog); $("viewportButton").addEventListener("click", openDialog); $("refreshButton").addEventListener("click", refresh);
+      $("connectionForm").addEventListener("submit", (event) => {
+        if (event.submitter && event.submitter.value === "cancel") return;
+        event.preventDefault(); const values = $("viewportInput").value.split(",").map(Number);
+        if (values.length !== 4 || values.some(v => !Number.isFinite(v)) || values[0] >= values[2] || values[1] >= values[3]) { $("viewportInput").setCustomValidity("Enter four ordered coordinates: lat1,lng1,lat2,lng2"); $("viewportInput").reportValidity(); return; }
+        $("viewportInput").setCustomValidity(""); token = normalizeToken($("tokenInput").value); viewport = values; updateViewportDisplay();
+        map.fitBounds([[values[0], values[1]], [values[2], values[3]]], {padding: [12, 12]});
+        $("connectButton").querySelector("span").textContent = token ? "Validating…" : "Connect data"; $("connectionDialog").close(); refresh();
+      });
+      setInterval(elapsed, 1000); setInterval(refresh, 15000); showDashboardView(activeDashboardView, false); elapsed(); refresh();
+    })();
+  </script>
 </body>
 </html>
