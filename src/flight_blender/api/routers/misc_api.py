@@ -3,10 +3,11 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from flight_blender.services import misc_svc
+from flight_blender.utils.paths import SRC_FLIGHT_BLENDER_PATH
 
 router = APIRouter()
 
-templates = Jinja2Templates(directory="src/flight_blender/templates")
+templates = Jinja2Templates(directory=SRC_FLIGHT_BLENDER_PATH / "templates")
 
 
 @router.get("/", response_class=HTMLResponse)

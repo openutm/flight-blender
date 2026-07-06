@@ -1,5 +1,16 @@
-import pytest
 from unittest.mock import patch
+
+from flight_blender.services.misc_svc import get_signing_public_keys
+
+
+class TestHome:
+    def test_home_renders_template(self, fastapi_client):
+        resp = fastapi_client.get("/")
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/html")
+        assert "<title>Flight Blender</title>" in resp.text
+        assert "Your instance of Flight Blender is working" in resp.text
 
 
 class TestPing:
@@ -28,9 +39,7 @@ class TestMiscServiceCoverage:
 
     def test_get_signing_public_keys_with_secret_key(self):
         """Test get_signing_public_keys with secret key."""
-        from flight_blender.services.misc_svc import get_signing_public_keys
-
-        with patch('flight_blender.services.misc_svc.settings') as mock_settings:
+        with patch("flight_blender.services.misc_svc.settings") as mock_settings:
             mock_settings.SECRET_KEY = "test-secret-key"
 
             result = get_signing_public_keys()
@@ -39,9 +48,7 @@ class TestMiscServiceCoverage:
 
     def test_get_signing_public_keys_without_secret_key(self):
         """Test get_signing_public_keys without secret key."""
-        from flight_blender.services.misc_svc import get_signing_public_keys
-
-        with patch('flight_blender.services.misc_svc.settings') as mock_settings:
+        with patch("flight_blender.services.misc_svc.settings") as mock_settings:
             mock_settings.SECRET_KEY = ""
 
             result = get_signing_public_keys()
@@ -50,9 +57,7 @@ class TestMiscServiceCoverage:
 
     def test_get_signing_public_keys_with_invalid_key(self):
         """Test get_signing_public_keys with invalid key."""
-        from flight_blender.services.misc_svc import get_signing_public_keys
-
-        with patch('flight_blender.services.misc_svc.settings') as mock_settings:
+        with patch("flight_blender.services.misc_svc.settings") as mock_settings:
             mock_settings.SECRET_KEY = "invalid-key"
 
             result = get_signing_public_keys()
