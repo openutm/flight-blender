@@ -19,7 +19,7 @@ jobs:
         run: docker build -t flight-blender:test .
       - name: Run Trivy vulnerability scanner
         id: trivy
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: flight-blender:test
           format: table
@@ -29,7 +29,7 @@ jobs:
         continue-on-error: true
       - name: Upload Trivy SARIF
         if: always()
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: flight-blender:test
           format: sarif
