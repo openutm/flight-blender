@@ -58,7 +58,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest-asyncio>=0.23.0",
-    "bandit[sarif]>=1.8.3",
+    "bandit[sarif]>=1.9.4",
     "codespell>=2.4.1",
     "pre-commit>=4.2.0",
     "pyright>=1.1.398",
