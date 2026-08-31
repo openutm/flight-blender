@@ -23,7 +23,7 @@ from flight_blender.schemas.scd import (
 from flight_blender.services import scd_svc
 from flight_blender.services.scd_svc import SCDService
 
-router = APIRouter(prefix="/scd")
+router = APIRouter(prefix="/scd", tags=["SCD"])
 
 
 async def _flight_declaration_repo(db: AsyncSession = Depends(async_get_db)) -> SQLAlchemyFlightDeclarationRepository:

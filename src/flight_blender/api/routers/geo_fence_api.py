@@ -18,7 +18,7 @@ from flight_blender.services.geo_fence_svc import GeoFenceOperations, validate_g
 from flight_blender.tasks.geo_fence_task import CeleryGeoFenceTaskDispatcher
 from flight_blender.utils.spatial_geo_fence import RTreeGeoFenceSpatialService
 
-router = APIRouter(prefix="/geo_fence_ops")
+router = APIRouter(prefix="/geo_fence_ops", tags=["Geo Fence"])
 
 GA_TEST_SCOPE = "geo-awareness.test"
 

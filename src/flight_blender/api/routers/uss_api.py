@@ -14,7 +14,7 @@ from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.services import uss_svc
 from flight_blender.services.uss_svc import USSService
 
-router = APIRouter(prefix="/uss")
+router = APIRouter(prefix="/uss", tags=["USS"])
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> USSService:

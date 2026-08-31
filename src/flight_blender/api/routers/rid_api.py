@@ -36,7 +36,7 @@ from flight_blender.services import rid_svc as view_port_ops
 from flight_blender.services.flight_feed_svc import ObservationReadOperations
 from flight_blender.tasks import rid_task
 
-router = APIRouter(prefix="/rid")
+router = APIRouter(prefix="/rid", tags=["RID"])
 
 
 async def _rid_ops(db=Depends(async_get_db)) -> SQLAlchemyRIDRepository:

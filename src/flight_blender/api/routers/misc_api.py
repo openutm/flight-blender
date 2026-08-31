@@ -6,7 +6,7 @@ from flight_blender.config import settings
 from flight_blender.services import misc_svc
 from flight_blender.utils.paths import SRC_FLIGHT_BLENDER_PATH
 
-router = APIRouter()
+router = APIRouter(tags=["Misc"])
 
 templates = Jinja2Templates(directory=SRC_FLIGHT_BLENDER_PATH / "templates")
 

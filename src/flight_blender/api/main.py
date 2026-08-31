@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from flight_blender.api.routers import (
     conformance_api,
@@ -21,6 +24,11 @@ from flight_blender.api.routers import (
 
 def create_fastapi_app() -> FastAPI:
     app = FastAPI(title="Flight Blender")
+
+    project_root = Path(__file__).parent.parent.parent.parent
+    images_dir = project_root / "images"
+    if images_dir.exists():
+        app.mount("/images", StaticFiles(directory=str(images_dir)), name="images")
 
     @app.exception_handler(HTTPException)
     async def http_exception_json_handler(_request: Request, exc: HTTPException):

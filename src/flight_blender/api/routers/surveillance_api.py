@@ -14,7 +14,7 @@ from flight_blender.schemas.surveillance import SensorHealthUpdate, Surveillance
 from flight_blender.services.surveillance_svc import SurveillanceOperations
 from flight_blender.tasks.scheduler import TaskSchedulerService
 
-router = APIRouter(prefix="/surveillance_monitoring_ops")
+router = APIRouter(prefix="/surveillance_monitoring_ops", tags=["Surveillance"])
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> SurveillanceOperations:
