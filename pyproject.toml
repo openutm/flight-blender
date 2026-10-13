@@ -5,11 +5,11 @@ authors = [{ name = "Hrishikesh Ballal", email = "hrishi@openskies.sh" }]
 description = "Flight Blender"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.14,<3.15"
+requires-python = "==3.12.*"
 
 keywords = ["Flight Blender"]
 classifiers = [
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.12",
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",

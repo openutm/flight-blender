@@ -37,7 +37,7 @@ class Format(str, Enum):
     RFC3339 = "RFC3339"
 
 
-class Reference(Enum):
+class Reference(str, Enum):
     TakeoffLocation = "TakeoffLocation"
     GroundLevel = "GroundLevel"
 
