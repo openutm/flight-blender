@@ -176,7 +176,7 @@ class MessageVerifier:
 
         try:
             parsed_body = json.loads(body) if body else {}
-        except json.JSONDecodeError, ValueError:
+        except (json.JSONDecodeError, ValueError):
             return False
 
         r = SimpleNamespace(method="PUT", url=url, headers=dict(headers), body=json.dumps(parsed_body).encode())

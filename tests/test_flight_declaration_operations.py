@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import arrow
 import pytest
@@ -497,6 +497,67 @@ class TestSubmitToDSSEnabled:
         )
         assert resp.status_code == 409
         assert "already exists" in resp.json()["message"]
+
+
+class TestProcessIntersectionResultAutoSubmit:
+    """Tests for the AUTO_SUBMIT_TO_DSS path in _process_intersection_result_sa."""
+
+    @staticmethod
+    def _make_ops(monkeypatch, existing_ref):
+        from flight_blender.domain_types.flight_declarations import IntersectionCheckResult
+        from flight_blender.services.flight_declarations_svc import FlightDeclarationOperations
+
+        monkeypatch.setattr(settings, "AUTO_SUBMIT_TO_DSS", 1)
+
+        fd = MagicMock()
+        fd.id = uuid.uuid4()
+        fd.state = 0
+
+        repo = MagicMock()
+        repo.update = AsyncMock(return_value=fd)
+        repo.add_state_history_entry = AsyncMock()
+        repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=existing_ref)
+
+        notifier = MagicMock()
+        ops = FlightDeclarationOperations(
+            repo=repo,
+            scd_client=MagicMock(),
+            parser=MagicMock(),
+            notifier=notifier,
+        )
+        intersection_result = IntersectionCheckResult(
+            all_relevant_fences=[],
+            all_relevant_declarations=[],
+            is_approved=True,
+            declaration_state=0,
+        )
+        return ops, repo, notifier, fd, intersection_result
+
+    @pytest.mark.asyncio
+    async def test_auto_submit_adds_state_history_and_notifies(self, monkeypatch):
+        """With no existing reference, auto-submit records history, notifies and enqueues the task."""
+        ops, repo, notifier, fd, intersection_result = self._make_ops(monkeypatch, existing_ref=None)
+
+        response = await ops._process_intersection_result_sa(fd, intersection_result, ussp_network_enabled=1)
+
+        repo.add_state_history_entry.assert_awaited_once()
+        notifier.submit_flight_declaration_to_dss_async.assert_called_once_with(flight_declaration_id=str(fd.id))
+        assert response.state == 0
+        notification_texts = [call.kwargs["message_text"] for call in notifier.send_operational_update_message.call_args_list]
+        assert any("Auto DSS submission triggered" in text for text in notification_texts)
+
+    @pytest.mark.asyncio
+    async def test_auto_submit_skips_when_reference_exists(self, monkeypatch):
+        """With an existing reference, auto-submit does not enqueue a duplicate DSS submission."""
+        existing_ref = MagicMock()
+        existing_ref.id = uuid.uuid4()
+        ops, repo, notifier, fd, intersection_result = self._make_ops(monkeypatch, existing_ref=existing_ref)
+
+        response = await ops._process_intersection_result_sa(fd, intersection_result, ussp_network_enabled=1)
+
+        notifier.submit_flight_declaration_to_dss_async.assert_not_called()
+        repo.add_state_history_entry.assert_not_awaited()
+        assert "already exists" in response.message
 
 
 class TestNetworkFlightDeclarationsByViewEnabled:

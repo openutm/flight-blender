@@ -846,6 +846,35 @@ class FlightDeclarationOperations:
 
         auto_submit_to_dss = settings.AUTO_SUBMIT_TO_DSS
         if is_approved and declaration_state == 0 and ussp_network_enabled and auto_submit_to_dss:
+            existing_ref = await self.repo.get_opint_reference_by_declaration_id(fd.id)
+            if existing_ref is not None:
+                already_exists_msg = f"A DSS operational intent reference already exists for flight declaration {flight_declaration_id}, skipping auto DSS submission"
+                logger.warning(already_exists_msg)
+                notifier.send_operational_update_message(
+                    flight_declaration_id=flight_declaration_id,
+                    message_text=already_exists_msg,
+                    level="error",
+                )
+                return FlightDeclarationCreateResponse(
+                    id=flight_declaration_id,
+                    message="A DSS operational intent reference already exists for this flight declaration.",
+                    is_approved=is_approved,
+                    state=declaration_state,
+                )
+
+            await self.repo.add_state_history_entry(
+                flight_declaration_id=fd.id,
+                original_state=declaration_state,
+                new_state=declaration_state,
+                notes="Auto DSS submission initiated via AUTO_SUBMIT_TO_DSS",
+            )
+
+            notifier.send_operational_update_message(
+                flight_declaration_id=flight_declaration_id,
+                message_text="Auto DSS submission triggered for flight declaration %s" % flight_declaration_id,
+                level="info",
+            )
+
             notifier.submit_flight_declaration_to_dss_async(flight_declaration_id=flight_declaration_id)
 
         return FlightDeclarationCreateResponse(

@@ -94,6 +94,7 @@
     <footer>© OpenUTM Ltd. · <a href="https://github.com/openutm" target="_blank" rel="noopener">GitHub</a></footer>
   </main>
   <script>
+    const authBypassEnabled = {{ 'true' if auth_bypass_enabled else 'false' }};
     (() => {
       const html = document.documentElement;
       const toggle = document.getElementById('themeToggle');

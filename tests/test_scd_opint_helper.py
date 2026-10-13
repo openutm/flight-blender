@@ -153,6 +153,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
         mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         creator = DSSOperationalIntentsCreator(
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
@@ -170,6 +171,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
         opint_ref = _fake_opint_ref()
         opint_detail = _fake_opint_detail()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         mock_fd_repo.create_opint_reference = AsyncMock(return_value=opint_ref)
         mock_fd_repo.create_opint_detail = AsyncMock(return_value=opint_detail)
         mock_fd_repo.create_or_update_composite_opint = AsyncMock()
@@ -204,6 +206,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
         mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         mock_fd_repo.update = AsyncMock()
         mock_fd_repo.add_state_history_entry = AsyncMock()
         creator = DSSOperationalIntentsCreator(
@@ -224,6 +227,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
     async def test_dss_409_error_sets_rejected_state(self):
         mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
         mock_fd_repo.update = AsyncMock()
         mock_fd_repo.add_state_history_entry = AsyncMock()
@@ -244,6 +248,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
     @pytest.mark.asyncio
     async def test_conflict_with_flight_sets_rejected_state(self):
         mock_fd_repo = AsyncMock()
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         fd = _fake_flight_declaration()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
         mock_fd_repo.update = AsyncMock()

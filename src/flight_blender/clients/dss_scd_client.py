@@ -1502,6 +1502,18 @@ class DSSOperationalIntentsCreator:
                 detail={"message": "Flight Declaration with ID %s not found in the database" % self.flight_declaration_id},
             )
 
+        existing_ref = await repo.get_opint_reference_by_declaration_id(fd_id)
+        if existing_ref is not None:
+            logger.warning("A DSS operational intent reference already exists for flight declaration %s, skipping submission" % self.flight_declaration_id)
+            return OperationalIntentSubmissionStatus(
+                dss_response=OtherError(notes="A DSS operational intent reference already exists for this flight declaration"),
+                status=SubmissionResultStatus.ConflictWithFlight.value,
+                status_code=409,
+                message="A DSS operational intent reference already exists for this flight declaration",
+                operational_intent_id=str(existing_ref.id),
+                constraints=None,
+            )
+
         current_state = flight_declaration.state
         operational_intent = json.loads(flight_declaration.operational_intent)
         operational_intent_data = from_dict(

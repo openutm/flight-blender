@@ -362,7 +362,7 @@ async def create_rid_notification(message: str, session_id, repo: SQLAlchemyNoti
     """Create a notification for RID operations."""
     try:
         session_uuid = uuid.UUID(session_id)
-    except ValueError, AttributeError:
+    except (ValueError, AttributeError):
         session_uuid = None
     await repo.create_notification(message=message, session_id=session_uuid)
 
