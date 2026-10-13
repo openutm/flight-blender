@@ -667,6 +667,25 @@ class FlightDeclarationOperations:
                 )
             }, 409
 
+        existing_ref = await self.repo.get_opint_reference_by_declaration_id(pk)
+        if existing_ref is not None:
+            return {"message": "A DSS operational intent reference already exists for this flight declaration."}, 409
+
+        await self.repo.add_state_history_entry(
+            flight_declaration_id=pk,
+            original_state=0,
+            new_state=0,
+            notes="DSS submission initiated via manual endpoint",
+        )
+
+        self.notifier.send_operational_update_message(
+            flight_declaration_id=str(pk),
+            message_text="Manual DSS submission triggered for flight declaration %s" % str(pk),
+            level="info",
+        )
+
+        self.notifier.submit_flight_declaration_to_dss_async(flight_declaration_id=str(pk))
+
         return {"message": "DSS submission initiated.", "id": str(flight_declaration.id)}, 200
 
     async def set_operational_intent(self, request_data: dict) -> tuple[dict, int]:

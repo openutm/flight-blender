@@ -1,6 +1,7 @@
 import uuid
 from unittest.mock import MagicMock, patch
 
+import arrow
 import pytest
 from flight_blender.config import settings
 from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE, READ_WRITE_SCOPE
@@ -457,6 +458,45 @@ class TestSubmitToDSSEnabled:
         )
         assert resp.status_code == 200
         assert "id" in resp.json()
+
+    def test_submit_to_dss_already_submitted(self, mounted_sync_client, monkeypatch, flight_declaration_payload):
+        """Returns 409 when a FlightOperationalIntentReference already exists."""
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
+        monkeypatch.setattr(settings, "AUTO_SUBMIT_TO_DSS", 0)
+        create_resp = mounted_sync_client.post(
+            "/flight_declaration_ops/set_flight_declaration",
+            json=flight_declaration_payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
+        )
+        fd_id = create_resp.json()["id"]
+
+        from unittest.mock import AsyncMock
+        from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+
+        mock_ref = MagicMock()
+        mock_ref.id = uuid.uuid4()
+        mock_ref.declaration_id = uuid.UUID(fd_id)
+
+        original_init = SQLAlchemyFlightDeclarationRepository.__init__
+        original_get_ref = SQLAlchemyFlightDeclarationRepository.get_opint_reference_by_declaration_id
+
+        def mock_init(self, db):
+            original_init(self, db)
+
+        async def mock_get_ref(self, declaration_id):
+            if str(declaration_id) == fd_id:
+                return mock_ref
+            return await original_get_ref(self, declaration_id)
+
+        monkeypatch.setattr(SQLAlchemyFlightDeclarationRepository, "__init__", mock_init)
+        monkeypatch.setattr(SQLAlchemyFlightDeclarationRepository, "get_opint_reference_by_declaration_id", mock_get_ref)
+
+        resp = mounted_sync_client.post(
+            f"/flight_declaration_ops/flight_declaration/{fd_id}/submit_to_dss",
+            headers=fastapi_auth_header(WRITE_SCOPE),
+        )
+        assert resp.status_code == 409
+        assert "already exists" in resp.json()["message"]
 
 
 class TestNetworkFlightDeclarationsByViewEnabled:
