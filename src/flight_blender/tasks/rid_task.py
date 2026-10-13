@@ -79,13 +79,15 @@ def _parse_rid_timestamp_value(rid_ts_value) -> arrow.Arrow | None:
     s = str(rid_ts_value)
     if s.endswith("Z") and "." in s:
         s = s[:-1] + "+00:00"
+    # fmt: off
     try:
         return arrow.get(s)
-    except ParserError, TypeError, ValueError:
+    except (ParserError, TypeError, ValueError):
         try:
             return arrow.get(float(s))
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return None
+    # fmt: on
 
 
 def _parse_rid_timestamp(rid_ts_value) -> arrow.Arrow:
