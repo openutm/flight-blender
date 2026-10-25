@@ -566,7 +566,11 @@ class FlightDeclarationOperations:
     ) -> tuple[dict, int]:
         present = arrow.now()
         s_date = arrow.get(start_date, "YYYY-MM-DD").floor("day").datetime if start_date else present.shift(days=-1).floor("day").datetime
-        e_date = arrow.get(end_date, "YYYY-MM-DD").ceil("day").datetime if end_date else present.shift(days=1).ceil("day").datetime
+        e_date = (
+            arrow.get(end_date, "YYYY-MM-DD").replace(hour=23, minute=59, second=59, microsecond=999999).datetime
+            if end_date
+            else present.shift(days=1).ceil("day").datetime
+        )
 
         states: list[int] | None = None
         if states_raw:
