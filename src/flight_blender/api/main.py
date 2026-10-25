@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from flight_blender.api.routers import (
+    adapter_api,
     conformance_api,
     constraint_api,
     flight_declarations_api,
@@ -36,6 +37,7 @@ def create_fastapi_app() -> FastAPI:
             return JSONResponse(exc.detail, status_code=exc.status_code, headers=exc.headers)
         return JSONResponse({"message": exc.detail}, status_code=exc.status_code, headers=exc.headers)
 
+    app.include_router(adapter_api.router)
     app.include_router(misc_api.router)
     app.include_router(geo_fence_api.router)
     app.include_router(weather_api.router)
