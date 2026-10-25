@@ -40,7 +40,7 @@ async def store_session(
         await ops.store(_owner(auth), data["session"], data["samples"])
     except PermissionError:
         raise HTTPException(403, "Session belongs to another principal")
-    except ValueError, IntegrityError:
+    except (ValueError, IntegrityError):
         raise HTTPException(409, "Conflicting session record; retry identical batches after concurrent requests")
     record = await ops.read(session_id, _owner(auth), -1, 1)
     if record is None:

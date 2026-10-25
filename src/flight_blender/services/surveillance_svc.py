@@ -854,7 +854,9 @@ class TrafficDataFuser(BaseTrafficDataFuser):
 # ── Task helper functions ────────────────────────────────────────────────
 
 
-async def record_surveillance_track_event(session_id: uuid.UUID, expected_at, had_active_tracks: bool, repo: SQLAlchemySurveillanceRepository) -> None:
+async def record_surveillance_track_event(
+    session_id: uuid.UUID, expected_at, had_active_tracks: bool, repo: SQLAlchemySurveillanceRepository
+) -> None:
     """Record a track event for a surveillance session."""
     await repo.record_track_event(
         session_id=session_id,
@@ -872,7 +874,9 @@ async def get_surveillance_sensor_health(repo: SQLAlchemySurveillanceRepository)
     return 0, 0
 
 
-async def record_surveillance_heartbeat_event(session_id: uuid.UUID, expected_at, delivered_on_time: bool, repo: SQLAlchemySurveillanceRepository) -> None:
+async def record_surveillance_heartbeat_event(
+    session_id: uuid.UUID, expected_at, delivered_on_time: bool, repo: SQLAlchemySurveillanceRepository
+) -> None:
     """Record a heartbeat event for a surveillance session."""
     await repo.record_heartbeat_event(
         session_id=session_id,

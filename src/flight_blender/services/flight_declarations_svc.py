@@ -848,7 +848,9 @@ class FlightDeclarationOperations:
         if is_approved and declaration_state == 0 and ussp_network_enabled and auto_submit_to_dss:
             existing_ref = await self.repo.get_opint_reference_by_declaration_id(fd.id)
             if existing_ref is not None:
-                already_exists_msg = f"A DSS operational intent reference already exists for flight declaration {flight_declaration_id}, skipping auto DSS submission"
+                already_exists_msg = (
+                    f"A DSS operational intent reference already exists for flight declaration {flight_declaration_id}, skipping auto DSS submission"
+                )
                 logger.warning(already_exists_msg)
                 notifier.send_operational_update_message(
                     flight_declaration_id=flight_declaration_id,
