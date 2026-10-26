@@ -77,10 +77,7 @@ async def _async_send_and_generate_track_to_consumer(
     async with async_task_session() as db:
         repo = SQLAlchemySurveillanceRepository(db)
         await record_surveillance_track_event(
-            session_id=uuid.UUID(surveillance_session_id),
-            expected_at=expected_at,
-            had_active_tracks=len(track_messages) > 0,
-            repo=repo
+            session_id=uuid.UUID(surveillance_session_id), expected_at=expected_at, had_active_tracks=len(track_messages) > 0, repo=repo
         )
 
     send_and_generate_track_to_consumer.apply_async(
@@ -135,10 +132,7 @@ async def _async_send_heartbeat_to_consumer(session_id: str, flight_declaration_
     async with async_task_session() as db:
         repo = SQLAlchemySurveillanceRepository(db)
         await record_surveillance_heartbeat_event(
-            session_id=uuid.UUID(surveillance_session_id),
-            expected_at=expected_at,
-            delivered_on_time=delivered_on_time,
-            repo=repo
+            session_id=uuid.UUID(surveillance_session_id), expected_at=expected_at, delivered_on_time=delivered_on_time, repo=repo
         )
 
     send_heartbeat_to_consumer.apply_async(
@@ -162,7 +156,6 @@ async def _async_cleanup_old_heartbeat_events() -> None:
     """
     retention_days = settings.HEARTBEAT_RETENTION_DAYS
     cutoff = arrow.utcnow().shift(days=-retention_days).datetime
-
 
     async with async_task_session() as db:
         repo = SQLAlchemySurveillanceRepository(db)

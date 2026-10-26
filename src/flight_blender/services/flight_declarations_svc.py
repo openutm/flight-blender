@@ -566,7 +566,11 @@ class FlightDeclarationOperations:
     ) -> tuple[dict, int]:
         present = arrow.now()
         s_date = arrow.get(start_date, "YYYY-MM-DD").floor("day").datetime if start_date else present.shift(days=-1).floor("day").datetime
-        e_date = arrow.get(end_date, "YYYY-MM-DD").ceil("day").datetime if end_date else present.shift(days=1).ceil("day").datetime
+        e_date = (
+            arrow.get(end_date, "YYYY-MM-DD").replace(hour=23, minute=59, second=59, microsecond=999999).datetime
+            if end_date
+            else present.shift(days=1).ceil("day").datetime
+        )
 
         states: list[int] | None = None
         if states_raw:
@@ -848,7 +852,9 @@ class FlightDeclarationOperations:
         if is_approved and declaration_state == 0 and ussp_network_enabled and auto_submit_to_dss:
             existing_ref = await self.repo.get_opint_reference_by_declaration_id(fd.id)
             if existing_ref is not None:
-                already_exists_msg = f"A DSS operational intent reference already exists for flight declaration {flight_declaration_id}, skipping auto DSS submission"
+                already_exists_msg = (
+                    f"A DSS operational intent reference already exists for flight declaration {flight_declaration_id}, skipping auto DSS submission"
+                )
                 logger.warning(already_exists_msg)
                 notifier.send_operational_update_message(
                     flight_declaration_id=flight_declaration_id,

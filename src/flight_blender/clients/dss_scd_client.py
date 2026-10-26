@@ -1504,7 +1504,9 @@ class DSSOperationalIntentsCreator:
 
         existing_ref = await repo.get_opint_reference_by_declaration_id(fd_id)
         if existing_ref is not None:
-            logger.warning("A DSS operational intent reference already exists for flight declaration %s, skipping submission" % self.flight_declaration_id)
+            logger.warning(
+                "A DSS operational intent reference already exists for flight declaration %s, skipping submission" % self.flight_declaration_id
+            )
             return OperationalIntentSubmissionStatus(
                 dss_response=OtherError(notes="A DSS operational intent reference already exists for this flight declaration"),
                 status=SubmissionResultStatus.ConflictWithFlight.value,

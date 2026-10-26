@@ -204,9 +204,10 @@ class TestFlightDeclarationList:
         assert "results" in data
         assert data["results"] == []
 
-    def test_list_with_date_filter(self, mounted_sync_client):
+    @pytest.mark.parametrize("end_date", ["2025-12-31", "9999-12-31"])
+    def test_list_with_date_filter(self, mounted_sync_client, end_date):
         resp = mounted_sync_client.get(
-            "/flight_declaration_ops/flight_declaration?start_date=2025-01-01&end_date=2025-12-31",
+            f"/flight_declaration_ops/flight_declaration?start_date=2025-01-01&end_date={end_date}",
             headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 200
@@ -595,7 +596,7 @@ class TestFlightDeclarationsTaskCoverage:
         """Test send_operational_update_message function."""
         from flight_blender.tasks.flight_declarations_task import send_operational_update_message
 
-        with patch('flight_blender.tasks.flight_declarations_task.settings') as mock_settings:
+        with patch("flight_blender.tasks.flight_declarations_task.settings") as mock_settings:
             mock_settings.AMQP_URL = None
 
             send_operational_update_message(
@@ -610,7 +611,7 @@ class TestFlightDeclarationsTaskCoverage:
         """Test CelerySCDNotifier.send_operational_update_message."""
         from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
-        with patch('flight_blender.tasks.flight_declarations_task.send_operational_update_message') as mock_task:
+        with patch("flight_blender.tasks.flight_declarations_task.send_operational_update_message") as mock_task:
             mock_task.delay = MagicMock()
 
             notifier = CelerySCDNotifier()
@@ -626,13 +627,15 @@ class TestFlightDeclarationsTaskCoverage:
         """Test CelerySCDNotifier.submit_flight_declaration_to_dss_async."""
         from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
-        with patch('flight_blender.tasks.flight_declarations_task.submit_flight_declaration_to_dss_async') as mock_task:
+        with patch("flight_blender.tasks.flight_declarations_task.submit_flight_declaration_to_dss_async") as mock_task:
             mock_task.delay = MagicMock()
 
             notifier = CelerySCDNotifier()
             notifier.submit_flight_declaration_to_dss_async(flight_declaration_id="test-fd-id")
 
             mock_task.delay.assert_called_once()
+
+
 # Spatial flight declarations additional coverage
 # ---------------------------------------------------------------------------
 
@@ -728,6 +731,7 @@ class TestSpatialFlightDeclarationsCoverage:
         factory.generate_flight_declaration_index([mock_declaration])
 
         import asyncio
+
         asyncio.run(factory.clear_rtree_index([mock_declaration]))
 
         # No assertion needed, just ensure it doesn't raise
