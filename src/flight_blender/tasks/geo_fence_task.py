@@ -3,13 +3,12 @@ import json
 from dataclasses import asdict
 
 import arrow
-import requests
+import httpx
 from loguru import logger
-from requests.exceptions import ConnectionError
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
-from flight_blender.auth.token_cache import get_redis
+from flight_blender.auth.token_cache import get_async_redis
 from flight_blender.celery import app
 from flight_blender.domain_types.geo_fence import GeoAwarenessTestStatus
 from flight_blender.services.geo_fence_svc import GeoZoneParser, save_geofence_feature
@@ -17,11 +16,16 @@ from flight_blender.services.geo_fence_svc import GeoZoneParser, save_geofence_f
 
 @app.task(name="download_geozone_source")
 def download_geozone_source(geo_zone_url: str, geozone_source_id: str):
-    r = get_redis()
+    asyncio.run(_async_download_geozone_source(geo_zone_url, geozone_source_id))
+
+
+async def _async_download_geozone_source(geo_zone_url: str, geozone_source_id: str) -> None:
+    r = get_async_redis()
     geoawareness_test_data_store = "geoawarenes_test." + str(geozone_source_id)
     try:
-        geo_zone_request = requests.get(geo_zone_url, timeout=30)
-    except ConnectionError as ce:
+        async with httpx.AsyncClient(timeout=30) as client:
+            geo_zone_request = await client.get(geo_zone_url)
+    except httpx.RequestError as ce:
         logger.error("Error in downloading data from Geofence url")
         logger.error(ce)
         test_status_storage = GeoAwarenessTestStatus(result="Error", message="Error in downloading data")
@@ -37,8 +41,8 @@ def download_geozone_source(geo_zone_url: str, geozone_source_id: str):
         else:
             test_status_storage = GeoAwarenessTestStatus(result="Unsupported", message="")
 
-    if r.exists(geoawareness_test_data_store):
-        r.set(geoawareness_test_data_store, json.dumps(asdict(test_status_storage)))
+    if await r.exists(geoawareness_test_data_store):
+        await r.set(geoawareness_test_data_store, json.dumps(asdict(test_status_storage)))
 
 
 @app.task(name="write_geo_zone")

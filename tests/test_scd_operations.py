@@ -222,6 +222,7 @@ class TestFlightPlanUpsertDSSPaths:
 
     def test_update_existing_flight_plan_uses_request_repo(self, mounted_sync_client, mock_scd_dss_success, monkeypatch):
         """Existing-plan updates must parse stored operational intent data with the request repo."""
+
         async def reject_update(self, **kwargs):
             return OperationalIntentUpdateResponse(
                 dss_response=CommonPeer9xxResponse(message="Update not submitted to DSS"),
@@ -292,10 +293,14 @@ class TestFlightPlanUpsertDSSPaths:
 
     def test_upsert_dss_http_exception_uses_handler(self, mounted_sync_client, monkeypatch):
         """Fatal DSS transport errors propagate through the FastAPI exception handler."""
+
+        async def auth_success(self, audience=""):
+            return fakes.fake_auth_token_success()
+
         def raise_dss_timeout(self, **kwargs):
             raise HTTPException(status_code=504, detail={"message": "DSS request timed out"})
 
-        monkeypatch.setattr(dss_helper.SCDOperations, "get_auth_token", lambda self, audience="": fakes.fake_auth_token_success())
+        monkeypatch.setattr(dss_helper.SCDOperations, "async_get_auth_token", auth_success)
         monkeypatch.setattr(dss_helper.SCDOperations, "create_and_submit_operational_intent_reference", raise_dss_timeout)
         monkeypatch.setattr(dss_helper.SCDOperations, "process_peer_uss_notifications", fakes.fake_noop)
 

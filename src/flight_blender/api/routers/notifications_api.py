@@ -11,7 +11,7 @@ from flight_blender.repositories.notifications_repo import SQLAlchemyNotificatio
 from flight_blender.schemas.notifications import CreateNotificationRequest
 from flight_blender.services.notifications_svc import NotificationsOperations
 
-router = APIRouter(prefix="/notifications_ops")
+router = APIRouter(prefix="/notifications_ops", tags=["Notifications"])
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> NotificationsOperations:

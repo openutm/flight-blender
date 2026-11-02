@@ -13,7 +13,7 @@ from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFligh
 from flight_blender.services.flight_declarations_svc import FlightDeclarationOperations, do_network_declarations_by_view
 from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
-router = APIRouter(prefix="/flight_declaration_ops")
+router = APIRouter(prefix="/flight_declaration_ops", tags=["Flight Declarations"])
 
 
 def _scd_query_client() -> SCDOperations:

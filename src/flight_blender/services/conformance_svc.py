@@ -20,6 +20,7 @@ from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFligh
 if TYPE_CHECKING:
     from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
+
 class StatusCode:
     @classmethod
     def list(cls):

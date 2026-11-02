@@ -153,11 +153,12 @@ class TestDSSOperationalIntentsCreatorSubmit:
         mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         creator = DSSOperationalIntentsCreator(
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"error": "conn_error"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"error": "conn_error"}):
             with pytest.raises(HTTPException) as exc_info:
                 await creator.submit_flight_declaration_to_dss()
         assert exc_info.value.status_code == 500
@@ -170,6 +171,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
         opint_ref = _fake_opint_ref()
         opint_detail = _fake_opint_detail()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         mock_fd_repo.create_opint_reference = AsyncMock(return_value=opint_ref)
         mock_fd_repo.create_opint_detail = AsyncMock(return_value=opint_detail)
         mock_fd_repo.create_or_update_composite_opint = AsyncMock()
@@ -191,8 +193,10 @@ class TestDSSOperationalIntentsCreatorSubmit:
             operational_intents_converter=mock_converter,
         )
         success = _submission_success()
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
-            with patch.object(creator.my_scd_dss_helper, "create_and_submit_operational_intent_reference", new_callable=AsyncMock, return_value=success):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
+            with patch.object(
+                creator.my_scd_dss_helper, "create_and_submit_operational_intent_reference", new_callable=AsyncMock, return_value=success
+            ):
                 result = await creator.submit_flight_declaration_to_dss()
         assert result.status_code == 201
         mock_fd_repo.update.assert_called_once_with(creator.flight_declaration_id, state=1)
@@ -202,13 +206,14 @@ class TestDSSOperationalIntentsCreatorSubmit:
         mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         mock_fd_repo.update = AsyncMock()
         mock_fd_repo.add_state_history_entry = AsyncMock()
         creator = DSSOperationalIntentsCreator(
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
             with patch.object(
                 creator.my_scd_dss_helper,
                 "create_and_submit_operational_intent_reference",
@@ -222,6 +227,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
     async def test_dss_409_error_sets_rejected_state(self):
         mock_fd_repo = AsyncMock()
         fd = _fake_flight_declaration()
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
         mock_fd_repo.update = AsyncMock()
         mock_fd_repo.add_state_history_entry = AsyncMock()
@@ -229,7 +235,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
             with patch.object(
                 creator.my_scd_dss_helper,
                 "create_and_submit_operational_intent_reference",
@@ -242,6 +248,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
     @pytest.mark.asyncio
     async def test_conflict_with_flight_sets_rejected_state(self):
         mock_fd_repo = AsyncMock()
+        mock_fd_repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=None)
         fd = _fake_flight_declaration()
         mock_fd_repo.get_by_id = AsyncMock(return_value=fd)
         mock_fd_repo.update = AsyncMock()
@@ -250,7 +257,7 @@ class TestDSSOperationalIntentsCreatorSubmit:
             flight_declaration_id=uuid.uuid4(),
             fd_repo=mock_fd_repo,
         )
-        with patch.object(creator.my_scd_dss_helper, "get_auth_token", return_value={"access_token": "tok"}):
+        with patch.object(creator.my_scd_dss_helper, "async_get_auth_token", new_callable=AsyncMock, return_value={"access_token": "tok"}):
             with patch.object(
                 creator.my_scd_dss_helper,
                 "create_and_submit_operational_intent_reference",
