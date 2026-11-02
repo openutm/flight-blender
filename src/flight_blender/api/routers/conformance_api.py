@@ -11,7 +11,7 @@ from flight_blender.domain_types.common import FLIGHTBLENDER_READ_SCOPE
 from flight_blender.repositories.conformance_repo import SQLAlchemyConformanceRepository
 from flight_blender.services.conformance_svc import ConformanceOperations
 
-router = APIRouter(prefix="/conformance_monitoring_ops")
+router = APIRouter(prefix="/conformance_monitoring_ops", tags=["Conformance"])
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> ConformanceOperations:

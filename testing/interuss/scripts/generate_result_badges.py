@@ -63,11 +63,7 @@ def _suite_result(report_path: Path) -> str | None:
         severity = (check.get("severity") or "Unknown").lower()
         severities[severity] = severities.get(severity, 0) + 1
 
-    parts = [
-        f"{severity} {severities[severity]}"
-        for severity in ("high", "medium", "low", "unknown")
-        if severity in severities
-    ]
+    parts = [f"{severity} {severities[severity]}" for severity in ("high", "medium", "low", "unknown") if severity in severities]
     if _has_execution_error(test_run):
         parts.insert(0, "execution error")
     return ", ".join(parts) or "failing"
