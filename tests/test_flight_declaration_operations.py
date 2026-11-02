@@ -1,6 +1,7 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import arrow
 import pytest
 from flight_blender.config import settings
 from tests.conftest import fastapi_auth_header, READ_SCOPE, WRITE_SCOPE, READ_WRITE_SCOPE
@@ -203,9 +204,10 @@ class TestFlightDeclarationList:
         assert "results" in data
         assert data["results"] == []
 
-    def test_list_with_date_filter(self, mounted_sync_client):
+    @pytest.mark.parametrize("end_date", ["2025-12-31", "9999-12-31"])
+    def test_list_with_date_filter(self, mounted_sync_client, end_date):
         resp = mounted_sync_client.get(
-            "/flight_declaration_ops/flight_declaration?start_date=2025-01-01&end_date=2025-12-31",
+            f"/flight_declaration_ops/flight_declaration?start_date=2025-01-01&end_date={end_date}",
             headers=fastapi_auth_header(READ_SCOPE),
         )
         assert resp.status_code == 200
@@ -458,6 +460,106 @@ class TestSubmitToDSSEnabled:
         assert resp.status_code == 200
         assert "id" in resp.json()
 
+    def test_submit_to_dss_already_submitted(self, mounted_sync_client, monkeypatch, flight_declaration_payload):
+        """Returns 409 when a FlightOperationalIntentReference already exists."""
+        monkeypatch.setattr(settings, "USSP_NETWORK_ENABLED", 1)
+        monkeypatch.setattr(settings, "AUTO_SUBMIT_TO_DSS", 0)
+        create_resp = mounted_sync_client.post(
+            "/flight_declaration_ops/set_flight_declaration",
+            json=flight_declaration_payload,
+            headers=fastapi_auth_header(WRITE_SCOPE),
+        )
+        fd_id = create_resp.json()["id"]
+
+        from unittest.mock import AsyncMock
+        from flight_blender.repositories.flight_declarations_repo import SQLAlchemyFlightDeclarationRepository
+
+        mock_ref = MagicMock()
+        mock_ref.id = uuid.uuid4()
+        mock_ref.declaration_id = uuid.UUID(fd_id)
+
+        original_init = SQLAlchemyFlightDeclarationRepository.__init__
+        original_get_ref = SQLAlchemyFlightDeclarationRepository.get_opint_reference_by_declaration_id
+
+        def mock_init(self, db):
+            original_init(self, db)
+
+        async def mock_get_ref(self, declaration_id):
+            if str(declaration_id) == fd_id:
+                return mock_ref
+            return await original_get_ref(self, declaration_id)
+
+        monkeypatch.setattr(SQLAlchemyFlightDeclarationRepository, "__init__", mock_init)
+        monkeypatch.setattr(SQLAlchemyFlightDeclarationRepository, "get_opint_reference_by_declaration_id", mock_get_ref)
+
+        resp = mounted_sync_client.post(
+            f"/flight_declaration_ops/flight_declaration/{fd_id}/submit_to_dss",
+            headers=fastapi_auth_header(WRITE_SCOPE),
+        )
+        assert resp.status_code == 409
+        assert "already exists" in resp.json()["message"]
+
+
+class TestProcessIntersectionResultAutoSubmit:
+    """Tests for the AUTO_SUBMIT_TO_DSS path in _process_intersection_result_sa."""
+
+    @staticmethod
+    def _make_ops(monkeypatch, existing_ref):
+        from flight_blender.domain_types.flight_declarations import IntersectionCheckResult
+        from flight_blender.services.flight_declarations_svc import FlightDeclarationOperations
+
+        monkeypatch.setattr(settings, "AUTO_SUBMIT_TO_DSS", 1)
+
+        fd = MagicMock()
+        fd.id = uuid.uuid4()
+        fd.state = 0
+
+        repo = MagicMock()
+        repo.update = AsyncMock(return_value=fd)
+        repo.add_state_history_entry = AsyncMock()
+        repo.get_opint_reference_by_declaration_id = AsyncMock(return_value=existing_ref)
+
+        notifier = MagicMock()
+        ops = FlightDeclarationOperations(
+            repo=repo,
+            scd_client=MagicMock(),
+            parser=MagicMock(),
+            notifier=notifier,
+        )
+        intersection_result = IntersectionCheckResult(
+            all_relevant_fences=[],
+            all_relevant_declarations=[],
+            is_approved=True,
+            declaration_state=0,
+        )
+        return ops, repo, notifier, fd, intersection_result
+
+    @pytest.mark.asyncio
+    async def test_auto_submit_adds_state_history_and_notifies(self, monkeypatch):
+        """With no existing reference, auto-submit records history, notifies and enqueues the task."""
+        ops, repo, notifier, fd, intersection_result = self._make_ops(monkeypatch, existing_ref=None)
+
+        response = await ops._process_intersection_result_sa(fd, intersection_result, ussp_network_enabled=1)
+
+        repo.add_state_history_entry.assert_awaited_once()
+        notifier.submit_flight_declaration_to_dss_async.assert_called_once_with(flight_declaration_id=str(fd.id))
+        assert response.state == 0
+        notification_texts = [call.kwargs["message_text"] for call in notifier.send_operational_update_message.call_args_list]
+        assert any("Auto DSS submission triggered" in text for text in notification_texts)
+
+    @pytest.mark.asyncio
+    async def test_auto_submit_skips_when_reference_exists(self, monkeypatch):
+        """With an existing reference, auto-submit does not enqueue a duplicate DSS submission."""
+        existing_ref = MagicMock()
+        existing_ref.id = uuid.uuid4()
+        ops, repo, notifier, fd, intersection_result = self._make_ops(monkeypatch, existing_ref=existing_ref)
+
+        response = await ops._process_intersection_result_sa(fd, intersection_result, ussp_network_enabled=1)
+
+        notifier.submit_flight_declaration_to_dss_async.assert_not_called()
+        repo.add_state_history_entry.assert_not_awaited()
+        assert "already exists" in response.message
+
 
 class TestNetworkFlightDeclarationsByViewEnabled:
     """Tests network_flight_declaration_details_by_view with USSP_NETWORK_ENABLED=1."""
@@ -494,7 +596,7 @@ class TestFlightDeclarationsTaskCoverage:
         """Test send_operational_update_message function."""
         from flight_blender.tasks.flight_declarations_task import send_operational_update_message
 
-        with patch('flight_blender.tasks.flight_declarations_task.settings') as mock_settings:
+        with patch("flight_blender.tasks.flight_declarations_task.settings") as mock_settings:
             mock_settings.AMQP_URL = None
 
             send_operational_update_message(
@@ -509,7 +611,7 @@ class TestFlightDeclarationsTaskCoverage:
         """Test CelerySCDNotifier.send_operational_update_message."""
         from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
-        with patch('flight_blender.tasks.flight_declarations_task.send_operational_update_message') as mock_task:
+        with patch("flight_blender.tasks.flight_declarations_task.send_operational_update_message") as mock_task:
             mock_task.delay = MagicMock()
 
             notifier = CelerySCDNotifier()
@@ -525,13 +627,15 @@ class TestFlightDeclarationsTaskCoverage:
         """Test CelerySCDNotifier.submit_flight_declaration_to_dss_async."""
         from flight_blender.tasks.flight_declarations_task import CelerySCDNotifier
 
-        with patch('flight_blender.tasks.flight_declarations_task.submit_flight_declaration_to_dss_async') as mock_task:
+        with patch("flight_blender.tasks.flight_declarations_task.submit_flight_declaration_to_dss_async") as mock_task:
             mock_task.delay = MagicMock()
 
             notifier = CelerySCDNotifier()
             notifier.submit_flight_declaration_to_dss_async(flight_declaration_id="test-fd-id")
 
             mock_task.delay.assert_called_once()
+
+
 # Spatial flight declarations additional coverage
 # ---------------------------------------------------------------------------
 
@@ -627,6 +731,7 @@ class TestSpatialFlightDeclarationsCoverage:
         factory.generate_flight_declaration_index([mock_declaration])
 
         import asyncio
+
         asyncio.run(factory.clear_rtree_index([mock_declaration]))
 
         # No assertion needed, just ensure it doesn't raise

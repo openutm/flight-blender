@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket
 
 from flight_blender.services import realtime_svc
 
-router = APIRouter()
+router = APIRouter(tags=["Realtime"])
 
 
 @router.websocket("/ws/surveillance/heartbeat/{session_id}")

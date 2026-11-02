@@ -631,17 +631,9 @@ class SCDOperations:
         logger.info(f"Applying down-USS mechanism for operational intent {dss_reference.id} (state={dss_reference.state})")
         return True, asdict(dss_reference), {"volumes": [], "off_nominal_volumes": [], "priority": 0}
 
-    def get_auth_token(self, audience: str = "") -> dict:
-        """Fetch a DSS/peer-USS auth token synchronously.
-
-        This is the patchable seam used by tests; the blocking network call is
-        offloaded to a thread by :meth:`async_get_auth_token` on the async path.
-        """
-        return get_dss_auth_token(audience=audience, token_type="scd")  # nosec B106
-
     async def async_get_auth_token(self, audience: str = "") -> dict:
-        """Async wrapper around :meth:`get_auth_token` that offloads the blocking call."""
-        return await asyncio.to_thread(self.get_auth_token, audience=audience)
+        """Fetch a DSS/peer-USS auth token without blocking the event loop."""
+        return await get_dss_auth_token(audience=audience, token_type="scd")  # nosec B106
 
     async def delete_operational_intent(self, dss_operational_intent_ref_id: str, ovn: str) -> DeleteOperationalIntentResponse:
         """
@@ -1508,6 +1500,20 @@ class DSSOperationalIntentsCreator:
             raise HTTPException(
                 status_code=404,
                 detail={"message": "Flight Declaration with ID %s not found in the database" % self.flight_declaration_id},
+            )
+
+        existing_ref = await repo.get_opint_reference_by_declaration_id(fd_id)
+        if existing_ref is not None:
+            logger.warning(
+                "A DSS operational intent reference already exists for flight declaration %s, skipping submission" % self.flight_declaration_id
+            )
+            return OperationalIntentSubmissionStatus(
+                dss_response=OtherError(notes="A DSS operational intent reference already exists for this flight declaration"),
+                status=SubmissionResultStatus.ConflictWithFlight.value,
+                status_code=409,
+                message="A DSS operational intent reference already exists for this flight declaration",
+                operational_intent_id=str(existing_ref.id),
+                constraints=None,
             )
 
         current_state = flight_declaration.state

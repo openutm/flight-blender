@@ -2,6 +2,9 @@ name: Code Quality
 
 on:
   pull_request:
+  push:
+    branches:
+      - master
 
 permissions:
   contents: write
@@ -17,8 +20,6 @@ jobs:
       BYPASS_AUTH_TOKEN_VERIFICATION: "1"
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref }}
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -49,7 +50,7 @@ jobs:
             echo "total_coverage=N/A" >> "$GITHUB_OUTPUT"
           fi
       - name: Generate quality badges
-        if: always()
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           COVERAGE_EXIT_CODE: ${{ steps.coverage.outputs.exit_code }}
         run: |
@@ -107,7 +108,7 @@ jobs:
               write_badge(Path("badges/code-quality.svg"), "code quality", "failing", "#e05d44")
           PY
       - name: Upload quality badges
-        if: always()
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
         with:
           name: quality-badges
@@ -115,8 +116,8 @@ jobs:
             badges/coverage.svg
             badges/code-quality.svg
           retention-days: 14
-      - name: Commit quality badges to PR branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.coverage.outputs.exit_code == '0' && hashFiles('coverage.json') != ''
+      - name: Commit quality badges to default branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.coverage.outputs.exit_code == '0' && hashFiles('coverage.json') != ''
         run: |
           if [ -z "$(git status --porcelain badges/coverage.svg badges/code-quality.svg)" ]; then
             echo "Quality badges unchanged."
@@ -126,7 +127,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add badges/coverage.svg badges/code-quality.svg
           git commit -m "Update quality badges"
-          git push origin HEAD:${{ github.head_ref }}
+          git push
       - name: Upload HTML coverage report
         if: always() && hashFiles('htmlcov/index.html') != ''
         uses: actions/upload-artifact@v4
