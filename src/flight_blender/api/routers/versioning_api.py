@@ -3,7 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/versioning")
+router = APIRouter(prefix="/versioning", tags=["Versioning"])
 
 SUPPORTED_SYSTEMS = {
     "astm.f3548.v21",

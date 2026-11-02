@@ -249,7 +249,11 @@ class SQLAlchemySurveillanceRepository:
         return True
 
     async def cleanup_old_events(self, cutoff: datetime) -> tuple[int, int]:
-        heartbeat_result = cast(CursorResult, await self.db.execute(delete(SurveillanceHeartbeatEventORM).where(SurveillanceHeartbeatEventORM.dispatched_at < cutoff)))
-        track_result = cast(CursorResult, await self.db.execute(delete(SurveillanceTrackEventORM).where(SurveillanceTrackEventORM.dispatched_at < cutoff)))
+        heartbeat_result = cast(
+            CursorResult, await self.db.execute(delete(SurveillanceHeartbeatEventORM).where(SurveillanceHeartbeatEventORM.dispatched_at < cutoff))
+        )
+        track_result = cast(
+            CursorResult, await self.db.execute(delete(SurveillanceTrackEventORM).where(SurveillanceTrackEventORM.dispatched_at < cutoff))
+        )
         await self.db.flush()
         return heartbeat_result.rowcount or 0, track_result.rowcount or 0

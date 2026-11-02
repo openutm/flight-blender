@@ -16,7 +16,7 @@ from flight_blender.schemas.flight_feed import ObservationRequest, SignedTelemet
 from flight_blender.services.flight_feed_svc import FlightBlenderTelemetryValidator, FlightFeedOperations
 from flight_blender.tasks.flight_feed_task import CeleryFlightFeedTaskDispatcher
 
-router = APIRouter(prefix="/flight_stream")
+router = APIRouter(prefix="/flight_stream", tags=["Flight Feed"])
 
 GA_TEST_SCOPE = "geo-awareness.test"
 
@@ -99,7 +99,7 @@ async def set_signed_telemetry(
     headers = dict(request.headers)
     url = str(request.url)
 
-    if not MessageVerifier().verify_message(body=body, headers=headers, url=url):
+    if not await MessageVerifier().verify_message(body=body, headers=headers, url=url):
         raise HTTPException(
             status_code=400,
             detail={"message": "Could not verify against public keys setup in Flight Blender"},

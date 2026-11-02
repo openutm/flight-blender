@@ -66,7 +66,6 @@ async def _async_submit_flight_declaration_to_dss(flight_declaration_id: str) ->
             level="info",
         )
 
-
         async with async_task_session() as db:
             fd_repo = SQLAlchemyFlightDeclarationRepository(db)
             flight_declaration, created_opint = await verify_and_update_declaration_state(flight_declaration_id, fd_repo=fd_repo)

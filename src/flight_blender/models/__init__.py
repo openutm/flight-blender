@@ -1,3 +1,4 @@
+from flight_blender.models.adapter_orm import AdapterSampleORM, AdapterSessionORM  # noqa: F401
 from flight_blender.models.conformance_orm import ConformanceRecordORM  # noqa: F401
 from flight_blender.models.constraint_orm import CompositeConstraintORM, ConstraintDetailORM, ConstraintReferenceORM  # noqa: F401
 from flight_blender.models.flight_declarations_orm import (  # noqa: F401

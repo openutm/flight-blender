@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 from typing import Any
 
@@ -15,7 +14,7 @@ from flight_blender.repositories.rid_repo import SQLAlchemyRIDRepository
 from flight_blender.services import uss_svc
 from flight_blender.services.uss_svc import USSService
 
-router = APIRouter(prefix="/uss")
+router = APIRouter(prefix="/uss", tags=["USS"])
 
 
 async def _ops(db: AsyncSession = Depends(async_get_db)) -> USSService:
@@ -46,7 +45,7 @@ async def peer_uss_report_notification(
         )
     ),
 ):
-    data, status_code = await asyncio.to_thread(uss_svc.peer_uss_report_notification, body)
+    data, status_code = await uss_svc.peer_uss_report_notification(body)
     return JSONResponse(data, status_code=status_code)
 
 
@@ -65,7 +64,7 @@ async def uss_opint_detail_telemetry(
     opint_id: uuid.UUID,
     _auth: Any = Depends(require_scopes(["utm.conformance_monitoring_sa"])),
 ):
-    data = await asyncio.to_thread(uss_svc.uss_telemetry, str(opint_id))
+    data = await uss_svc.uss_telemetry(str(opint_id))
     return JSONResponse(data, status_code=200)
 
 

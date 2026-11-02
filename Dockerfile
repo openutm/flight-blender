@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-ARG PYTHON_BUILDER_IMAGE=cgr.dev/chainguard/python:latest-dev
-ARG PYTHON_RUNTIME_IMAGE=cgr.dev/chainguard/python:latest
+# Use the public Wolfi OS base image instead
+ARG PYTHON_BUILDER_IMAGE=cgr.dev/chainguard/wolfi-base:latest
+ARG PYTHON_RUNTIME_IMAGE=cgr.dev/chainguard/wolfi-base:latest
 ARG SHELL_COMPAT_IMAGE=busybox:1.37.0-musl
 
 FROM ${PYTHON_BUILDER_IMAGE} AS builder
@@ -12,7 +13,10 @@ ENV PIP_NO_CACHE_DIR=1 \
 
 WORKDIR /app
 
-# Dependency layers stay cached unless the dependency metadata or lockfile changes.
+# Install Python 3.12 and its dev headers into the builder stage using apk
+USER root
+RUN apk update && apk add python-3.12 python-3.12-dev uv build-base
+
 COPY uv.lock pyproject.toml ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
@@ -38,10 +42,15 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Install the minimal runtime package for Python 3.12 in the final scratch space
+USER root
+RUN apk update && apk add python-3.12 && rm -rf /var/cache/apk/*
+
 COPY --from=shell-compat /bin/busybox /bin/sh
 COPY --from=builder --chown=65532:65532 /app/.venv /venv
 COPY --chown=65532:65532 src ./src
 COPY --chown=65532:65532 alembic ./alembic
+COPY --chown=65532:65532 images ./images
 COPY --chown=65532:65532 alembic.ini LICENSE README.md ./
 
 EXPOSE 8000

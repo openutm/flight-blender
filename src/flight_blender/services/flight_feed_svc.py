@@ -526,6 +526,4 @@ async def write_flight_observation(observation, repo: SQLAlchemyFlightFeedReposi
 async def get_latest_flight_observation_by_declaration_id(flight_declaration_id: str, repo: SQLAlchemyFlightFeedRepository):
     """Get the latest flight observation for a declaration."""
     obs_helper = ObservationReadOperations(repo=repo, redis=get_redis())
-    return await obs_helper.get_latest_flight_observation_by_flight_declaration_id(
-        flight_declaration_id=flight_declaration_id
-    )
+    return await obs_helper.get_latest_flight_observation_by_flight_declaration_id(flight_declaration_id=flight_declaration_id)
