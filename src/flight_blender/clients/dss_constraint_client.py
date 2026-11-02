@@ -5,8 +5,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-import requests
-import urllib3
+import httpx
 from dacite import Config, from_dict
 from loguru import logger
 
@@ -30,7 +29,7 @@ class ConstraintOperations:
 
         # Get auth token with DSS audience (not self audience)
         dss_audience = generate_audience_from_base_url(self.dss_base_url)
-        auth_token = self.get_auth_token(audience=dss_audience)
+        auth_token = await self.get_auth_token(audience=dss_audience)
         if not auth_token or "error" in auth_token:
             logger.error("Failed to get auth token for DSS constraint query")
             return []
@@ -52,12 +51,12 @@ class ConstraintOperations:
             logger.info("Querying DSS for constraints in the area..")
             logger.debug(f"Area of interest {area_of_interest}")
             try:
-                query_constraints_request = requests.post(
-                    query_constraints_url,
-                    json=json.loads(json.dumps(asdict(area_of_interest))),
-                    headers=headers,
-                    timeout=30,
-                )
+                async with httpx.AsyncClient(timeout=30) as client:
+                    query_constraints_request = await client.post(
+                        query_constraints_url,
+                        json=json.loads(json.dumps(asdict(area_of_interest))),
+                        headers=headers,
+                    )
             except Exception as re:
                 logger.error("Error in getting constraint for the volume %s " % re)
             else:
@@ -134,7 +133,7 @@ class ConstraintOperations:
 
                 else:  # This operational intent details is from a peer uss, need to query peer USS
                     uss_audience = generate_audience_from_base_url(base_url=current_uss_base_url)
-                    uss_auth_token = self.get_auth_token(audience=uss_audience)
+                    uss_auth_token = await self.get_auth_token(audience=uss_audience)
                     logger.debug(f"Auth Token {uss_auth_token}")
                     uss_headers = {
                         "Content-Type": "application/json",
@@ -150,18 +149,9 @@ class ConstraintOperations:
 
                     logger.info(f"Querying USS for constraints: {constraints_detail_url}")
                     try:
-                        uss_constraint_request = requests.get(constraints_detail_url, headers=uss_headers, timeout=30)
-                    except urllib3.exceptions.NameResolutionError:
-                        logger.info("URLLIB error")
-                        raise ConnectionError("Could not reach peer USS.. ")
-
-                    except (
-                        requests.exceptions.ConnectTimeout,
-                        requests.exceptions.HTTPError,
-                        requests.exceptions.ReadTimeout,
-                        requests.exceptions.Timeout,
-                        requests.exceptions.ConnectionError,
-                    ) as e:
+                        async with httpx.AsyncClient(timeout=30) as client:
+                            uss_constraint_request = await client.get(constraints_detail_url, headers=uss_headers)
+                    except httpx.RequestError as e:
                         logger.error("Connection error details..")
                         logger.error(e)
                         logger.error(
@@ -213,5 +203,5 @@ class ConstraintOperations:
 
         return all_constraints_in_aoi
 
-    def get_auth_token(self, audience: str = ""):
-        return get_dss_auth_token(audience=audience, token_type="constraints")  # nosec B106
+    async def get_auth_token(self, audience: str = "") -> dict:
+        return await get_dss_auth_token(audience=audience, token_type="constraints")  # nosec B106

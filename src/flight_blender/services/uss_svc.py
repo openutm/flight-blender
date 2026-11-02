@@ -253,7 +253,7 @@ class USSService:
         ), 200
 
 
-def peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
+async def peer_uss_report_notification(request_data: dict) -> tuple[dict, int]:
     try:
         error_report = from_dict(data_class=ErrorReport, data=request_data, config=Config(cast=[Enum]))
     except Exception as e:
@@ -363,7 +363,7 @@ async def get_uss_flights(view: str, repo: SQLAlchemyFlightFeedRepository) -> tu
     return json.loads(json.dumps(asdict(rid_response))), 200
 
 
-def uss_telemetry(opint_id: str) -> dict:
+async def uss_telemetry(opint_id: str) -> dict:
     now = arrow.now()
     five_seconds_from_now = now.shift(seconds=5)
     telemetry_response = VehicleTelemetryResponse(
