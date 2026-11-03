@@ -531,6 +531,20 @@ class TestOperationalIntentUpdatePreSubmissionChecks:
         assert response.check_id == OpIntUpdateCheckResultCodes.B
         assert response.tentative_flight_plan_processing_response == FlightPlanCurrentStatus.OkToFly
 
+    def test_activated_update_with_preexisting_conflict_is_submitted(self):
+        ops = dss_helper.SCDOperations()
+
+        response = ops.check_if_update_payload_should_be_submitted_to_dss(
+            current_state=OperationalIntentState.Activated.value,
+            new_state=OperationalIntentState.Activated.value,
+            extents_conflict_with_dss_volumes=True,
+            priority=0,
+            preexisting_conflict=True,
+        )
+
+        assert response.should_submit_update_payload_to_dss == 1
+        assert response.check_id == OpIntUpdateCheckResultCodes.A
+
 
 class TestPeerUSSNotification:
     async def test_notify_auth_failure_raises_http_exception(self, monkeypatch):

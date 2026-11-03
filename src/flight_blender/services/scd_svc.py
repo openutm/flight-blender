@@ -604,6 +604,7 @@ class SCDService:
             deconfliction_check=self._should_deconflict(current_state_str, ctx.generated_state),
             priority=ctx.request.intended_flight.astm_f3548_21.priority,
             ovn=stored_details.reference.ovn,
+            previous_extents=existing_op_int_details.operational_intent_details.volumes if existing_op_int_details else None,
         )
         if update_job.status == 200:
             return await self._handle_successful_update(ctx, update_job, stored_details, existing_op_int_details)

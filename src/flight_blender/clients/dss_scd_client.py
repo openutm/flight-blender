@@ -977,6 +977,7 @@ class SCDOperations:
         new_state: str,
         extents_conflict_with_dss_volumes: bool,
         priority: int,
+        preexisting_conflict: bool = False,
     ) -> ShouldSendtoDSSProcessingResponse:
         should_opint_be_sent_to_dss = ShouldSendtoDSSProcessingResponse(
             should_submit_update_payload_to_dss=0,
@@ -987,7 +988,9 @@ class SCDOperations:
         activated = OperationalIntentState.Activated.value
         off_nominal_states = (OperationalIntentState.Nonconforming.value, OperationalIntentState.Contingent.value)
 
-        if current_state == activated and new_state == activated and extents_conflict_with_dss_volumes:
+        # An already-activated intent may be updated while its conflict persists.
+        # Only reject an update that newly introduces a conflict.
+        if current_state == activated and new_state == activated and extents_conflict_with_dss_volumes and not preexisting_conflict:
             logger.debug("Case B")
             should_opint_be_sent_to_dss.should_submit_update_payload_to_dss = 0
             should_opint_be_sent_to_dss.check_id = OpIntUpdateCheckResultCodes.B
@@ -1026,6 +1029,7 @@ class SCDOperations:
         ovn: str,
         deconfliction_check=False,
         priority: int = 0,
+        previous_extents: list[Volume4D] | None = None,
     ) -> OperationalIntentUpdateResponse:
         """
         Update a specified operational intent reference in the DSS.
@@ -1097,14 +1101,20 @@ class SCDOperations:
                 all_existing_operational_intent_details=all_existing_operational_intent_details,
                 extents=extents,
             )
+            preexisting_conflict = bool(previous_extents) and self.check_extents_conflict_with_latest_volumes(
+                all_existing_operational_intent_details=all_existing_operational_intent_details,
+                extents=previous_extents,
+            )
         else:
             extents_conflict_with_dss_volumes = False
+            preexisting_conflict = False
 
         pre_submission_checks = self.check_if_update_payload_should_be_submitted_to_dss(
             current_state=current_state,
             new_state=new_state,
             extents_conflict_with_dss_volumes=extents_conflict_with_dss_volumes,
             priority=priority,
+            preexisting_conflict=preexisting_conflict,
         )
 
         if not pre_submission_checks.should_submit_update_payload_to_dss:
