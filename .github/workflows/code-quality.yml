@@ -108,8 +108,8 @@ jobs:
               write_badge(Path("badges/code-quality.svg"), "code quality", "failing", "#e05d44")
           PY
       - name: Upload quality badges
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
           name: quality-badges
           path: |
@@ -130,7 +130,7 @@ jobs:
           git push
       - name: Upload HTML coverage report
         if: always() && hashFiles('htmlcov/index.html') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: htmlcov/
