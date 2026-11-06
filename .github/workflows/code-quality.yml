@@ -19,11 +19,8 @@ jobs:
       DATABASE_URL: "sqlite:///:memory:"
       BYPASS_AUTH_TOKEN_VERIFICATION: "1"
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref }}
-
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -267,8 +264,8 @@ jobs:
     name: Code Complexity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install radon
