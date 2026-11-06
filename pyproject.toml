@@ -43,7 +43,7 @@ dependencies = [
     "pika==1.4.1",
     "psycopg2-binary==2.9.12",
     "pyjwt==2.15.0",
-    "pyproj==3.7.2",
+    "pyproj==3.8.0",
     "rtree==1.4.1",
     "shapely==2.1.2",
     "tldextract==5.3.1",
