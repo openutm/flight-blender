@@ -81,7 +81,7 @@ jobs:
             await upsertPrComment({ github, context, marker, body });
       - name: Generate SBOM
         if: always()
-        uses: anchore/sbom-action@v0.24.0
+        uses: anchore/sbom-action@v0.24.3
         with:
           image: flight-blender:test
           format: spdx-json
